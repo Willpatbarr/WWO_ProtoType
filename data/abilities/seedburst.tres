@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" path="res://ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = "seedburst"
+display_name = "Seedburst"
+description = "Triggered: your grenade bursts into seed grenades with half the blast."
+color = Color(0.95, 0.85, 0.25, 1)
+kind = "triggered"
+order = 2
+unlocked = true
+sub_count = 3.0
+sub_scale = 0.5
+sub_spread = 5.0
+sub_fuse = 0.6

@@ -1,0 +1,137 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://viewmodel_material.tres" id="1_jhl5k"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_ah44n"]
+size = Vector3(0.045, 0.07, 0.16)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rpopb"]
+size = Vector3(0.036, 0.042, 0.18)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ndnqd"]
+size = Vector3(0.02, 0.008, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4w32f"]
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.075
+radial_segments = 10
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_fbsxj"]
+size = Vector3(0.036, 0.12, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hopi6"]
+size = Vector3(0.012, 0.026, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_oey83"]
+size = Vector3(0.006, 0.02, 0.01)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6uo3s"]
+size = Vector3(0.007, 0.018, 0.01)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gbilc"]
+size = Vector3(0.007, 0.018, 0.01)
+
+[sub_resource type="SphereMesh" id="SphereMesh_u68yl"]
+radius = 0.0022
+height = 0.0044
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="SphereMesh_kk7ha"]
+radius = 0.04
+height = 0.08
+radial_segments = 8
+rings = 4
+
+[node name="Handcannon" type="Node3D" unique_id=2116069331]
+
+[node name="Frame" type="MeshInstance3D" parent="." unique_id=2046212700]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.055, 0.02)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.48, 0.34, 0.2, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_ah44n")
+
+[node name="Barrel" type="MeshInstance3D" parent="." unique_id=102479242]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.036, -0.14)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_rpopb")
+
+[node name="Rib" type="MeshInstance3D" parent="." unique_id=1957060501]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.013, -0.07)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_ndnqd")
+
+[node name="Magazine" type="MeshInstance3D" parent="." unique_id=1788007274]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.056, -0.005)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.78, 0.6, 0.25, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_4w32f")
+
+[node name="Grip" type="MeshInstance3D" parent="." unique_id=202710103]
+transform = Transform3D(1, 0, 0, 0, 0.9396926, 0.34202012, 0, -0.34202012, 0.9396926, 0, -0.13, 0.09)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.38, 0.22, 0.12, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_fbsxj")
+
+[node name="Hammer" type="MeshInstance3D" parent="." unique_id=196306670]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.016, 0.1)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_hopi6")
+
+[node name="FrontPost" type="MeshInstance3D" parent="." unique_id=1096764591]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.011, -0.21)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_oey83")
+
+[node name="RearLeft" type="MeshInstance3D" parent="." unique_id=942838947]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.009, -0.009, 0.08)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_6uo3s")
+
+[node name="RearRight" type="MeshInstance3D" parent="." unique_id=248692643]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009, -0.009, 0.08)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_gbilc")
+
+[node name="SightDot" type="MeshInstance3D" parent="." unique_id=818484306]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.21)
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.95, 0.95, 1)
+instance_shader_parameters/glow = 4.0
+mesh = SubResource("SphereMesh_u68yl")
+
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1940743646]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.036, -0.26)
+visible = false
+material_override = ExtResource("1_jhl5k")
+cast_shadow = 0
+instance_shader_parameters/color = Color(1, 0.75, 0.3, 1)
+instance_shader_parameters/glow = 6.0
+mesh = SubResource("SphereMesh_kk7ha")

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://stat_modifier.gd" id="1_6jsnb"]
+[ext_resource type="Script" path="res://frame_part_data.gd" id="2_b2hh2"]
+
+[sub_resource type="Resource" id="Resource_rj036"]
+script = ExtResource("1_6jsnb")
+stat = "sprint_speed"
+op = 1
+value = 0.12
+
+[sub_resource type="Resource" id="Resource_7bi1i"]
+script = ExtResource("1_6jsnb")
+stat = "jump_height"
+op = 1
+value = -0.1
+
+[resource]
+script = ExtResource("2_b2hh2")
+id = "stride_legs"
+display_name = "Stride Legs"
+order = 1
+modifiers = Array[ExtResource("1_6jsnb")]([SubResource("Resource_rj036"), SubResource("Resource_7bi1i")])

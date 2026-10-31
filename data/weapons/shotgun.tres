@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "shotgun"
+model = "res://weapons/models/shotgun.tscn"
+unlocked = true
+hip_position = Vector3(0.15, -0.1, -0.52)
+ads_position = Vector3(0, 0, -0.6)
+display_name = "Shotgun"
+archetype = "Pump shotgun"
+order = 2
+zoom = 1.2
+ads_time = 0.2
+ads_sensitivity = 1.0
+ads_move_speed = 0.8
+ads_vignette = 0.2
+scope_overlay = 0.0
+semi_auto = 1.0
+fire_rate = 65.0
+damage = 18.0
+crit_multiplier = 1.2
+fire_range = 15.0
+pellets = 8.0
+pellet_spread = 4.0
+hip_spread = 0.0
+recoil_up = 4.0
+recoil_side = 1.0
+gun_kick = 3.0
+magazine_size = 5.0
+reload_time = 2.6
+viewmodel_fov = 62.0
+sway = 1.3
+gun_bob = 1.2
+slide_tilt = 18.0
+aim_assistance = 60.0
+magnetism_angle = 0.0
+friction_strength = 0.3
+friction_angle = 6.0
+adhesion = 0.0
+assist_range = 12.0
+ads_boost = 1.2

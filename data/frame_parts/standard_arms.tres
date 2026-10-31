@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://stat_modifier.gd" id="1_22ge1"]
+[ext_resource type="Script" path="res://frame_part_data.gd" id="2_dfxeu"]
+
+[resource]
+script = ExtResource("2_dfxeu")
+id = "standard_arms"
+display_name = "Standard Arms"
+slot = "arms"
+order = 8

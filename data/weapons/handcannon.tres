@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "handcannon"
+model = "res://weapons/models/handcannon.tscn"
+unlocked = true
+hip_position = Vector3(0.11, -0.085, -0.4)
+ads_position = Vector3(0, 0, -0.46)
+display_name = "Hand Cannon"
+archetype = "Hand cannon"
+order = 1
+zoom = 1.4
+ads_time = 0.16
+ads_sensitivity = 1.0
+ads_move_speed = 0.75
+ads_vignette = 0.3
+scope_overlay = 0.0
+semi_auto = 1.0
+fire_rate = 140.0
+damage = 55.0
+crit_multiplier = 2.0
+fire_range = 60.0
+pellets = 1.0
+pellet_spread = 0.0
+hip_spread = 0.8
+recoil_up = 2.6
+recoil_side = 0.6
+gun_kick = 2.2
+magazine_size = 12.0
+reload_time = 2.2
+viewmodel_fov = 62.0
+sway = 1.2
+gun_bob = 1.1
+slide_tilt = 14.0
+aim_assistance = 80.0
+magnetism_angle = 3.0
+friction_strength = 0.5
+friction_angle = 4.0
+adhesion = 0.0
+assist_range = 35.0
+ads_boost = 1.4

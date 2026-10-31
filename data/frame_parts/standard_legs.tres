@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://stat_modifier.gd" id="1_mqw8d"]
+[ext_resource type="Script" path="res://frame_part_data.gd" id="2_t3fre"]
+
+[resource]
+script = ExtResource("2_t3fre")
+id = "standard_legs"
+display_name = "Standard Legs"

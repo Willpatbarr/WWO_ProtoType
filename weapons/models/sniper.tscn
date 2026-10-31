@@ -1,0 +1,183 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://viewmodel_material.tres" id="1_t6sql"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_8hc04"]
+size = Vector3(0.05, 0.07, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cvbmj"]
+top_radius = 0.014
+bottom_radius = 0.014
+height = 0.52
+radial_segments = 10
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_0v0si"]
+size = Vector3(0.036, 0.03, 0.05)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_emv0r"]
+top_radius = 0.022
+bottom_radius = 0.022
+height = 0.3
+radial_segments = 10
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_a0ovb"]
+top_radius = 0.031
+bottom_radius = 0.031
+height = 0.05
+radial_segments = 10
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_b7qlo"]
+top_radius = 0.028
+bottom_radius = 0.028
+height = 0.04
+radial_segments = 10
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_brfn8"]
+top_radius = 0.026
+bottom_radius = 0.026
+height = 0.004
+radial_segments = 10
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_gwytq"]
+size = Vector3(0.02, 0.04, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_84wew"]
+size = Vector3(0.02, 0.04, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jpi4x"]
+size = Vector3(0.05, 0.012, 0.012)
+
+[sub_resource type="BoxMesh" id="BoxMesh_xsinh"]
+size = Vector3(0.036, 0.06, 0.07)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8eqji"]
+size = Vector3(0.04, 0.11, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_xoyev"]
+size = Vector3(0.045, 0.09, 0.26)
+
+[sub_resource type="SphereMesh" id="SphereMesh_6wqis"]
+radius = 0.06
+height = 0.12
+radial_segments = 8
+rings = 4
+
+[node name="Sniper" type="Node3D" unique_id=348053610]
+
+[node name="Receiver" type="MeshInstance3D" parent="." unique_id=998024336]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.085, 0.05)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_8hc04")
+
+[node name="Barrel" type="MeshInstance3D" parent="." unique_id=238804670]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.075, -0.36)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_cvbmj")
+
+[node name="Brake" type="MeshInstance3D" parent="." unique_id=1897023487]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.075, -0.64)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_0v0si")
+
+[node name="Scope" type="MeshInstance3D" parent="." unique_id=1255441367]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_emv0r")
+
+[node name="ScopeFront" type="MeshInstance3D" parent="." unique_id=20377869]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.16)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_a0ovb")
+
+[node name="ScopeRear" type="MeshInstance3D" parent="." unique_id=969885002]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0.15)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_b7qlo")
+
+[node name="Lens" type="MeshInstance3D" parent="." unique_id=2017385808]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.186)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.3, 0.6, 0.9, 1)
+instance_shader_parameters/glow = 1.5
+mesh = SubResource("CylinderMesh_brfn8")
+
+[node name="MountFront" type="MeshInstance3D" parent="." unique_id=1367685777]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.04, -0.08)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_gwytq")
+
+[node name="MountRear" type="MeshInstance3D" parent="." unique_id=1976853236]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.04, 0.08)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_84wew")
+
+[node name="Bolt" type="MeshInstance3D" parent="." unique_id=566094792]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.045, -0.07, 0.12)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.78, 0.6, 0.25, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_jpi4x")
+
+[node name="Magazine" type="MeshInstance3D" parent="." unique_id=110178430]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.145, 0.02)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.5, 0.1, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_xsinh")
+
+[node name="Grip" type="MeshInstance3D" parent="." unique_id=2065359279]
+transform = Transform3D(1, 0, 0, 0, 0.9659258, 0.25881904, 0, -0.25881904, 0.9659258, 0, -0.16, 0.16)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_8eqji")
+
+[node name="Stock" type="MeshInstance3D" parent="." unique_id=1502862063]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0.34)
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_xoyev")
+
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1466476249]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.075, -0.68)
+visible = false
+material_override = ExtResource("1_t6sql")
+cast_shadow = 0
+instance_shader_parameters/color = Color(1, 0.75, 0.3, 1)
+instance_shader_parameters/glow = 6.0
+mesh = SubResource("SphereMesh_6wqis")

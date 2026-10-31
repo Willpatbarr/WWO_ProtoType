@@ -1,0 +1,108 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://viewmodel_material.tres" id="1_vtumm"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_4xgwp"]
+size = Vector3(0.05, 0.075, 0.22)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_6tql5"]
+top_radius = 0.018
+bottom_radius = 0.018
+height = 0.46
+radial_segments = 10
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_c1afy"]
+top_radius = 0.013
+bottom_radius = 0.013
+height = 0.38
+radial_segments = 10
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_vb1tg"]
+size = Vector3(0.046, 0.046, 0.13)
+
+[sub_resource type="BoxMesh" id="BoxMesh_f5m2s"]
+size = Vector3(0.04, 0.08, 0.22)
+
+[sub_resource type="BoxMesh" id="BoxMesh_minfe"]
+size = Vector3(0.012, 0.006, 0.46)
+
+[sub_resource type="SphereMesh" id="SphereMesh_0qa00"]
+radius = 0.004
+height = 0.008
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="SphereMesh_cp12w"]
+radius = 0.05
+height = 0.1
+radial_segments = 8
+rings = 4
+
+[node name="Shotgun" type="Node3D" unique_id=775070310]
+
+[node name="Receiver" type="MeshInstance3D" parent="." unique_id=1119230217]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.058, 0.08)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.22, 0.27, 0.2, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_4xgwp")
+
+[node name="Barrel" type="MeshInstance3D" parent="." unique_id=1713980987]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.032, -0.25)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_6tql5")
+
+[node name="Tube" type="MeshInstance3D" parent="." unique_id=1195509627]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.068, -0.2)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_c1afy")
+
+[node name="Magazine" type="MeshInstance3D" parent="." unique_id=1519238394]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, -0.17)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.38, 0.22, 0.12, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_vb1tg")
+
+[node name="Stock" type="MeshInstance3D" parent="." unique_id=1520771299]
+transform = Transform3D(1, 0, 0, 0, 0.9945219, 0.104528464, 0, -0.104528464, 0.9945219, 0, -0.09, 0.29)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.38, 0.22, 0.12, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_f5m2s")
+
+[node name="Rib" type="MeshInstance3D" parent="." unique_id=992130478]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.012, -0.25)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_minfe")
+
+[node name="SightDot" type="MeshInstance3D" parent="." unique_id=2125422669]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.47)
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.95, 0.95, 1)
+instance_shader_parameters/glow = 4.0
+mesh = SubResource("SphereMesh_0qa00")
+
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1699807550]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.032, -0.5)
+visible = false
+material_override = ExtResource("1_vtumm")
+cast_shadow = 0
+instance_shader_parameters/color = Color(1, 0.75, 0.3, 1)
+instance_shader_parameters/glow = 6.0
+mesh = SubResource("SphereMesh_cp12w")

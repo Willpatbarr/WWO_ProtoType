@@ -1,0 +1,147 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://viewmodel_material.tres" id="1_cpcxy"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_mou4i"]
+size = Vector3(0.05, 0.08, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8la6u"]
+size = Vector3(0.052, 0.015, 0.2)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_nndyy"]
+top_radius = 0.015
+bottom_radius = 0.015
+height = 0.26
+radial_segments = 10
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_lgy88"]
+size = Vector3(0.045, 0.12, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_q42od"]
+size = Vector3(0.04, 0.13, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_br1rc"]
+size = Vector3(0.042, 0.07, 0.15)
+
+[sub_resource type="BoxMesh" id="BoxMesh_m8q2w"]
+size = Vector3(0.034, 0.01, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_s73go"]
+size = Vector3(0.005, 0.036, 0.008)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mtgvh"]
+size = Vector3(0.005, 0.036, 0.008)
+
+[sub_resource type="BoxMesh" id="BoxMesh_eqt0e"]
+size = Vector3(0.04, 0.005, 0.008)
+
+[sub_resource type="SphereMesh" id="SphereMesh_tqyky"]
+radius = 0.0025
+height = 0.005
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="SphereMesh_s3v3p"]
+radius = 0.03
+height = 0.06
+radial_segments = 8
+rings = 4
+
+[node name="Rifle" type="Node3D" unique_id=1906664462]
+
+[node name="Receiver" type="MeshInstance3D" parent="." unique_id=490182]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0.02)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_mou4i")
+
+[node name="Stripe" type="MeshInstance3D" parent="." unique_id=1902127580]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.065, 0.02)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.5, 0.1, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_8la6u")
+
+[node name="Barrel" type="MeshInstance3D" parent="." unique_id=1843563902]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.06, -0.25)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("CylinderMesh_nndyy")
+
+[node name="Grip" type="MeshInstance3D" parent="." unique_id=809050744]
+transform = Transform3D(1, 0, 0, 0, 0.9659258, 0.25881904, 0, -0.25881904, 0.9659258, 0, -0.16, 0.11)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_lgy88")
+
+[node name="Magazine" type="MeshInstance3D" parent="." unique_id=967680250]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.165, -0.02)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.5, 0.1, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_q42od")
+
+[node name="Stock" type="MeshInstance3D" parent="." unique_id=1551619630]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, 0.23)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_br1rc")
+
+[node name="SightBase" type="MeshInstance3D" parent="." unique_id=2017161088]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0225, 0)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_m8q2w")
+
+[node name="SightLeft" type="MeshInstance3D" parent="." unique_id=1637378366]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0175, -0.002, 0)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_s73go")
+
+[node name="SightRight" type="MeshInstance3D" parent="." unique_id=571810305]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0175, -0.002, 0)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_mtgvh")
+
+[node name="SightTop" type="MeshInstance3D" parent="." unique_id=576619638]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0175, 0)
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
+instance_shader_parameters/glow = 0.0
+mesh = SubResource("BoxMesh_eqt0e")
+
+[node name="SightDot" type="MeshInstance3D" parent="." unique_id=353426700]
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(0.95, 0.95, 0.95, 1)
+instance_shader_parameters/glow = 4.0
+mesh = SubResource("SphereMesh_tqyky")
+
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1689781592]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, -0.41)
+visible = false
+material_override = ExtResource("1_cpcxy")
+cast_shadow = 0
+instance_shader_parameters/color = Color(1, 0.75, 0.3, 1)
+instance_shader_parameters/glow = 6.0
+mesh = SubResource("SphereMesh_s3v3p")

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://stat_modifier.gd" id="1_6iwdd"]
+[ext_resource type="Script" path="res://frame_part_data.gd" id="2_j1uft"]
+
+[sub_resource type="Resource" id="Resource_ha33g"]
+script = ExtResource("1_6iwdd")
+stat = "mantle_reach"
+op = 0
+value = 0.6
+
+[sub_resource type="Resource" id="Resource_drnls"]
+script = ExtResource("1_6iwdd")
+stat = "mantle_time"
+op = 1
+value = -0.3
+
+[sub_resource type="Resource" id="Resource_5ipal"]
+script = ExtResource("1_6iwdd")
+stat = "walk_speed"
+op = 1
+value = -0.04
+
+[resource]
+script = ExtResource("2_j1uft")
+id = "climber_core"
+display_name = "Climber Core"
+slot = "core"
+order = 7
+modifiers = Array[ExtResource("1_6iwdd")]([SubResource("Resource_ha33g"), SubResource("Resource_drnls"), SubResource("Resource_5ipal")])

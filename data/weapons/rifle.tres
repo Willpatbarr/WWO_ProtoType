@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "rifle"
+model = "res://weapons/models/rifle.tscn"
+unlocked = true
+hip_position = Vector3(0.15, -0.12, -0.4)
+ads_position = Vector3(0, 0, -0.34)
+display_name = "Rifle"
+archetype = "Auto rifle"
+order = 0
+zoom = 1.5
+ads_time = 0.12
+ads_sensitivity = 1.0
+ads_move_speed = 0.65
+ads_vignette = 0.35
+scope_overlay = 0.0
+semi_auto = 0.0
+fire_rate = 600.0
+damage = 20.0
+crit_multiplier = 1.6
+fire_range = 120.0
+pellets = 1.0
+pellet_spread = 0.0
+hip_spread = 0.0
+recoil_up = 0.35
+recoil_side = 0.15
+gun_kick = 1.0
+magazine_size = 30.0
+reload_time = 2.0
+viewmodel_fov = 65.0
+sway = 1.0
+gun_bob = 1.0
+slide_tilt = 11.0
+aim_assistance = 70.0
+magnetism_angle = 2.5
+friction_strength = 0.45
+friction_angle = 3.7
+adhesion = 0.0
+assist_range = 40.0
+ads_boost = 1.4

@@ -1,0 +1,8 @@
+# Godot 4 editor cache (rebuilt automatically on open)
+.godot/
+
+# Local "Save as defaults" file from the in-game settings menu
+saved_settings.json
+
+# macOS
+.DS_Store
