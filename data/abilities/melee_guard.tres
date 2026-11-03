@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" path="res://ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = "melee_guard"
+display_name = "Melee Guard"
+description = "Triggered: after you land a melee hit, you take less melee damage for a few seconds."
+color = Color(0.4, 0.7, 1, 1)
+kind = "triggered"
+order = 2
+flora = "voltvine"
+duration = 4.0
+guard_reduction = 0.5

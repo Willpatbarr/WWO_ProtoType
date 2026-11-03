@@ -1,0 +1,38 @@
+{
+  "format_version": 1,
+  "name": "Flora::Ability",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Flora",
+      "position": 2
+    },
+    {
+      "label": "Kind",
+      "position": 3
+    },
+    {
+      "label": "Effect",
+      "position": 4
+    },
+    {
+      "label": "Duration",
+      "position": 5
+    },
+    {
+      "label": "Recharge",
+      "position": 6
+    },
+    {
+      "label": "HUD Behavior",
+      "position": 7
+    },
+    {
+      "label": "Notes",
+      "position": 8
+    }
+  ]
+}

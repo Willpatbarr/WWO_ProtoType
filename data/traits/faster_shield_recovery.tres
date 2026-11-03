@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod0"]
+script = ExtResource("2_mod")
+stat = "recharge_delay"
+op = 1
+value = -0.25
+
+[sub_resource type="Resource" id="mod1"]
+script = ExtResource("2_mod")
+stat = "shield_regen"
+op = 1
+value = 0.5
+
+[resource]
+script = ExtResource("1_trait")
+id = "faster_shield_recovery"
+display_name = "Faster Shield Recovery"
+description = "Shields start recharging 25% sooner and refill 50% faster."
+flora = "voltvine"
+order = 1
+mods = Array[ExtResource("2_mod")]([SubResource("mod0"), SubResource("mod1")])

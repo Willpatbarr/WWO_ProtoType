@@ -11,7 +11,6 @@ extends StaticBody3D
 
 const BODY_COLOR := Color(0.2, 0.85, 0.95)
 const HEAD_COLOR := Color(1.0, 0.55, 0.1)
-const CRIT_COLOR := Color(1.0, 0.85, 0.2)
 
 var _body_mat := StandardMaterial3D.new()
 var _head_mat := StandardMaterial3D.new()
@@ -26,6 +25,11 @@ var manager: Node = null # the TargetManager, set when it starts up
 var _death_tween: Tween
 
 @onready var head_shape: CollisionShape3D = $Head
+
+
+static func is_target(node: Object) -> bool:
+	# Anything shootable: target dummies and enemies (they share hit/aim_parts/is_critical_shape).
+	return node is Node and (node as Node).is_in_group("all_targets")
 
 
 func _ready() -> void:
@@ -49,7 +53,7 @@ func _physics_process(delta: float) -> void:
 func aim_parts() -> Array:
 	# Aim assist targets: center and rough radius of each part. Head first.
 	return [
-		{"position": head_shape.global_position, "radius": 0.23, "critical": true},
+		{"position": head_shape.global_position, "radius": 0.17, "critical": true},
 		{"position": ($Body as CollisionShape3D).global_position, "radius": 0.4, "critical": false},
 	]
 
@@ -58,7 +62,7 @@ func is_critical_shape(shape_index: int) -> bool:
 	return shape_owner_get_owner(shape_find_owner(shape_index)) == head_shape
 
 
-func hit(damage: float, critical: bool, point: Vector3) -> bool:
+func hit(damage: float, critical: bool, point: Vector3, color := Color(0, 0, 0, 0)) -> bool:
 	# Returns true if this hit killed the target.
 	if dead:
 		return false
@@ -66,7 +70,7 @@ func hit(damage: float, critical: bool, point: Vector3) -> bool:
 		_head_flash = 1.0
 	else:
 		_body_flash = 1.0
-	_spawn_damage_number(damage, critical, point)
+	DamageNumbers.spawn(self, damage, critical, point, color)
 	health -= damage
 	if health <= 0.0:
 		_die()
@@ -115,28 +119,3 @@ func _process(delta: float) -> void:
 	_head_flash = move_toward(_head_flash, 0.0, 6.0 * delta)
 	_body_mat.albedo_color = BODY_COLOR.lerp(Color.WHITE, _body_flash)
 	_head_mat.albedo_color = HEAD_COLOR.lerp(Color.WHITE, _head_flash)
-
-
-func _spawn_damage_number(damage: float, critical: bool, point: Vector3) -> void:
-	var label := Label3D.new()
-	label.text = str(roundi(damage))
-	label.modulate = CRIT_COLOR if critical else Color.WHITE
-	label.outline_modulate = Color(0, 0, 0, 0.8)
-	label.font_size = 48 if critical else 36
-	label.outline_size = 8
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.fixed_size = true # same size on screen no matter how far away
-	label.pixel_size = 0.0006
-	_world_root().add_child(label)
-	label.global_position = point + Vector3(randf_range(-0.15, 0.15), 0.2, 0.0)
-	var tween := label.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(label, "global_position", label.global_position + Vector3.UP * 0.6, 0.7)
-	tween.tween_property(label, "modulate:a", 0.0, 0.7).set_delay(0.25)
-	tween.chain().tween_callback(label.queue_free)
-
-
-func _world_root() -> Node:
-	# Where to put spawned effects: the running level (or the tree root as a fallback).
-	return get_tree().current_scene if get_tree().current_scene else get_tree().root

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod0"]
+script = ExtResource("2_mod")
+stat = "melee_time"
+op = 1
+value = -0.15
+
+[sub_resource type="Resource" id="mod1"]
+script = ExtResource("2_mod")
+stat = "air_control"
+op = 1
+value = 0.3
+
+[resource]
+script = ExtResource("1_trait")
+id = "faster_melee"
+display_name = "Faster Melee"
+description = "Melee swings 15% faster, and you turn tighter in the air (+30% air control)."
+flora = "voltvine"
+order = 3
+mods = Array[ExtResource("2_mod")]([SubResource("mod0"), SubResource("mod1")])

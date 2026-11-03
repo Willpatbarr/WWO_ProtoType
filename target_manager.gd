@@ -7,15 +7,20 @@ extends Node
 
 
 func _ready() -> void:
+	for mate in get_tree().get_nodes_in_group("all_teammates"):
+		mate.reset()
 	for target in _all_targets():
 		target.manager = self
 	reset_targets()
 
 
 func reset_targets() -> void:
-	# Bring every target back at full health.
+	# Bring every target back at full health. Enemies reset to their spawn and own health.
 	for target in _all_targets():
-		target.revive(target_health)
+		if target.has_method("reset"):
+			target.reset()
+		else:
+			target.revive(target_health)
 
 
 func _set_target_health(value: float) -> void:

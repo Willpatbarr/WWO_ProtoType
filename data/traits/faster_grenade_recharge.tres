@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod0"]
+script = ExtResource("2_mod")
+stat = "grenade_recharge"
+op = 1
+value = -0.25
+
+[resource]
+script = ExtResource("1_trait")
+id = "faster_grenade_recharge"
+display_name = "Faster Grenade Recharge"
+description = "Grenades recharge 25% faster."
+flora = "ironbark"
+order = 0
+mods = Array[ExtResource("2_mod")]([SubResource("mod0")])

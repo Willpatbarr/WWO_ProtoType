@@ -1,11 +1,10 @@
 [gd_resource type="Resource" script_class="FramePartData" format=3]
 
-[ext_resource type="Script" path="res://stat_modifier.gd" id="1_mwqd7"]
-[ext_resource type="Script" path="res://frame_part_data.gd" id="2_woqs0"]
+[ext_resource type="Script" path="res://frame_part_data.gd" id="1_2unvm"]
 
 [resource]
-script = ExtResource("2_woqs0")
+script = ExtResource("1_2unvm")
 id = "standard_core"
 display_name = "Standard Core"
 slot = "core"
-order = 4
+order = 12

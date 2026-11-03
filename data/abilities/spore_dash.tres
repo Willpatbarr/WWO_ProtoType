@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" path="res://ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = "spore_dash"
+display_name = "Spore Dash"
+description = "Activate: launch backwards and leave a thick spore fog that enemies can't see through."
+color = Color(0.62, 0.45, 0.85, 1)
+kind = "active"
+order = 11
+flora = "veilspore"
+cooldown = 12.0
+dash_speed = 13.0
+dash_up = 5.0
+dash_fog_radius = 4.0
+dash_fog_time = 6.0

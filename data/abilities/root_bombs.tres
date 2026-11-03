@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" path="res://ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = "root_bombs"
+display_name = "Root Bombs"
+description = "Activate: throw two large root bombs that explode on impact. Made for bosses."
+color = Color(0.5, 0.35, 0.2, 1)
+kind = "active"
+order = 20
+flora = "ironbark"
+cooldown = 25.0
+bomb_damage = 150.0
+bomb_radius = 3.5
+bomb_speed = 22.0

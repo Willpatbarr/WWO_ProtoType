@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FloraData" format=3]
+
+[ext_resource type="Script" path="res://flora/flora_data.gd" id="1_flora"]
+
+[resource]
+script = ExtResource("1_flora")
+id = "voltvine"
+display_name = "VoltVine"
+description = "An electrified vine with glowing bulbs: speed and brawling. Boosts your mobility and melee against swarms. Ult: a massive explosive burst."
+color = Color(0.3, 0.6, 1, 1)
+order = 0
+ult = "blast"
+ult_name = "Massive Burst"
+graft_color = Color(0.25, 0.55, 1, 1)

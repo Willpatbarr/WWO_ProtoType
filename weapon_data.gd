@@ -32,6 +32,11 @@ extends Resource
 @export var hip_spread := 0.0 # degrees of random spread from the hip (none when fully aimed)
 @export var recoil_up := 0.35 # degrees the view kicks up per shot
 @export var recoil_side := 0.15
+# Kick-and-recover recoil (hand cannon style). 0 kick time = the view snaps up instantly
+# and stays there (you pull it back down yourself).
+@export var recoil_kick_time := 0.0 # seconds the view takes to rise
+@export var recoil_recovery := 0.0 # fraction of the kick that falls back on its own (0-1)
+@export var recoil_recovery_time := 0.12 # how quickly it falls back (seconds to settle most of the way)
 @export var gun_kick := 1.0 # how hard the model jolts back per shot
 @export var magazine_size := 30.0
 @export var reload_time := 2.0
@@ -45,6 +50,7 @@ extends Resource
 @export_group("Aim assist")
 @export var aim_assistance := 70.0
 @export var magnetism_angle := 2.5
+@export var crit_magnetism := 0.4 # heads only get magnetism inside this fraction of the cone
 @export var friction_strength := 0.45
 @export var friction_angle := 3.7
 @export var adhesion := 0.0

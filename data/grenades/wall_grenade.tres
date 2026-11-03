@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="GrenadeData" format=3]
+
+[ext_resource type="Script" path="res://grenade_data.gd" id="1_grenade"]
+
+[resource]
+script = ExtResource("1_grenade")
+id = "wall_grenade"
+display_name = "Wall Grenade"
+color = Color(0.55, 0.4, 0.25, 1)
+order = 20
+damage = 60.0
+blast_radius = 2.5
+flora = "ironbark"
+kind = "wall"
+bounce = 0.15
+wall_width = 5.0
+wall_height = 2.6
+wall_time = 10.0

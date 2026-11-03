@@ -3,8 +3,9 @@ extends SceneTree
 # Run from the project folder:  godot --headless -s tools/build_weapon_models.gd
 # Each model's origin is its sight point, so aiming down sights centers it.
 # Required node names: Magazine (moves during reload), MuzzleFlash (hidden; shown when firing).
-# Optional: SightDot (glows; turns red over a target).
-# Parts: [name, "box" or "cyl", size (box) or Vector2(radius, length) (cyl, along -z),
+# Optional: SightDot and SightRing (glow; turn red over a target).
+# Parts: [name, "box", "cyl", "ring" or "sphere", size (box) or Vector2(radius, length) (cyl, along -z)
+#         or Vector2(inner, outer radius) (ring, faces up; rotate 90 on x to face you),
 #         position, rotation in degrees, color, glow]
 
 const MATERIAL := preload("res://viewmodel_material.tres")
@@ -33,18 +34,17 @@ const MODELS := {
 		["SightDot", "sphere", Vector3(0.0025, 0, 0), Vector3.ZERO, Vector3.ZERO, Color(0.95, 0.95, 0.95), 4.0],
 		["MuzzleFlash", "sphere", Vector3(0.03, 0, 0), Vector3(0, -0.06, -0.41), Vector3.ZERO, FLASH, 6.0],
 	],
-	"handcannon": [ # revolver with iron sights; the front post top is the sight point
-		["Frame", "box", Vector3(0.045, 0.07, 0.16), Vector3(0, -0.055, 0.02), Vector3.ZERO, BRONZE, 0.0],
-		["Barrel", "box", Vector3(0.036, 0.042, 0.18), Vector3(0, -0.036, -0.14), Vector3.ZERO, DARK, 0.0],
-		["Rib", "box", Vector3(0.02, 0.008, 0.3), Vector3(0, -0.013, -0.07), Vector3.ZERO, DARK, 0.0],
-		["Magazine", "cyl", Vector2(0.032, 0.075), Vector3(0, -0.056, -0.005), Vector3.ZERO, GOLD, 0.0], # the cylinder
-		["Grip", "box", Vector3(0.036, 0.12, 0.05), Vector3(0, -0.13, 0.09), Vector3(-20, 0, 0), WOOD, 0.0],
-		["Hammer", "box", Vector3(0.012, 0.026, 0.02), Vector3(0, -0.016, 0.1), Vector3.ZERO, DARK, 0.0],
-		["FrontPost", "box", Vector3(0.006, 0.02, 0.01), Vector3(0, -0.011, -0.21), Vector3.ZERO, DARK, 0.0],
-		["RearLeft", "box", Vector3(0.007, 0.018, 0.01), Vector3(-0.009, -0.009, 0.08), Vector3.ZERO, DARK, 0.0],
-		["RearRight", "box", Vector3(0.007, 0.018, 0.01), Vector3(0.009, -0.009, 0.08), Vector3.ZERO, DARK, 0.0],
-		["SightDot", "sphere", Vector3(0.0022, 0, 0), Vector3(0, 0, -0.21), Vector3.ZERO, Color(0.95, 0.95, 0.95), 4.0],
-		["MuzzleFlash", "sphere", Vector3(0.04, 0, 0), Vector3(0, -0.036, -0.26), Vector3.ZERO, FLASH, 6.0],
+	"handcannon": [ # revolver with a floating holo reticle above the barrel (no iron sights)
+		# Everything sits 1 cm lower than the sight line so the reticle floats clear of the rib.
+		["Frame", "box", Vector3(0.045, 0.07, 0.16), Vector3(0, -0.065, 0.02), Vector3.ZERO, BRONZE, 0.0],
+		["Barrel", "box", Vector3(0.036, 0.042, 0.18), Vector3(0, -0.046, -0.14), Vector3.ZERO, DARK, 0.0],
+		["Rib", "box", Vector3(0.02, 0.008, 0.3), Vector3(0, -0.023, -0.07), Vector3.ZERO, DARK, 0.0],
+		["Magazine", "cyl", Vector2(0.032, 0.075), Vector3(0, -0.066, -0.005), Vector3.ZERO, GOLD, 0.0], # the cylinder
+		["Grip", "box", Vector3(0.036, 0.12, 0.05), Vector3(0, -0.14, 0.09), Vector3(-20, 0, 0), WOOD, 0.0],
+		["Hammer", "box", Vector3(0.012, 0.026, 0.02), Vector3(0, -0.026, 0.1), Vector3.ZERO, DARK, 0.0],
+		["SightRing", "ring", Vector2(0.0085, 0.0098), Vector3(0, 0, -0.12), Vector3(90, 0, 0), Color(0.95, 0.95, 0.95), 4.0],
+		["SightDot", "sphere", Vector3(0.0016, 0, 0), Vector3(0, 0, -0.12), Vector3.ZERO, Color(0.95, 0.95, 0.95), 4.0],
+		["MuzzleFlash", "sphere", Vector3(0.04, 0, 0), Vector3(0, -0.046, -0.26), Vector3.ZERO, FLASH, 6.0],
 	],
 	"shotgun": [ # pump action with a bead sight at the muzzle
 		["Receiver", "box", Vector3(0.05, 0.075, 0.22), Vector3(0, -0.058, 0.08), Vector3.ZERO, OLIVE, 0.0],
@@ -118,6 +118,13 @@ func _mesh(kind: String, size) -> Mesh:
 			cyl.radial_segments = 10
 			cyl.rings = 0
 			return cyl
+		"ring":
+			var ring := TorusMesh.new() # size = Vector2(inner radius, outer radius)
+			ring.inner_radius = size.x
+			ring.outer_radius = size.y
+			ring.rings = 24
+			ring.ring_segments = 6
+			return ring
 		_:
 			var sphere := SphereMesh.new()
 			sphere.radius = size.x

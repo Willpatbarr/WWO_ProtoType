@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="GrenadeData" format=3]
+
+[ext_resource type="Script" path="res://grenade_data.gd" id="1_grenade"]
+
+[resource]
+script = ExtResource("1_grenade")
+id = "snare_mine"
+display_name = "Snare Mine"
+color = Color(0.25, 0.4, 1, 1)
+order = 2
+damage = 80.0
+blast_radius = 4.0
+flora = "voltvine"
+kind = "tripmine"
+bounce = 0.0
+arm_time = 0.6
+trigger_radius = 2.5
+mine_life = 25.0
+slow_amount = 0.5
+slow_time = 3.0

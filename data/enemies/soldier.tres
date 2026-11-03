@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="SoldierData" format=3]
+
+[ext_resource type="Script" path="res://enemies/soldier_data.gd" id="1_soldier"]
+
+[resource]
+script = ExtResource("1_soldier")

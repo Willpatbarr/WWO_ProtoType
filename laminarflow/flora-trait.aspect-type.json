@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "name": "Flora::Trait",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Flora",
+      "position": 2
+    },
+    {
+      "label": "Effect",
+      "position": 3
+    },
+    {
+      "label": "Stat Changes",
+      "position": 4
+    },
+    {
+      "label": "Notes",
+      "position": 5
+    }
+  ]
+}

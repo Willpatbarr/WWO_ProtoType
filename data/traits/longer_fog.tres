@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[resource]
+script = ExtResource("1_trait")
+id = "longer_fog"
+display_name = "Longer Fog"
+description = "Your spore fog lasts 50% longer."
+flora = "veilspore"
+order = 0
+effect = "fog_longer"
+amount = 0.5

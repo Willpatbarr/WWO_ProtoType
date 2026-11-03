@@ -13,3 +13,4 @@ order = 0
 unlocked = true
 speed_mult = 1.15
 extra_jumps = 1.0
+flora = "voltvine"

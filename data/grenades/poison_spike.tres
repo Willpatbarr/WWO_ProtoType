@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="GrenadeData" format=3]
+
+[ext_resource type="Script" path="res://grenade_data.gd" id="1_grenade"]
+
+[resource]
+script = ExtResource("1_grenade")
+id = "poison_spike"
+display_name = "Poison Spike"
+color = Color(0.75, 0.3, 0.9, 1)
+order = 11
+damage = 30.0
+blast_radius = 1.5
+flora = "veilspore"
+kind = "spike"
+bounce = 0.75
+poison_dps = 20.0
+poison_time = 5.0
+spike_life = 6.0
+seek_radius = 7.0
+seek_strength = 160.0

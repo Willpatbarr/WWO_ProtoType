@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://frame_part_data.gd" id="1_rvl3p"]
+
+[resource]
+script = ExtResource("1_rvl3p")
+id = "braced_arms"
+display_name = "Braced Arms"
+slot = "arms"
+order = 6
+dexterity = 2.0
+durability = 1.0

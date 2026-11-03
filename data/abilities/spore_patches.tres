@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" path="res://ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = "spore_patches"
+display_name = "Spore Patches"
+description = "Triggered: your grenades leave patches of fog-emitting flora wherever they touch down."
+color = Color(0.45, 0.75, 0.6, 1)
+kind = "triggered"
+order = 12
+flora = "veilspore"
+patch_radius = 2.0
+patch_time = 6.0
+patch_max = 4.0

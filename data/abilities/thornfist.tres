@@ -14,3 +14,4 @@ unlocked = true
 melee_damage_mult = 2.0
 duration = 8.0
 cooldown = 20.0
+flora = "voltvine"

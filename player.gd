@@ -48,13 +48,23 @@ var slide_speed_now := 0.0
 var takeoff_speed := 0.0 # keeps sprint/slide momentum while airborne
 var lunging := false # melee lunge: dashing toward a target
 var mantling := false # pulling up onto a ledge
+var ulting := false # the ult is playing: no moving or looking (UltManager runs it)
+var slow_left := 0.0 # seconds of Slow left (from the Tank's slam)
+var slow_amount := 0.0 # 0.5 = half speed while slowed
+var veil_left := 0.0 # seconds of the VeilSpore ult left (invisible while in spore fog)
+var entrench_left := 0.0 # seconds of the IronBark ult left (rooted, invulnerable, fast grenades)
+var _launch_time := 0.0 # just launched (Spore Dash): treat as airborne so the speed carries
 var _mantle_from := Vector3.ZERO
 var _mantle_to := Vector3.ZERO
 var _mantle_t := 0.0
 var _lunge_target: Node3D = null
 var _lunge_time := 0.0
+var _lunge_last_flat := INF
 var _crouch_was_held := false
 var _crouch_toggled := false # crouch is a toggle: tap to crouch, tap again to stand
+var _slide_queued := false # crouch pressed in the air with sprint momentum: slide on landing
+var _since_landed := 99.0 # seconds since touching down
+var _landed_sprinting := false # had sprint momentum when you touched down
 var _camera_base_y := STAND_CAMERA_Y
 var _bob_time := 0.0
 var _bob_weight := 0.0 # fades the bob in and out when you start or stop walking
@@ -65,7 +75,7 @@ var _land_offset := 0.0 # current landing dip applied to the camera
 
 @onready var camera: Camera3D = $Camera3D
 @onready var collider: CollisionShape3D = $CollisionShape3D
-@onready var mesh: MeshInstance3D = $MeshInstance3D
+@onready var model: CharacterModel = $Model # the body: only its shadow shows, since you see from inside the head
 @onready var gun: Gun = $Camera3D/Gun
 @export var abilities: AbilityManager
 @export var mods: Modifiers # frame parts (and later traits) adjust stats through this
@@ -73,10 +83,13 @@ var _land_offset := 0.0 # current landing dip applied to the camera
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Your own body would block the view from inside the head, so only its shadow shows.
+	model.set_shadow_only(true)
+	model.follow_loadout(mods.loadout) # part colors (only shows in the shadow for now)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not ulting:
 		_look(Vector2(event.relative) * mouse_sensitivity * 0.001)
 	elif event is InputEventMouseButton and event.pressed:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED # click to recapture
@@ -91,6 +104,21 @@ func _look(amount: Vector2) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if (ulting or entrench_left > 0.0) and lunging:
+		lunging = false # a lunge can't move while you're frozen or rooted; drop it so the punch lands
+	if ulting or entrench_left > 0.0:
+		# Frozen in place for the ult, and rooted while entrenched (you can still look and
+		# shoot). Still falls if you were in the air.
+		if entrench_left > 0.0 and not ulting:
+			var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+			_look(stick * stick_sensitivity * delta * gun.aim_assist.friction_scale())
+			sprinting = false
+			sliding = false
+		_apply_gravity(delta)
+		velocity.x = 0.0
+		velocity.z = 0.0
+		move_and_slide()
+		return
 	var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	_look(stick * stick_sensitivity * delta * gun.aim_assist.friction_scale()) # friction: slower near targets
 
@@ -101,6 +129,7 @@ func _physics_process(delta: float) -> void:
 		_update_mantle(delta) # takes over movement until you're up
 		_update_body_height(delta)
 		_update_landing_dip(delta)
+		_update_model()
 		return
 
 	_update_sprint(input_dir)
@@ -118,6 +147,7 @@ func _physics_process(delta: float) -> void:
 	_update_body_height(delta)
 	_update_landing_dip(delta)
 	_update_head_bob(delta)
+	_update_model()
 
 
 func _update_sprint(input_dir: Vector2) -> void:
@@ -140,13 +170,20 @@ func _update_crouch_and_slide(wish_dir: Vector3) -> void:
 	# Tapping crouch while sprinting on the ground starts a slide instead.
 	# The slide runs its full distance on its own; only a jump ends it early.
 	# Afterward you stand back up.
+	# From a sprint jump: crouch in the air queues a slide for the moment you land, and
+	# crouch just after landing still slides (LAND_SLIDE_WINDOW), so momentum carries.
+	_since_landed += get_physics_process_delta_time()
 	if crouch_started:
-		if sprinting and is_on_floor() and _m("slide_speed", slide_speed) > _m("crouch_speed", crouch_speed):
-			sliding = true
-			slide_dir = wish_dir if wish_dir else -transform.basis.z
-			slide_speed_now = _m("slide_speed", slide_speed)
+		var can_slide := _m("slide_speed", slide_speed) > _m("crouch_speed", crouch_speed)
+		var just_landed := _since_landed <= LAND_SLIDE_WINDOW and _landed_sprinting
+		if can_slide and is_on_floor() and (sprinting or just_landed) and not sliding:
+			_start_slide(wish_dir)
+		elif can_slide and not is_on_floor() and _has_sprint_momentum():
+			_slide_queued = not _slide_queued # tap again in the air to cancel
 		elif not sliding:
 			_crouch_toggled = not _crouch_toggled
+	if _slide_queued and not is_on_floor():
+		return # stay standing in the air; the slide starts on landing
 
 	if sliding or _crouch_toggled:
 		crouching = true
@@ -155,15 +192,42 @@ func _update_crouch_and_slide(wish_dir: Vector3) -> void:
 		crouching = false
 
 
+const LAND_SLIDE_WINDOW := 0.2 # seconds after landing that crouch still turns into a slide
+
+
+func _has_sprint_momentum() -> bool:
+	return sprinting or takeoff_speed > _m("walk_speed", walk_speed) * 1.05
+
+
+func _start_slide(wish_dir: Vector3) -> void:
+	sliding = true
+	_slide_queued = false
+	var moving := Vector3(velocity.x, 0.0, velocity.z)
+	slide_dir = wish_dir if wish_dir else (moving.normalized() if moving.length() > 0.5 else -transform.basis.z)
+	slide_speed_now = _m("slide_speed", slide_speed)
+	crouching = true
+	sprinting = false
+
+
+func launch(new_velocity: Vector3) -> void:
+	# Throws you (Spore Dash). You keep the horizontal speed until you land.
+	velocity = new_velocity
+	takeoff_speed = Vector2(new_velocity.x, new_velocity.z).length()
+	_launch_time = 0.15
+	sliding = false
+	sprinting = false
+
+
 func _apply_gravity(delta: float) -> void:
-	if is_on_floor():
+	_launch_time = maxf(_launch_time - delta, 0.0)
+	if is_on_floor() and _launch_time <= 0.0:
 		jumps_used = 0
 		takeoff_speed = 0.0
 		_air_time = 0.0
 		return
 
 	_air_time += delta
-	if jumps_used == 0 and _air_time > _m("coyote_time", coyote_time):
+	if jumps_used == 0 and _air_time > coyote_time:
 		jumps_used = 1 # walked off a ledge and missed the coyote window: only the air jump is left
 
 	var gravity := ascent_gravity if velocity.y > 0.0 else descent_gravity
@@ -206,8 +270,8 @@ func _apply_horizontal(wish_dir: Vector3, delta: float) -> void:
 		speed = _m("crouch_speed", crouch_speed)
 	elif sprinting:
 		speed = _m("sprint_speed", sprint_speed)
-	speed *= abilities.speed_multiplier() * gun.move_multiplier()
-	if not is_on_floor():
+	speed *= abilities.speed_multiplier() * gun.move_multiplier() * slow_multiplier()
+	if not is_on_floor() or _launch_time > 0.0:
 		# In the air you keep your momentum and can only steer it gradually.
 		speed = maxf(speed, takeoff_speed)
 		if wish_dir:
@@ -231,10 +295,39 @@ func _update_body_height(delta: float) -> void:
 	var offset := (height - STAND_HEIGHT) / 2.0
 	(collider.shape as CapsuleShape3D).height = height
 	collider.position.y = offset
-	(mesh.mesh as CapsuleMesh).height = height
-	mesh.position.y = offset
 	var camera_y := STAND_CAMERA_Y + (height - STAND_HEIGHT)
 	_camera_base_y = lerpf(_camera_base_y, camera_y, CAMERA_SMOOTHING * delta)
+
+
+# Speeds (m/s) the body animations look right at; playback speeds up or slows to match.
+const WALK_ANIM_SPEED := 1.6
+const JOG_ANIM_SPEED := 4.5
+const SPRINT_ANIM_SPEED := 7.0
+const CROUCH_ANIM_SPEED := 1.5
+
+
+func _update_model() -> void:
+	# Pick the body animation from what you're doing.
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if mantling:
+		model.play("Jump_Start")
+	elif sliding:
+		model.play("Crouch_Idle")
+	elif not is_on_floor():
+		model.play("Jump")
+	elif crouching:
+		if speed > 0.3:
+			model.play("Crouch_Fwd", clampf(speed / CROUCH_ANIM_SPEED, 0.6, 2.0))
+		else:
+			model.play("Crouch_Idle")
+	elif speed < 0.3:
+		model.play("Idle")
+	elif sprinting:
+		model.play("Sprint", clampf(speed / SPRINT_ANIM_SPEED, 0.6, 2.0))
+	elif speed > 3.0:
+		model.play("Jog_Fwd", clampf(speed / JOG_ANIM_SPEED, 0.6, 2.0))
+	else:
+		model.play("Walk", clampf(speed / WALK_ANIM_SPEED, 0.6, 2.0))
 
 
 func _update_head_bob(delta: float) -> void:
@@ -266,6 +359,11 @@ func _launch_speed(height: float) -> float:
 
 
 func _land(fall_speed: float) -> void:
+	_since_landed = 0.0
+	_landed_sprinting = sprinting or takeoff_speed > _m("walk_speed", walk_speed) * 1.05
+	if _slide_queued:
+		var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		_start_slide((transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized())
 	_land_kick = -clampf(fall_speed * LANDING_DIP_PER_SPEED, 0.0, LANDING_DIP_MAX) * landing_dip
 
 
@@ -285,6 +383,7 @@ func start_lunge(target: Node3D) -> void:
 	lunging = true
 	_lunge_target = target
 	_lunge_time = 0.0
+	_lunge_last_flat = INF
 	sprinting = false
 	sliding = false
 
@@ -296,7 +395,14 @@ func _apply_lunge(delta: float) -> void:
 	var goal := _lunge_target.global_position + Vector3.UP * 1.0
 	var to := goal - global_position
 	to.y *= gun.lunge_vertical # 0 = ground only, 1 = full pull up/down
-	var arrived := to.length() <= LUNGE_STOP_DISTANCE
+	# Arrived once you're up against its body (measured flat, so short or tall targets
+	# count), or once you've stopped getting any closer (bumped into it or a wall).
+	var flat := Vector2(to.x, to.z).length()
+	var body_radius: float = _lunge_target.aim_parts()[-1].radius
+	var reach := LUNGE_STOP_DISTANCE + body_radius * 0.5
+	var stalled := _lunge_time > 0.1 and flat >= _lunge_last_flat - 0.02
+	_lunge_last_flat = flat
+	var arrived := flat <= reach or stalled
 	if (arrived and _lunge_time >= LUNGE_MIN_TIME) or _lunge_time > LUNGE_MAX_TIME:
 		lunging = false
 		velocity = Vector3.ZERO # stop dead; gravity takes over next frame
@@ -321,6 +427,81 @@ func _m(stat: String, base: float) -> float:
 	return mods.apply(stat, base)
 
 
+var _kick_left := 0.0 # radians of upward kick still to apply
+var _kick_yaw_left := 0.0
+var _kick_rate := 0.0 # radians per second while kicking
+var _recoil_rest := 0.0 # camera pitch the view settles back to
+var _recovering := false
+var _recovery_time := 0.12
+
+
+func apply_slow(amount: float, seconds: float) -> void:
+	# Slow status: cuts your speed for a while. A new slow refreshes the time.
+	slow_amount = maxf(clampf(amount, 0.0, 0.95), slow_amount if slow_left > 0.0 else 0.0)
+	slow_left = maxf(slow_left, seconds)
+
+
+func is_invisible() -> bool:
+	# The VeilSpore ult: enemies can't see you while you're veiled and inside spore fog.
+	return veil_left > 0.0 and SporeFog.contains(get_tree(), global_position)
+
+
+func veil_melee_multiplier() -> float:
+	var ult := get_tree().get_first_node_in_group("ult_manager")
+	return ult.veil_melee_mult if ult and is_invisible() else 1.0
+
+
+func entrench_recharge_multiplier() -> float:
+	var ult := get_tree().get_first_node_in_group("ult_manager")
+	return ult.entrench_grenade_mult if ult and entrench_left > 0.0 else 1.0
+
+
+func slow_multiplier() -> float:
+	return 1.0 - slow_amount if slow_left > 0.0 else 1.0
+
+
+func add_recoil(pitch: float, yaw: float, kick_time: float, recovery: float, recovery_time: float) -> void:
+	# A shot's recoil. With a kick time, the view rises over that time, then falls back by
+	# `recovery` of the kick. Shooting again before it settles stacks from where you are,
+	# so timing your shots keeps you on target.
+	if kick_time <= 0.0 and recovery <= 0.0:
+		apply_recoil(pitch, yaw)
+		return
+	_kick_left += pitch
+	_kick_yaw_left += yaw
+	_kick_rate = _kick_left / maxf(kick_time, 0.001)
+	var peak := camera.rotation.x + _kick_left
+	_recoil_rest = peak - pitch * clampf(recovery, 0.0, 1.0) # only this shot's kick falls back
+	_recovery_time = maxf(recovery_time, 0.01)
+	_recovering = recovery > 0.0
+
+
+func _process(delta: float) -> void:
+	_update_recoil(delta)
+	slow_left = maxf(slow_left - delta, 0.0)
+	veil_left = maxf(veil_left - delta, 0.0)
+	entrench_left = maxf(entrench_left - delta, 0.0)
+
+
+func _update_recoil(delta: float) -> void:
+	if _kick_left > 0.0:
+		var step := minf(_kick_left, _kick_rate * delta)
+		var fraction := step / _kick_left
+		var yaw_step := _kick_yaw_left * fraction
+		_kick_left -= step
+		_kick_yaw_left -= yaw_step
+		apply_recoil(step, yaw_step)
+		return
+	if not _recovering:
+		return
+	var pitch := camera.rotation.x
+	if pitch <= _recoil_rest + 0.0002:
+		_recovering = false # settled, or you already pulled it down yourself
+		return
+	var target := lerpf(pitch, _recoil_rest, 1.0 - exp(-delta * 3.0 / _recovery_time))
+	camera.rotation.x = target
+
+
 func apply_recoil(pitch: float, yaw: float) -> void:
 	# Kicks the view directly (not slowed by ADS look scaling).
 	rotate_y(yaw)
@@ -342,7 +523,7 @@ const MANTLE_MIN_HEIGHT := 0.3 # ledges lower than this above your feet aren't w
 func _try_mantle(input_dir: Vector2) -> bool:
 	# Mantle when you're airborne, pushing forward, facing a wall with a flat top in reach,
 	# and there's room to stand up there.
-	var reach := _m("mantle_reach", mantle_reach)
+	var reach := mantle_reach
 	if mantle_reach <= 0.0 or reach <= 0.0 or is_on_floor() or sliding or lunging or input_dir.y > -0.5:
 		return false
 	var space := get_world_3d().direct_space_state
@@ -355,13 +536,13 @@ func _try_mantle(input_dir: Vector2) -> bool:
 	# 1. A wall right in front of you at chest height.
 	var chest := global_position + Vector3.UP * 0.2
 	var wall := _ray(space, chest, chest + forward * MANTLE_WALL_CHECK)
-	if wall.is_empty() or wall.collider is Target:
+	if wall.is_empty() or Target.is_target(wall.collider):
 		return false
 
 	# 2. A flat top within reach, just past the wall face.
 	var probe: Vector3 = wall.position + forward * MANTLE_STEP_IN
 	var top := _ray(space, Vector3(probe.x, feet + reach + 0.1, probe.z), Vector3(probe.x, feet + MANTLE_MIN_HEIGHT, probe.z))
-	if top.is_empty() or top.normal.y < 0.7 or top.collider is Target:
+	if top.is_empty() or top.normal.y < 0.7 or Target.is_target(top.collider):
 		return false
 
 	# 3. Room to stand there.
@@ -388,7 +569,7 @@ func _try_mantle(input_dir: Vector2) -> bool:
 
 func _update_mantle(delta: float) -> void:
 	# Rise up along the wall first, then roll forward over the edge.
-	_mantle_t += delta / maxf(_m("mantle_time", mantle_time), 0.05)
+	_mantle_t += delta / maxf(mantle_time, 0.05)
 	var t := minf(_mantle_t, 1.0)
 	var up := smoothstep(0.0, 0.55, t)
 	var over := smoothstep(0.45, 1.0, t)

@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://enemies/tank.gd" id="1_tank"]
+[ext_resource type="Resource" path="res://data/enemies/tank.tres" id="2_data"]
+[ext_resource type="Script" path="res://characters/character_model.gd" id="3_model"]
+
+[sub_resource type="CapsuleShape3D" id="body_shape"]
+radius = 0.42
+height = 2.6
+
+[sub_resource type="BoxShape3D" id="weak_shape"]
+size = Vector3(0.34, 0.31, 0.19)
+
+[node name="Tank" type="CharacterBody3D"]
+script = ExtResource("1_tank")
+data = ExtResource("2_data")
+body_color = Color(0.3, 0.33, 0.22, 1)
+joint_color = Color(0.12, 0.12, 0.14, 1)
+model_scale = 1.55
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+shape = SubResource("body_shape")
+
+[node name="WeakSpot" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0.3)
+shape = SubResource("weak_shape")
+
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("3_model")

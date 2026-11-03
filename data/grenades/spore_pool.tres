@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GrenadeData" format=3]
+
+[ext_resource type="Script" path="res://grenade_data.gd" id="1_grenade"]
+
+[resource]
+script = ExtResource("1_grenade")
+id = "spore_pool"
+display_name = "Lingering Pool"
+color = Color(0.55, 0.85, 0.35, 1)
+order = 10
+damage = 40.0
+blast_radius = 3.0
+flora = "veilspore"
+kind = "pool"
+pool_dps = 25.0
+pool_time = 5.0

@@ -1,0 +1,54 @@
+{
+  "format_version": 1,
+  "name": "Weapon",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Archetype",
+      "position": 2
+    },
+    {
+      "label": "Fire Mode",
+      "position": 3
+    },
+    {
+      "label": "Damage",
+      "position": 4
+    },
+    {
+      "label": "Crit Multiplier",
+      "position": 5
+    },
+    {
+      "label": "Fire Rate",
+      "position": 6
+    },
+    {
+      "label": "Magazine & Reload",
+      "position": 7
+    },
+    {
+      "label": "Range",
+      "position": 8
+    },
+    {
+      "label": "Zoom",
+      "position": 9
+    },
+    {
+      "label": "Handling",
+      "position": 10
+    },
+    {
+      "label": "Aim Assist",
+      "position": 11
+    },
+    {
+      "label": "Notes",
+      "position": 12
+    }
+  ]
+}

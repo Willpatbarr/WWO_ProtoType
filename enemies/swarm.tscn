@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://enemies/swarm.gd" id="1_swarm"]
+[ext_resource type="Resource" path="res://data/enemies/swarm.tres" id="2_data"]
+[ext_resource type="Script" path="res://characters/character_model.gd" id="3_model"]
+
+[sub_resource type="CapsuleShape3D" id="body_shape"]
+radius = 0.32
+height = 1.3
+
+[sub_resource type="BoxShape3D" id="head_shape"]
+size = Vector3(0.22, 0.26, 0.24)
+
+[node name="Swarm" type="CharacterBody3D"]
+script = ExtResource("1_swarm")
+data = ExtResource("2_data")
+body_color = Color(0.62, 0.68, 0.2, 1)
+joint_color = Color(0.2, 0.15, 0.1, 1)
+model_scale = 0.95
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, 0)
+shape = SubResource("body_shape")
+
+[node name="Head" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.48, 0)
+shape = SubResource("head_shape")
+
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("3_model")

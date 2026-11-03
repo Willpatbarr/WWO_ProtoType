@@ -1,0 +1,30 @@
+{
+  "format_version": 1,
+  "name": "Flora::Ult",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Flora",
+      "position": 2
+    },
+    {
+      "label": "Effect",
+      "position": 3
+    },
+    {
+      "label": "Duration",
+      "position": 4
+    },
+    {
+      "label": "Charge",
+      "position": 5
+    },
+    {
+      "label": "Notes",
+      "position": 6
+    }
+  ]
+}

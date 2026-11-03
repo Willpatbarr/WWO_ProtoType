@@ -1,0 +1,42 @@
+{
+  "format_version": 1,
+  "name": "Flora::Grenade",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Flora",
+      "position": 2
+    },
+    {
+      "label": "Damage",
+      "position": 3
+    },
+    {
+      "label": "Blast Radius",
+      "position": 4
+    },
+    {
+      "label": "Throw Distance",
+      "position": 5
+    },
+    {
+      "label": "Recharge",
+      "position": 6
+    },
+    {
+      "label": "Fuse",
+      "position": 7
+    },
+    {
+      "label": "Special Behavior",
+      "position": 8
+    },
+    {
+      "label": "Notes",
+      "position": 9
+    }
+  ]
+}

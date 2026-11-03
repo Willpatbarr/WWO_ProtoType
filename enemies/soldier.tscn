@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://enemies/soldier.gd" id="1_soldier"]
+[ext_resource type="Resource" path="res://data/enemies/soldier.tres" id="2_data"]
+[ext_resource type="Script" path="res://characters/character_model.gd" id="3_model"]
+
+[sub_resource type="CapsuleShape3D" id="body_shape"]
+radius = 0.3
+height = 1.5
+
+[sub_resource type="BoxShape3D" id="head_shape"]
+size = Vector3(0.22, 0.27, 0.24)
+
+[node name="Soldier" type="CharacterBody3D"]
+script = ExtResource("1_soldier")
+data = ExtResource("2_data")
+body_color = Color(0.55, 0.15, 0.13, 1)
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("body_shape")
+
+[node name="Head" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+shape = SubResource("head_shape")
+
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("3_model")

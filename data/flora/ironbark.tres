@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FloraData" format=3]
+
+[ext_resource type="Script" path="res://flora/flora_data.gd" id="1_flora"]
+
+[resource]
+script = ExtResource("1_flora")
+id = "ironbark"
+display_name = "IronBark"
+description = "Armor yourself in the bark of iron wood trees: tankier and less mobile, a bastion to rally behind. Ult: entrench, becoming invulnerable with faster grenade recharge."
+color = Color(0.6, 0.43, 0.27, 1)
+order = 2
+ult = "entrench"
+ult_name = "Entrench"
+graft_color = Color(0.45, 0.31, 0.19, 1)

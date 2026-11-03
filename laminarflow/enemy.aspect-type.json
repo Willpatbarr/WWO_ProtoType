@@ -1,0 +1,46 @@
+{
+  "format_version": 1,
+  "name": "Enemy",
+  "fields": [
+    {
+      "label": "Summary",
+      "position": 1
+    },
+    {
+      "label": "Role",
+      "position": 2
+    },
+    {
+      "label": "Health & Shields",
+      "position": 3
+    },
+    {
+      "label": "Weak Points",
+      "position": 4
+    },
+    {
+      "label": "Movement",
+      "position": 5
+    },
+    {
+      "label": "Attacks",
+      "position": 6
+    },
+    {
+      "label": "Behavior",
+      "position": 7
+    },
+    {
+      "label": "Spawning & Respawn",
+      "position": 8
+    },
+    {
+      "label": "Drops & Rewards",
+      "position": 9
+    },
+    {
+      "label": "Notes",
+      "position": 10
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FramePartData" format=3]
+
+[ext_resource type="Script" path="res://frame_part_data.gd" id="1_fnl34"]
+
+[resource]
+script = ExtResource("1_fnl34")
+id = "scout_head"
+display_name = "Scout Head"
+slot = "head"
+order = 3
+aerial = 2.0
+dexterity = 1.0

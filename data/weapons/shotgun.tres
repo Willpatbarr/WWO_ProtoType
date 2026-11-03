@@ -42,3 +42,4 @@ friction_angle = 6.0
 adhesion = 0.0
 assist_range = 12.0
 ads_boost = 1.2
+crit_magnetism = 0.4

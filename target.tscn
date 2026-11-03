@@ -6,13 +6,13 @@
 size = Vector3(0.8, 1.4, 0.5)
 
 [sub_resource type="BoxShape3D" id="head_shape"]
-size = Vector3(0.45, 0.45, 0.45)
+size = Vector3(0.32, 0.32, 0.32)
 
 [sub_resource type="BoxMesh" id="body_mesh"]
 size = Vector3(0.8, 1.4, 0.5)
 
 [sub_resource type="BoxMesh" id="head_mesh"]
-size = Vector3(0.45, 0.45, 0.45)
+size = Vector3(0.32, 0.32, 0.32)
 
 [node name="Target" type="StaticBody3D"]
 script = ExtResource("1_target")
@@ -22,7 +22,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 shape = SubResource("body_shape")
 
 [node name="Head" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, 0)
 shape = SubResource("head_shape")
 
 [node name="BodyMesh" type="MeshInstance3D" parent="."]
@@ -30,5 +30,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 mesh = SubResource("body_mesh")
 
 [node name="HeadMesh" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, 0)
 mesh = SubResource("head_mesh")

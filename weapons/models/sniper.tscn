@@ -67,9 +67,9 @@ height = 0.12
 radial_segments = 8
 rings = 4
 
-[node name="Sniper" type="Node3D" unique_id=348053610]
+[node name="Sniper" type="Node3D" unique_id=2144316184]
 
-[node name="Receiver" type="MeshInstance3D" parent="." unique_id=998024336]
+[node name="Receiver" type="MeshInstance3D" parent="." unique_id=1049597971]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.085, 0.05)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -77,7 +77,7 @@ instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_8hc04")
 
-[node name="Barrel" type="MeshInstance3D" parent="." unique_id=238804670]
+[node name="Barrel" type="MeshInstance3D" parent="." unique_id=1615758803]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.075, -0.36)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -85,7 +85,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("CylinderMesh_cvbmj")
 
-[node name="Brake" type="MeshInstance3D" parent="." unique_id=1897023487]
+[node name="Brake" type="MeshInstance3D" parent="." unique_id=1528030995]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.075, -0.64)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -93,7 +93,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_0v0si")
 
-[node name="Scope" type="MeshInstance3D" parent="." unique_id=1255441367]
+[node name="Scope" type="MeshInstance3D" parent="." unique_id=388301556]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -101,7 +101,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("CylinderMesh_emv0r")
 
-[node name="ScopeFront" type="MeshInstance3D" parent="." unique_id=20377869]
+[node name="ScopeFront" type="MeshInstance3D" parent="." unique_id=48320766]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.16)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -109,7 +109,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("CylinderMesh_a0ovb")
 
-[node name="ScopeRear" type="MeshInstance3D" parent="." unique_id=969885002]
+[node name="ScopeRear" type="MeshInstance3D" parent="." unique_id=5546389]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0.15)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -117,7 +117,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("CylinderMesh_b7qlo")
 
-[node name="Lens" type="MeshInstance3D" parent="." unique_id=2017385808]
+[node name="Lens" type="MeshInstance3D" parent="." unique_id=831308421]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.186)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -125,7 +125,7 @@ instance_shader_parameters/color = Color(0.3, 0.6, 0.9, 1)
 instance_shader_parameters/glow = 1.5
 mesh = SubResource("CylinderMesh_brfn8")
 
-[node name="MountFront" type="MeshInstance3D" parent="." unique_id=1367685777]
+[node name="MountFront" type="MeshInstance3D" parent="." unique_id=1447575475]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.04, -0.08)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -133,7 +133,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_gwytq")
 
-[node name="MountRear" type="MeshInstance3D" parent="." unique_id=1976853236]
+[node name="MountRear" type="MeshInstance3D" parent="." unique_id=557061460]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.04, 0.08)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -141,7 +141,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_84wew")
 
-[node name="Bolt" type="MeshInstance3D" parent="." unique_id=566094792]
+[node name="Bolt" type="MeshInstance3D" parent="." unique_id=733443901]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.045, -0.07, 0.12)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -149,7 +149,7 @@ instance_shader_parameters/color = Color(0.78, 0.6, 0.25, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_jpi4x")
 
-[node name="Magazine" type="MeshInstance3D" parent="." unique_id=110178430]
+[node name="Magazine" type="MeshInstance3D" parent="." unique_id=2032261488]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.145, 0.02)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -157,7 +157,7 @@ instance_shader_parameters/color = Color(0.95, 0.5, 0.1, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_xsinh")
 
-[node name="Grip" type="MeshInstance3D" parent="." unique_id=2065359279]
+[node name="Grip" type="MeshInstance3D" parent="." unique_id=2021606498]
 transform = Transform3D(1, 0, 0, 0, 0.9659258, 0.25881904, 0, -0.25881904, 0.9659258, 0, -0.16, 0.16)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -165,7 +165,7 @@ instance_shader_parameters/color = Color(0.12, 0.12, 0.13, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_8eqji")
 
-[node name="Stock" type="MeshInstance3D" parent="." unique_id=1502862063]
+[node name="Stock" type="MeshInstance3D" parent="." unique_id=1572630411]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0.34)
 material_override = ExtResource("1_t6sql")
 cast_shadow = 0
@@ -173,7 +173,7 @@ instance_shader_parameters/color = Color(0.22, 0.24, 0.28, 1)
 instance_shader_parameters/glow = 0.0
 mesh = SubResource("BoxMesh_xoyev")
 
-[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1466476249]
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=724507389]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.075, -0.68)
 visible = false
 material_override = ExtResource("1_t6sql")

@@ -11,7 +11,7 @@ extends Node
 @export var detonation_time := 1.5 # seconds of fuse after the throw
 # Damage and blast radius come from the equipped grenade's data file.
 
-const LAUNCH_ANGLE := 20.0 # degrees above where you're looking
+const LAUNCH_ANGLE := 7.0 # degrees above where you're looking: a fast, flat throw (was a 20 degree lob)
 const HAND_OFFSET := Vector3(0.2, -0.25, -0.5) # where it leaves your hand, relative to the camera
 
 @export var player: CharacterBody3D
@@ -19,13 +19,15 @@ const HAND_OFFSET := Vector3(0.2, -0.25, -0.5) # where it leaves your hand, rela
 @export var abilities: AbilityManager
 @export var mods: Modifiers
 
-var charge := 1.0 # 1 = ready
+var charge := 1.0 # grenade charges: 1 = one ready; can go up to max_charges() (Extra Grenade)
 
 
 func _process(delta: float) -> void:
-	if charge < 1.0:
-		charge = minf(charge + delta / maxf(effective_recharge_time(), 0.1), 1.0)
-	if Input.is_action_just_pressed("grenade"):
+	if charge < max_charges():
+		charge = minf(charge + delta / maxf(effective_recharge_time(), 0.1), max_charges())
+	charge = minf(charge, max_charges()) # Extra Grenade unequipped
+	var pressed := Input.is_action_just_pressed("grenade") or ControllerChord.consume(get_tree(), "grenade") # G, or L1 alone
+	if pressed and not player.ulting:
 		throw()
 
 
@@ -36,7 +38,12 @@ func effective_throw_distance(grenade: GrenadeData = null) -> float:
 
 func effective_recharge_time(grenade: GrenadeData = null) -> float:
 	grenade = grenade if grenade else loadout.grenade
-	return recharge_time * (grenade.recharge_mult if grenade else 1.0)
+	var time := mods.apply("grenade_recharge", recharge_time * (grenade.recharge_mult if grenade else 1.0)) # traits
+	return time / player.entrench_recharge_multiplier() # the IronBark ult speeds it up
+
+
+func max_charges() -> float:
+	return 1.0 + abilities.extra_charges() # Extra Grenade adds a charge
 
 
 func effective_fuse(grenade: GrenadeData = null) -> float:
@@ -52,7 +59,7 @@ func throw() -> bool:
 	var gun: Gun = player.gun
 	if not is_ready() or gun.meleeing or player.mantling or loadout.grenade == null:
 		return false
-	charge = 0.0
+	charge -= 1.0
 	gun.cancel_reload() # throwing cancels a reload, like Destiny
 	gun.start_throw_pose()
 
@@ -66,10 +73,14 @@ func throw() -> bool:
 	var grenade := Grenade.new()
 	grenade.color = loadout.grenade.color
 	grenade.damage = loadout.grenade.damage
-	grenade.blast_radius = loadout.grenade.blast_radius
+	grenade.blast_radius = loadout.grenade.blast_radius * (1.0 + loadout.trait_bonus("blast_bigger")) # Bigger Explosions trait
 	grenade.fuse = effective_fuse()
 	grenade.gun = gun
 	grenade.seedburst = abilities.seedburst() # null unless Seedburst is equipped
+	grenade.data = loadout.grenade # kind (explosive / pool / spike) and its settings
+	grenade.spore_patches = abilities.spore_patches() # null unless Spore Patches is equipped
+	grenade.explode_on_impact = loadout.trait_bonus("impact_fuse") > 0.0 and loadout.grenade.kind not in ["spike", "tripmine"] # Impact Grenades trait
+	grenade.thrown_from = player.global_position
 	var root := get_tree().current_scene if get_tree().current_scene else get_tree().root
 	root.add_child(grenade)
 	grenade.global_position = camera.global_transform * HAND_OFFSET

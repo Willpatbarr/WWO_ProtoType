@@ -14,11 +14,15 @@ extends CanvasLayer
 # - The two equipped flora abilities sit beside it:
 #   passive = half-grayed; activated = like the grenade (plus a bright border while
 #   its effect lasts); triggered = dark until set off, then lit.
+# - Player shield and health bars at the bottom center (shield on top). A red flash
+#   when you take damage, and a dark "Respawning" screen while dead.
 
 @export var gun: Gun
 @export var loadout: Loadout
 @export var grenade_thrower: GrenadeThrower
 @export var abilities: AbilityManager
+@export var health: PlayerHealth
+@export var ult: UltManager
 
 const RETICLE_COLOR := Color(1, 1, 1, 0.9)
 const RETICLE_ON_TARGET_COLOR := Color(1.0, 0.25, 0.2, 0.95)
@@ -44,9 +48,17 @@ var _hit_critical := false
 var _hit_killed := false
 var _health_bar: Control
 var _grenade_box: Control
+var _ult_box: Control
+var _slowed_label: Label
+var _veiled_label: Label
+var _entrenched_label: Label
 var _grenade_label: Label
 var _ability_boxes: Array[Control] = []
 var _ability_labels: Array[Label] = []
+var _vitals: Control # shield + health bars
+var _damage_flash: ColorRect
+var _death_screen: ColorRect
+var _death_label: Label
 
 
 func _ready() -> void:
@@ -73,6 +85,90 @@ func _ready() -> void:
 	_build_grenade_indicator()
 	loadout.changed.connect(_update_grenade_indicator)
 	_update_grenade_indicator()
+	_build_vitals()
+	# "SLOWED" tag above the vitals while the Tank's slam has you slowed.
+	_slowed_label = Label.new()
+	_slowed_label.text = "SLOWED"
+	_slowed_label.add_theme_font_size_override("font_size", 20)
+	_slowed_label.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
+	_slowed_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	_slowed_label.add_theme_constant_override("outline_size", 6)
+	_slowed_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_slowed_label.position += Vector2(-36, -130)
+	_slowed_label.visible = false
+	add_child(_slowed_label)
+	# "VEILED" while the VeilSpore ult has you invisible in spore fog.
+	_veiled_label = _slowed_label.duplicate()
+	_veiled_label.text = "VEILED"
+	_veiled_label.add_theme_color_override("font_color", Color(0.8, 0.65, 1.0))
+	_veiled_label.position += Vector2(-6, -28)
+	add_child(_veiled_label)
+	_entrenched_label = _slowed_label.duplicate()
+	_entrenched_label.text = "ENTRENCHED"
+	_entrenched_label.add_theme_color_override("font_color", Color(0.85, 0.65, 0.4))
+	_entrenched_label.position += Vector2(-30, -56)
+	add_child(_entrenched_label)
+
+
+const VITALS_SIZE := Vector2(360, 30) # shield bar + health bar, stacked
+const SHIELD_COLOR := Color(0.55, 0.8, 1.0)
+const HEALTH_COLOR := Color(0.95, 0.95, 0.95)
+const HEALTH_LOW_COLOR := Color(1.0, 0.3, 0.25)
+
+
+func _build_vitals() -> void:
+	_damage_flash = ColorRect.new()
+	_damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_damage_flash.color = Color(0.8, 0.05, 0.02, 0.0)
+	add_child(_damage_flash)
+	health.damaged.connect(func(_amount: float) -> void: _damage_flash.color.a = 0.3)
+
+	_vitals = Control.new()
+	_vitals.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_vitals.custom_minimum_size = VITALS_SIZE
+	_vitals.size = VITALS_SIZE
+	_vitals.position = Vector2(-VITALS_SIZE.x * 0.5, -VITALS_SIZE.y - 50.0)
+	_vitals.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vitals.draw.connect(_draw_vitals)
+	add_child(_vitals)
+
+	_death_screen = ColorRect.new()
+	_death_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_death_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_death_screen.color = Color(0.05, 0.0, 0.0, 0.6)
+	_death_screen.visible = false
+	add_child(_death_screen)
+	_death_label = Label.new()
+	_death_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_death_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_death_label.add_theme_font_size_override("font_size", 40)
+	_death_screen.add_child(_death_label)
+
+
+func _draw_vitals() -> void:
+	# Shield bar (thin, on top) over the health bar. Each bar's width is its max,
+	# measured against the default 100, so Durability points make them longer.
+	var shield_h := 8.0
+	var health_h := 14.0
+	var gap := 4.0
+	var unit := VITALS_SIZE.x / 200.0 # pixels per point; 200 fills the box
+	var max_shield := health.max_shield()
+	var max_health := health.max_health()
+	var y := 0.0
+	if max_shield > 0.0:
+		var full := minf(max_shield * unit, VITALS_SIZE.x)
+		var x := (VITALS_SIZE.x - full) * 0.5
+		_vitals.draw_rect(Rect2(x, y, full, shield_h), Color(0, 0, 0, 0.45))
+		_vitals.draw_rect(Rect2(x, y, full * health.shield / max_shield, shield_h), SHIELD_COLOR)
+	y += shield_h + gap
+	var full_h := minf(max_health * unit, VITALS_SIZE.x)
+	var hx := (VITALS_SIZE.x - full_h) * 0.5
+	var frac := health.health / max_health
+	_vitals.draw_rect(Rect2(hx, y, full_h, health_h), Color(0, 0, 0, 0.45))
+	_vitals.draw_rect(Rect2(hx, y, full_h * frac, health_h), HEALTH_LOW_COLOR if frac < 0.35 else HEALTH_COLOR)
+	_vitals.draw_rect(Rect2(hx, y, full_h, health_h), Color(1, 1, 1, 0.5), false, 1.0)
 
 
 func _build_grenade_indicator() -> void:
@@ -91,6 +187,9 @@ func _build_grenade_indicator() -> void:
 		var parts := _hud_slot(row, _draw_ability_box.bind(slot))
 		_ability_boxes.append(parts[0])
 		_ability_labels.append(parts[1])
+	var ult_slot := _hud_slot(row, _draw_ult_box)
+	_ult_box = ult_slot[0]
+	ult_slot[1].text = "Ult"
 
 
 func _hud_slot(row: HBoxContainer, draw_fn: Callable) -> Array:
@@ -134,9 +233,27 @@ func _draw_charge_box(box: Control, color: Color, charge: float) -> void:
 	box.draw_rect(rect, Color(0.6, 0.6, 0.6, 0.7), false, 2.0)
 
 
+func _draw_ult_box() -> void:
+	# Fills up in the grenade's color; pulses when ready.
+	var color := loadout.grenade.color if loadout.grenade else Color(1.0, 0.6, 0.2)
+	_draw_charge_box(_ult_box, color, ult.charge)
+	if ult.is_ready() and not ult.active:
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.008)
+		_ult_box.draw_rect(Rect2(Vector2.ZERO, _ult_box.size).grow(3.0), Color(1, 1, 1, pulse), false, 3.0)
+
+
 func _draw_grenade_box() -> void:
 	if loadout.grenade:
-		_draw_charge_box(_grenade_box, loadout.grenade.color, grenade_thrower.charge)
+		var charges: float = grenade_thrower.charge
+		var shown := 1.0 if charges >= 1.0 else charges
+		_draw_charge_box(_grenade_box, loadout.grenade.color, shown)
+		if grenade_thrower.max_charges() > 1.0:
+			# Extra Grenade: show how many are ready, and the next one filling.
+			var ready := floori(charges)
+			_grenade_box.draw_string(ThemeDB.fallback_font, Vector2(4, 18), "x%d" % ready, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK if ready > 0 else Color.WHITE)
+			if ready >= 1 and charges < grenade_thrower.max_charges():
+				var next := charges - ready
+				_grenade_box.draw_rect(Rect2(0, _grenade_box.size.y - 5, _grenade_box.size.x * next, 5), Color(1, 1, 1, 0.8))
 
 
 func _draw_ability_box(slot: int) -> void:
@@ -253,10 +370,11 @@ func _on_hit(critical: bool, killed: bool) -> void:
 
 
 func _draw_health_bar() -> void:
-	var target := gun.reticle_target
+	var target = gun.reticle_target
 	if target == null:
 		return
-	var top := target.global_position + Vector3.UP * HEALTH_BAR_HEIGHT
+	var bar_height: float = target._body_height() + 0.25 if target.has_method("_body_height") else HEALTH_BAR_HEIGHT
+	var top: Vector3 = target.global_position + Vector3.UP * bar_height
 	if gun.camera.is_position_behind(top):
 		return
 	var center := get_viewport().get_visible_rect().size * 0.5
@@ -266,13 +384,28 @@ func _draw_health_bar() -> void:
 	_health_bar.draw_rect(rect.grow(2.0), Color(0, 0, 0, 0.6))
 	_health_bar.draw_rect(Rect2(rect.position, Vector2(rect.size.x * fraction, rect.size.y)), Color(0.9, 0.2, 0.15))
 	var text := "%d" % ceili(target.health)
+	# Enemies with a shield (the Tank) get a blue bar above the health bar.
+	var max_shield: float = target.get("max_shield") if target.get("max_shield") != null else 0.0
+	if max_shield > 0.0:
+		var shield_rect := Rect2(rect.position + Vector2(0, -rect.size.y - 4), rect.size)
+		_health_bar.draw_rect(shield_rect.grow(2.0), Color(0, 0, 0, 0.6))
+		var shield_fraction := clampf(target.shield / max_shield, 0.0, 1.0)
+		_health_bar.draw_rect(Rect2(shield_rect.position, Vector2(shield_rect.size.x * shield_fraction, shield_rect.size.y)), SHIELD_COLOR)
+		if target.shield > 0.0:
+			text = "%d + %d" % [ceili(target.shield), ceili(target.health)]
+		rect.position.y = shield_rect.position.y
 	_health_bar.draw_string(ThemeDB.fallback_font, rect.position + Vector2(0, -6), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 16)
 
 
 func _process(delta: float) -> void:
+	_slowed_label.visible = health.player.slow_left > 0.0
+	_veiled_label.visible = health.player.is_invisible()
+	_entrenched_label.visible = health.player.entrench_left > 0.0
 	var aimed: float = gun.ads_amount
 	var color := RETICLE_ON_TARGET_COLOR if gun.target_under_reticle else RETICLE_COLOR
 	color.a *= clampf(1.0 - aimed * 2.5, 0.0, 1.0) # gone by 40% aimed, like Destiny
+	if ult.active:
+		color.a = 0.0 # no reticle while the camera is in third person
 	_reticle.modulate = color
 
 	_hit_time -= delta
@@ -283,7 +416,13 @@ func _process(delta: float) -> void:
 	_vignette.material.set_shader_parameter("strength", gun.ads_vignette * aimed)
 	_assist_debug.queue_redraw()
 	_health_bar.queue_redraw()
+	_vitals.queue_redraw()
+	_damage_flash.color.a = move_toward(_damage_flash.color.a, 0.0, 1.2 * delta)
+	_death_screen.visible = health.dead
+	if health.dead:
+		_death_label.text = "You died\nRespawning in %.1f" % maxf(health._respawn_left, 0.0)
 	_grenade_box.queue_redraw()
+	_ult_box.queue_redraw()
 	for box in _ability_boxes:
 		box.queue_redraw()
 

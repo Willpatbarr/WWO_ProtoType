@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod0"]
+script = ExtResource("2_mod")
+stat = "walk_speed"
+op = 1
+value = 0.1
+
+[sub_resource type="Resource" id="mod1"]
+script = ExtResource("2_mod")
+stat = "sprint_speed"
+op = 1
+value = 0.1
+
+[sub_resource type="Resource" id="mod2"]
+script = ExtResource("2_mod")
+stat = "crouch_speed"
+op = 1
+value = 0.1
+
+[resource]
+script = ExtResource("1_trait")
+id = "extra_speed"
+display_name = "Extra Speed"
+description = "Walk, sprint and crouch 10% faster."
+flora = "voltvine"
+order = 0
+mods = Array[ExtResource("2_mod")]([SubResource("mod0"), SubResource("mod1"), SubResource("mod2")])

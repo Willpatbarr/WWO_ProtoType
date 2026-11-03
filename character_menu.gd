@@ -2,7 +2,7 @@ extends CanvasLayer
 # Character screen. DualSense touchpad (or I) opens and closes it.
 # Left: three loadout tiles (Flora, Weapons, Frame Parts). Picking one expands it to
 # fill the tile area; its Collapse button (or circle / Esc) goes back to all three.
-# Right: a preview of the character (the player capsule for now).
+# Right: a preview of the character (the mannequin body).
 # Flora's expanded view: labeled rows (Flora / Abilities / Traits) in a scroll area.
 # Traits wrap onto new lines, so the slot count can grow freely.
 # The Grenade and Ability slots show what's equipped; clicking one opens a picker row
@@ -26,7 +26,7 @@ var _expanded_scroll: ScrollContainer
 var _expanded_content: VBoxContainer
 var cursor: MenuCursor
 var _preview_model: Node3D
-var _picker := "" # which picker is open: "", "grenade", "ability0" or "ability1"
+var _picker := "" # which picker is open: "", "flora", "grenade", "ability0", "ability1" or "traits"
 
 
 func _ready() -> void:
@@ -178,21 +178,14 @@ func _build_preview() -> Control:
 	environment.environment.ambient_light_color = Color(0.5, 0.5, 0.55)
 	viewport.add_child(environment)
 
-	# Placeholder character: the player's capsule, plus a visor so you can see it turn.
+	# The character: the same mannequin as the player's body (and the Soldier enemies).
+	# Its feet sit where the old capsule's bottom was, so the framing stays the same.
 	_preview_model = Node3D.new()
 	viewport.add_child(_preview_model)
-	var body_mesh := MeshInstance3D.new()
-	body_mesh.mesh = CapsuleMesh.new()
-	_preview_model.add_child(body_mesh)
-	var visor := MeshInstance3D.new()
-	var visor_mesh := BoxMesh.new()
-	visor_mesh.size = Vector3(0.6, 0.18, 0.2)
-	visor.mesh = visor_mesh
-	visor.position = Vector3(0, 0.55, 0.4)
-	var visor_mat := StandardMaterial3D.new()
-	visor_mat.albedo_color = Color(0.95, 0.5, 0.1)
-	visor.material_override = visor_mat
-	_preview_model.add_child(visor)
+	var body := CharacterModel.new()
+	body.position.y = -1.0
+	_preview_model.add_child(body)
+	body.follow_loadout(loadout) # each region shows its equipped frame part's color
 	return container
 
 
@@ -223,7 +216,9 @@ func _build_flora_rows() -> void:
 	var neutral := Color(0.24, 0.25, 0.3)
 	var blue := Color(0.16, 0.22, 0.34)
 	_add_row_label("Flora")
-	_add_slot_row(["Flora"], Vector2(300, 120), green, false)
+	_expanded_content.add_child(_make_flora_slot())
+	if _picker == "flora":
+		_add_flora_picker()
 	_add_row_label("Abilities")
 	var abilities := HBoxContainer.new()
 	abilities.add_theme_constant_override("separation", 12)
@@ -235,11 +230,23 @@ func _build_flora_rows() -> void:
 		_add_grenade_picker()
 	elif _picker.begins_with("ability"):
 		_add_ability_picker(int(_picker.trim_prefix("ability")))
-	_add_row_label("Traits")
-	var names: Array = []
-	for i in trait_slot_count:
-		names.append("Trait %d" % (i + 1))
-	_add_slot_row(names, Vector2(120, 120), blue, true)
+	_add_row_label("Traits (%d of %d)" % [loadout.equipped_traits().size(), Loadout.TRAIT_SLOTS])
+	var slots := HFlowContainer.new()
+	slots.add_theme_constant_override("h_separation", 10)
+	slots.add_theme_constant_override("v_separation", 10)
+	var equipped := loadout.equipped_traits()
+	for i in Loadout.TRAIT_SLOTS:
+		var text := equipped[i].display_name if i < equipped.size() else "Empty"
+		var slot := _make_slot(text, Vector2(170, 90), blue if i < equipped.size() else Color(0.2, 0.21, 0.25))
+		slot.add_theme_font_size_override("font_size", 16)
+		if i < equipped.size():
+			_set_slot_border(slot, Color(0.55, 0.7, 1.0), 2)
+			slot.tooltip_text = equipped[i].description
+		slot.pressed.connect(_toggle_picker.bind("traits"))
+		slots.add_child(slot)
+	_expanded_content.add_child(slots)
+	if _picker == "traits":
+		_add_trait_picker()
 
 
 func _build_frame_rows() -> void:
@@ -264,7 +271,7 @@ func _build_frame_rows() -> void:
 		_expanded_content.add_child(row)
 	_add_row_label("Net effect")
 	var net := Label.new()
-	var lines := mods.net_changes()
+	var lines := mods.group_summary()
 	net.text = "\n".join(lines) if not lines.is_empty() else "No changes (all Standard parts)"
 	net.add_theme_font_size_override("font_size", 18)
 	_expanded_content.add_child(net)
@@ -299,6 +306,69 @@ func _build_weapon_rows() -> void:
 	_expanded_content.add_child(grid)
 
 
+func _make_flora_slot() -> Button:
+	var equipped := loadout.flora
+	var text := "Flora\n" + (equipped.display_name if equipped else "None")
+	if equipped and equipped.ult_name != "":
+		text += "\nUlt: " + equipped.ult_name
+	var color := equipped.color if equipped else Color(0.4, 0.85, 0.3)
+	var slot := _make_slot(text, Vector2(300, 120), color.darkened(0.6))
+	slot.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_set_slot_border(slot, color, 3)
+	slot.pressed.connect(_toggle_picker.bind("flora"))
+	return slot
+
+
+func _add_flora_picker() -> void:
+	_add_row_label("Choose a flora (switches your grenade, abilities and ult)")
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	for option in loadout.floras:
+		if not option.unlocked:
+			continue
+		var equipped := option == loadout.flora
+		var button := _make_slot(option.display_name + ("  ✓" if equipped else "") + "\nUlt: " + option.ult_name, Vector2(240, 90), option.color.darkened(0.5))
+		button.tooltip_text = option.description
+		_set_slot_border(button, option.color.lightened(0.3) if equipped else option.color, 5 if equipped else 2)
+		button.pressed.connect(func() -> void:
+			loadout.equip_flora(option)
+			_picker = ""
+			_refresh())
+		row.add_child(button)
+	_expanded_content.add_child(row)
+	if loadout.flora:
+		var hint := Label.new()
+		hint.text = loadout.flora.description
+		hint.add_theme_font_size_override("font_size", 18)
+		hint.modulate = Color(1, 1, 1, 0.6)
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_expanded_content.add_child(hint)
+
+
+func _add_trait_picker() -> void:
+	# Every trait of the equipped flora; click to equip or unequip.
+	_add_row_label("Choose traits (click to equip / unequip, up to %d)" % Loadout.TRAIT_SLOTS)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 10)
+	row.add_theme_constant_override("v_separation", 10)
+	var full := loadout.equipped_traits().size() >= Loadout.TRAIT_SLOTS
+	for option in loadout.traits_for_flora():
+		if not option.unlocked:
+			continue
+		var on := loadout.is_trait_equipped(option)
+		var button := _make_slot(option.display_name + ("  ✓" if on else "") + "\n" + option.description, Vector2(250, 110), Color(0.16, 0.22, 0.34) if on else Color(0.2, 0.21, 0.26))
+		button.add_theme_font_size_override("font_size", 14)
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_set_slot_border(button, Color(0.55, 0.7, 1.0) if on else Color(0.4, 0.42, 0.5), 4 if on else 1)
+		if full and not on:
+			button.modulate = Color(1, 1, 1, 0.5) # every slot is taken
+		button.pressed.connect(func() -> void:
+			loadout.toggle_trait(option)
+			_refresh())
+		row.add_child(button)
+	_expanded_content.add_child(row)
+
+
 func _make_grenade_slot() -> Button:
 	var equipped := loadout.grenade
 	var slot := _make_slot("Grenade\n" + equipped.display_name, Vector2(220, 110), equipped.color.darkened(0.6))
@@ -327,7 +397,7 @@ func _add_ability_picker(slot: int) -> void:
 	_add_row_label("Choose ability %d" % (slot + 1))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	for option in loadout.abilities:
+	for option in loadout.abilities_for_flora():
 		if not option.unlocked:
 			continue
 		var in_slot := loadout.ability_slot_of(option)
@@ -356,7 +426,7 @@ func _add_ability_picker(slot: int) -> void:
 
 func _describe_abilities() -> String:
 	var lines := []
-	for option in loadout.abilities:
+	for option in loadout.abilities_for_flora():
 		lines.append("%s: %s" % [option.display_name, option.description])
 	return "\n".join(lines)
 
@@ -365,11 +435,11 @@ func _add_grenade_picker() -> void:
 	_add_row_label("Choose a grenade")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	for option in loadout.grenades:
+	for option in loadout.grenades_for_flora():
 		if not option.unlocked:
 			continue
 		var equipped := option == loadout.grenade
-		var stats := "%d dmg · %s m" % [roundi(option.damage), str(option.blast_radius)]
+		var stats := "%s · %d dmg · %s m" % [option.kind.capitalize(), roundi(option.damage), str(option.blast_radius)]
 		var button := _make_slot(option.display_name + ("  ✓" if equipped else "") + "\n" + stats, Vector2(200, 90), option.color.darkened(0.45))
 		_set_slot_border(button, option.color.lightened(0.3) if equipped else option.color, 5 if equipped else 2)
 		button.pressed.connect(func() -> void:

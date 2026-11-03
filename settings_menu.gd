@@ -18,6 +18,13 @@ extends CanvasLayer
 @export var target_manager: TargetManager
 @export var grenade_thrower: GrenadeThrower
 @export var loadout: Loadout
+@export var health: PlayerHealth
+@export var mods: Modifiers
+@export var soldier_data: SoldierData
+@export var swarm_data: SwarmData
+@export var tank_data: TankData
+@export var ally_data: AllyData
+@export var ult: UltManager
 
 const SAVE_PATH := "res://saved_settings.json"
 
@@ -102,9 +109,140 @@ func _register_sections() -> void:
 		_row(th, "recharge_time", "Recharge time (s)", 0.5, 60.0, 0.5),
 		_row(th, "detonation_time", "Detonation time (s)", 0.1, 5.0, 0.05),
 	])
+	_add_global("Player", [
+		{"header": "Health and shields"},
+		_row(health, "base_health", "Health", 10.0, 500.0, 5.0),
+		_row(health, "base_shield", "Shields", 0.0, 500.0, 5.0),
+		_row(health, "recharge_delay", "Recovery delay (s)", 0.5, 15.0, 0.25),
+		_row(health, "health_regen", "Health regen (per s)", 5.0, 300.0, 5.0),
+		_row(health, "shield_regen", "Shield regen (per s)", 5.0, 300.0, 5.0),
+		_row(health, "respawn_time", "Respawn time (s)", 0.0, 10.0, 0.25),
+		_row(health, "god_mode", "God mode (0/1)", 0.0, 1.0, 1.0),
+		{"header": "Weapon handling"},
+		_row(g, "swap_time", "Weapon swap time (s)", 0.05, 1.5, 0.01),
+		_row(g, "ready_time", "Ready time after sprint (s)", 0.0, 0.6, 0.01),
+		{"header": "Frame parts"},
+		_row(mods, "point_value", "Each group point changes stats by", 0.0, 0.25, 0.01,
+			func(v: float) -> String: return "%d%%" % roundi(v * 100.0)),
+	])
 	_add_global("Targets", [
 		_row(target_manager, "target_health", "Target health", 10.0, 2000.0, 10.0),
 		_row(target_manager, "respawn_time", "Auto respawn (s, 0 = off)", 0.0, 10.0, 0.5),
+	])
+	_add_global("Ult", [
+		{"header": "Ult (F / L1+R1). Starter: massive grenade blast"},
+		_row(ult, "charge_time", "Charge time (s)", 1.0, 600.0, 1.0),
+		_row(ult, "damage", "Damage (center)", 0.0, 5000.0, 10.0),
+		_row(ult, "blast_radius", "Blast radius (m)", 1.0, 40.0, 0.5),
+		{"header": "Animation and camera"},
+		_row(ult, "windup_time", "Windup before the blast (s)", 0.2, 4.0, 0.05),
+		_row(ult, "hold_time", "Watch the blast for (s)", 0.0, 4.0, 0.05),
+		_row(ult, "camera_blend", "Camera glide time (s)", 0.05, 2.0, 0.05),
+		_row(ult, "camera_distance", "Camera distance behind (m)", 1.0, 12.0, 0.25),
+		_row(ult, "camera_height", "Camera height (m)", -1.0, 6.0, 0.25),
+		_row(ult, "camera_side", "Camera over-shoulder (m)", -3.0, 3.0, 0.1),
+		{"header": "Veil (VeilSpore ult)"},
+		_row(ult, "veil_time", "Veiled for (s)", 1.0, 60.0, 0.5),
+		_row(ult, "veil_fog_radius", "Fog radius (m)", 1.0, 20.0, 0.25),
+		_row(ult, "veil_fog_time", "Fog time (s)", 1.0, 60.0, 0.5),
+		_row(ult, "veil_melee_mult", "Melee damage while veiled", 1.0, 6.0, 0.1,
+			func(v: float) -> String: return "×%.1f" % v),
+		_row(ult, "veil_camera_blend", "Camera flash time (s)", 0.05, 1.0, 0.01),
+		_row(ult, "veil_hold", "Time in third person (s)", 0.0, 2.0, 0.05),
+		{"header": "Entrench (IronBark ult)"},
+		_row(ult, "entrench_time", "Entrenched for (s)", 1.0, 60.0, 0.5),
+		_row(ult, "entrench_grenade_mult", "Grenade recharge speed", 1.0, 20.0, 0.5,
+			func(v: float) -> String: return "×%.1f" % v),
+	])
+	var sd := soldier_data
+	_add_global("Soldier", [
+		{"header": "Enemy: Soldier (shared by all soldiers)"},
+		_row(sd, "ai_enabled", "AI on (0/1)", 0.0, 1.0, 1.0),
+		_row(sd, "max_health", "Health", 10.0, 1000.0, 5.0),
+		_row(sd, "walk_speed", "Walk speed (m/s)", 0.5, 10.0, 0.25),
+		_row(sd, "min_range", "Backs off inside (m)", 0.0, 50.0, 0.5),
+		_row(sd, "max_range", "Moves in beyond (m)", 1.0, 80.0, 0.5),
+		_row(sd, "sight_range", "Notices you within (m)", 5.0, 120.0, 1.0),
+		_row(sd, "strafe_time", "Strafe switch time (s)", 0.3, 6.0, 0.1),
+		_row(sd, "turn_speed", "Turn speed", 1.0, 30.0, 0.5),
+		{"header": "Shooting"},
+		_row(sd, "windup_time", "Windup glow (s)", 0.0, 2.0, 0.05),
+		_row(sd, "burst_count", "Shots per burst", 1.0, 10.0, 1.0),
+		_row(sd, "burst_interval", "Time between shots (s)", 0.03, 1.0, 0.01),
+		_row(sd, "burst_cooldown", "Time between bursts (s)", 0.2, 8.0, 0.1),
+		_row(sd, "group_spacing", "Group burst spacing (s)", 0.0, 3.0, 0.05),
+		_row(sd, "projectile_damage", "Damage per shot", 0.0, 100.0, 1.0),
+		_row(sd, "projectile_speed", "Shot speed (m/s)", 5.0, 150.0, 1.0),
+		_row(sd, "spread", "Aim error (degrees)", 0.0, 10.0, 0.1),
+		{"header": "Cover"},
+		_row(sd, "cover_health", "Seeks cover below health", 0.0, 1.0, 0.05,
+			func(v: float) -> String: return "%d%%" % roundi(v * 100.0)),
+	])
+	var sw := swarm_data
+	_add_global("Swarm", [
+		{"header": "Enemy: Swarm (shared by all swarm)"},
+		_row(sw, "ai_enabled", "AI on (0/1)", 0.0, 1.0, 1.0),
+		_row(sw, "max_health", "Health", 5.0, 500.0, 5.0),
+		_row(sw, "walk_speed", "Run speed (m/s)", 1.0, 20.0, 0.25),
+		_row(sw, "sight_range", "Notices you within (m)", 5.0, 120.0, 1.0),
+		_row(sw, "turn_speed", "Turn speed", 1.0, 30.0, 0.5),
+		_row(sw, "spread_distance", "Pack spacing (m)", 0.0, 5.0, 0.1),
+		{"header": "Leap"},
+		_row(sw, "leap_range", "Leaps from (m)", 0.0, 12.0, 0.25),
+		_row(sw, "leap_speed", "Leap speed (m/s)", 2.0, 30.0, 0.5),
+		_row(sw, "leap_height", "Leap height (m)", 0.0, 4.0, 0.1),
+		_row(sw, "leap_damage", "Leap damage", 0.0, 100.0, 1.0),
+		_row(sw, "leap_cooldown", "Time between leaps (s)", 0.2, 10.0, 0.1),
+		{"header": "Bite"},
+		_row(sw, "bite_range", "Bites within (m)", 0.5, 4.0, 0.05),
+		_row(sw, "bite_damage", "Bite damage", 0.0, 100.0, 1.0),
+		_row(sw, "bite_interval", "Time between bites (s)", 0.1, 4.0, 0.05),
+	])
+	var tk := tank_data
+	_add_global("Tank", [
+		{"header": "Enemy: Tank"},
+		_row(tk, "ai_enabled", "AI on (0/1)", 0.0, 1.0, 1.0),
+		_row(tk, "max_health", "Health", 50.0, 5000.0, 25.0),
+		_row(tk, "walk_speed", "Walk speed (m/s)", 0.5, 10.0, 0.25),
+		_row(tk, "sight_range", "Notices you within (m)", 5.0, 120.0, 1.0),
+		_row(tk, "turn_speed", "Turn speed", 0.2, 20.0, 0.1),
+		{"header": "Shield (applies on reset)"},
+		_row(tk, "shield", "Shield (0 = none)", 0.0, 2000.0, 10.0),
+		_row(tk, "shield_regen_delay", "Refill delay (s)", 0.5, 30.0, 0.5),
+		_row(tk, "shield_regen_rate", "Refill rate (per s)", 5.0, 500.0, 5.0),
+		{"header": "Slam"},
+		_row(tk, "slam_range", "Slams when you're within (m)", 1.0, 10.0, 0.25),
+		_row(tk, "slam_radius", "Slam radius (m)", 1.0, 12.0, 0.25),
+		_row(tk, "slam_damage", "Slam damage", 0.0, 200.0, 1.0),
+		_row(tk, "slam_windup", "Arms-up warning (s)", 0.1, 3.0, 0.05),
+		_row(tk, "slam_recover", "Stands still after (s)", 0.0, 5.0, 0.1),
+		_row(tk, "slam_cooldown", "Time between slams (s)", 0.5, 15.0, 0.25),
+		_row(tk, "slow_amount", "Slow amount", 0.0, 0.95, 0.05,
+			func(v: float) -> String: return "%d%% slower" % roundi(v * 100.0)),
+		_row(tk, "slow_time", "Slow time (s)", 0.0, 10.0, 0.25),
+		{"header": "Lobbed shot"},
+		_row(tk, "lob_damage", "Damage (center)", 0.0, 200.0, 1.0),
+		_row(tk, "lob_radius", "Splash radius (m)", 0.5, 10.0, 0.25),
+		_row(tk, "lob_interval", "Time between shots (s)", 0.5, 15.0, 0.25),
+		_row(tk, "lob_flight_time", "Time in the air (s)", 0.3, 4.0, 0.05),
+	])
+	var al := ally_data
+	_add_global("Allies", [
+		{"header": "AI teammates (for testing team abilities like Shield Share)"},
+		_row(al, "ai_enabled", "AI on (0/1)", 0.0, 1.0, 1.0),
+		_row(al, "max_health", "Health", 10.0, 500.0, 5.0),
+		_row(al, "max_shield", "Shields", 0.0, 500.0, 5.0),
+		_row(al, "recharge_delay", "Recovery delay (s)", 0.5, 15.0, 0.25),
+		_row(al, "shield_regen", "Shield regen (per s)", 1.0, 300.0, 5.0),
+		_row(al, "move_speed", "Move speed (m/s)", 1.0, 15.0, 0.25),
+		_row(al, "follow_min", "Stays at least (m) from you", 0.0, 10.0, 0.25),
+		_row(al, "follow_max", "Walks back past (m)", 1.0, 30.0, 0.5),
+		{"header": "Shooting"},
+		_row(al, "damage", "Damage per shot", 0.0, 100.0, 1.0),
+		_row(al, "fire_interval", "Time between shots (s)", 0.05, 3.0, 0.05),
+		_row(al, "spread", "Aim error (degrees)", 0.0, 15.0, 0.25),
+		_row(al, "sight_range", "Shoots enemies within (m)", 5.0, 120.0, 1.0),
+		_row(al, "respawn_time", "Down for (s)", 1.0, 60.0, 1.0),
 	])
 	_add_global("Aim Assist", [
 		_row(aa, "mouse_assist", "Mouse assist (0 = off)", 0.0, 1.0, 0.05),
@@ -120,6 +258,9 @@ func _register_sections() -> void:
 	for ability in loadout.abilities:
 		_sections[_ability_key(ability)] = {"title": ability.display_name, "rows": _ability_rows(ability)}
 
+	for flora_trait in loadout.traits:
+		_sections[_trait_key(flora_trait)] = {"title": flora_trait.display_name, "rows": _trait_rows(flora_trait)}
+
 	for grenade in loadout.grenades:
 		_sections[_grenade_key(grenade)] = {"title": grenade.display_name, "rows": [
 			{"header": "Blast"},
@@ -132,7 +273,40 @@ func _register_sections() -> void:
 				func(v: float) -> String: return "×%.2f = %.1f s" % [v, th.recharge_time * v]),
 			_row(grenade, "fuse_mult", "Detonation time", 0.25, 3.0, 0.05,
 				func(v: float) -> String: return "×%.2f = %.2f s" % [v, th.detonation_time * v]),
-		]}
+			_row(grenade, "bounce", "Bounciness", 0.0, 1.0, 0.05),
+		] + _grenade_kind_rows(grenade)}
+
+
+func _grenade_kind_rows(g: GrenadeData) -> Array:
+	match g.kind:
+		"pool":
+			return [{"header": "Lingering pool (radius = blast radius)"},
+				_row(g, "pool_dps", "Pool damage per second", 0.0, 200.0, 1.0),
+				_row(g, "pool_time", "Pool time (s)", 0.5, 20.0, 0.5)]
+		"wall":
+			return [{"header": "Wall"},
+				_row(g, "wall_width", "Wall width (m)", 1.0, 12.0, 0.25),
+				_row(g, "wall_height", "Wall height (m)", 0.5, 6.0, 0.1),
+				_row(g, "wall_time", "Wall lasts (s)", 1.0, 60.0, 0.5)]
+		"blind":
+			return [{"header": "Blinding"},
+				_row(g, "blind_time", "Blinds enemies for (s)", 0.5, 15.0, 0.25)]
+		"tripmine":
+			return [{"header": "Slowing tripmine"},
+				_row(g, "arm_time", "Arms after (s)", 0.0, 5.0, 0.05),
+				_row(g, "trigger_radius", "Goes off within (m)", 0.5, 8.0, 0.25),
+				_row(g, "mine_life", "Lasts (s)", 1.0, 120.0, 1.0),
+				_row(g, "slow_amount", "Slows enemies by", 0.0, 0.95, 0.05,
+					func(v: float) -> String: return "%d%%" % roundi(v * 100.0)),
+				_row(g, "slow_time", "Slow time (s)", 0.0, 15.0, 0.25)]
+		"spike":
+			return [{"header": "Poison spike (damage = the direct hit)"},
+				_row(g, "poison_dps", "Poison damage per second", 0.0, 200.0, 1.0),
+				_row(g, "poison_time", "Poison time (s)", 0.5, 20.0, 0.5),
+				_row(g, "spike_life", "Bounces around for (s)", 1.0, 20.0, 0.5),
+				_row(g, "seek_radius", "Seeks targets within (m)", 0.0, 20.0, 0.5),
+				_row(g, "seek_strength", "Seek turn rate (degrees/s)", 0.0, 720.0, 10.0)]
+	return []
 
 
 func _add_global(title: String, rows: Array) -> void:
@@ -170,6 +344,9 @@ func _weapon_rows(w: WeaponData) -> Array:
 		_row(w, "hip_spread", "Hip-fire spread (degrees)", 0.0, 10.0, 0.1),
 		_row(w, "recoil_up", "Recoil up (degrees/shot)", 0.0, 8.0, 0.05),
 		_row(w, "recoil_side", "Recoil side (degrees/shot)", 0.0, 3.0, 0.05),
+		_row(w, "recoil_kick_time", "Recoil rise time (s, 0 = instant)", 0.0, 0.3, 0.005),
+		_row(w, "recoil_recovery", "Recoil falls back (0-1)", 0.0, 1.0, 0.05),
+		_row(w, "recoil_recovery_time", "Recoil fall-back speed (s)", 0.02, 1.0, 0.01),
 		_row(w, "gun_kick", "Gun kick", 0.0, 5.0, 0.1),
 		_row(w, "magazine_size", "Magazine size", 1.0, 100.0, 1.0),
 		_row(w, "reload_time", "Reload time (s)", 0.3, 6.0, 0.05),
@@ -180,6 +357,7 @@ func _weapon_rows(w: WeaponData) -> Array:
 		_row(w, "slide_tilt", "Slide gun tilt (degrees)", 0.0, 60.0, 1.0),
 		{"header": "Aim assist"},
 		_row(w, "aim_assistance", "Aim assistance stat", 0.0, 100.0, 1.0),
+		_row(w, "crit_magnetism", "Head magnetism (fraction of cone)", 0.0, 1.0, 0.05),
 		_row(w, "magnetism_angle", "Magnetism cone (degrees)", 0.0, 10.0, 0.1),
 		_row(w, "friction_strength", "Friction strength", 0.0, 0.9, 0.05),
 		_row(w, "friction_angle", "Friction cone (degrees)", 0.0, 15.0, 0.1),
@@ -190,25 +368,13 @@ func _weapon_rows(w: WeaponData) -> Array:
 
 
 func _frame_rows(part: FramePartData) -> Array:
-	var rows: Array = [{"header": part.slot.capitalize() + " part"}]
-	if part.modifiers.is_empty():
-		rows.append({"header": "No changes: this is the neutral part for its slot."})
-	for i in part.modifiers.size():
-		var mod := part.modifiers[i]
-		var name: String = Modifiers.STAT_NAMES.get(mod.stat, mod.stat)
-		var row: Dictionary
-		match mod.op:
-			StatModifier.Op.FLAT:
-				row = _row(mod, "value", name + " (added)", -3.0, 3.0, 0.01,
-					func(v: float) -> String: return "%+.2f" % v)
-			StatModifier.Op.MULTIPLY:
-				row = _row(mod, "value", name + " (multiplier)", 0.1, 3.0, 0.01,
-					func(v: float) -> String: return "×%.2f" % v)
-			_:
-				row = _row(mod, "value", name + " (percent)", -0.9, 2.0, 0.01,
-					func(v: float) -> String: return "%+d%%" % roundi(v * 100.0))
-		row.id = "mod%d_%s" % [i, mod.stat] # every modifier edits "value", so give each its own id
-		rows.append(row)
+	# One slider per stat group: the points this part gives (negative = a penalty).
+	var rows: Array = [{"header": part.slot.capitalize() + " part · group points"}]
+	for group in Modifiers.GROUPS:
+		var stats: Array = Modifiers.GROUPS[group].map(func(st: String) -> String: return Modifiers.STAT_NAMES[st].to_lower())
+		rows.append({"header": "%s: %s" % [group.capitalize(), ", ".join(stats)]})
+		rows.append(_row(part, group, group.capitalize() + " points", -5.0, 5.0, 1.0,
+			func(v: float) -> String: return "%+d" % roundi(v)))
 	return rows
 
 
@@ -218,6 +384,33 @@ func _frame_items() -> Array:
 		var equipped := part == loadout.frame_part(part.slot)
 		items.append({"key": "frame/" + part.id, "title": part.display_name,
 			"subtitle": part.slot.capitalize() + (" · equipped" if equipped else "")})
+	return items
+
+
+func _trait_key(flora_trait: TraitData) -> String:
+	return "trait/" + flora_trait.id
+
+
+func _trait_rows(t: TraitData) -> Array:
+	var rows: Array = [{"header": t.description}]
+	for i in t.mods.size():
+		var mod: StatModifier = t.mods[i]
+		var row := _row(mod, "value", mod.describe().split(" +")[0].split(" -")[0] + " change", -0.9, 2.0, 0.01,
+			func(v: float) -> String: return "%+d%%" % roundi(v * 100.0))
+		row.id = "mod%d" % i # every mod edits "value", so give each its own id
+		rows.append(row)
+	if t.effect != "" and t.effect != "no_radar":
+		rows.append(_row(t, "amount", "Effect strength", 0.0, 3.0, 0.05,
+			func(v: float) -> String: return "%+d%%" % roundi(v * 100.0)))
+	return rows
+
+
+func _trait_items() -> Array:
+	var items := []
+	for flora_trait in loadout.traits:
+		var flora_name := flora_trait.flora.capitalize()
+		items.append({"key": _trait_key(flora_trait), "title": flora_trait.display_name,
+			"subtitle": flora_name + (" · equipped" if loadout.is_trait_equipped(flora_trait) else "")})
 	return items
 
 
@@ -235,6 +428,31 @@ func _ability_rows(a: AbilityData) -> Array:
 			rows.append(_row(a, "melee_damage_mult", "Melee damage multiplier", 1.0, 5.0, 0.05))
 			rows.append(_row(a, "duration", "Duration (s)", 1.0, 30.0, 0.5))
 			rows.append(_row(a, "cooldown", "Recharge time (s)", 1.0, 120.0, 1.0))
+		"root_bombs":
+			rows.append(_row(a, "cooldown", "Recharge time (s)", 1.0, 120.0, 1.0))
+			rows.append(_row(a, "bomb_damage", "Damage per bomb (center)", 0.0, 1000.0, 5.0))
+			rows.append(_row(a, "bomb_radius", "Blast radius (m)", 0.5, 12.0, 0.25))
+			rows.append(_row(a, "bomb_speed", "Throw speed (m/s)", 5.0, 60.0, 1.0))
+		"shield_share":
+			rows.append(_row(a, "shield_amount", "Shield given per explosion", 0.0, 300.0, 5.0))
+		"extra_grenade":
+			rows.append(_row(a, "extra_charges", "Extra grenade charges", 0.0, 3.0, 1.0))
+		"melee_guard":
+			rows.append(_row(a, "guard_reduction", "Melee damage cut by", 0.0, 1.0, 0.05,
+				func(v: float) -> String: return "%d%%" % roundi(v * 100.0)))
+			rows.append(_row(a, "duration", "Lasts after a melee hit (s)", 0.5, 20.0, 0.5))
+		"spore_fog_damage":
+			rows.append(_row(a, "fog_dps", "Fog damage per second", 0.0, 100.0, 1.0))
+		"spore_dash":
+			rows.append(_row(a, "cooldown", "Recharge time (s)", 1.0, 120.0, 1.0))
+			rows.append(_row(a, "dash_speed", "Dash speed backwards (m/s)", 2.0, 40.0, 0.5))
+			rows.append(_row(a, "dash_up", "Dash lift (m/s)", 0.0, 15.0, 0.25))
+			rows.append(_row(a, "dash_fog_radius", "Fog radius (m)", 0.5, 12.0, 0.25))
+			rows.append(_row(a, "dash_fog_time", "Fog time (s)", 0.5, 30.0, 0.5))
+		"spore_patches":
+			rows.append(_row(a, "patch_max", "Patches per grenade", 1.0, 10.0, 1.0))
+			rows.append(_row(a, "patch_radius", "Fog radius per patch (m)", 0.5, 8.0, 0.25))
+			rows.append(_row(a, "patch_time", "Patch time (s)", 0.5, 30.0, 0.5))
 		"seedburst":
 			rows.append(_row(a, "sub_count", "Seed count", 1.0, 8.0, 1.0))
 			rows.append(_row(a, "sub_scale", "Seed size (blast and damage)", 0.1, 1.0, 0.05))
@@ -401,7 +619,7 @@ func _build() -> void:
 	panel.custom_minimum_size = Vector2(1560, 860)
 	panel.theme = Theme.new()
 	panel.theme.default_font_size = 22
-	panel.theme.set_font_size("font_size", "TabContainer", 17) # all 8 Global tabs fit
+	panel.theme.set_font_size("font_size", "TabContainer", 15) # all 9 Global tabs fit
 	# Slimmer tab padding (also so all 8 Global tabs fit).
 	for state in ["tab_selected", "tab_unselected", "tab_hovered"]:
 		var shade: float = {"tab_selected": 0.24, "tab_unselected": 0.13, "tab_hovered": 0.18}[state]
@@ -487,8 +705,19 @@ func _build_global_pane() -> VBoxContainer:
 		var rows := VBoxContainer.new()
 		rows.add_theme_constant_override("separation", 8)
 		_build_rows(rows, key)
-		if key == "global/Targets":
-			var reset_targets := _button("Reset targets", target_manager.reset_targets)
+		if key == "global/Player":
+			var hurt := _button("Take 30 damage", func() -> void: health.take_damage(30.0))
+			hurt.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			rows.add_child(hurt)
+			var die := _button("Die (test respawn)", health.kill)
+			die.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			rows.add_child(die)
+		if key == "global/Ult":
+			var fill := _button("Fill ult", ult.fill)
+			fill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			rows.add_child(fill)
+		if key in ["global/Targets", "global/Soldier", "global/Swarm", "global/Tank", "global/Allies"]:
+			var reset_targets := _button("Reset targets and enemies", target_manager.reset_targets)
 			reset_targets.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 			rows.add_child(reset_targets)
 		_add_tab(_global_tabs, _sections[key].title, _scroll_page(rows))
@@ -507,7 +736,7 @@ func _build_specific_pane() -> VBoxContainer:
 	var flora := TabContainer.new() # sub-tabs for each Flora slot type
 	_add_tab(flora, "Grenades", _make_browser(_grenade_items))
 	_add_tab(flora, "Abilities", _make_browser(_ability_items))
-	_add_tab(flora, "Traits", _empty_page())
+	_add_tab(flora, "Traits", _make_browser(_trait_items))
 	_add_tab(_specific_tabs, "Flora", flora)
 	_add_tab(_specific_tabs, "Weapons", _make_browser(_weapon_items))
 	_add_tab(_specific_tabs, "Frame Parts", _make_browser(_frame_items))
@@ -547,6 +776,8 @@ func _build_rows(container: VBoxContainer, key: String) -> void:
 			var header := Label.new()
 			header.text = row.header
 			header.add_theme_font_size_override("font_size", 18)
+			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART # long headers wrap instead of widening the pane
+			header.custom_minimum_size.x = 200
 			header.modulate = Color(1, 1, 1, 0.55)
 			container.add_child(header)
 		else:

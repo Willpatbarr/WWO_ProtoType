@@ -20,6 +20,8 @@ var aim_assistance: float: # weapon stat, 0-100: scales every cone
 	get: return gun.weapon.aim_assistance
 var magnetism_angle: float: # degrees, at stat 100 and hip fire
 	get: return gun.weapon.magnetism_angle
+var crit_magnetism: float: # heads only pull inside this fraction of the cone
+	get: return gun.weapon.crit_magnetism
 var friction_strength: float: # how much look speed drops on target (0-0.9)
 	get: return gun.weapon.friction_strength
 var friction_angle: float: # degrees, at stat 100 and hip fire
@@ -71,7 +73,7 @@ func _range_falloff(distance: float) -> float:
 	return clampf(1.0 - (distance - full) / (full * 0.5), 0.0, 1.0)
 
 
-func find_part(base_angle_deg: float) -> Dictionary:
+func find_part(base_angle_deg: float, crit_scale := 1.0) -> Dictionary:
 	# The head or body closest to the reticle inside the cone, or {} if none.
 	var scale := cone_scale()
 	if scale <= 0.0 or base_angle_deg <= 0.0:
@@ -80,11 +82,13 @@ func find_part(base_angle_deg: float) -> Dictionary:
 	var forward := -gun.camera.global_basis.z
 	var best := {}
 	for node in get_tree().get_nodes_in_group("targets"):
-		var target := node as Target
+		var target = node
 		for part in target.aim_parts(): # head first, so heads win ties
 			var to: Vector3 = part.position - origin
 			var distance := to.length()
 			var cone := deg_to_rad(base_angle_deg) * scale * _range_falloff(distance)
+			if part.critical:
+				cone *= crit_scale
 			if cone <= 0.0:
 				continue
 			var angle := maxf(forward.angle_to(to) - atan(part.radius / distance), 0.0)
@@ -100,7 +104,8 @@ func find_part(base_angle_deg: float) -> Dictionary:
 
 func magnetize() -> Dictionary:
 	# For a shot that missed: bend it onto the nearest target part in the magnetism cone.
-	var part := find_part(magnetism_angle)
+	# Heads use a much smaller cone, so a near-miss usually lands on the body, not the head.
+	var part := find_part(magnetism_angle, crit_magnetism)
 	if part.is_empty():
 		return {}
 	var result := gun.cast_ray_to(part.position)
@@ -111,7 +116,7 @@ func magnetize() -> Dictionary:
 
 func friction_scale() -> float:
 	# Multiplier for stick look speed: drops as the reticle nears a target.
-	friction_part = find_part(friction_angle)
+	friction_part = {} if gun.player.lunging else find_part(friction_angle) # the lunge steers the camera alone
 	if friction_part.is_empty():
 		return 1.0
 	var closeness: float = 1.0 - friction_part.angle / friction_part.cone
@@ -127,7 +132,7 @@ func _update_adhesion() -> void:
 	var player := gun.player
 	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	var move := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var active := adhesion > 0.0 and (look.length() > 0.1 or move.length() > 0.1)
+	var active: bool = adhesion > 0.0 and (look.length() > 0.1 or move.length() > 0.1) and not player.lunging
 	var part := find_part(friction_angle) if active else {}
 	if part.is_empty():
 		_adhesion_key = ""

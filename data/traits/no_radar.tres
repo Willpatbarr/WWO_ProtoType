@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TraitData" format=3]
+
+[ext_resource type="Script" path="res://flora/trait_data.gd" id="1_trait"]
+[ext_resource type="Script" path="res://stat_modifier.gd" id="2_mod"]
+
+[resource]
+script = ExtResource("1_trait")
+id = "no_radar"
+display_name = "Radar Veil"
+description = "Spore fog removes enemy players' radar. (No effect yet: there's no radar or PvP in the prototype.)"
+flora = "veilspore"
+order = 1
+effect = "no_radar"
+amount = 1.0
