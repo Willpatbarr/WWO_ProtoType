@@ -14,9 +14,10 @@ extends SceneTree
 
 const KIT := "res://maps/scifi/"
 const TILE := 4.0
-const W := 16
-const D := 12
-const OUT := "res://maps/scifi_arena_map.tscn"
+# Which map: pass "large" after "--" for the large arena (tools/build_scifi_map.gd -- large).
+var W := 16
+var D := 12
+var OUT := "res://maps/scifi_arena_map.tscn"
 const PLATFORM_HEIGHT := 2.0
 const FILLER_COLOR := Color(0.2, 0.22, 0.26)
 const PLATFORM_COLOR := Color(0.24, 0.26, 0.3)
@@ -25,6 +26,9 @@ var root_node: Node3D
 var _shapes := {} # piece path -> Array of [Shape3D, Transform3D] (shared by every copy)
 var _wall_edges := {} # "x,z,edge" -> true, for corner fillers
 var _count := 0
+var _rails := [] # rail requests, placed last so stairs tops stay open: [x, z, edge, y]
+var _stair_tops := {} # "x,z,edge" where a stairs climbs onto a platform: no rail there
+var _large := false
 
 
 func tile(x: float, z: float, y := 0.0) -> Vector3:
@@ -32,10 +36,20 @@ func tile(x: float, z: float, y := 0.0) -> Vector3:
 
 
 func _initialize() -> void:
+	_large = "large" in OS.get_cmdline_user_args()
+	if _large:
+		W = 24
+		D = 16
+		OUT = "res://maps/scifi_arena_large_map.tscn"
+	seed(7 if _large else 3) # the same crate layout every rebuild
 	root_node = Node3D.new()
-	root_node.name = "SciFiArena"
+	root_node.name = "SciFiArenaLarge" if _large else "SciFiArena"
 	root.add_child(root_node)
-	_build_layout()
+	if _large:
+		_build_large_layout()
+	else:
+		_build_layout()
+	_place_rails()
 	_corner_fillers()
 	_boundary()
 	for i in 4:
@@ -144,9 +158,177 @@ func _build_layout() -> void:
 	crate_stack(tile(0.6, 5.5)); prop("Props/Prop_Barrel_Large", tile(1.3, 8.4), 0.0, true)
 
 
+# --- Large arena (24 x 16 tiles, two levels) -----------------------------------------
+# Ground:  spawn room (south, x 10-13 z 13-15), atrium (x 6-17 z 5-12) with a 4 m central
+#          tower, north hall (x 6-17 z 0-4), east hallway (x 18-19) with three side rooms
+#          (x 20-23).
+# Upper (4 m): the west wing (x 0-5, the whole depth) with two rooms and an open hallway
+#          overlooking the atrium; two staircases with landings; a bridge from the wing's
+#          north landing to the top of the central tower.
+
+const UPPER := 4.0
+
+
+func open_edge(x: int, z: int, edge: String) -> void:
+	# No rail on this edge (where a landing, bridge or stairs joins).
+	_stair_tops["%d,%d,%s" % [x, z, edge]] = true
+
+
+func _build_large_layout() -> void:
+	# Ground floors.
+	for x in range(6, 18):
+		for z in range(0, 5):
+			floor_tile(x, z, "Platform_Metal" if (x + z) % 2 == 0 else "Platform_Metal2")
+		for z in range(5, 13):
+			floor_tile(x, z, "Platform_Squares" if (x + z) % 3 else "Platform_CenterPlate")
+	for x in range(18, 20):
+		for z in range(0, 16):
+			floor_tile(x, z, "Platform_DarkPlates")
+	for x in range(20, 24):
+		for z in [0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15]:
+			floor_tile(x, z, "Platform_Simple2")
+	for x in range(10, 14):
+		for z in range(13, 16):
+			floor_tile(x, z, "Platform_DarkPlates")
+
+	# Outer walls (ground).
+	for x in range(6, 24):
+		wall(x, 0, "N", "WallWindow_Straight" if x < 18 else "WallAstra_Straight", true)
+	for z in [0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15]:
+		wall(23, z, "E", "WallAstra_Straight", true)
+	for x in [10, 11, 12, 13, 18, 19, 20, 21, 22, 23]:
+		wall(x, 15, "S", "WallAstra_Straight", true)
+	for x in [6, 7, 8, 9, 14, 15, 16, 17]:
+		wall(x, 12, "S", "WallAstra_Straight", true)
+	for z in range(13, 16):
+		wall(10, z, "W", "WallAstra_Straight", true)
+		wall(13, z, "E", "WallAstra_Straight", true)
+		wall(18, z, "W", "WallAstra_Straight", true)
+	wall(10, 13, "N", "WallBand_Straight")
+	wall(13, 13, "N", "WallBand_Straight") # the spawn room opens north between these
+
+	# North hall: three doorways into the atrium, one into the east hallway.
+	for x in range(6, 18):
+		if x in [8, 11, 15]:
+			door(x, 4, "S")
+		else:
+			wall(x, 4, "S", "WallBand_Straight")
+	for z in range(0, 5):
+		if z == 2:
+			door(17, z, "E")
+		else:
+			wall(17, z, "E", "WallAstra_Straight")
+	for p in [Vector2(9, 2), Vector2(13, 2)]:
+		piece("Columns/Column_Large_Straight", tile(p.x, p.y) + Vector3(2, 0, 0), 0.0)
+
+	# Atrium east wall: two doorways into the hallway.
+	for z in range(5, 13):
+		if z == 7 or z == 10:
+			door(17, z, "E")
+		else:
+			wall(17, z, "E", "WallAstra_Straight")
+	# East hallway: doorways into each side room.
+	for z in range(0, 16):
+		if z in [2, 7, 13]:
+			door(19, z, "E")
+		else:
+			wall(19, z, "E", "WallBand_Straight")
+	for x in range(20, 24):
+		wall(x, 4, "S", "WallAstra_Straight")
+		wall(x, 6, "N", "WallAstra_Straight")
+		wall(x, 9, "S", "WallAstra_Straight")
+		wall(x, 11, "N", "WallAstra_Straight")
+
+	# West wing: a solid 4 m block, its top is the upper floor.
+	raised_platform(0, 0, 5, 15, UPPER, false)
+	for z in range(0, 13):
+		if z != 8 and z != 9:
+			_rails.append([5, z, "E", UPPER]) # overlook rail (gaps where the landings join)
+	for z in range(0, 16):
+		wall(0, z, "W", "WallAstra_Straight", true, UPPER)
+	for x in range(0, 6):
+		wall(x, 0, "N", "WallWindow_Straight", true, UPPER)
+		wall(x, 15, "S", "WallAstra_Straight", true, UPPER)
+	for z in range(13, 16):
+		wall(5, z, "E", "WallAstra_Straight", true, UPPER) # the wing's south end is closed
+	# Upper rooms: U1 (north) and U2 (south), with the open hallway (x 4-5) between them
+	# and the atrium.
+	for z in range(0, 6):
+		if z == 2:
+			door(3, z, "E", UPPER)
+		else:
+			wall(3, z, "E", "WallBand_Straight", false, UPPER)
+	for x in range(0, 4):
+		if x == 1:
+			door(x, 5, "S", UPPER)
+		else:
+			wall(x, 5, "S", "WallBand_Straight", false, UPPER)
+	for x in range(0, 4):
+		if x == 2:
+			door(x, 10, "N", UPPER)
+		else:
+			wall(x, 10, "N", "WallBand_Straight", false, UPPER)
+	for z in range(10, 16):
+		if z == 13:
+			door(3, z, "E", UPPER)
+		else:
+			wall(3, z, "E", "WallBand_Straight", false, UPPER)
+
+	# Staircases up to the wing (two flights each, on a 2 m support), with landings.
+	stairs(6, 11, "N") # you walk on from the atrium floor in front of it (tile 6, 12)
+	_block(6, 10, 6, 10, 2.0)
+	stairs(6, 10, "N", 2.0)
+	raised_platform(6, 9, 6, 9, UPPER)
+	open_edge(6, 9, "W"); open_edge(6, 9, "N")
+	stairs(6, 6, "S")
+	_block(6, 7, 6, 7, 2.0)
+	stairs(6, 7, "S", 2.0)
+	raised_platform(6, 8, 6, 8, UPPER)
+	open_edge(6, 8, "W"); open_edge(6, 8, "E"); open_edge(6, 8, "S") # joins the south landing
+
+	# Central tower (4 m) with stairs up both sides, and the bridge from the north landing.
+	raised_platform(10, 8, 13, 9, UPPER)
+	stairs(11, 11, "N")
+	_block(11, 10, 11, 10, 2.0)
+	stairs(11, 10, "N", 2.0)
+	stairs(12, 6, "S")
+	_block(12, 7, 12, 7, 2.0)
+	stairs(12, 7, "S", 2.0)
+	bridge(7, 9, 8, UPPER)
+	open_edge(10, 8, "W")
+
+	# Cover.
+	for c in [Vector2(8, 6.3), Vector2(15.5, 6), Vector2(8.6, 11), Vector2(15, 11.2), Vector2(14.6, 8.6), Vector2(8.2, 9)]:
+		crate_stack(tile(c.x, c.y))
+	low_wall(9, 6, "N"); low_wall(14, 10, "S"); low_wall(16, 8, "W"); low_wall(7, 11, "E")
+	for b in [Vector2(10, 6.5), Vector2(13.5, 11.6), Vector2(16.4, 5.4)]:
+		prop("Props/Prop_Barrel_Large", tile(b.x, b.y), randf() * 360.0, true)
+	for l in [Vector2(9, 7.5), Vector2(15, 7.5), Vector2(11.5, 12.5)]:
+		prop("Props/Prop_Light_Floor", tile(l.x, l.y), 90.0)
+	crate_stack(tile(7, 1)); crate_stack(tile(11.5, 0.5)); crate_stack(tile(16, 3))
+	prop("Props/Prop_Chest", tile(14, 0.3), 0.0, true)
+	crate_stack(tile(18.6, 4.5)); crate_stack(tile(19.2, 11))
+	crate_stack(tile(21, 2.5)); crate_stack(tile(22.5, 8)); crate_stack(tile(21.5, 13.5))
+	prop("Props/Prop_Computer", tile(23, 7.5) + Vector3(1.3, 0, 0), 270.0)
+	crate_stack(tile(1.5, 2.5, UPPER)); crate_stack(tile(2, 12.5, UPPER)); crate_stack(tile(4.6, 6, UPPER))
+	prop("Props/Prop_Chest", tile(1, 14.5, UPPER), 0.0, true)
+	prop("Props/Prop_Computer", tile(11, 15) + Vector3(-1.0, 0, 1.2), 180.0)
+
+	# Enemy spawn points for waves.
+	spawn_point(8.5, 2, "tank soldier")
+	spawn_point(15, 2, "tank soldier swarm")
+	spawn_point(18.5, 0.6, "swarm")
+	spawn_point(21.5, 2, "swarm soldier")
+	spawn_point(21.5, 7.5, "swarm soldier")
+	spawn_point(21.5, 13.5, "swarm soldier")
+	spawn_point(1.5, 2.5, "soldier swarm", UPPER)
+	spawn_point(1.5, 12.5, "soldier swarm", UPPER)
+	spawn_point(11.5, 8.5, "soldier", UPPER)
+
+
 # --- Piece helpers -------------------------------------------------------------------
 
-func piece(path: String, at: Vector3, yaw_degrees: float, cover := false) -> Node3D:
+func piece(path: String, at: Vector3, yaw_degrees: float, cover := false, collide := true) -> Node3D:
 	var holder := Node3D.new()
 	holder.name = "%s_%d" % [path.get_file(), _count]
 	_count += 1
@@ -156,6 +338,8 @@ func piece(path: String, at: Vector3, yaw_degrees: float, cover := false) -> Nod
 	var scene: PackedScene = load(KIT + path + ".gltf")
 	var visual := scene.instantiate()
 	holder.add_child(visual)
+	if not collide:
+		return holder
 	var body := StaticBody3D.new()
 	body.name = "Collision"
 	holder.add_child(body)
@@ -209,24 +393,24 @@ const EDGE_YAW := {"W": 0.0, "S": 90.0, "E": 180.0, "N": 270.0}
 const EDGE_DIR := {"W": Vector3(-1, 0, 0), "E": Vector3(1, 0, 0), "N": Vector3(0, 0, -1), "S": Vector3(0, 0, 1)}
 
 
-func wall(x: int, z: int, edge: String, kind: String, tall := false) -> void:
+func wall(x: int, z: int, edge: String, kind: String, tall := false, y := 0.0) -> void:
 	# Wall pieces sit on a tile's -X edge by default; turn them onto the edge we want.
-	piece("Walls/" + kind, tile(x, z), EDGE_YAW[edge])
+	piece("Walls/" + kind, tile(x, z, y), EDGE_YAW[edge])
 	if tall:
-		piece("Walls/TopSimple_Straight", tile(x, z), EDGE_YAW[edge])
-	_wall_edges[_edge_key(x, z, edge)] = true
+		piece("Walls/TopSimple_Straight", tile(x, z, y), EDGE_YAW[edge])
+	_wall_edges[_edge_key(x, z, edge, y)] = true
 
 
-func door(x: int, z: int, edge: String) -> void:
+func door(x: int, z: int, edge: String, y := 0.0) -> void:
 	# Door frames run along X through their origin, so move them onto the edge.
 	var yaw := 0.0 if edge in ["N", "S"] else 90.0
-	piece("Platforms/Door_Frame_Square", tile(x, z) + EDGE_DIR[edge] * TILE * 0.5, yaw)
-	_wall_edges[_edge_key(x, z, edge)] = true
+	piece("Platforms/Door_Frame_Square", tile(x, z, y) + EDGE_DIR[edge] * TILE * 0.5, yaw)
+	_wall_edges[_edge_key(x, z, edge, y)] = true
 
 
-func low_wall(x: int, z: int, edge: String) -> void:
+func low_wall(x: int, z: int, edge: String, y := 0.0) -> void:
 	# A 2 m wall on a tile edge: cover you can shoot over by jumping, or mantle.
-	var holder := piece("Walls/ShortWall_Metal2_Straight", tile(x, z), EDGE_YAW[edge], true)
+	var holder := piece("Walls/ShortWall_Metal2_Straight", tile(x, z, y), EDGE_YAW[edge], true)
 	holder.position += EDGE_DIR[edge] * 0.02
 
 
@@ -243,52 +427,103 @@ func crate_stack(at: Vector3) -> void:
 		piece("Props/Prop_Crate3", at + Vector3(1.1, 0.5, randf_range(-0.3, 0.3)), randf() * 90.0)
 
 
-func raised_platform(x0: int, z0: int, x1: int, z1: int) -> void:
-	# A solid 2 m block with metal plates on top, short-wall facades and rails on the
-	# open edges.
-	var size := Vector3((x1 - x0 + 1) * TILE, PLATFORM_HEIGHT, (z1 - z0 + 1) * TILE)
+func raised_platform(x0: int, z0: int, x1: int, z1: int, height := PLATFORM_HEIGHT, rails := true, base := 0.0) -> void:
+	# A solid block (2 m by default) with metal plates on top, short-wall facades and
+	# rails on its edges (except where stairs climb onto it). `base` raises the bottom.
+	_block(x0, z0, x1, z1, height, base)
+	for x in range(x0, x1 + 1):
+		for z in range(z0, z1 + 1):
+			floor_tile(x, z, "Platform_Metal", base + height + 0.01)
+	for x in range(x0, x1 + 1):
+		_platform_edge(x, z0, "N", base, height, rails)
+		_platform_edge(x, z1, "S", base, height, rails)
+	for z in range(z0, z1 + 1):
+		_platform_edge(x0, z, "W", base, height, rails)
+		_platform_edge(x1, z, "E", base, height, rails)
+
+
+func _block(x0: int, z0: int, x1: int, z1: int, height: float, base := 0.0) -> void:
+	# Just the solid block (supports, stair landings).
+	var size := Vector3((x1 - x0 + 1) * TILE, height, (z1 - z0 + 1) * TILE)
 	var center := (tile(x0, z0) + tile(x1, z1)) * 0.5
 	var block := CSGBox3D.new()
 	block.name = "PlatformBlock_%d" % _count
+	_count += 1
 	block.size = size
-	block.position = center + Vector3.UP * PLATFORM_HEIGHT * 0.5
+	block.position = center + Vector3.UP * (base + height * 0.5)
 	block.use_collision = true
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = PLATFORM_COLOR
 	block.material = mat
 	root_node.add_child(block)
-	for x in range(x0, x1 + 1):
-		for z in range(z0, z1 + 1):
-			floor_tile(x, z, "Platform_Metal", PLATFORM_HEIGHT + 0.01)
-	for x in range(x0, x1 + 1):
-		_platform_edge(x, z0, "N")
-		_platform_edge(x, z1, "S")
-	for z in range(z0, z1 + 1):
-		_platform_edge(x0, z, "W")
-		_platform_edge(x1, z, "E")
 
 
-func _platform_edge(x: int, z: int, edge: String) -> void:
-	var h := piece("Walls/ShortWall_Metal2_Straight", tile(x, z), EDGE_YAW[edge])
-	h.position += EDGE_DIR[edge] * 0.03
-	var rail := piece("Props/Prop_Rail_4", tile(x, z, PLATFORM_HEIGHT) + EDGE_DIR[edge] * (TILE * 0.5 - 0.15), EDGE_YAW[edge] + 180.0)
+func _platform_edge(x: int, z: int, edge: String, base := 0.0, height := PLATFORM_HEIGHT, rails := true) -> void:
+	# Short-wall facades up the side (one per 2 m), and a rail along the top.
+	var level := 0.0
+	while level < height - 0.01:
+		var h := piece("Walls/ShortWall_Metal2_Straight", tile(x, z, base + level), EDGE_YAW[edge])
+		h.position += EDGE_DIR[edge] * 0.03
+		level += 2.0
+	if rails:
+		_rails.append([x, z, edge, base + height])
+
+
+func _place_rails() -> void:
+	for r in _rails:
+		if not _stair_tops.has("%d,%d,%s" % [r[0], r[1], r[2]]):
+			_rail(r[0], r[1], r[2], r[3])
+
+
+func _rail(x: int, z: int, edge: String, y: float) -> void:
+	var rail := piece("Props/Prop_Rail_4", tile(x, z, y) + EDGE_DIR[edge] * (TILE * 0.5 - 0.15), EDGE_YAW[edge] + 180.0)
 	# Rails run along -Z from their origin; shift so one spans the tile edge.
 	var along := Vector3(0, 0, 1).rotated(Vector3.UP, deg_to_rad(EDGE_YAW[edge] + 180.0))
 	rail.position += along * (TILE * 0.5 - 0.04)
 
 
-func stairs(x: int, z: int, toward: String) -> void:
-	# Stairs in tile (x, z) climbing toward the platform on its `toward` side. The kit's
-	# stairs are high at their origin and run down along +Z.
-	var high_edge: Vector3 = tile(x, z) + EDGE_DIR[toward] * TILE * 0.5
+const OPPOSITE := {"N": "S", "S": "N", "E": "W", "W": "E"}
+
+
+func stairs(x: int, z: int, toward: String, y := 0.0) -> void:
+	# Stairs in tile (x, z) climbing 2 m toward the platform on its `toward` side,
+	# starting at height y. The kit's stairs are high at their origin and run down along +Z.
+	var high_edge: Vector3 = tile(x, z, y) + EDGE_DIR[toward] * TILE * 0.5
 	var down: Vector3 = -EDGE_DIR[toward]
-	piece("Platforms/Platform_Stairs_4Wide", high_edge, rad_to_deg(atan2(down.x, down.z)))
+	var yaw := rad_to_deg(atan2(down.x, down.z))
+	var holder := piece("Platforms/Platform_Stairs_4Wide", high_edge, yaw, false, false)
+	# Collision is a smooth ramp, not the steps: the player can walk up a slope but has no
+	# step-up for 25 cm stairs.
+	var body := StaticBody3D.new()
+	body.name = "RampCollision"
+	holder.add_child(body)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	var run := TILE
+	var rise := 2.0
+	box.size = Vector3(TILE, 0.2, sqrt(run * run + rise * rise))
+	shape.shape = box
+	# In the stairs' own space the top is at z = 0, y = 2 and the bottom at z = 4, y = 0.
+	shape.transform = Transform3D(Basis(Vector3.RIGHT, atan2(rise, run)), Vector3(0, rise * 0.5 - 0.1, run * 0.5))
+	body.add_child(shape)
+	var d: Vector3 = EDGE_DIR[toward]
+	_stair_tops["%d,%d,%s" % [x + int(d.x), z + int(d.z), OPPOSITE[toward]]] = true # no rail across the top
+	_stair_tops["%d,%d,%s" % [x, z, toward]] = true
+
+
+func bridge(x0: int, x1: int, z: int, y: float) -> void:
+	# A catwalk along x at height y, one tile wide: plates on a thin slab, rails both sides.
+	_block(x0, z, x1, z, 0.25, y - 0.25)
+	for x in range(x0, x1 + 1):
+		floor_tile(x, z, "Platform_Metal2", y + 0.01)
+		_rails.append([x, z, "N", y])
+		_rails.append([x, z, "S", y])
 
 
 # --- Finishing ------------------------------------------------------------------------
 
-func _edge_key(x: int, z: int, edge: String) -> String:
-	return "%d,%d,%s" % [x, z, edge]
+func _edge_key(x: int, z: int, edge: String, y := 0.0) -> String:
+	return "%d,%d,%s,%.1f" % [x, z, edge, y]
 
 
 func _corner_fillers() -> void:
@@ -296,8 +531,8 @@ func _corner_fillers() -> void:
 	var corners := {}
 	for key in _wall_edges:
 		var parts: PackedStringArray = key.split(",")
-		var x := int(parts[0]); var z := int(parts[1]); var edge := parts[2]
-		var c := tile(x, z)
+		var x := int(parts[0]); var z := int(parts[1]); var edge := parts[2]; var y := float(parts[3])
+		var c := tile(x, z, y)
 		var ends := []
 		match edge:
 			"W", "E":
@@ -307,7 +542,7 @@ func _corner_fillers() -> void:
 				var ez := c.z + (TILE * 0.5 if edge == "S" else -TILE * 0.5)
 				ends = [Vector2(c.x - TILE * 0.5, ez), Vector2(c.x + TILE * 0.5, ez)]
 		for e in ends:
-			var k := "%.1f,%.1f" % [e.x, e.y]
+			var k := "%.1f,%.1f,%.1f" % [e.x, e.y, y]
 			if not corners.has(k):
 				corners[k] = {}
 			corners[k][edge in ["W", "E"]] = true
@@ -319,7 +554,7 @@ func _corner_fillers() -> void:
 		var xy: PackedStringArray = k.split(",")
 		var post := CSGBox3D.new()
 		post.size = Vector3(1.3, 5.0, 1.3)
-		post.position = Vector3(float(xy[0]), 2.5, float(xy[1]))
+		post.position = Vector3(float(xy[0]), float(xy[2]) + 2.5, float(xy[1]))
 		post.use_collision = true
 		post.material = mat
 		root_node.add_child(post)
@@ -328,7 +563,7 @@ func _corner_fillers() -> void:
 func _boundary() -> void:
 	# Tall invisible walls around the whole map, so double jumps and mantles can't get
 	# you over the outer walls.
-	var size := Vector3(W * TILE, 0, D * TILE)
+	var size := Vector3(W * TILE, 0, D * TILE) # W and D are set per map
 	var body := StaticBody3D.new()
 	body.name = "Boundary"
 	root_node.add_child(body)

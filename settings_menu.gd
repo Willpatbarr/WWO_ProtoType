@@ -227,6 +227,9 @@ func _register_sections() -> void:
 		_row(tk, "lob_interval", "Time between shots (s)", 0.5, 15.0, 0.25),
 		_row(tk, "lob_flight_time", "Time in the air (s)", 0.3, 4.0, 0.05),
 	])
+	_add_global("Maps", [
+		{"header": "Switch maps (restarts the run on that map)"},
+	])
 	_add_global("Waves", [
 		{"header": "Arena waves (changes to 'on' and the wave list apply on Restart run)"},
 		_row(waves, "enabled", "Waves on (0/1; 0 = sandbox)", 0.0, 1.0, 1.0),
@@ -723,6 +726,11 @@ func _build_global_pane() -> VBoxContainer:
 			var die := _button("Die (test respawn)", health.kill)
 			die.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 			rows.add_child(die)
+		if key == "global/Maps":
+			for pair in [["Small arena", "res://arena.tscn"], ["Large arena (two levels)", "res://arena_large.tscn"], ["Test range (gray box)", "res://main.tscn"]]:
+				var b := _button(pair[0], _load_map.bind(pair[1]))
+				b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+				rows.add_child(b)
 		if key == "global/Waves":
 			for pair in [["Restart run", waves.restart], ["Skip wave (kill all)", waves.skip_wave]]:
 				var b := _button(pair[0], pair[1])
@@ -964,3 +972,8 @@ func toggle() -> void:
 	else:
 		cursor.deactivate()
 		player.reset_input_edges() # circle is also crouch: don't count the closing press
+
+
+func _load_map(path: String) -> void:
+	get_tree().paused = false # the menu pauses the game; the new map starts running
+	get_tree().change_scene_to_file(path)
