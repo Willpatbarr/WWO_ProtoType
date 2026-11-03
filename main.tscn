@@ -21,6 +21,7 @@
 [ext_resource type="Resource" path="res://data/enemies/tank.tres" id="18_tank_data"]
 [ext_resource type="PackedScene" path="res://allies/ally.tscn" id="20_ally"]
 [ext_resource type="Resource" path="res://data/allies/ally.tres" id="21_ally_data"]
+[ext_resource type="Script" path="res://wave_manager.gd" id="22_waves"]
 [ext_resource type="Script" path="res://player_health.gd" id="12_health"]
 [ext_resource type="Script" path="res://modifiers.gd" id="11_mods"]
 
@@ -277,6 +278,9 @@ script = ExtResource("14_ult")
 player = NodePath("../Player")
 loadout = NodePath("../Loadout")
 
+[node name="WaveManager" type="Node" parent="."]
+script = ExtResource("22_waves")
+
 [node name="TargetManager" type="Node" parent="."]
 script = ExtResource("6_targets")
 
@@ -289,7 +293,7 @@ loadout = NodePath("../Loadout")
 grenade_thrower = NodePath("../GrenadeThrower")
 abilities = NodePath("../AbilityManager")
 
-[node name="SettingsMenu" type="CanvasLayer" parent="." node_paths=PackedStringArray("player", "gun", "target_manager", "grenade_thrower", "loadout", "health", "mods", "ult")]
+[node name="SettingsMenu" type="CanvasLayer" parent="." node_paths=PackedStringArray("player", "gun", "target_manager", "grenade_thrower", "loadout", "health", "mods", "ult", "waves")]
 health = NodePath("../PlayerHealth")
 mods = NodePath("../Modifiers")
 script = ExtResource("2_menu")
@@ -298,6 +302,7 @@ swarm_data = ExtResource("17_swarm_data")
 tank_data = ExtResource("18_tank_data")
 ally_data = ExtResource("21_ally_data")
 ult = NodePath("../UltManager")
+waves = NodePath("../WaveManager")
 player = NodePath("../Player")
 gun = NodePath("../Player/Camera3D/Gun")
 target_manager = NodePath("../TargetManager")

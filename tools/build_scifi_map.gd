@@ -131,6 +131,15 @@ func _build_layout() -> void:
 	crate_stack(tile(2, 1)); crate_stack(tile(8, 0.4)); crate_stack(tile(11, 1.6))
 	prop("Props/Prop_Chest", tile(4.5, 0.2), 0.0, true)
 	prop("Props/Prop_Computer", tile(7.5, 0) + Vector3(0, 0, -1.3), 0.0)
+	# Enemy spawn points for waves (WaveManager). `kinds` limits which enemies use one.
+	spawn_point(0.5, 3.5, "swarm")
+	spawn_point(1.0, 8.4, "swarm")
+	spawn_point(2.0, 1.0, "swarm soldier")
+	spawn_point(7.5, 1.0, "tank soldier")
+	spawn_point(11.2, 1.0, "swarm soldier")
+	spawn_point(12.5, 3.6, "swarm soldier")
+	spawn_point(12.5, 7.0, "soldier", PLATFORM_HEIGHT)
+	spawn_point(2.5, 3.5, "soldier", PLATFORM_HEIGHT)
 	# West corridor clutter (cover for the swarm to come around).
 	crate_stack(tile(0.6, 5.5)); prop("Props/Prop_Barrel_Large", tile(1.3, 8.4), 0.0, true)
 
@@ -180,6 +189,16 @@ func _relative(node: Node3D, ancestor: Node) -> Transform3D:
 		xf = (n as Node3D).transform * xf
 		n = n.get_parent()
 	return xf
+
+
+func spawn_point(x: float, z: float, kinds: String, y := 0.0) -> void:
+	var marker := Marker3D.new()
+	marker.name = "EnemySpawn_%d" % _count
+	_count += 1
+	marker.position = tile(x, z, y + 0.1)
+	marker.set_meta("kinds", kinds)
+	marker.add_to_group("enemy_spawn", true)
+	root_node.add_child(marker)
 
 
 func floor_tile(x: float, z: float, kind: String, y := 0.0) -> void:

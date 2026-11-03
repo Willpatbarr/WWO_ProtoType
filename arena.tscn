@@ -1,35 +1,36 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://loadout.gd" id="1_u73fl"]
-[ext_resource type="Script" path="res://modifiers.gd" id="2_8t24w"]
-[ext_resource type="PackedScene" path="res://maps/scifi_arena_map.tscn" id="3_6e4pq"]
-[ext_resource type="Script" path="res://ability_manager.gd" id="4_wheaq"]
-[ext_resource type="PackedScene" path="res://target.tscn" id="5_2mp5q"]
-[ext_resource type="Script" path="res://target.gd" id="6_qxpgd"]
-[ext_resource type="PackedScene" path="res://enemies/soldier.tscn" id="7_bjukh"]
-[ext_resource type="Script" path="res://enemies/soldier.gd" id="8_vl1nw"]
-[ext_resource type="Resource" path="res://data/enemies/soldier.tres" id="9_4j635"]
-[ext_resource type="PackedScene" path="res://enemies/swarm.tscn" id="10_o6fdx"]
-[ext_resource type="Script" path="res://enemies/swarm.gd" id="11_dmhbs"]
-[ext_resource type="Resource" path="res://data/enemies/swarm.tres" id="12_krdqr"]
-[ext_resource type="PackedScene" path="res://enemies/tank.tscn" id="13_bqlr2"]
-[ext_resource type="Script" path="res://enemies/tank.gd" id="14_i6sev"]
-[ext_resource type="Resource" path="res://data/enemies/tank.tres" id="15_siauy"]
-[ext_resource type="PackedScene" path="res://allies/ally.tscn" id="16_tpni7"]
-[ext_resource type="Script" path="res://allies/ally.gd" id="17_b1rdv"]
-[ext_resource type="Resource" path="res://data/allies/ally.tres" id="18_l2gpd"]
-[ext_resource type="Script" path="res://player.gd" id="19_54cq8"]
-[ext_resource type="Script" path="res://characters/character_model.gd" id="20_8gnsl"]
-[ext_resource type="PackedScene" path="res://gun.tscn" id="21_60pvr"]
-[ext_resource type="Script" path="res://gun.gd" id="22_nya2j"]
-[ext_resource type="Script" path="res://player_health.gd" id="23_2nqam"]
-[ext_resource type="Script" path="res://grenade_thrower.gd" id="24_my58l"]
-[ext_resource type="Script" path="res://controller_chord.gd" id="25_arhl1"]
-[ext_resource type="Script" path="res://ult_manager.gd" id="26_vbm2j"]
-[ext_resource type="Script" path="res://target_manager.gd" id="27_b4d53"]
-[ext_resource type="Script" path="res://hud.gd" id="28_nl8si"]
-[ext_resource type="Script" path="res://settings_menu.gd" id="29_l11g6"]
-[ext_resource type="Script" path="res://character_menu.gd" id="30_btpqg"]
+[ext_resource type="Script" path="res://loadout.gd" id="1_8t24w"]
+[ext_resource type="Script" path="res://modifiers.gd" id="2_6e4pq"]
+[ext_resource type="PackedScene" path="res://maps/scifi_arena_map.tscn" id="3_wheaq"]
+[ext_resource type="Script" path="res://ability_manager.gd" id="4_2mp5q"]
+[ext_resource type="PackedScene" path="res://target.tscn" id="5_qxpgd"]
+[ext_resource type="Script" path="res://target.gd" id="6_bjukh"]
+[ext_resource type="PackedScene" path="res://enemies/soldier.tscn" id="7_vl1nw"]
+[ext_resource type="Script" path="res://enemies/soldier.gd" id="8_4j635"]
+[ext_resource type="Resource" path="res://data/enemies/soldier.tres" id="9_o6fdx"]
+[ext_resource type="PackedScene" path="res://enemies/swarm.tscn" id="10_dmhbs"]
+[ext_resource type="Script" path="res://enemies/swarm.gd" id="11_krdqr"]
+[ext_resource type="Resource" path="res://data/enemies/swarm.tres" id="12_bqlr2"]
+[ext_resource type="PackedScene" path="res://enemies/tank.tscn" id="13_i6sev"]
+[ext_resource type="Script" path="res://enemies/tank.gd" id="14_siauy"]
+[ext_resource type="Resource" path="res://data/enemies/tank.tres" id="15_tpni7"]
+[ext_resource type="PackedScene" path="res://allies/ally.tscn" id="16_b1rdv"]
+[ext_resource type="Script" path="res://allies/ally.gd" id="17_l2gpd"]
+[ext_resource type="Resource" path="res://data/allies/ally.tres" id="18_54cq8"]
+[ext_resource type="Script" path="res://player.gd" id="19_8gnsl"]
+[ext_resource type="Script" path="res://characters/character_model.gd" id="20_60pvr"]
+[ext_resource type="PackedScene" path="res://gun.tscn" id="21_nya2j"]
+[ext_resource type="Script" path="res://gun.gd" id="22_2nqam"]
+[ext_resource type="Script" path="res://player_health.gd" id="23_my58l"]
+[ext_resource type="Script" path="res://grenade_thrower.gd" id="24_arhl1"]
+[ext_resource type="Script" path="res://controller_chord.gd" id="25_vbm2j"]
+[ext_resource type="Script" path="res://ult_manager.gd" id="26_b4d53"]
+[ext_resource type="Script" path="res://wave_manager.gd" id="27_nl8si"]
+[ext_resource type="Script" path="res://target_manager.gd" id="28_l11g6"]
+[ext_resource type="Script" path="res://hud.gd" id="29_btpqg"]
+[ext_resource type="Script" path="res://settings_menu.gd" id="30_vygkr"]
+[ext_resource type="Script" path="res://character_menu.gd" id="31_a2mai"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -42,186 +43,189 @@ sky = SubResource("sky")
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 
-[node name="Main" type="Node3D" unique_id=1277328048]
+[node name="Main" type="Node3D" unique_id=1623019148]
 
-[node name="Loadout" type="Node" parent="." unique_id=646773768]
-script = ExtResource("1_u73fl")
+[node name="Loadout" type="Node" parent="." unique_id=2000056466]
+script = ExtResource("1_8t24w")
 
-[node name="Modifiers" type="Node" parent="." unique_id=2125203593 node_paths=PackedStringArray("loadout")]
-script = ExtResource("2_8t24w")
+[node name="Modifiers" type="Node" parent="." unique_id=369680887 node_paths=PackedStringArray("loadout")]
+script = ExtResource("2_6e4pq")
 loadout = NodePath("../Loadout")
 
-[node name="SciFiArena" type="Node3D" parent="." unique_id=160772835 instance=ExtResource("3_6e4pq")]
+[node name="SciFiArena" type="Node3D" parent="." unique_id=1636516211 instance=ExtResource("3_wheaq")]
 
-[node name="AbilityManager" type="Node" parent="." unique_id=1289118249 node_paths=PackedStringArray("loadout")]
-script = ExtResource("4_wheaq")
+[node name="AbilityManager" type="Node" parent="." unique_id=1617599518 node_paths=PackedStringArray("loadout")]
+script = ExtResource("4_2mp5q")
 loadout = NodePath("../Loadout")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=110631372]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1513195137]
 environment = SubResource("env")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1229434157]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=494785651]
 transform = Transform3D(1, 0, 0, 0, 0.5, 0.866025, 0, -0.866025, 0.5, 0, 10, 0)
 shadow_enabled = true
 
-[node name="TargetClose" type="StaticBody3D" parent="." unique_id=1248120336 instance=ExtResource("5_2mp5q")]
+[node name="TargetClose" type="StaticBody3D" parent="." unique_id=1825126921 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(0.5038709, 0, -0.86377895, 0, 1, 0, 0.86377895, 0, 0.5038709, -4.8, 0, 22)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 
-[node name="TargetLeft" type="StaticBody3D" parent="." unique_id=353463247 instance=ExtResource("5_2mp5q")]
+[node name="TargetLeft" type="StaticBody3D" parent="." unique_id=1046709168 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(0.5038709, 0, 0.86377895, 0, 1, 0, -0.86377895, 0, 0.5038709, 4.8, 0, 22)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 
-[node name="TargetNear" type="StaticBody3D" parent="." unique_id=666034049 instance=ExtResource("5_2mp5q")]
+[node name="TargetNear" type="StaticBody3D" parent="." unique_id=93400940 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(-0.775562, 0, -0.6312714, 0, 1, 0, 0.6312714, 0, -0.775562, -14, 0, 2)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 strafe_distance = 4.0
 
-[node name="TargetMid" type="StaticBody3D" parent="." unique_id=99403210 instance=ExtResource("5_2mp5q")]
+[node name="TargetMid" type="StaticBody3D" parent="." unique_id=868792713 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(-0.8561877, 0, 0.51666486, 0, 1, 0, -0.51666486, 0, -0.8561877, 14, 0, -4)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 strafe_distance = 6.0
 strafe_speed = 4.0
 
-[node name="TargetFar" type="StaticBody3D" parent="." unique_id=1458470584 instance=ExtResource("5_2mp5q")]
+[node name="TargetFar" type="StaticBody3D" parent="." unique_id=439405136 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0, -8.4)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 
-[node name="TargetOnPlatform" type="StaticBody3D" parent="." unique_id=1680262021 instance=ExtResource("5_2mp5q")]
+[node name="TargetOnPlatform" type="StaticBody3D" parent="." unique_id=740009212 instance=ExtResource("5_qxpgd")]
 transform = Transform3D(-0.80565107, 0, -0.59239036, 0, 1, 0, 0.59239036, 0, -0.80565107, -20, 2, -8)
-script = ExtResource("6_qxpgd")
+script = ExtResource("6_bjukh")
 
-[node name="SoldierA" type="CharacterBody3D" parent="." unique_id=499241460 instance=ExtResource("7_bjukh")]
+[node name="SoldierA" type="CharacterBody3D" parent="." unique_id=327264510 instance=ExtResource("7_vl1nw")]
 transform = Transform3D(-0.55084205, 0, 0.83460915, 0, 1, 0, -0.83460915, 0, -0.55084205, 20, 2, 6)
-script = ExtResource("8_vl1nw")
-data = ExtResource("9_4j635")
+script = ExtResource("8_4j635")
+data = ExtResource("9_o6fdx")
 
-[node name="SoldierB" type="CharacterBody3D" parent="." unique_id=1129684503 instance=ExtResource("7_bjukh")]
+[node name="SoldierB" type="CharacterBody3D" parent="." unique_id=2000556289 instance=ExtResource("7_vl1nw")]
 transform = Transform3D(-0.9883714, 0, 0.15205713, 0, 1, 0, -0.15205713, 0, -0.9883714, 4, 0, -6.8)
-script = ExtResource("8_vl1nw")
-data = ExtResource("9_4j635")
+script = ExtResource("8_4j635")
+data = ExtResource("9_o6fdx")
 
-[node name="SoldierC" type="CharacterBody3D" parent="." unique_id=2103916751 instance=ExtResource("7_bjukh")]
+[node name="SoldierC" type="CharacterBody3D" parent="." unique_id=1809110793 instance=ExtResource("7_vl1nw")]
 transform = Transform3D(-0.9207514, 0, -0.39014894, 0, 1, 0, 0.39014894, 0, -0.9207514, -10, 0, -4.4)
-script = ExtResource("8_vl1nw")
-data = ExtResource("9_4j635")
+script = ExtResource("8_4j635")
+data = ExtResource("9_o6fdx")
 
-[node name="Swarm1" type="CharacterBody3D" parent="." unique_id=538655042 instance=ExtResource("10_o6fdx")]
+[node name="Swarm1" type="CharacterBody3D" parent="." unique_id=162501672 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.9945057, 0, -0.10468478, 0, 1, 0, 0.10468478, 0, -0.9945057, -28.4, 0, -8.8)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Swarm2" type="CharacterBody3D" parent="." unique_id=594543303 instance=ExtResource("10_o6fdx")]
+[node name="Swarm2" type="CharacterBody3D" parent="." unique_id=715838299 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.99726826, 0, 0.07387168, 0, 1, 0, -0.07387168, 0, -0.99726826, -24.4, 0, -7.6000004)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Swarm3" type="CharacterBody3D" parent="." unique_id=1950282590 instance=ExtResource("10_o6fdx")]
+[node name="Swarm3" type="CharacterBody3D" parent="." unique_id=1949566873 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.9980526, 0, -0.062378325, 0, 1, 0, 0.062378325, 0, -0.9980526, -27.2, 0, -5.200001)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Swarm4" type="CharacterBody3D" parent="." unique_id=114669741 instance=ExtResource("10_o6fdx")]
+[node name="Swarm4" type="CharacterBody3D" parent="." unique_id=321944164 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.99951243, 0, 0.031234829, 0, 1, 0, -0.031234829, 0, -0.99951243, -25.2, 0, -11.6)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Swarm5" type="CharacterBody3D" parent="." unique_id=1137680878 instance=ExtResource("10_o6fdx")]
+[node name="Swarm5" type="CharacterBody3D" parent="." unique_id=1173124117 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.99613, 0, -0.08789381, 0, 1, 0, 0.08789381, 0, -0.99613, -28.4, 0, -13.2)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Swarm6" type="CharacterBody3D" parent="." unique_id=1375648913 instance=ExtResource("10_o6fdx")]
+[node name="Swarm6" type="CharacterBody3D" parent="." unique_id=1070529451 instance=ExtResource("10_dmhbs")]
 transform = Transform3D(-0.99634665, 0, 0.085401244, 0, 1, 0, -0.085401244, 0, -0.99634665, -23.6, 0, -14)
-script = ExtResource("11_dmhbs")
-data = ExtResource("12_krdqr")
+script = ExtResource("11_krdqr")
+data = ExtResource("12_bqlr2")
 body_color = Color(0.62, 0.68, 0.2, 1)
 joint_color = Color(0.2, 0.15, 0.1, 1)
 model_scale = 0.95
 
-[node name="Tank" type="CharacterBody3D" parent="." unique_id=2073151037 instance=ExtResource("13_bqlr2")]
+[node name="Tank" type="CharacterBody3D" parent="." unique_id=654170390 instance=ExtResource("13_i6sev")]
 transform = Transform3D(-1.0000004, 0, 8.7422805e-08, 0, 1, 0, -8.7422805e-08, 0, -1.0000004, 0, 0, -18)
-script = ExtResource("14_i6sev")
-data = ExtResource("15_siauy")
+script = ExtResource("14_siauy")
+data = ExtResource("15_tpni7")
 body_color = Color(0.3, 0.33, 0.22, 1)
 joint_color = Color(0.12, 0.12, 0.14, 1)
 model_scale = 1.55
 
-[node name="AllyA" type="CharacterBody3D" parent="." unique_id=1106754415 instance=ExtResource("16_tpni7")]
+[node name="AllyA" type="CharacterBody3D" parent="." unique_id=148717780 instance=ExtResource("16_b1rdv")]
 transform = Transform3D(0.9858866, 0, -0.1674147, 0, 1, 0, 0.1674147, 0, 0.9858866, -3.6, 1, 21.2)
-script = ExtResource("17_b1rdv")
-data = ExtResource("18_l2gpd")
+script = ExtResource("17_l2gpd")
+data = ExtResource("18_54cq8")
 
-[node name="AllyB" type="CharacterBody3D" parent="." unique_id=1430632656 instance=ExtResource("16_tpni7")]
+[node name="AllyB" type="CharacterBody3D" parent="." unique_id=585930871 instance=ExtResource("16_b1rdv")]
 transform = Transform3D(0.9858866, 0, 0.1674147, 0, 1, 0, -0.1674147, 0, 0.9858866, 3.6, 1, 21.2)
-script = ExtResource("17_b1rdv")
-data = ExtResource("18_l2gpd")
+script = ExtResource("17_l2gpd")
+data = ExtResource("18_54cq8")
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=901136529 node_paths=PackedStringArray("abilities", "mods") groups=["player"]]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1494528532 node_paths=PackedStringArray("abilities", "mods") groups=["player"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 19.2)
-script = ExtResource("19_54cq8")
+script = ExtResource("19_8gnsl")
 abilities = NodePath("../AbilityManager")
 mods = NodePath("../Modifiers")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=1968250565]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=403522438]
 shape = SubResource("capsule_shape")
 
-[node name="Model" type="Node3D" parent="Player" unique_id=2005321758]
+[node name="Model" type="Node3D" parent="Player" unique_id=1582673520]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
-script = ExtResource("20_8gnsl")
+script = ExtResource("20_60pvr")
 
-[node name="Camera3D" type="Camera3D" parent="Player" unique_id=1000298916]
+[node name="Camera3D" type="Camera3D" parent="Player" unique_id=982618605]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
 keep_aspect = 0
 
-[node name="Gun" type="Node3D" parent="Player/Camera3D" unique_id=2083542725 node_paths=PackedStringArray("loadout") instance=ExtResource("21_60pvr")]
-script = ExtResource("22_nya2j")
+[node name="Gun" type="Node3D" parent="Player/Camera3D" unique_id=328258624 node_paths=PackedStringArray("loadout") instance=ExtResource("21_nya2j")]
+script = ExtResource("22_2nqam")
 loadout = NodePath("../../../Loadout")
 
-[node name="PlayerSpawn" type="Marker3D" parent="." unique_id=1705209323]
+[node name="PlayerSpawn" type="Marker3D" parent="." unique_id=1958966418]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 19.2)
 
-[node name="PlayerHealth" type="Node" parent="." unique_id=1976200406 node_paths=PackedStringArray("player", "mods", "spawn_point") groups=["player_health"]]
-script = ExtResource("23_2nqam")
+[node name="PlayerHealth" type="Node" parent="." unique_id=1947028600 node_paths=PackedStringArray("player", "mods", "spawn_point") groups=["player_health"]]
+script = ExtResource("23_my58l")
 player = NodePath("../Player")
 mods = NodePath("../Modifiers")
 spawn_point = NodePath("../PlayerSpawn")
 
-[node name="GrenadeThrower" type="Node" parent="." unique_id=133639354 node_paths=PackedStringArray("player", "loadout", "abilities", "mods")]
-script = ExtResource("24_my58l")
+[node name="GrenadeThrower" type="Node" parent="." unique_id=1596764775 node_paths=PackedStringArray("player", "loadout", "abilities", "mods")]
+script = ExtResource("24_arhl1")
 player = NodePath("../Player")
 loadout = NodePath("../Loadout")
 abilities = NodePath("../AbilityManager")
 mods = NodePath("../Modifiers")
 
-[node name="ControllerChord" type="Node" parent="." unique_id=1859481430]
-script = ExtResource("25_arhl1")
+[node name="ControllerChord" type="Node" parent="." unique_id=965932060]
+script = ExtResource("25_vbm2j")
 
-[node name="UltManager" type="Node" parent="." unique_id=1428376021 node_paths=PackedStringArray("player", "loadout")]
-script = ExtResource("26_vbm2j")
+[node name="UltManager" type="Node" parent="." unique_id=1677664936 node_paths=PackedStringArray("player", "loadout")]
+script = ExtResource("26_b4d53")
 player = NodePath("../Player")
 loadout = NodePath("../Loadout")
 
-[node name="TargetManager" type="Node" parent="." unique_id=1342818491]
-script = ExtResource("27_b4d53")
+[node name="WaveManager" type="Node" parent="." unique_id=713344088]
+script = ExtResource("27_nl8si")
 
-[node name="HUD" type="CanvasLayer" parent="." unique_id=1693063325 node_paths=PackedStringArray("gun", "loadout", "grenade_thrower", "abilities", "health", "ult")]
-script = ExtResource("28_nl8si")
+[node name="TargetManager" type="Node" parent="." unique_id=1749268931]
+script = ExtResource("28_l11g6")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1652863228 node_paths=PackedStringArray("gun", "loadout", "grenade_thrower", "abilities", "health", "ult")]
+script = ExtResource("29_btpqg")
 gun = NodePath("../Player/Camera3D/Gun")
 loadout = NodePath("../Loadout")
 grenade_thrower = NodePath("../GrenadeThrower")
@@ -229,8 +233,8 @@ abilities = NodePath("../AbilityManager")
 health = NodePath("../PlayerHealth")
 ult = NodePath("../UltManager")
 
-[node name="SettingsMenu" type="CanvasLayer" parent="." unique_id=1663110403 node_paths=PackedStringArray("player", "gun", "target_manager", "grenade_thrower", "loadout", "health", "mods", "ult")]
-script = ExtResource("29_l11g6")
+[node name="SettingsMenu" type="CanvasLayer" parent="." unique_id=983836024 node_paths=PackedStringArray("player", "gun", "target_manager", "grenade_thrower", "loadout", "health", "mods", "waves", "ult")]
+script = ExtResource("30_vygkr")
 player = NodePath("../Player")
 gun = NodePath("../Player/Camera3D/Gun")
 target_manager = NodePath("../TargetManager")
@@ -238,14 +242,15 @@ grenade_thrower = NodePath("../GrenadeThrower")
 loadout = NodePath("../Loadout")
 health = NodePath("../PlayerHealth")
 mods = NodePath("../Modifiers")
-soldier_data = ExtResource("9_4j635")
-swarm_data = ExtResource("12_krdqr")
-tank_data = ExtResource("15_siauy")
-ally_data = ExtResource("18_l2gpd")
+soldier_data = ExtResource("9_o6fdx")
+swarm_data = ExtResource("12_bqlr2")
+tank_data = ExtResource("15_tpni7")
+ally_data = ExtResource("18_54cq8")
+waves = NodePath("../WaveManager")
 ult = NodePath("../UltManager")
 
-[node name="CharacterMenu" type="CanvasLayer" parent="." unique_id=1482403757 node_paths=PackedStringArray("settings_menu", "player", "loadout", "mods")]
-script = ExtResource("30_btpqg")
+[node name="CharacterMenu" type="CanvasLayer" parent="." unique_id=1033456246 node_paths=PackedStringArray("settings_menu", "player", "loadout", "mods")]
+script = ExtResource("31_a2mai")
 settings_menu = NodePath("../SettingsMenu")
 player = NodePath("../Player")
 loadout = NodePath("../Loadout")

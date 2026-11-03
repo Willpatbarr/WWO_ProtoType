@@ -24,6 +24,7 @@ extends CanvasLayer
 @export var swarm_data: SwarmData
 @export var tank_data: TankData
 @export var ally_data: AllyData
+@export var waves: WaveManager
 @export var ult: UltManager
 
 const SAVE_PATH := "res://saved_settings.json"
@@ -225,6 +226,16 @@ func _register_sections() -> void:
 		_row(tk, "lob_radius", "Splash radius (m)", 0.5, 10.0, 0.25),
 		_row(tk, "lob_interval", "Time between shots (s)", 0.5, 15.0, 0.25),
 		_row(tk, "lob_flight_time", "Time in the air (s)", 0.3, 4.0, 0.05),
+	])
+	_add_global("Waves", [
+		{"header": "Arena waves (changes to 'on' and the wave list apply on Restart run)"},
+		_row(waves, "enabled", "Waves on (0/1; 0 = sandbox)", 0.0, 1.0, 1.0),
+		_row(waves, "waves_to_win", "Waves to win", 1.0, 30.0, 1.0),
+		_row(waves, "start_delay", "Time before wave 1 (s)", 0.0, 30.0, 0.5),
+		_row(waves, "break_time", "Break between waves (s)", 0.0, 60.0, 0.5),
+		_row(waves, "size_scale", "Wave size", 0.25, 4.0, 0.05,
+			func(v: float) -> String: return "×%.2f" % v),
+		_row(waves, "spawn_stagger", "Time between spawns (s)", 0.0, 3.0, 0.05),
 	])
 	var al := ally_data
 	_add_global("Allies", [
@@ -712,6 +723,11 @@ func _build_global_pane() -> VBoxContainer:
 			var die := _button("Die (test respawn)", health.kill)
 			die.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 			rows.add_child(die)
+		if key == "global/Waves":
+			for pair in [["Restart run", waves.restart], ["Skip wave (kill all)", waves.skip_wave]]:
+				var b := _button(pair[0], pair[1])
+				b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+				rows.add_child(b)
 		if key == "global/Ult":
 			var fill := _button("Fill ult", ult.fill)
 			fill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
