@@ -15,6 +15,7 @@
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "UnrealClient.h"
 #include "Player/WWOGrenadeComponent.h"
@@ -441,6 +442,27 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 		const FVector Dir = Cast<IWWOTargetable>(Best)->GetAimParts().Last().Position - P->EyeLocation();
 		P->SetViewRotation(FMath::Asin(Dir.GetSafeNormal().Z), Dir.Rotation().Yaw);
 	};
+	auto Speed2D = [P]() { return FVector2D(P->GetVelocity()).Size() / WWO::M; };
+	auto FaceOpen = [this, P]()
+	{
+		float BestYaw = P->GetActorRotation().Yaw, BestLen = 0.f;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAutoTest), false, P);
+		for (int32 I = 0; I < 24; ++I)
+		{
+			const FVector From = P->GetActorLocation();
+			const FVector To = From + FRotator(0.f, I * 15.f, 0.f).Vector() * 4000.f;
+			FHitResult Hit;
+			const float Len = GetWorld()->SweepSingleByChannel(Hit, From, To, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(45.f), Params) ? Hit.Distance : 4000.f;
+			if (Len > BestLen) { BestLen = Len; BestYaw = I * 15.f; }
+		}
+		P->SetViewRotation(0.f, BestYaw);
+		return BestLen / WWO::M;
+	};
+	if (bAutoTrackSlide && !P->bSliding && AutoTestClock > 26.85f)
+	{
+		bAutoTrackSlide = false;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide covered %.2f m"), FVector2D(P->GetActorLocation() - AutoSlideFrom).Size() / WWO::M);
+	}
 	if (AutoTestStep == 0) AutoTestStep = 100; // start at 10 s (shaders, AI settle)
 	if (At(10.f)) { Shot(TEXT("01_start")); Next(11.f); }
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
@@ -460,5 +482,43 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	else if (At(22.5f)) { Shot(TEXT("09_character")); Next(23.f); }
 	else if (At(23.f)) { ToggleCharacterMenu(); P->SetViewRotation(0.f, P->GetActorRotation().Yaw + 180.f); Next(24.f); }
 	else if (At(24.f)) { Shot(TEXT("10_allies")); Next(25.f); }
-	else if (At(25.f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	// Ground movement: walk, crouch, sprint (stands you up), slide and its distance, stop.
+	// Speeds in m/s; each run faces the longest clear line so walls don't cut it short.
+	else if (At(25.f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: clear run %.1f m; stats walk %.2f sprint %.2f crouch %.2f slide %.2f over %.2f m"), FaceOpen(),
+			P->M("walk_speed", P->WalkSpeed), P->M("sprint_speed", P->SprintSpeed), P->M("crouch_speed", P->CrouchSpeed),
+			P->M("slide_speed", P->SlideSpeed), P->M("slide_distance", P->SlideDistance));
+		MoveValue = FVector2D(0.f, 1.f);
+		Next(25.5f);
+	}
+	else if (At(25.5f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: walk %.2f"), Speed2D()); Held[(int32)EWWOAction::Crouch] = true; Next(25.6f); }
+	else if (At(25.6f)) { Held[(int32)EWWOAction::Crouch] = false; Next(26.3f); }
+	else if (At(26.3f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: crouch %.2f crouched %d eye %.1f cm above feet"), Speed2D(), P->bIsCrouched,
+			P->EyeLocation().Z - (P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+		Shot(TEXT("11_crouched"));
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: clear run %.1f m"), FaceOpen());
+		JustPressed[(int32)EWWOAction::Sprint] = true;
+		Next(26.8f);
+	}
+	else if (At(26.8f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: sprint %.2f crouched %d"), Speed2D(), P->bIsCrouched);
+		Held[(int32)EWWOAction::Crouch] = true;
+		AutoSlideFrom = P->GetActorLocation();
+		bAutoTrackSlide = true;
+		Next(26.9f);
+	}
+	else if (At(26.9f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide %.2f sliding %d"), Speed2D(), P->bSliding); Held[(int32)EWWOAction::Crouch] = false; Next(28.5f); }
+	else if (At(28.5f)) { MoveValue = FVector2D::ZeroVector; Next(28.6f); }
+	else if (At(28.6f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: stopped %.2f"), Speed2D()); Next(29.5f); }
+	else if (At(29.5f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest move: after slide crouched %d eye %.1f cm above feet"), P->bIsCrouched,
+			P->EyeLocation().Z - (P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+		Next(31.f);
+	}
+	else if (At(31.f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }

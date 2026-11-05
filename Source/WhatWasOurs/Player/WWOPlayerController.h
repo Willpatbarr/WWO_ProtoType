@@ -106,6 +106,8 @@ private:
 	bool bAutoTest = false;
 	float AutoTestClock = 0.f;
 	int32 AutoTestStep = 0;
+	FVector AutoSlideFrom = FVector::ZeroVector; // ground movement steps: where the slide started
+	bool bAutoTrackSlide = false;
 	void UpdateAutoTest(float DeltaTime);
 	void Shot(const TCHAR* Name);
 };

@@ -117,6 +117,10 @@ public:
 
 	float M(FName Stat, float Base) const; // a stat after frame part and trait modifiers
 
+	// Health and this frame's movement rules (sets WishVelocity); the movement component calls
+	// it just before it moves.
+	void PrepareMovement(float DeltaSeconds);
+
 	AWWOPlayerController* GetWWOController() const;
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
@@ -142,6 +146,7 @@ private:
 	float AirTime = 0.f;
 	float LandKick = 0.f;
 	float LastFallSpeed = 0.f; // m/s
+	uint64 PreparedFrame = 0; // GFrameCounter of the last PrepareMovement
 
 	// Recoil (radians)
 	float KickLeft = 0.f, KickYawLeft = 0.f, KickRate = 0.f;

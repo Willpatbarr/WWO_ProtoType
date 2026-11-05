@@ -185,17 +185,28 @@ void AWWOCharacter::TurnToward(const FVector& Point, float Strength, float Delta
 
 // --- Each frame -------------------------------------------------------------------------------
 
-void AWWOCharacter::Tick(float DeltaSeconds)
+void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 {
-	Super::Tick(DeltaSeconds);
-	// Same order as the Godot nodes: health, movement, gun, abilities, grenades, ult.
-	Health->UpdateHealth(DeltaSeconds);
+	// Called by the movement component right before it moves, so input from this frame moves
+	// you this frame (Godot sets the velocity and calls move_and_slide in the same step).
+	PreparedFrame = GFrameCounter;
+	Health->UpdateHealth(DeltaSeconds); // same order as the Godot nodes: health, then movement
 	if (Health->bDead)
 	{
 		WishVelocity = FVector::ZeroVector;
-		return; // no moving, shooting or throwing
+		return; // no moving
 	}
 	TickMovement(DeltaSeconds);
+}
+
+void AWWOCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	// The movement component has already run PrepareMovement and moved (it ticks first);
+	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
+	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
+	if (Health->bDead) return; // no shooting or throwing
+	UpdateCamera(DeltaSeconds);
 	AimAssist->UpdateAdhesion();
 	if (!bUlting) Weapon->UpdateWeapon(DeltaSeconds);
 	Abilities->UpdateAbilities(DeltaSeconds);
@@ -230,7 +241,6 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 		}
 		UpdateAir(DeltaSeconds);
 		WishVelocity = FVector::ZeroVector;
-		UpdateCamera(DeltaSeconds);
 		return;
 	}
 	Look(LookStick * StickSensitivity * DeltaSeconds * AimAssist->FrictionScale()); // friction: slower near targets
@@ -241,7 +251,6 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	if (bMantling || TryMantle(Input))
 	{
 		UpdateMantle(DeltaSeconds);
-		UpdateCamera(DeltaSeconds);
 		return;
 	}
 
@@ -252,7 +261,6 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	ApplyHorizontal(WishDir, DeltaSeconds);
 	if (bLunging) ApplyLunge(DeltaSeconds);
 	if (!IsOnFloor()) LastFallSpeed = -Move->Velocity.Z / WWO::M;
-	UpdateCamera(DeltaSeconds);
 }
 
 void AWWOCharacter::UpdateSprint(const FVector2D& Input)
