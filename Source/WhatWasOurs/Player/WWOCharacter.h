@@ -168,6 +168,7 @@ private:
 	void Land(float FallSpeedM); // Godot's _land: landing dip, land-slide window, queued slide
 	void ApplyLunge(float DeltaSeconds);
 	void UpdateCamera(float DeltaSeconds);
+	void UpdateModel(); // the body animation from what you're doing (Godot: _update_model)
 	void UpdateRecoil(float DeltaSeconds);
 	float TimedLeft(float Age) const;
 	float ApexHangClamped() const { return FMath::Clamp(ApexHang, 0.f, 0.9f); }

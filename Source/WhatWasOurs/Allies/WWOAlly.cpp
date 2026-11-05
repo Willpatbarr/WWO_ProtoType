@@ -27,7 +27,6 @@ AWWOAlly::AWWOAlly(const FObjectInitializer& ObjectInitializer)
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
 	Body->BodyColor = FLinearColor(0.25f, 0.7f, 0.65f); // friendly teal
 	Body->JointColor = FLinearColor(0.12f, 0.14f, 0.16f);
-	Body->AnimSet = EWWOAnimSet::Rifle;
 	Tags.Add("Teammate");
 }
 
@@ -91,7 +90,7 @@ void AWWOAlly::GoDown()
 	DownLeft = D()->RespawnTime;
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
-	Body->PlayDeath(false);
+	Body->Play("Death01", 1.f, 0.1f);
 	Gun->SetVisibility(false, true);
 }
 
@@ -120,7 +119,7 @@ void AWWOAlly::GetUp()
 		TeleportTo(Spot, GetActorRotation());
 	}
 	GetCharacterMovement()->StopMovementImmediately();
-	Body->Revive();
+	Body->Play("Idle", 1.f, 0.1f);
 }
 
 void AWWOAlly::ResetAlly()
@@ -169,6 +168,9 @@ void AWWOAlly::Tick(float DeltaSeconds)
 		Face(Wish, DeltaSeconds);
 	}
 	Move->Wish = Wish * WWO::M;
+	// Jogs when moving, at a playback speed that matches how fast (Godot: ally.gd _process).
+	const float Speed = GetVelocity().Size2D() / WWO::M;
+	Body->Play(Speed > 0.5f ? FName("Jog_Fwd") : FName("Idle"), FMath::Clamp(Speed / 4.5f, 0.6f, 1.6f));
 	// The gun sits in the right hand, pointing where it faces.
 	Gun->SetWorldLocationAndRotation(GetMesh()->GetSocketLocation("hand_r"), FRotator(0.f, GetActorRotation().Yaw, 0.f));
 }

@@ -65,9 +65,11 @@ private:
 	float Blend = 0.25f;
 	float ExplodeAt = 0.f;
 	float CastAt = 0.f;
+	float ChargeAt = 0.f; // the blast's Spell_Simple_Enter -> Spell_Simple_Idle
 	float FinishAt = 0.f;
 	bool bExploded = false;
 	bool bCast = false;
+	bool bCharging = false;
 	bool bGlidingBack = false;
 	FTransform GlideFrom, GlideTo;
 	FLinearColor Color = FLinearColor::White;

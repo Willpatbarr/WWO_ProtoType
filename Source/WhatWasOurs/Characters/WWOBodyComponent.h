@@ -2,13 +2,14 @@
 
 // Sets up and drives a mannequin body (Godot: characters/character_model.gd). Shared by the
 // player, enemies, allies and the character menu preview.
-// - The Unreal mannequin (SKM_Manny_Simple) with the template locomotion AnimBP
-//   (ABP_Unarmed, or the pistol / rifle AnimBPs for armed characters).
+// - The Unreal mannequin (SKM_Manny_Simple) played by UWWOBodyAnimInstance: the Godot body
+//   animations, baked onto the mannequin (/Game/WWO/Anims/UAL, Tools/bake_ual_anims.py), called
+//   by their Godot names. Play() is CharacterModel.play(): one clip with a crossfade and a speed.
+//   Each owner picks its clip every frame from what it's doing, as its Godot script does.
 // - Colors via the mannequin material's "Paint Tint", and a white hit flash.
-// - One-off actions (attacks, the ult cast) as montages on the AnimBP's DefaultSlot.
-// - Death plays a death animation on its own.
 // - Flora grafts: gray-box markers pinned to bones that show the equipped flora's
-//   grenade and abilities (simplified versions of the Godot vine/spore/bark grafts).
+//   grenade and abilities (simplified versions of the Godot vine/spore/bark grafts),
+//   placed from the standing pose (Idle's first frame) as in Godot.
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -17,13 +18,8 @@
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
-class UAnimSequenceBase;
-
-UENUM()
-enum class EWWOAnimSet : uint8 { Unarmed, Pistol, Rifle };
-
-UENUM()
-enum class EWWOBodyAction : uint8 { None, UltCharge, UltCast, Bite, Slam, Lob, Leap };
+class UAnimSequence;
+class UWWOBodyAnimInstance;
 
 UCLASS(ClassGroup = (WWO))
 class WHATWASOURS_API UWWOBodyComponent : public UActorComponent
@@ -37,7 +33,6 @@ public:
 
 	FLinearColor BodyColor = FLinearColor(0.55f, 0.15f, 0.13f);
 	FLinearColor JointColor = FLinearColor(0.16f, 0.16f, 0.18f);
-	EWWOAnimSet AnimSet = EWWOAnimSet::Unarmed;
 	float ModelScale = 1.f;
 	bool bShadowOnly = false; // the player's own body: only its shadow shows in first person
 	TWeakObjectPtr<USkeletalMeshComponent> MeshOverride; // the preview uses its own mesh
@@ -45,9 +40,26 @@ public:
 	USkeletalMeshComponent* GetMesh() const;
 	void ApplyColors();
 	void SetFlash(float Amount);
-	void PlayAction(EWWOBodyAction Action, float Rate = 1.f);
-	void PlayDeath(bool bKnockedBack = false);
-	void Revive();
+
+	// CharacterModel.play(name, speed, blend): a different animation crossfades in, the same one
+	// only takes the new speed. Names are the Godot ones ("Idle", "Crouch_Fwd", "Death01"...).
+	void Play(FName Anim, float Speed = 1.f, float Blend = 0.2f);
+	void Queue(FName Anim); // AnimationPlayer.queue: plays when the current one ends
+	FName CurrentAnim() const; // None once a one-off animation has ended (it holds its last frame)
+	float CurrentAnimTime() const;
+	float CurrentAnimLength() const;
+	float AnimLength(FName Anim) const;
+	// Snaps the skeleton into an animation frame now (for measuring where to put things).
+	void ForcePose(FName Anim, float At = 0.f);
+	// The Soldier's upper-body layers: the pistol aim by weight, and a hit flinch on top.
+	void SetUpperBody(FName Anim, float Weight);
+	void PlayUpperShot(FName Anim, float FadeIn = 0.05f, float FadeOut = 0.2f);
+	// The idle / walk Blend2 of the Soldier's tree, and switching the tree off (it died).
+	void SetMix(FName A, FName B, float Alpha, float SpeedB);
+	void ClearLayers();
+	// The Swarm's hunch (HunchModifier): degrees over the spine, and lifted back over the neck and head.
+	void SetHunch(float SpineDegrees, float HeadDegrees);
+	UWWOBodyAnimInstance* GetAnimInstance() const;
 	void FollowLoadout(bool bShadow); // rebuild the grafts whenever the loadout changes
 	void RebuildGrafts();
 	// Godot's set_shadow_only: only the shadow shows in first person; off for the ult's third
@@ -57,15 +69,19 @@ public:
 	// A box pinned to a bone at a world point (measured now), e.g. Tank armor plates.
 	UStaticMeshComponent* AttachBox(FName Bone, const FVector& WorldCenter, const FVector& SizeM, const FLinearColor& Color, float Glow = 0.f);
 
-	static UAnimSequenceBase* LoadAnim(const TCHAR* Path);
+	UAnimSequence* FindAnim(FName Anim) const;
+	static bool IsLooping(FName Anim);
 
 private:
 	UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;
+	UPROPERTY() mutable TMap<FName, TObjectPtr<UAnimSequence>> Anims;
+	mutable TMap<FName, FTransform> IdlePose; // component space, Idle's first frame
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Grafts;
 	FDelegateHandle LoadoutHandle;
 	bool bSetUp = false;
 
 	UStaticMeshComponent* AddGraft(FName Bone, const FVector& World, UStaticMesh* Mesh, const FVector& ScaleM, const FLinearColor& Color,
 		float Glow = 0.f, const FRotator& WorldRot = FRotator::ZeroRotator);
-	FVector BonePoint(FName Bone) const;
+	FVector BonePoint(FName Bone) const; // in the standing pose, world
+	FTransform IdleBone(FName Bone) const; // world
 };

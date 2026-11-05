@@ -13,6 +13,9 @@
 #include "Player/WWOFPArmPaths.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PoseableMeshComponent.h"
+#include "Animation/AnimSequence.h"
+#include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 
@@ -269,28 +272,45 @@ void UWWOWeaponComponent::BuildModel()
 
 void UWWOWeaponComponent::BuildArm(FWWOFPArm& Arm, bool bLeft)
 {
-	auto Shape = [this](USceneComponent* Parent, UStaticMesh* Mesh) -> UStaticMeshComponent*
-	{
-		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(GetOwner());
-		C->SetupAttachment(Parent);
-		C->SetStaticMesh(Mesh);
-		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		C->SetCastShadow(false);
-		C->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
-		C->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
-		C->SetUsingAbsoluteScale(false);
-		C->RegisterComponent();
-		C->CreateAndSetMaterialInstanceDynamic(0);
-		return C;
-	};
 	Arm.bLeft = bLeft;
 	Arm.Root = NewObject<USceneComponent>(GetOwner());
 	Arm.Root->SetupAttachment(GetAttachParent()); // the camera
 	Arm.Root->RegisterComponent();
-	Arm.Upper = Shape(Arm.Root, WWOFX::Cylinder());
-	Arm.Fore = Shape(Arm.Root, WWOFX::Cylinder());
-	Arm.Fist = Shape(Arm.Root, WWOFX::Cube());
-	Arm.Ball = Shape(Arm.Root, WWOFX::Sphere());
+	// The mannequin, posed bone by bone each frame. Mirrored (the left arm) by a flipped scale.
+	USkeletalMesh* Manny = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+	Arm.Mesh = NewObject<UPoseableMeshComponent>(GetOwner());
+	Arm.Mesh->SetupAttachment(Arm.Root);
+	Arm.Mesh->SetSkinnedAssetAndUpdate(Manny);
+	Arm.Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Arm.Mesh->SetCastShadow(false);
+	Arm.Mesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	Arm.Mesh->SetBoundsScale(2.f); // the posed arm reaches well outside the reference pose's bounds
+	Arm.Mesh->SetRelativeScale3D(FVector(1.f, bLeft ? -1.f : 1.f, 1.f));
+	Arm.Mesh->RegisterComponent();
+	for (int32 i = 0; i < Arm.Mesh->GetNumMaterials(); ++i)
+	{
+		Arm.Mesh->SetMaterial(i, WWOFX::Material(TEXT("M_WWO_Solid"))); // fp_arm.gdshader: flat color, roughness 0.6
+		Arm.Mesh->CreateAndSetMaterialInstanceDynamic(i);
+	}
+	const TCHAR* AnimPath = bLeft ? TEXT("/Game/WWO/Anims/UAL/A_OverhandThrow.A_OverhandThrow") : TEXT("/Game/WWO/Anims/UAL/A_Melee_Hook.A_Melee_Hook");
+	Arm.Anim = LoadObject<UAnimSequence>(nullptr, AnimPath);
+	// Every bone is posed each frame (parents first): the right arm from the animation, the rest
+	// of the body shrunk away into the shoulder (fp_arm.gd hides it in its shader instead).
+	if (Manny && Manny->GetSkeleton())
+	{
+		const FReferenceSkeleton& Ref = Manny->GetSkeleton()->GetReferenceSkeleton();
+		const int32 Upper = Ref.FindBoneIndex("upperarm_r");
+		for (int32 b = 0; b < Ref.GetNum(); ++b)
+		{
+			const int32 Parent = Ref.GetParentIndex(b);
+			Arm.Bones.Add(b);
+			Arm.Shown.Add(b == Upper || (Parent != INDEX_NONE && Arm.Shown[Parent]));
+		}
+	}
+	Arm.Ball = WWOFX::AddShape(GetOwner(), Arm.Root, WWOFX::Sphere(), TEXT("M_WWO_Solid"), FLinearColor::White);
+	Arm.Ball->SetCastShadow(false);
+	Arm.Ball->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	Arm.Ball->MarkRenderStateDirty();
 	Arm.Root->SetVisibility(false, true);
 }
 
@@ -304,18 +324,19 @@ void UWWOWeaponComponent::UpdateArmColor()
 {
 	// Same color as the body's arms: the equipped Arms frame part's group color.
 	const FLinearColor Base(0.3f, 0.42f, 0.55f);
-	const FLinearColor Joint(0.15f, 0.16f, 0.18f);
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const UWWOFramePartData* ArmsPart = Loadout ? Loadout->GetFramePart("arms") : nullptr;
 	const FLinearColor Skin = ArmsPart ? ArmsPart->BodyColor(Base) : Base;
 	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
 	{
 		if (!Arm->Root) continue;
-		for (UStaticMeshComponent* C : { Arm->Upper.Get(), Arm->Fore.Get() })
+		// Godot's arm is the robot's, all in the skin color (its texture shading it). The mannequin's
+		// forearm and hand are mostly its trim (slot 1), so the trim takes a darker shade of the skin
+		// rather than the joint color, or the arm would read as the joint color.
+		for (int32 i = 0; Arm->Mesh && i < Arm->Mesh->GetNumMaterials(); ++i)
 		{
-			if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(C->GetMaterial(0))) Mat->SetVectorParameterValue("Color", Skin);
+			if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(Arm->Mesh->GetMaterial(i))) Mat->SetVectorParameterValue("Color", i == 0 ? Skin : Skin * 0.55f);
 		}
-		if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(Arm->Fist->GetMaterial(0))) Mat->SetVectorParameterValue("Color", Joint);
 	}
 }
 
@@ -858,37 +879,50 @@ void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float
 {
 	if (!Arm.Root) return;
 	Arm.Root->SetVisibility(bVisible, true);
-	if (!bVisible) return;
-	FVector J[4];
-	for (int32 i = 0; i < 4; ++i)
+	if (!bVisible || !Arm.Mesh || !Arm.Anim) return;
+	const USkeletalMesh* Manny = Cast<USkeletalMesh>(Arm.Mesh->GetSkinnedAsset());
+	if (!Manny || !Manny->GetSkeleton()) return;
+	const FReferenceSkeleton& Ref = Manny->GetSkeleton()->GetReferenceSkeleton();
+	// The animation frame, in the mannequin's mesh space (cm; faces +y, left +x, up +z).
+	TArray<FTransform> CS;
+	CS.SetNum(Ref.GetNum());
+	const FAnimExtractContext At(double(FMath::Clamp(AnimT, 0.f, Arm.Anim->GetPlayLength())));
+	for (const int32 B : Arm.Bones)
 	{
-		const FVector Joint = Arm.bLeft ? ArmJoint(WWOArmPaths::OverhandThrow, i, AnimT) : ArmJoint(WWOArmPaths::MeleeHook, i, AnimT);
-		J[i] = PlaceJoint(Joint, Arm.bLeft, Yaw, PitchDeg, Push, Drop);
+		FTransform Local;
+		Arm.Anim->GetBoneTransform(Local, FSkeletonPoseBoneIndex(B), At, false);
+		const int32 Parent = Ref.GetParentIndex(B);
+		CS[B] = Parent == INDEX_NONE ? Local : Local * CS[Parent];
 	}
-	// The arm FOV (see UpdateFov): x and y scaled toward the view axis, thickness with them.
+	// Mesh space -> Godot model space (meters, y up, facing +z), the file the Godot arm plays.
+	auto ToGodot = [](const FVector& V) { return FVector(V.X, V.Z, V.Y) / WWO::M; };
+	// The shoulder goes exactly where the Godot arm's shoulder is (the baked path, relative to the
+	// eyes); the rest of the arm hangs off it at the animation's angles.
+	const FVector Shoulder = Arm.bLeft ? ArmJoint(WWOArmPaths::OverhandThrow, 0, AnimT) : ArmJoint(WWOArmPaths::MeleeHook, 0, AnimT);
+	const FVector Eye = ToGodot(CS[Ref.FindBoneIndex("upperarm_r")].GetLocation()) - Shoulder;
+	// Then fp_arm.gd's placement (PlaceJoint), squeezed toward the view axis by the arm FOV (see
+	// UpdateFov; the bones shrink with it, so the arm's thickness does too), into camera space.
+	// The left arm's mesh is mirrored by its scale, so its points are flipped back here.
 	const float K = ArmFovRatio;
-	for (FVector& V : J) V *= FVector(K, K, 1.f);
-	const FVector& Shoulder = J[0];
-	const FVector& Elbow = J[1];
-	const FVector& Wrist = J[2];
-	const FVector& Knuckles = J[3];
-	auto Limb = [K](UStaticMeshComponent* C, const FVector& A, const FVector& B, float Thick)
+	const FVector Flip(1.f, Arm.bLeft ? -1.f : 1.f, 1.f);
+	auto Point = [&](const FVector& MeshPos) { return G2U(PlaceJoint(ToGodot(MeshPos) - Eye, Arm.bLeft, Yaw, PitchDeg, Push, Drop) * FVector(K, K, 1.f)); };
+	auto Dir = [&](const FVector& MeshDir) { return (G2U(PlaceJoint(ToGodot(MeshDir), Arm.bLeft, Yaw, PitchDeg, 0.f, 0.f) * FVector(K, K, 1.f)) * Flip).GetSafeNormal(); };
+	const FVector Hidden = Point(CS[Ref.FindBoneIndex("upperarm_r")].GetLocation()) * Flip;
+	for (int32 i = 0; i < Arm.Bones.Num(); ++i)
 	{
-		Thick *= K;
-		const FVector UA = G2U(A), UB = G2U(B);
-		const float Length = FVector::Dist(UA, UB);
-		const FRotator Rot = FRotationMatrix::MakeFromZ((UB - UA).GetSafeNormal()).Rotator(); // cylinder runs along z
-		C->SetRelativeLocationAndRotation((UA + UB) * 0.5f, Rot);
-		C->SetRelativeScale3D(FVector(Thick, Thick, Length / 100.f));
-	};
-	Limb(Arm.Upper, Shoulder, Elbow, 0.11f);
-	Limb(Arm.Fore, Elbow, Wrist, 0.085f);
-	// The fist: a block from the wrist out past the knuckles.
-	const FVector UWrist = G2U(Wrist), UKnuckles = G2U(Knuckles);
-	const FVector Along = UKnuckles - UWrist;
-	Arm.Fist->SetRelativeLocationAndRotation(UWrist + Along * 0.6f, FRotationMatrix::MakeFromX(Along.GetSafeNormal()).Rotator());
-	Arm.Fist->SetRelativeScale3D(FVector(Along.Size() / 100.f * 1.3f, 0.1f * K, 0.09f * K));
+		if (!Arm.Shown[i])
+		{
+			// A bone outside the arm: shrunk to nothing at the shoulder, so the body's vertices
+			// vanish and the ones it shares with the arm pull in to close the shoulder.
+			Arm.Mesh->SetBoneTransformByName(Ref.GetBoneName(Arm.Bones[i]), FTransform(FQuat::Identity, Hidden, FVector(0.01f)), EBoneSpaces::ComponentSpace);
+			continue;
+		}
+		const FTransform& T = CS[Arm.Bones[i]];
+		const FQuat Rot = FRotationMatrix::MakeFromXY(Dir(T.GetUnitAxis(EAxis::X)), Dir(T.GetUnitAxis(EAxis::Y))).ToQuat();
+		Arm.Mesh->SetBoneTransformByName(Ref.GetBoneName(Arm.Bones[i]), FTransform(Rot, Point(T.GetLocation()) * Flip, FVector(K)), EBoneSpaces::ComponentSpace);
+	}
+	// Godot: a 4 cm radius ball held at the base of the middle finger (in the palm).
 	if (!Arm.bLeft) Arm.Ball->SetVisibility(false); // only the throwing hand holds a grenade
-	Arm.Ball->SetRelativeScale3D(FVector(0.08f * K)); // Godot: a 4 cm radius ball held at the middle finger's base
-	Arm.Ball->SetRelativeLocation(UWrist + Along * 1.25f); // (just past the block, so it shows)
+	Arm.Ball->SetRelativeScale3D(FVector(0.08f * K));
+	Arm.Ball->SetRelativeLocation(Point(CS[Ref.FindBoneIndex("middle_01_r")].GetLocation()));
 }

@@ -213,12 +213,45 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
 	if (Health->bDead) return; // no shooting or throwing
+	if (!bUlting && EntrenchLeft <= 0.f) UpdateModel(); // frozen or rooted: the ult drives the body
 	UpdateCamera(DeltaSeconds);
 	AimAssist->UpdateAdhesion();
 	if (!bUlting) Weapon->UpdateWeapon(DeltaSeconds);
 	Abilities->UpdateAbilities(DeltaSeconds);
 	Grenades->UpdateGrenades(DeltaSeconds);
 	Ult->UpdateUlt(DeltaSeconds);
+}
+
+void AWWOCharacter::UpdateModel()
+{
+	// Pick the body animation from what you're doing. Playback speeds up or slows to match the
+	// speed (m/s) each animation looks right at.
+	constexpr float WalkAnimSpeed = 1.6f, JogAnimSpeed = 4.5f, SprintAnimSpeed = 7.f, CrouchAnimSpeed = 1.5f;
+	const float Speed = GetCharacterMovement()->Velocity.Size2D() / WWO::M;
+	if (bMantling)
+	{
+		Body->Play("Jump_Start");
+	}
+	else if (bSliding)
+	{
+		// Drop into the slide (Slide_Start), then hold the sliding pose (Slide, looping).
+		const FName Now = Body->CurrentAnim();
+		if (Now != "Slide_Start" && Now != "Slide")
+		{
+			Body->Play("Slide_Start", 1.6f, 0.08f);
+			Body->Queue("Slide");
+		}
+	}
+	else if (!IsOnFloor()) Body->Play("Jump");
+	else if (bCrouching)
+	{
+		if (Speed > 0.3f) Body->Play("Crouch_Fwd", FMath::Clamp(Speed / CrouchAnimSpeed, 0.6f, 2.f));
+		else Body->Play("Crouch_Idle");
+	}
+	else if (Speed < 0.3f) Body->Play("Idle");
+	else if (bSprinting) Body->Play("Sprint", FMath::Clamp(Speed / SprintAnimSpeed, 0.6f, 2.f));
+	else if (Speed > 3.f) Body->Play("Jog_Fwd", FMath::Clamp(Speed / JogAnimSpeed, 0.6f, 2.f));
+	else Body->Play("Walk", FMath::Clamp(Speed / WalkAnimSpeed, 0.6f, 2.f));
 }
 
 void AWWOCharacter::TickMovement(float DeltaSeconds)

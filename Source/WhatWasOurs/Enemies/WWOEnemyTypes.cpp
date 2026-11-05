@@ -36,7 +36,6 @@ AWWOSoldier::AWWOSoldier(const FObjectInitializer& ObjectInitializer) : Super(Ob
 	BodyHitbox->SetRelativeLocation(FVector(0, 0, -15.f)); // 1.5 m tall from the feet
 	Body->BodyColor = FLinearColor(0.55f, 0.15f, 0.13f);
 	Body->JointColor = FLinearColor(0.16f, 0.16f, 0.18f);
-	Body->AnimSet = EWWOAnimSet::Pistol;
 }
 
 UWWOEnemyData* AWWOSoldier::Data() const { return D(); }
@@ -89,9 +88,16 @@ void AWWOSoldier::OnReset()
 	if (Gun) Gun->SetVisibility(true, true);
 }
 
+void AWWOSoldier::OnHit(bool bCritical)
+{
+	// A quick flinch on the upper body on top of everything; the legs keep walking.
+	Body->PlayUpperShot(bCritical ? "Hit_Head" : "Hit_Chest", 0.05f, 0.2f);
+}
+
 void AWWOSoldier::OnDeath()
 {
 	CancelAttack();
+	Body->ClearLayers(); // the animation tree stops; the death plays on its own
 	if (Gun) Gun->SetVisibility(false, true);
 	if (MuzzleLight) MuzzleLight->SetIntensity(0.f);
 }
@@ -253,6 +259,10 @@ void AWWOSoldier::Animate(float DeltaSeconds)
 	// The gun sits in the right hand. In combat it points at the target; otherwise it points
 	// where the soldier faces, tipped down.
 	AimBlend = WWO::MoveToward(AimBlend, bAlerted ? 1.f : 0.f, 4.f * DeltaSeconds);
+	// Animation: aim when in combat (upper body), idle or walk by speed (soldier.gd's tree).
+	const float Speed = GetVelocity().Size2D() / WWO::M;
+	Body->SetMix("Idle", "Walk", FMath::Clamp(Speed / 1.f, 0.f, 1.f), FMath::Max(Speed / 1.6f, 0.5f));
+	Body->SetUpperBody("Pistol_Aim_Neutral", AimBlend);
 	const FVector Hand = GetMesh()->GetSocketLocation("hand_r");
 	Gun->SetWorldLocation(Hand);
 	FVector AimPoint = Hand + GetActorForwardVector() * 100.f - FVector(0, 0, 60.f);
@@ -285,6 +295,7 @@ UWWOSwarmData* AWWOSwarm::D() const
 
 void AWWOSwarm::Setup()
 {
+	Body->SetHunch(55.f, 45.f); // HunchModifier: bent forward at the spine, head lifted to look ahead
 	PinCrit("head", BonePos(GetMesh(), "head") + FVector(0, 0, 10.f * ModelScale) + GetActorForwardVector() * 2.f, FVector(12.f, 11.f, 13.f));
 	if (const UWWOSwarmData* S = D()) LeapCooldown = FMath::FRandRange(0.f, S->LeapCooldown);
 }
@@ -331,7 +342,7 @@ FVector AWWOSwarm::Think(float DeltaSeconds)
 		{
 			BiteTimer = S->BiteInterval;
 			DamageTarget(S->BiteDamage, true);
-			Body->PlayAction(EWWOBodyAction::Bite, 1.6f);
+			Body->Play("Punch_Jab", 1.6f, 0.05f);
 		}
 		return FVector::ZeroVector; // stand and bite
 	}
@@ -354,7 +365,17 @@ void AWWOSwarm::Leap(const FVector& Toward)
 	const float Up = FMath::Sqrt(2.f * 20.f * S->LeapHeight);
 	GetCharacterMovement()->Velocity = (Toward * S->LeapSpeed + FVector(0, 0, Up)) * WWO::M;
 	GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-	Body->PlayAction(EWWOBodyAction::Leap, 1.f);
+	Body->Play("Jump", 1.f, 0.05f);
+}
+
+void AWWOSwarm::Animate(float DeltaSeconds)
+{
+	if (bLeaping) return;
+	if (Body->CurrentAnim() == "Punch_Jab") return; // let the bite finish
+	const float Speed = GetVelocity().Size2D() / WWO::M;
+	constexpr float RunAnimSpeed = 6.5f; // m/s the Sprint animation looks right at, at full size
+	if (Speed > 0.5f) Body->Play("Sprint", FMath::Clamp(Speed / (RunAnimSpeed * ModelScale), 0.6f, 2.5f));
+	else Body->Play("Idle");
 }
 
 void AWWOSwarm::AfterMove(float DeltaSeconds)
@@ -534,14 +555,14 @@ FVector AWWOTank::Think(float DeltaSeconds)
 	{
 		SlamTime = 0.f;
 		bSlamLanded = false;
-		Body->PlayAction(EWWOBodyAction::Slam, 0.6f); // arms up: the warning
+		Body->Play("Spell_Simple_Enter", 0.6f, 0.15f); // arms up: the warning
 		return FVector::ZeroVector;
 	}
 	if (Distance > T->SlamRange && LobTimer <= 0.f && CanSeeTarget(Head))
 	{
 		LobTimer = T->LobInterval;
 		Lobbing = 0.5f;
-		Body->PlayAction(EWWOBodyAction::Lob, 1.f);
+		Body->Play("Spell_Simple_Shoot", 1.f, 0.1f);
 		Lob();
 	}
 	return PathDirection(TargetActor->GetActorLocation(), DeltaSeconds) * T->WalkSpeed; // never retreats
@@ -550,6 +571,7 @@ FVector AWWOTank::Think(float DeltaSeconds)
 void AWWOTank::Slam()
 {
 	const UWWOTankData* T = D();
+	Body->Play("Jump_Land", 1.4f, 0.05f);
 	AWWOFXActor::Shockwave(GetWorld(), FeetLocation() + FVector(0, 0, 10.f), FLinearColor(1.f, 0.7f, 0.3f, 0.8f), T->SlamRadius, 0.45f);
 	// Hits you and any teammates in range (the slam counts as melee).
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
@@ -592,4 +614,9 @@ void AWWOTank::Animate(float DeltaSeconds)
 	Bubble->SetVisibility(Shield > 0.f);
 	BubbleFlash = WWO::MoveToward(BubbleFlash, 0.f, 4.f * DeltaSeconds);
 	if (UMaterialInstanceDynamic* M = WWOFX::MID(Bubble)) M->SetScalarParameterValue("Alpha", FMath::Lerp(0.06f, 0.35f, BubbleFlash));
+	if (SlamTime >= 0.f || Lobbing > 0.f) return; // the slam and throw poses play out
+	const float Speed = GetVelocity().Size2D() / WWO::M;
+	constexpr float WalkAnimSpeed = 1.6f; // m/s the Walk animation looks right at, at full size
+	if (Speed > 0.3f) Body->Play("Walk", FMath::Clamp(Speed / (WalkAnimSpeed * ModelScale), 0.5f, 2.f));
+	else Body->Play("Idle");
 }

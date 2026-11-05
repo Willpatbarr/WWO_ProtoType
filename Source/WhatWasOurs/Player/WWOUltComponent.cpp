@@ -97,6 +97,7 @@ void UWWOUltComponent::Begin()
 	Clock = 0.f;
 	bExploded = false;
 	bCast = false;
+	bCharging = false;
 	bGlidingBack = false;
 	GlideFrom = FirstPersonTransform();
 	GlideTo = ThirdPersonTransform();
@@ -110,7 +111,11 @@ void UWWOUltComponent::Begin()
 		CastAt = FMath::Max(WindupTime - CastLead, Blend);
 		ExplodeAt = FMath::Max(WindupTime, Blend + CastLead);
 		FinishAt = ExplodeAt + HoldTime;
-		P->Body->PlayAction(EWWOBodyAction::UltCharge, 1.f);
+		// Godot: Spell_Simple_Enter as the camera glides out, then Spell_Simple_Idle once the
+		// enter has played out (or right before the cast), then Spell_Simple_Shoot.
+		P->Body->Play("Spell_Simple_Enter", 1.f, 0.1f);
+		const float EnterLeft = FMath::Max(P->Body->AnimLength("Spell_Simple_Enter") - Blend, 0.f);
+		ChargeAt = Blend + FMath::Min(EnterLeft, FMath::Max(WindupTime - Blend - CastLead, 0.f));
 		// The orb that grows between your hands.
 		Orb = WWOFX::AddShape(P, nullptr, WWOFX::Sphere(), TEXT("M_WWO_Solid"), Color, 4.f);
 		Orb->SetUsingAbsoluteLocation(true);
@@ -132,7 +137,7 @@ void UWWOUltComponent::Begin()
 		Blend = VeilCameraBlend;
 		ExplodeAt = Blend; // the release
 		FinishAt = Blend + VeilHold;
-		P->Body->PlayAction(EWWOBodyAction::UltCast, 1.6f);
+		P->Body->Play("Spell_Simple_Shoot", 1.6f, 0.05f);
 	}
 }
 
@@ -206,10 +211,15 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 		const float Grow = FMath::Clamp(Clock / FMath::Max(WindupTime - CastLead, 0.1f), 0.f, 1.f);
 		Orb->SetWorldScale3D(FVector(FMath::Max(OrbSize * WWO::M * Grow / 50.f, 0.01f)));
 	}
+	if (Kind == EKind::Blast && !bCharging && !bCast && Clock >= ChargeAt && ChargeAt < CastAt)
+	{
+		bCharging = true;
+		P->Body->Play("Spell_Simple_Idle", 1.f, 0.1f);
+	}
 	if (Kind == EKind::Blast && !bCast && Clock >= CastAt)
 	{
 		bCast = true;
-		P->Body->PlayAction(EWWOBodyAction::UltCast, 1.f);
+		P->Body->Play("Spell_Simple_Shoot", 1.f, 0.1f);
 	}
 	if (!bExploded && Clock >= ExplodeAt)
 	{
@@ -229,7 +239,7 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		bGlidingBack = true;
 		GlideFrom = UltCamera->GetComponentTransform();
-		P->Body->PlayAction(EWWOBodyAction::None, 1.f);
+		P->Body->Play("Idle", 1.f, Kind == EKind::Blast ? 0.3f : 0.2f);
 	}
 	const float Back = (Clock - FinishAt) / FMath::Max(Blend, 0.01f);
 	const FTransform To = FirstPersonTransform();

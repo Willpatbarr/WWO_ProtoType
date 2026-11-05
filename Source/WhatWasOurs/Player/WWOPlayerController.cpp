@@ -75,7 +75,8 @@ void AWWOPlayerController::BeginPlay()
 	SetMenuMode(false);
 	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
 	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
-	bAutoTest |= bAutoTestMenusOnly;
+	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
+	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
 	// menus instead while the game viewport has focus (stop PIE with the toolbar's Stop button).
@@ -563,6 +564,7 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	{
 		Shot(TEXT("01_start"));
 		if (bAutoTestMenusOnly) { AutoTestClock = 45.3f; Next(45.3f); }
+		else if (bAutoTestBodyOnly) { AutoTestClock = 45.4f; Next(45.4f); }
 		else Next(11.f);
 	}
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
@@ -762,8 +764,10 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	// Abilities and ults: each ability equipped and set off, then each flora's ult.
 	else if (At(45.2f)) { if (UpdateAutoAbilityTest(P, DeltaTime)) Next(45.3f); }
 	// Menus by controller alone: injected DualSense buttons and sticks (and Esc / Tab / I).
-	else if (At(45.3f)) { if (UpdateAutoMenuTest(P, DeltaTime)) Next(45.4f); }
-	else if (At(45.4f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	else if (At(45.3f)) { if (UpdateAutoMenuTest(P, DeltaTime)) Next(bAutoTestMenusOnly ? 45.5f : 45.4f); }
+	// Body animations: a row of mannequins in each state, then your body crouching and sliding.
+	else if (At(45.4f)) { if (UpdateAutoBodyTest(P, DeltaTime)) Next(45.5f); }
+	else if (At(45.5f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }
 
 bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)

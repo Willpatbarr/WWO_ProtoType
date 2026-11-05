@@ -23,8 +23,14 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `AutoTest ability:` / `AutoTest ult:` with 23_ability_* and 24_ult_* screenshots, and puts the loadout back;
   then drives both menus by injected DualSense input alone (Options, L1/R1, the left stick steering
   the cursor onto buttons, cross clicks and slider drags, right-stick scrolling, circle, touchpad) plus
-  Tab / Esc / I, logging `AutoTest menu: ... ok|FAIL` with 25_menu_* to 29_menu_* shots) and saves
-  screenshots to `Saved/AutoTest/`. `-WWOAutoTestMenus` runs only the menu steps (about 30 s).
+  Tab / Esc / I, logging `AutoTest menu: ... ok|FAIL` with 25_menu_* to 29_menu_* shots); then, on a floor
+  built 40 m above the arena, a row of mannequins in each body state (crouch, crouch walk, slide, Soldier
+  aim and hit flinch, death, knockback death, Swarm run, ult charge and cast, Tank slam warning) with a
+  close-up of each, your own body in third person crouched, crouch walking and sliding, and the
+  first-person throw and punch arms in slow motion, logging `AutoTest body:` with 30_body_row,
+  31_body_*, 32_player_* and 33_fp_* shots, and saves screenshots to `Saved/AutoTest/`.
+  `-WWOAutoTestMenus` runs only the menu steps (about 30 s), `-WWOAutoTestBody` only the body steps
+  (about 1 minute).
 - `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
   reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
   shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
@@ -40,14 +46,14 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 | gun.gd, aim_assist.gd | `Player/WWOWeaponComponent`, `WWOAimAssistComponent` (viewmodel uses Unreal First Person Rendering for its own FOV) |
 | player_health / ability_manager / grenade_thrower / ult_manager | `Player/WWOHealthComponent`, `WWOAbilityComponent`, `WWOGrenadeComponent`, `WWOUltComponent` |
 | grenade.gd | `Weapons/WWOGrenade` (ProjectileMovementComponent, plus Godot's rigid-body damping and contact friction with spin, so it bounces and rolls like the Godot ball) |
-| characters/fp_arm.gd | First-person arms in `Player/WWOWeaponComponent`, moved by `Player/WWOFPArmPaths.h` (baked from the Godot UAL animations by `Tools/bake_fp_arm_paths.py`) |
+| characters/fp_arm.gd | First-person arms in `Player/WWOWeaponComponent`: the mannequin (a PoseableMeshComponent) posed bone by bone from the baked Melee_Hook / OverhandThrow, the rest of the body shrunk away into the shoulder, the shoulder on the Godot arm's path from `Player/WWOFPArmPaths.h` (baked by `Tools/bake_fp_arm_paths.py`) |
 | loadout.gd + modifiers.gd | `Systems/WWOLoadoutSubsystem` (GameInstance subsystem, SaveGame slot "Loadout") |
 | groups, TargetManager, DamageNumbers | `Systems/WWOWorldSubsystem`, `WWOTargetable` interface |
 | enemies/*.gd | `Enemies/WWOEnemy`, `WWOEnemyTypes` (Soldier, Swarm, Tank), `WWOEnemyProjectile` |
 | allies/ally.gd | `Allies/WWOAlly` |
 | wave_manager.gd | `Game/WWOGameMode` (navmesh built at runtime from the map's NavMeshBoundsVolume; one nav agent sized like Godot's: 0.5 m radius, 1.8 m tall. Effects (`AWWOFXActor`, enemy shots) are kept out of it: Unreal adds every new mesh component to the navigation octree, and the constant tile rebuilds around shots and tracers left holes in the navmesh. Training targets and bark walls are in it, so paths go around them; Godot's baked navmesh has neither) |
 | flora/*.gd | `Flora/WWOSporeFog`, `WWOFloraEffects`; `FX/WWOFX` (blasts, particles, lightning) |
-| character_model.gd | `Characters/WWOBodyComponent` (Manny + template AnimBPs, tint, grafts) |
+| character_model.gd | `Characters/WWOBodyComponent` (Manny, tint, grafts) + `WWOBodyAnimInstance` (a native AnimInstance, no AnimBP: AnimationPlayer-style play / crossfade / speed / queue, the Soldier's upper-body aim and flinch layers, HunchModifier's bend). The Godot body animations are baked onto the mannequin skeleton as `/Game/WWO/Anims/UAL/A_<Godot name>` by `Tools/bake_ual_anims.py`, and each owner picks them by their Godot names as its Godot script does |
 | hud.gd, settings_menu.gd, character_menu.gd, menu_cursor.gd | `UI/` (UMG built in C++) |
 | data/*.tres | Data assets in `Content/WWO/Data` (Asset Manager primary assets) |
 | tools/build_*.gd | `Tools/create_assets.py`, `Tools/build_maps.py` (run with UnrealEditor-Cmd -run=pythonscript) |
@@ -74,16 +80,22 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Data from Godot: `python3 Tools/tres_to_json.py ~/Documents/WhatWasOurs Tools/wwo_data.json`
 - Then `Tools/create_assets.py` (materials + data assets) and `Tools/build_maps.py` (delete
   `Content/WWO/Maps/*.umap` first).
+- Body animations: `Tools/bake_ual_anims.py` (UnrealEditor-Cmd -run=pythonscript; reads the UAL glb files
+  from the Godot project, `WWO_GODOT` or `~/Documents/WhatWasOurs`). It retargets each clip in mesh space:
+  the UAL rig rests in a T-pose with three spine bones, Manny in an A-pose with five; mapped bones take the
+  UAL bone's world rotation change after a fixed rest alignment, the pelvis moves scaled by the pelvis
+  heights, and Manny keeps its own bone lengths.
 
 ## Differences from the Godot version
-- Mannequin animations come from the UE template: no crouch, slide, hit-flinch or Spell anims;
-  the ult uses the template's attack anims, Swarm isn't hunched.
+- Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and
+  speeds), not the Godot robot / UAL mesh. The Godot clips loop where their names end in _Loop.
 - Flora grafts are simplified gray-box pods, caps and plates (not the procedural vines/mushrooms/bark).
   Frame part region colors show on the first-person arm only.
 - Effects are C++ shapes and instanced-mesh particles, not Niagara.
-- The first-person punch and throw arms are simple limbs (cylinders and a fist block) instead of the
-  mannequin's arm, but they follow the Godot animations' shoulder, elbow, wrist and knuckle paths
-  (Melee_Hook, OverhandThrow) with the same timings, placement and arm FOV.
+- The first-person arms are the mannequin's right arm, flat-colored like fp_arm.gd. Godot's arm is the
+  robot's, all in the skin color; the mannequin's forearm and hand are mostly its trim, so the trim
+  takes a darker shade of the skin color. The arm FOV squeeze moves the bones toward the view axis and
+  shrinks them (Godot squeezes the projection), so the arm's depth isn't squeezed.
 - Wall Grenade walls stand on the ground under the blast. In Godot the ground ray also hits the
   grenade itself (it isn't excluded), so walls there start at the grenade's top: 24 cm up when it
   rests on the floor, higher if it goes off mid-bounce. Probably a Godot bug; not copied.

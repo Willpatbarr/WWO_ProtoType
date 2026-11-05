@@ -5,8 +5,8 @@
 #include "WWOTypes.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Animation/AnimInstance.h"
-#include "Animation/AnimSequenceBase.h"
+#include "Characters/WWOBodyAnimInstance.h"
+#include "Animation/AnimSequence.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -14,22 +14,8 @@
 namespace
 {
 	const TCHAR* MannyPath = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
-	const TCHAR* UnarmedABP = TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C");
-	const TCHAR* PistolABP = TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Pistol.ABP_TP_Pistol_C");
-	const TCHAR* RifleABP = TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C");
-	const TCHAR* Anim(EWWOBodyAction Action)
-	{
-		switch (Action)
-		{
-		case EWWOBodyAction::UltCharge: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack.MM_ChargedAttack");
-		case EWWOBodyAction::UltCast: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02.MM_Attack_02");
-		case EWWOBodyAction::Bite: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01.MM_Attack_01");
-		case EWWOBodyAction::Slam: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack.MM_ChargedAttack");
-		case EWWOBodyAction::Lob: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03.MM_Attack_03");
-		case EWWOBodyAction::Leap: return TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Jump.MM_Jump");
-		default: return nullptr;
-		}
-	}
+	// The baked Godot animations that loop (the UAL clips named *_Loop, as Godot's import loops them).
+	const FName Looping[] = { "Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Spell_Simple_Idle", "Slide", "Pistol_Aim_Neutral" };
 }
 
 UWWOBodyComponent::UWWOBodyComponent()
@@ -37,9 +23,20 @@ UWWOBodyComponent::UWWOBodyComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-UAnimSequenceBase* UWWOBodyComponent::LoadAnim(const TCHAR* Path)
+bool UWWOBodyComponent::IsLooping(FName Anim)
 {
-	return Path ? LoadObject<UAnimSequenceBase>(nullptr, Path) : nullptr;
+	for (const FName& L : Looping) if (L == Anim) return true;
+	return false;
+}
+
+UAnimSequence* UWWOBodyComponent::FindAnim(FName Anim) const
+{
+	if (Anim.IsNone()) return nullptr;
+	if (const TObjectPtr<UAnimSequence>* Found = Anims.Find(Anim)) return *Found;
+	const FString Name = Anim.ToString();
+	UAnimSequence* Seq = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/WWO/Anims/UAL/A_%s.A_%s"), *Name, *Name));
+	Anims.Add(Anim, Seq);
+	return Seq;
 }
 
 USkeletalMeshComponent* UWWOBodyComponent::GetMesh() const
@@ -47,6 +44,12 @@ USkeletalMeshComponent* UWWOBodyComponent::GetMesh() const
 	if (MeshOverride.IsValid()) return MeshOverride.Get();
 	const ACharacter* C = Cast<ACharacter>(GetOwner());
 	return C ? C->GetMesh() : GetOwner()->FindComponentByClass<USkeletalMeshComponent>();
+}
+
+UWWOBodyAnimInstance* UWWOBodyComponent::GetAnimInstance() const
+{
+	const USkeletalMeshComponent* Mesh = GetMesh();
+	return Mesh ? Cast<UWWOBodyAnimInstance>(Mesh->GetAnimInstance()) : nullptr;
 }
 
 void UWWOBodyComponent::BeginPlay()
@@ -58,12 +61,8 @@ void UWWOBodyComponent::BeginPlay()
 	{
 		if (!Mesh->GetSkeletalMeshAsset()) Mesh->SetSkeletalMeshAsset(Manny);
 	}
-	const TCHAR* ABP = AnimSet == EWWOAnimSet::Pistol ? PistolABP : (AnimSet == EWWOAnimSet::Rifle ? RifleABP : UnarmedABP);
-	if (UClass* AnimClass = LoadClass<UAnimInstance>(nullptr, ABP))
-	{
-		Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-		Mesh->SetAnimInstanceClass(AnimClass);
-	}
+	Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Mesh->SetAnimInstanceClass(UWWOBodyAnimInstance::StaticClass());
 	Mesh->SetRelativeScale3D(FVector(ModelScale));
 	Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 	Materials.Reset();
@@ -73,6 +72,7 @@ void UWWOBodyComponent::BeginPlay()
 	}
 	bSetUp = true;
 	ApplyColors();
+	ForcePose("Idle"); // Godot: force_pose("Idle") before measuring hitboxes and gear, then play("Idle")
 }
 
 void UWWOBodyComponent::EndPlay(const EEndPlayReason::Type Reason)
@@ -100,43 +100,85 @@ void UWWOBodyComponent::SetFlash(float Amount)
 	}
 }
 
-void UWWOBodyComponent::PlayAction(EWWOBodyAction Action, float Rate)
+// --- Animation ---------------------------------------------------------------------------------
+
+void UWWOBodyComponent::Play(FName Anim, float Speed, float Blend)
 {
-	USkeletalMeshComponent* Mesh = GetMesh();
-	UAnimInstance* AnimInstance = Mesh ? Mesh->GetAnimInstance() : nullptr;
-	if (!AnimInstance) return;
-	if (Action == EWWOBodyAction::None)
-	{
-		AnimInstance->StopSlotAnimation(0.25f, "DefaultSlot");
-		return;
-	}
-	if (UAnimSequenceBase* Seq = LoadAnim(Anim(Action)))
-	{
-		AnimInstance->PlaySlotAnimationAsDynamicMontage(Seq, "DefaultSlot", 0.08f, 0.2f, Rate);
-	}
+	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->Play(FindAnim(Anim), IsLooping(Anim), Speed, Blend);
 }
 
-void UWWOBodyComponent::PlayDeath(bool bKnockedBack)
+void UWWOBodyComponent::Queue(FName Anim)
 {
-	USkeletalMeshComponent* Mesh = GetMesh();
-	if (!Mesh) return;
-	const TCHAR* Path = bKnockedBack ? TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Back_01.MM_Death_Back_01")
-		: TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Front_01.MM_Death_Front_01");
-	if (UAnimSequenceBase* Seq = LoadAnim(Path))
-	{
-		Mesh->PlayAnimation(Seq, false);
-	}
+	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->Queue(FindAnim(Anim), IsLooping(Anim));
 }
 
-void UWWOBodyComponent::Revive()
+FName UWWOBodyComponent::CurrentAnim() const
+{
+	const UWWOBodyAnimInstance* A = GetAnimInstance();
+	const UAnimSequence* Seq = A ? A->GetCurrent() : nullptr;
+	if (!Seq) return NAME_None;
+	for (const TPair<FName, TObjectPtr<UAnimSequence>>& Pair : Anims)
+	{
+		if (Pair.Value == Seq) return Pair.Key;
+	}
+	return NAME_None;
+}
+
+float UWWOBodyComponent::CurrentAnimTime() const
+{
+	const UWWOBodyAnimInstance* A = GetAnimInstance();
+	return A ? A->GetCurrentTime() : 0.f;
+}
+
+float UWWOBodyComponent::CurrentAnimLength() const
+{
+	const UWWOBodyAnimInstance* A = GetAnimInstance();
+	return A && A->IsPlaying() ? A->GetCurrentLength() : 0.f;
+}
+
+float UWWOBodyComponent::AnimLength(FName Anim) const
+{
+	const UAnimSequence* Seq = FindAnim(Anim);
+	return Seq ? Seq->GetPlayLength() : 0.f;
+}
+
+void UWWOBodyComponent::ForcePose(FName Anim, float At)
 {
 	USkeletalMeshComponent* Mesh = GetMesh();
-	if (!Mesh) return;
-	const TCHAR* ABP = AnimSet == EWWOAnimSet::Pistol ? PistolABP : (AnimSet == EWWOAnimSet::Rifle ? RifleABP : UnarmedABP);
-	if (UClass* AnimClass = LoadClass<UAnimInstance>(nullptr, ABP))
+	UWWOBodyAnimInstance* A = GetAnimInstance();
+	if (!Mesh || !A) return;
+	A->Stop();
+	A->Play(FindAnim(Anim), IsLooping(Anim), 1.f, 0.f);
+	Mesh->TickAnimation(At, false);
+	Mesh->RefreshBoneTransforms();
+}
+
+void UWWOBodyComponent::SetUpperBody(FName Anim, float Weight)
+{
+	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->SetUpperBody(FindAnim(Anim), Weight);
+}
+
+void UWWOBodyComponent::PlayUpperShot(FName Anim, float FadeIn, float FadeOut)
+{
+	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->PlayUpperShot(FindAnim(Anim), FadeIn, FadeOut);
+}
+
+void UWWOBodyComponent::SetMix(FName A, FName B, float Alpha, float SpeedB)
+{
+	if (UWWOBodyAnimInstance* I = GetAnimInstance()) I->SetMix(FindAnim(A), FindAnim(B), Alpha, SpeedB);
+}
+
+void UWWOBodyComponent::ClearLayers()
+{
+	if (UWWOBodyAnimInstance* I = GetAnimInstance()) I->ClearLayers();
+}
+
+void UWWOBodyComponent::SetHunch(float SpineDegrees, float HeadDegrees)
+{
+	if (UWWOBodyAnimInstance* A = GetAnimInstance())
 	{
-		Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-		Mesh->SetAnimInstanceClass(AnimClass);
+		A->HunchSpine = SpineDegrees;
+		A->HunchHead = HeadDegrees;
 	}
 }
 
@@ -169,10 +211,35 @@ void UWWOBodyComponent::SetShadowOnly(bool bOn)
 	}
 }
 
+FTransform UWWOBodyComponent::IdleBone(FName Bone) const
+{
+	// Where a bone is in the standing pose (Idle's first frame), in world space. Godot places the
+	// grafts from that pose whatever is playing (show_flora plays Idle, seeks 0, then goes back).
+	const USkeletalMeshComponent* Mesh = GetMesh();
+	if (!Mesh) return GetOwner()->GetActorTransform();
+	const USkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
+	const UAnimSequence* Idle = FindAnim("Idle");
+	if (IdlePose.Num() == 0 && Asset && Asset->GetSkeleton() && Idle)
+	{
+		const FReferenceSkeleton& Ref = Asset->GetSkeleton()->GetReferenceSkeleton();
+		TArray<FTransform> CS;
+		CS.SetNum(Ref.GetNum());
+		for (int32 i = 0; i < Ref.GetNum(); ++i)
+		{
+			FTransform Local;
+			Idle->GetBoneTransform(Local, FSkeletonPoseBoneIndex(i), FAnimExtractContext(0.0), false);
+			const int32 Parent = Ref.GetParentIndex(i);
+			CS[i] = Parent == INDEX_NONE ? Local : Local * CS[Parent];
+			IdlePose.Add(Ref.GetBoneName(i), CS[i]);
+		}
+	}
+	if (const FTransform* Found = IdlePose.Find(Bone)) return *Found * Mesh->GetComponentTransform();
+	return Mesh->GetSocketTransform(Bone);
+}
+
 FVector UWWOBodyComponent::BonePoint(FName Bone) const
 {
-	const USkeletalMeshComponent* Mesh = GetMesh();
-	return Mesh ? Mesh->GetSocketLocation(Bone) : GetOwner()->GetActorLocation();
+	return IdleBone(Bone).GetLocation();
 }
 
 UStaticMeshComponent* UWWOBodyComponent::AddGraft(FName Bone, const FVector& World, UStaticMesh* MeshAsset, const FVector& ScaleM,
@@ -185,10 +252,11 @@ UStaticMeshComponent* UWWOBodyComponent::AddGraft(FName Bone, const FVector& Wor
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	C->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
 	C->SetupAttachment(Mesh, Bone);
+	// Placed against the bone in the standing pose (meters -> the 1 m engine shapes), then it follows the bone.
+	const FTransform Want(WorldRot.IsZero() ? GetOwner()->GetActorRotation() : WorldRot, World, ScaleM);
+	C->SetRelativeTransform(Want.GetRelativeTransform(IdleBone(Bone)));
 	C->RegisterComponent();
 	GetOwner()->AddInstanceComponent(C);
-	C->SetWorldLocationAndRotation(World, WorldRot.IsZero() ? GetOwner()->GetActorRotation() : WorldRot);
-	C->SetWorldScale3D(ScaleM); // meters -> the 1 m engine shapes
 	if (UMaterialInstanceDynamic* M = C->CreateAndSetMaterialInstanceDynamic(0))
 	{
 		M->SetVectorParameterValue("Color", Color);

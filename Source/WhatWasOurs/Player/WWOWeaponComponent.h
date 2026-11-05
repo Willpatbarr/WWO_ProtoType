@@ -17,22 +17,26 @@
 class AWWOCharacter;
 class UWWOWeaponData;
 class UStaticMeshComponent;
+class UPoseableMeshComponent;
+class UAnimSequence;
 class UMaterialInstanceDynamic;
 struct FHitResult;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWWOHitConfirmed, bool /*bCritical*/, bool /*bKilled*/);
 
-// A gray-box first-person arm (the punching right arm or the throwing left arm).
+// A first-person arm (fp_arm.gd): the mannequin's right arm (the rest of the body shrunk away),
+// posed from the Godot animation (Melee_Hook, or OverhandThrow mirrored for the left arm).
 USTRUCT()
 struct FWWOFPArm
 {
 	GENERATED_BODY()
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Upper;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Fore;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Fist;
+	UPROPERTY() TObjectPtr<UPoseableMeshComponent> Mesh;
+	UPROPERTY() TObjectPtr<UAnimSequence> Anim;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Ball; // the grenade in the throwing hand
+	TArray<int32> Bones; // skeleton bones, parents first
+	TArray<bool> Shown;  // per entry of Bones: part of the right arm (the rest is shrunk away)
 	bool bLeft = false;
 };
 

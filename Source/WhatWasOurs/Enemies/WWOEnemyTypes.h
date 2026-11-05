@@ -35,6 +35,7 @@ protected:
 	virtual void Animate(float DeltaSeconds) override;
 	virtual void OnReset() override;
 	virtual void OnDeath() override;
+	virtual void OnHit(bool bCritical) override;
 	virtual void StandDown() override { CancelAttack(); }
 	virtual void AfterMove(float DeltaSeconds) override;
 	virtual float CritRadius() const override { return 14.f; }
@@ -73,6 +74,7 @@ protected:
 	virtual UWWOEnemyData* Data() const override;
 	virtual void Setup() override;
 	virtual FVector Think(float DeltaSeconds) override;
+	virtual void Animate(float DeltaSeconds) override;
 	virtual void OnReset() override;
 	virtual void AfterMove(float DeltaSeconds) override;
 	virtual float CritRadius() const override { return 15.f; }

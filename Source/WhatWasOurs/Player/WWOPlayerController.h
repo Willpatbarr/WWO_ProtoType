@@ -112,6 +112,15 @@ private:
 	// -WWOAutoTest: a scripted play-through that saves screenshots (for checking the port).
 	bool bAutoTest = false;
 	bool bAutoTestMenusOnly = false; // -WWOAutoTestMenus: just the controller-only menu steps
+	bool bAutoTestBodyOnly = false; // -WWOAutoTestBody: just the body animation steps
+	// Body steps (WWOPlayerControllerAutoBody.cpp): a row of mannequins in each body state.
+	int32 AutoBodyStep = 0;
+	float AutoBodyClock = 0.f;
+	FVector AutoBodyOrigin = FVector::ZeroVector;
+	UPROPERTY() TArray<TObjectPtr<AActor>> AutoBodies;
+	UPROPERTY() TArray<TObjectPtr<AActor>> AutoBodyProps;
+	UPROPERTY() TObjectPtr<class ACameraActor> AutoBodyCamera;
+	bool UpdateAutoBodyTest(class AWWOCharacter* P, float DeltaTime);
 	// Menu steps (WWOPlayerControllerAutoMenu.cpp): the menus driven by injected DualSense input.
 	int32 AutoMenuStep = 0;
 	float AutoMenuClock = 0.f;

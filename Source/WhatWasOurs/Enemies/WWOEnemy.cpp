@@ -180,10 +180,10 @@ void AWWOEnemy::ResetTarget()
 	{
 		bDead = false;
 		SetCollision(true);
-		Body->Revive();
 	}
 	SetActorHiddenInGame(false);
 	OnReset();
+	Body->Play("Idle", 1.f, 0.f);
 }
 
 void AWWOEnemy::Die()
@@ -192,7 +192,7 @@ void AWWOEnemy::Die()
 	Health = 0.f;
 	SetCollision(false);
 	OnDeath();
-	Body->PlayDeath(false);
+	Body->Play("Death01", 1.f, 0.1f);
 	OnDied.Broadcast(this);
 	CorpseLeft = CorpseTime;
 	const UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
@@ -219,7 +219,7 @@ void AWWOEnemy::KnockBack(const FVector& Push)
 		// A killing blow knocks it clean off its feet, falling away from the hit.
 		const FVector Away = FVector(Push.X, Push.Y, 0.f).GetSafeNormal();
 		if (!Away.IsNearlyZero()) SetActorRotation(FRotator(0.f, (-Away).Rotation().Yaw, 0.f));
-		Body->PlayDeath(true);
+		Body->Play("Hit_Knockback", 1.f, 0.05f); // thrown onto its back instead of the usual collapse
 	}
 }
 
