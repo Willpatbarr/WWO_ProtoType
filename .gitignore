@@ -1,0 +1,9 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vscode/
+.idea/
+*.xcworkspace
+*.xcodeproj
+.DS_Store

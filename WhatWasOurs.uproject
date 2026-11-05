@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "What Was Ours: first-person shooter prototype (ported from Godot).",
+	"Modules": [
+		{
+			"Name": "WhatWasOurs",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [ "Engine", "AIModule", "UMG" ]
+		}
+	],
+	"Plugins": [
+		{ "Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "EditorScriptingUtilities", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "ModelingToolsEditorMode", "Enabled": true, "TargetAllowList": [ "Editor" ] }
+	]
+}

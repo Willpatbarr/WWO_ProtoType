@@ -1,0 +1,1311 @@
+{
+ "weapons": [
+  {
+   "id": "rifle",
+   "model": "res://weapons/models/rifle.tscn",
+   "unlocked": true,
+   "hip_position": [
+    0.15,
+    -0.12,
+    -0.4
+   ],
+   "ads_position": [
+    0.0,
+    0.0,
+    -0.34
+   ],
+   "display_name": "Rifle",
+   "archetype": "Auto rifle",
+   "order": 0.0,
+   "zoom": 1.5,
+   "ads_time": 0.12,
+   "ads_sensitivity": 1.0,
+   "ads_move_speed": 0.65,
+   "ads_vignette": 0.35,
+   "scope_overlay": 0.0,
+   "semi_auto": 0.0,
+   "fire_rate": 600.0,
+   "damage": 20.0,
+   "crit_multiplier": 1.6,
+   "fire_range": 120.0,
+   "pellets": 1.0,
+   "pellet_spread": 0.0,
+   "hip_spread": 0.0,
+   "recoil_up": 0.65,
+   "recoil_side": 0.15,
+   "gun_kick": 1.1,
+   "magazine_size": 30.0,
+   "reload_time": 2.0,
+   "viewmodel_fov": 65.0,
+   "sway": 1.0,
+   "gun_bob": 1.0,
+   "slide_tilt": 11.0,
+   "aim_assistance": 70.0,
+   "magnetism_angle": 2.0,
+   "friction_strength": 0.45,
+   "friction_angle": 3.7,
+   "adhesion": 0.0,
+   "assist_range": 40.0,
+   "ads_boost": 1.4,
+   "crit_magnetism": 0.35,
+   "rumble_strong": 0.25,
+   "rumble_weak": 0.3,
+   "rumble_time": 0.04,
+   "punch_fov": 0.5,
+   "punch_roll": 0.25,
+   "punch_time": 0.07,
+   "recoil_kick_time": 0.0,
+   "recoil_recovery": 0.0,
+   "recoil_recovery_curve": 2.0,
+   "recoil_recovery_delay": 0.0,
+   "recoil_recovery_sync": 0.0,
+   "recoil_recovery_time": 0.12
+  },
+  {
+   "id": "handcannon",
+   "model": "res://weapons/models/handcannon.tscn",
+   "unlocked": true,
+   "hip_position": [
+    0.11,
+    -0.085,
+    -0.4
+   ],
+   "ads_position": [
+    0.0,
+    0.0,
+    -0.46
+   ],
+   "display_name": "Hand Cannon",
+   "archetype": "Hand cannon",
+   "order": 1.0,
+   "zoom": 1.4,
+   "ads_time": 0.16,
+   "ads_sensitivity": 1.0,
+   "ads_move_speed": 0.75,
+   "ads_vignette": 0.3,
+   "scope_overlay": 0.0,
+   "semi_auto": 1.0,
+   "fire_rate": 150.0,
+   "damage": 55.0,
+   "crit_multiplier": 2.0,
+   "fire_range": 60.0,
+   "pellets": 1.0,
+   "pellet_spread": 0.0,
+   "hip_spread": 0.8,
+   "recoil_up": 5.85,
+   "recoil_side": 1.05,
+   "gun_kick": 3.0,
+   "magazine_size": 15.0,
+   "reload_time": 1.25,
+   "viewmodel_fov": 62.0,
+   "sway": 1.2,
+   "gun_bob": 1.1,
+   "slide_tilt": 14.0,
+   "aim_assistance": 80.0,
+   "magnetism_angle": 2.2,
+   "friction_strength": 0.55,
+   "friction_angle": 4.0,
+   "adhesion": 0.0,
+   "assist_range": 35.0,
+   "ads_boost": 1.2,
+   "crit_magnetism": 0.2,
+   "recoil_kick_time": 0.095,
+   "recoil_recovery": 0.95,
+   "recoil_recovery_time": 0.18,
+   "rumble_strong": 0.9,
+   "rumble_weak": 0.45,
+   "rumble_time": 0.08,
+   "punch_fov": 2.5,
+   "punch_roll": 1.2,
+   "punch_time": 0.16,
+   "recoil_recovery_sync": 1.0,
+   "recoil_recovery_curve": 2.0,
+   "recoil_recovery_delay": 0.105
+  },
+  {
+   "id": "shotgun",
+   "model": "res://weapons/models/shotgun.tscn",
+   "unlocked": true,
+   "hip_position": [
+    0.15,
+    -0.1,
+    -0.52
+   ],
+   "ads_position": [
+    0.0,
+    0.0,
+    -0.6
+   ],
+   "display_name": "Shotgun",
+   "archetype": "Pump shotgun",
+   "order": 2.0,
+   "zoom": 1.2,
+   "ads_time": 0.2,
+   "ads_sensitivity": 1.0,
+   "ads_move_speed": 0.8,
+   "ads_vignette": 0.2,
+   "scope_overlay": 0.0,
+   "semi_auto": 1.0,
+   "fire_rate": 65.0,
+   "damage": 18.0,
+   "crit_multiplier": 1.2,
+   "fire_range": 15.0,
+   "pellets": 8.0,
+   "pellet_spread": 4.0,
+   "hip_spread": 0.0,
+   "recoil_up": 4.0,
+   "recoil_side": 1.0,
+   "gun_kick": 3.0,
+   "magazine_size": 5.0,
+   "reload_time": 2.6,
+   "viewmodel_fov": 62.0,
+   "sway": 1.3,
+   "gun_bob": 1.2,
+   "slide_tilt": 18.0,
+   "aim_assistance": 60.0,
+   "magnetism_angle": 0.0,
+   "friction_strength": 0.3,
+   "friction_angle": 6.0,
+   "adhesion": 0.0,
+   "assist_range": 12.0,
+   "ads_boost": 1.2,
+   "crit_magnetism": 0.4,
+   "rumble_strong": 1.0,
+   "rumble_weak": 0.6,
+   "rumble_time": 0.14,
+   "punch_fov": 3.5,
+   "punch_roll": 1.5,
+   "punch_time": 0.2,
+   "recoil_kick_time": 0.0,
+   "recoil_recovery": 0.0,
+   "recoil_recovery_curve": 2.0,
+   "recoil_recovery_delay": 0.0,
+   "recoil_recovery_sync": 0.0,
+   "recoil_recovery_time": 0.12
+  },
+  {
+   "id": "sniper",
+   "model": "res://weapons/models/sniper.tscn",
+   "unlocked": true,
+   "hip_position": [
+    0.13,
+    -0.1,
+    -0.46
+   ],
+   "ads_position": [
+    0.0,
+    0.0,
+    -0.4
+   ],
+   "display_name": "Sniper Rifle",
+   "archetype": "Sniper rifle",
+   "order": 3.0,
+   "zoom": 6.0,
+   "ads_time": 0.35,
+   "ads_sensitivity": 1.0,
+   "ads_move_speed": 0.5,
+   "ads_vignette": 0.0,
+   "scope_overlay": 1.0,
+   "semi_auto": 1.0,
+   "fire_rate": 70.0,
+   "damage": 160.0,
+   "crit_multiplier": 2.5,
+   "fire_range": 300.0,
+   "pellets": 1.0,
+   "pellet_spread": 0.0,
+   "hip_spread": 3.0,
+   "recoil_up": 4.5,
+   "recoil_side": 0.8,
+   "gun_kick": 3.0,
+   "magazine_size": 4.0,
+   "reload_time": 2.9,
+   "viewmodel_fov": 60.0,
+   "sway": 1.5,
+   "gun_bob": 1.2,
+   "slide_tilt": 10.0,
+   "aim_assistance": 55.0,
+   "magnetism_angle": 0.8,
+   "friction_strength": 0.5,
+   "friction_angle": 2.5,
+   "adhesion": 0.0,
+   "assist_range": 150.0,
+   "ads_boost": 1.15,
+   "crit_magnetism": 0.15,
+   "rumble_strong": 1.0,
+   "rumble_weak": 0.5,
+   "rumble_time": 0.16,
+   "punch_fov": 3.0,
+   "punch_roll": 0.8,
+   "punch_time": 0.25,
+   "recoil_kick_time": 0.0,
+   "recoil_recovery": 0.0,
+   "recoil_recovery_curve": 2.0,
+   "recoil_recovery_delay": 0.0,
+   "recoil_recovery_sync": 0.0,
+   "recoil_recovery_time": 0.12
+  }
+ ],
+ "grenades": [
+  {
+   "id": "volt_grenade",
+   "display_name": "Volt Grenade",
+   "color": [
+    0.3,
+    0.6,
+    1.0,
+    1.0
+   ],
+   "order": 0.0,
+   "damage": 120.0,
+   "blast_radius": 4.5,
+   "flora": "voltvine",
+   "kind": "explosive",
+   "bounce": 0.35,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "shock_pool",
+   "display_name": "Shock Pool",
+   "color": [
+    0.35,
+    0.85,
+    1.0,
+    1.0
+   ],
+   "order": 1.0,
+   "damage": 52.0,
+   "blast_radius": 5.0,
+   "flora": "voltvine",
+   "kind": "pool",
+   "pool_dps": 30.0,
+   "pool_time": 5.0,
+   "bounce": 0.35,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "snare_mine",
+   "display_name": "Snare Mine",
+   "color": [
+    0.25,
+    0.4,
+    1.0,
+    1.0
+   ],
+   "order": 2.0,
+   "damage": 80.0,
+   "blast_radius": 4.0,
+   "flora": "voltvine",
+   "kind": "tripmine",
+   "bounce": 0.0,
+   "arm_time": 0.6,
+   "trigger_radius": 2.5,
+   "mine_life": 25.0,
+   "slow_amount": 0.5,
+   "slow_time": 3.0,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "spore_pool",
+   "display_name": "Lingering Pool",
+   "color": [
+    0.55,
+    0.85,
+    0.35,
+    1.0
+   ],
+   "order": 10.0,
+   "damage": 40.0,
+   "blast_radius": 5.0,
+   "flora": "veilspore",
+   "kind": "pool",
+   "pool_dps": 50.0,
+   "pool_time": 5.0,
+   "bounce": 0.35,
+   "fuse_mult": 0.85,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "poison_spike",
+   "display_name": "Poison Spike",
+   "color": [
+    0.75,
+    0.3,
+    0.9,
+    1.0
+   ],
+   "order": 11.0,
+   "damage": 30.0,
+   "blast_radius": 1.5,
+   "flora": "veilspore",
+   "kind": "spike",
+   "bounce": 0.75,
+   "poison_dps": 20.0,
+   "poison_time": 5.0,
+   "spike_life": 6.0,
+   "seek_radius": 1.0,
+   "seek_strength": 110.0,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "spore_blast",
+   "display_name": "Spore Blast",
+   "color": [
+    0.85,
+    0.65,
+    0.95,
+    1.0
+   ],
+   "order": 12.0,
+   "damage": 130.0,
+   "blast_radius": 4.5,
+   "flora": "veilspore",
+   "kind": "explosive",
+   "bounce": 0.35,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "wall_grenade",
+   "display_name": "Wall Grenade",
+   "color": [
+    0.55,
+    0.4,
+    0.25,
+    1.0
+   ],
+   "order": 20.0,
+   "damage": 60.0,
+   "blast_radius": 2.5,
+   "flora": "ironbark",
+   "kind": "wall",
+   "bounce": 0.15,
+   "wall_width": 5.0,
+   "wall_height": 2.6,
+   "wall_time": 10.0,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "iron_grenade",
+   "display_name": "Iron Grenade",
+   "color": [
+    0.62,
+    0.62,
+    0.66,
+    1.0
+   ],
+   "order": 21.0,
+   "damage": 130.0,
+   "blast_radius": 4.5,
+   "flora": "ironbark",
+   "kind": "explosive",
+   "bounce": 0.35,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  },
+  {
+   "id": "blinding_grenade",
+   "display_name": "Blinding Grenade",
+   "color": [
+    1.0,
+    0.95,
+    0.7,
+    1.0
+   ],
+   "order": 22.0,
+   "damage": 40.0,
+   "blast_radius": 5.0,
+   "flora": "ironbark",
+   "kind": "blind",
+   "blind_time": 3.0,
+   "bounce": 0.35,
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0
+  }
+ ],
+ "abilities": [
+  {
+   "id": "overgrowth",
+   "display_name": "Overgrowth",
+   "description": "Passive: move faster and gain a third jump.",
+   "color": [
+    0.4,
+    0.85,
+    0.3,
+    1.0
+   ],
+   "kind": "passive",
+   "order": 0.0,
+   "unlocked": true,
+   "speed_mult": 1.1,
+   "extra_jumps": 1.0,
+   "flora": "voltvine"
+  },
+  {
+   "id": "thornfist",
+   "display_name": "Thornfist",
+   "description": "Activate: melee hits much harder for a short time.",
+   "color": [
+    0.95,
+    0.45,
+    0.2,
+    1.0
+   ],
+   "kind": "active",
+   "order": 1.0,
+   "unlocked": true,
+   "melee_damage_mult": 2.5,
+   "duration": 8.0,
+   "cooldown": 20.0,
+   "flora": "voltvine",
+   "discharge_arcs": 6.0,
+   "discharge_radius": 1.2,
+   "discharge_time": 0.35
+  },
+  {
+   "id": "melee_guard",
+   "display_name": "Melee Guard",
+   "description": "Triggered: after you land a melee hit, you take less melee damage for a few seconds.",
+   "color": [
+    0.4,
+    0.7,
+    1.0,
+    1.0
+   ],
+   "kind": "triggered",
+   "order": 2.0,
+   "flora": "voltvine",
+   "duration": 4.0,
+   "guard_reduction": 0.75
+  },
+  {
+   "id": "static_charge",
+   "display_name": "Static Charge",
+   "description": "Charged: taking damage builds charge. When full, activate it, and your next melee hit unleashes lightning that chains between enemies.",
+   "color": [
+    0.55,
+    0.85,
+    1.0,
+    1.0
+   ],
+   "kind": "charged",
+   "order": 3.0,
+   "flora": "voltvine",
+   "charge_damage": 150.0,
+   "chain_damage": 120.0,
+   "chain_jumps": 8.0,
+   "chain_range": 8.0,
+   "chain_falloff": 0.85,
+   "chain_delay": 0.05
+  },
+  {
+   "id": "seedburst",
+   "display_name": "Seedburst",
+   "description": "Triggered: your grenade bursts into seed grenades with half the blast.",
+   "color": [
+    0.95,
+    0.85,
+    0.25,
+    1.0
+   ],
+   "kind": "triggered",
+   "order": 9.0,
+   "unlocked": false,
+   "sub_count": 3.0,
+   "sub_scale": 0.5,
+   "sub_spread": 5.0,
+   "sub_fuse": 0.6,
+   "flora": "none"
+  },
+  {
+   "id": "spore_fog_damage",
+   "display_name": "Spore Fog Damage",
+   "description": "Passive: your spore fogs hurt Swarm and Soldiers over time.",
+   "color": [
+    0.6,
+    0.8,
+    0.4,
+    1.0
+   ],
+   "kind": "passive",
+   "order": 10.0,
+   "flora": "veilspore",
+   "fog_dps": 12.0
+  },
+  {
+   "id": "spore_dash",
+   "display_name": "Spore Dash",
+   "description": "Activate: launch backwards and leave a thick spore fog that enemies can't see through.",
+   "color": [
+    0.62,
+    0.45,
+    0.85,
+    1.0
+   ],
+   "kind": "active",
+   "order": 11.0,
+   "flora": "veilspore",
+   "cooldown": 10.0,
+   "dash_speed": 9.5,
+   "dash_up": 5.0,
+   "dash_fog_radius": 3.5,
+   "dash_fog_time": 6.0
+  },
+  {
+   "id": "spore_patches",
+   "display_name": "Spore Patches",
+   "description": "Triggered: your grenades leave patches of fog-emitting flora wherever they touch down.",
+   "color": [
+    0.45,
+    0.75,
+    0.6,
+    1.0
+   ],
+   "kind": "triggered",
+   "order": 12.0,
+   "flora": "veilspore",
+   "patch_radius": 2.0,
+   "patch_time": 6.0,
+   "patch_max": 5.0
+  },
+  {
+   "id": "root_bombs",
+   "display_name": "Root Bombs",
+   "description": "Activate: throw two large root bombs that explode on impact. Made for bosses.",
+   "color": [
+    0.5,
+    0.35,
+    0.2,
+    1.0
+   ],
+   "kind": "active",
+   "order": 20.0,
+   "flora": "ironbark",
+   "cooldown": 25.0,
+   "bomb_damage": 150.0,
+   "bomb_radius": 3.5,
+   "bomb_speed": 22.0
+  },
+  {
+   "id": "shield_share",
+   "display_name": "Shield Share",
+   "description": "Passive: your explosions recharge the shields of teammates caught in them. (No teammates in the prototype yet.)",
+   "color": [
+    0.55,
+    0.75,
+    0.95,
+    1.0
+   ],
+   "kind": "passive",
+   "order": 21.0,
+   "flora": "ironbark",
+   "shield_amount": 60.0
+  },
+  {
+   "id": "extra_grenade",
+   "display_name": "Extra Grenade",
+   "description": "Passive: hold an extra grenade charge.",
+   "color": [
+    0.7,
+    0.55,
+    0.35,
+    1.0
+   ],
+   "kind": "passive",
+   "order": 22.0,
+   "flora": "ironbark",
+   "extra_charges": 1.0
+  }
+ ],
+ "frame_parts": [
+  {
+   "id": "standard_head",
+   "display_name": "Standard Head",
+   "slot": "head",
+   "aerial": 0.0,
+   "agility": 0.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "focus_head",
+   "display_name": "Focus Head",
+   "slot": "head",
+   "order": 1.0,
+   "aerial": 1.0,
+   "dexterity": 2.0,
+   "agility": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "guard_head",
+   "display_name": "Guard Head",
+   "slot": "head",
+   "order": 2.0,
+   "dexterity": 1.0,
+   "durability": 2.0,
+   "aerial": 0.0,
+   "agility": 0.0
+  },
+  {
+   "id": "scout_head",
+   "display_name": "Scout Head",
+   "slot": "head",
+   "order": 3.0,
+   "aerial": 2.0,
+   "dexterity": 1.0,
+   "agility": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "standard_arms",
+   "display_name": "Standard Arms",
+   "slot": "arms",
+   "order": 4.0,
+   "aerial": 0.0,
+   "agility": 0.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "quick_arms",
+   "display_name": "Quick Arms",
+   "slot": "arms",
+   "order": 5.0,
+   "agility": 1.0,
+   "dexterity": 2.0,
+   "aerial": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "braced_arms",
+   "display_name": "Braced Arms",
+   "slot": "arms",
+   "order": 6.0,
+   "dexterity": 2.0,
+   "durability": 1.0,
+   "aerial": 0.0,
+   "agility": 0.0
+  },
+  {
+   "id": "strong_arms",
+   "display_name": "Strong Arms",
+   "slot": "arms",
+   "order": 7.0,
+   "agility": 2.0,
+   "dexterity": 1.0,
+   "aerial": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "standard_legs",
+   "display_name": "Standard Legs",
+   "order": 8.0,
+   "aerial": 0.0,
+   "agility": 0.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "stride_legs",
+   "display_name": "Stride Legs",
+   "order": 9.0,
+   "agility": 2.0,
+   "aerial": 1.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "spring_legs",
+   "display_name": "Spring Legs",
+   "order": 10.0,
+   "agility": 1.0,
+   "aerial": 2.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "sturdy_legs",
+   "display_name": "Sturdy Legs",
+   "order": 11.0,
+   "agility": 1.0,
+   "durability": 2.0,
+   "aerial": 0.0,
+   "dexterity": 0.0
+  },
+  {
+   "id": "standard_core",
+   "display_name": "Standard Core",
+   "slot": "core",
+   "order": 12.0,
+   "aerial": 0.0,
+   "agility": 0.0,
+   "dexterity": 0.0,
+   "durability": 0.0
+  },
+  {
+   "id": "light_core",
+   "display_name": "Light Core",
+   "slot": "core",
+   "order": 13.0,
+   "agility": 2.0,
+   "durability": 1.0,
+   "aerial": 0.0,
+   "dexterity": 0.0
+  },
+  {
+   "id": "armored_core",
+   "display_name": "Armored Core",
+   "slot": "core",
+   "order": 14.0,
+   "aerial": 1.0,
+   "durability": 2.0,
+   "agility": 0.0,
+   "dexterity": 0.0
+  },
+  {
+   "id": "thruster_core",
+   "display_name": "Thruster Core",
+   "slot": "core",
+   "order": 15.0,
+   "aerial": 2.0,
+   "durability": 1.0,
+   "agility": 0.0,
+   "dexterity": 0.0
+  }
+ ],
+ "flora": [
+  {
+   "id": "voltvine",
+   "display_name": "VoltVine",
+   "description": "An electrified vine with glowing bulbs: speed and brawling. Boosts your mobility and melee against swarms. Ult: a massive explosive burst.",
+   "color": [
+    0.3,
+    0.6,
+    1.0,
+    1.0
+   ],
+   "order": 0.0,
+   "ult": "blast",
+   "ult_name": "Massive Burst",
+   "graft_color": [
+    0.25,
+    0.55,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "id": "veilspore",
+   "display_name": "VeilSpore",
+   "description": "Spore fog: poison, lingering pools and fog that hides you. Ult: become invisible and hit harder in melee while in spore fog.",
+   "color": [
+    0.62,
+    0.45,
+    0.85,
+    1.0
+   ],
+   "order": 1.0,
+   "ult": "veil",
+   "ult_name": "Veil",
+   "graft_color": [
+    0.62,
+    0.45,
+    0.85,
+    1.0
+   ]
+  },
+  {
+   "id": "ironbark",
+   "display_name": "IronBark",
+   "description": "Armor yourself in the bark of iron wood trees: tankier and less mobile, a bastion to rally behind. Ult: entrench, becoming invulnerable with faster grenade recharge.",
+   "color": [
+    0.6,
+    0.43,
+    0.27,
+    1.0
+   ],
+   "order": 2.0,
+   "ult": "entrench",
+   "ult_name": "Entrench",
+   "graft_color": [
+    0.45,
+    0.31,
+    0.19,
+    1.0
+   ]
+  }
+ ],
+ "traits": [
+  {
+   "id": "extra_speed",
+   "display_name": "Extra Speed",
+   "description": "Walk, sprint and crouch 10% faster.",
+   "flora": "voltvine",
+   "order": 0.0,
+   "mods": [
+    {
+     "stat": "walk_speed",
+     "op": 1.0,
+     "value": 0.1
+    },
+    {
+     "stat": "sprint_speed",
+     "op": 1.0,
+     "value": 0.1
+    },
+    {
+     "stat": "crouch_speed",
+     "op": 1.0,
+     "value": 0.1
+    }
+   ]
+  },
+  {
+   "id": "faster_grenade_recharge",
+   "display_name": "Faster Grenade Recharge",
+   "description": "Grenades recharge 25% faster.",
+   "flora": "ironbark",
+   "order": 0.0,
+   "mods": [
+    {
+     "stat": "grenade_recharge",
+     "op": 1.0,
+     "value": -0.25
+    }
+   ]
+  },
+  {
+   "id": "longer_fog",
+   "display_name": "Longer Fog",
+   "description": "Your spore fog lasts 50% longer.",
+   "flora": "veilspore",
+   "order": 0.0,
+   "effect": "fog_longer",
+   "amount": 0.5
+  },
+  {
+   "id": "faster_shield_recovery",
+   "display_name": "Faster Shield Recovery",
+   "description": "Shields start recharging 25% sooner and refill 50% faster.",
+   "flora": "voltvine",
+   "order": 1.0,
+   "mods": [
+    {
+     "stat": "recharge_delay",
+     "op": 1.0,
+     "value": -0.25
+    },
+    {
+     "stat": "shield_regen",
+     "op": 1.0,
+     "value": 0.5
+    }
+   ]
+  },
+  {
+   "id": "longer_walls",
+   "display_name": "Longer Walls",
+   "description": "Wall Grenade walls last 50% longer.",
+   "flora": "ironbark",
+   "order": 1.0,
+   "effect": "wall_longer",
+   "amount": 0.5
+  },
+  {
+   "id": "no_radar",
+   "display_name": "Radar Veil",
+   "description": "Spore fog removes enemy players' radar. (No effect yet: there's no radar or PvP in the prototype.)",
+   "flora": "veilspore",
+   "order": 1.0,
+   "effect": "no_radar",
+   "amount": 1.0
+  },
+  {
+   "id": "bouncier_grenades",
+   "display_name": "Bouncier Grenades",
+   "description": "Grenades bounce more.",
+   "flora": "veilspore",
+   "order": 2.0,
+   "effect": "more_bounce",
+   "amount": 0.25
+  },
+  {
+   "id": "impact_grenades",
+   "display_name": "Impact Grenades",
+   "description": "Grenades explode the moment they hit something.",
+   "flora": "ironbark",
+   "order": 2.0,
+   "effect": "impact_fuse",
+   "amount": 1.0
+  },
+  {
+   "id": "more_melee_damage",
+   "display_name": "More Melee Damage",
+   "description": "Melee hits do 15% more damage.",
+   "flora": "voltvine",
+   "order": 2.0,
+   "mods": [
+    {
+     "stat": "melee_damage",
+     "op": 1.0,
+     "value": 0.15
+    }
+   ]
+  },
+  {
+   "id": "bigger_explosions",
+   "display_name": "Bigger Explosions",
+   "description": "Your explosions are 25% bigger.",
+   "flora": "ironbark",
+   "order": 3.0,
+   "effect": "blast_bigger",
+   "amount": 0.25
+  },
+  {
+   "id": "faster_melee",
+   "display_name": "Faster Melee",
+   "description": "Melee swings 15% faster, and you turn tighter in the air (+30% air control).",
+   "flora": "voltvine",
+   "order": 3.0,
+   "mods": [
+    {
+     "stat": "melee_time",
+     "op": 1.0,
+     "value": -0.15
+    },
+    {
+     "stat": "air_control",
+     "op": 1.0,
+     "value": 0.3
+    }
+   ]
+  },
+  {
+   "id": "longer_throws",
+   "display_name": "Longer Throws",
+   "description": "Throw grenades 25% further.",
+   "flora": "veilspore",
+   "order": 3.0,
+   "mods": [
+    {
+     "stat": "throw_distance",
+     "op": 1.0,
+     "value": 0.25
+    }
+   ]
+  },
+  {
+   "id": "longer_snare",
+   "display_name": "Longer Snare",
+   "description": "Your grenades' slow lasts 50% longer.",
+   "flora": "voltvine",
+   "order": 4.0,
+   "effect": "slow_longer",
+   "amount": 0.5
+  },
+  {
+   "id": "more_durability",
+   "display_name": "More Durability",
+   "description": "15% more health and shields.",
+   "flora": "ironbark",
+   "order": 4.0,
+   "mods": [
+    {
+     "stat": "max_health",
+     "op": 1.0,
+     "value": 0.15
+    },
+    {
+     "stat": "max_shield",
+     "op": 1.0,
+     "value": 0.15
+    }
+   ]
+  },
+  {
+   "id": "stronger_poison",
+   "display_name": "Stronger Poison",
+   "description": "Poison, lingering pools and spore fog do 30% more damage.",
+   "flora": "veilspore",
+   "order": 4.0,
+   "effect": "poison_damage",
+   "amount": 0.3
+  }
+ ],
+ "soldier": {
+  "ai_enabled": 1.0,
+  "burst_cooldown": 1.4,
+  "burst_count": 3.0,
+  "burst_interval": 0.09,
+  "cover_health": 0.35,
+  "group_spacing": 0.6,
+  "max_health": 325.0,
+  "max_range": 25.0,
+  "min_range": 15.0,
+  "projectile_damage": 10.0,
+  "projectile_speed": 53.0,
+  "sight_range": 35.0,
+  "spread": 1.5,
+  "strafe_time": 1.8,
+  "turn_speed": 8.0,
+  "walk_speed": 4.0,
+  "windup_time": 0.5
+ },
+ "swarm": {
+  "ai_enabled": 1.0,
+  "bite_damage": 10.0,
+  "bite_interval": 0.8,
+  "bite_range": 1.4,
+  "leap_cooldown": 2.5,
+  "leap_damage": 15.0,
+  "leap_height": 1.2,
+  "leap_range": 4.0,
+  "leap_speed": 11.0,
+  "max_health": 75.0,
+  "sight_range": 30.0,
+  "spread_distance": 1.6,
+  "turn_speed": 12.0,
+  "walk_speed": 7.5
+ },
+ "tank": {
+  "ai_enabled": 1.0,
+  "lob_damage": 35.0,
+  "lob_flight_time": 1.2,
+  "lob_interval": 3.0,
+  "lob_radius": 3.0,
+  "max_health": 1200.0,
+  "shield": 300.0,
+  "shield_regen_delay": 6.0,
+  "shield_regen_rate": 75.0,
+  "sight_range": 40.0,
+  "slam_cooldown": 4.0,
+  "slam_damage": 40.0,
+  "slam_radius": 4.5,
+  "slam_range": 4.0,
+  "slam_recover": 1.5,
+  "slam_windup": 0.7,
+  "slow_amount": 0.5,
+  "slow_time": 2.5,
+  "turn_speed": 1.5,
+  "walk_speed": 3.0
+ },
+ "ally": {
+  "ai_enabled": 1.0,
+  "damage": 10.0,
+  "fire_interval": 0.35,
+  "follow_max": 7.0,
+  "follow_min": 3.0,
+  "max_health": 100.0,
+  "max_shield": 100.0,
+  "move_speed": 6.0,
+  "recharge_delay": 4.0,
+  "respawn_time": 8.0,
+  "shield_regen": 40.0,
+  "sight_range": 35.0,
+  "spread": 2.0
+ },
+ "global": {
+  "Aim Assist": {
+   "mouse_assist": 0.0,
+   "show_debug": 0.0
+  },
+  "Allies": {
+   "ai_enabled": 1.0,
+   "damage": 10.0,
+   "fire_interval": 0.35,
+   "follow_max": 7.0,
+   "follow_min": 3.0,
+   "max_health": 100.0,
+   "max_shield": 100.0,
+   "move_speed": 6.0,
+   "recharge_delay": 4.0,
+   "respawn_time": 8.0,
+   "shield_regen": 40.0,
+   "sight_range": 35.0,
+   "spread": 2.0
+  },
+  "Camera": {
+   "bob_intensity": 1.5,
+   "hip_fov": 100.0,
+   "landing_dip": 1.0,
+   "mouse_sensitivity": 2.0,
+   "punch_scale": 1.0,
+   "rumble_scale": 1.0,
+   "sprint_stride": 4.2,
+   "stick_sensitivity": 4.0,
+   "walk_stride": 2.3
+  },
+  "Crouch / Slide": {
+   "crouch_speed": 2.5,
+   "slide_distance": 9.5,
+   "slide_speed": 22.0
+  },
+  "Grenades": {
+   "detonation_time": 1.0,
+   "recharge_time": 8.0,
+   "throw_arm_pitch": 8.0,
+   "throw_arm_push": 0.0,
+   "throw_arm_yaw": -12.0,
+   "throw_distance": 18.0,
+   "throw_follow": 0.2,
+   "throw_release": 0.22
+  },
+  "Jump": {
+   "air_control": 5.0,
+   "apex_hang": 0.5,
+   "ascent_gravity": 20.0,
+   "coyote_time": 0.12,
+   "descent_gravity": 32.0,
+   "jump_height_1": 2.0,
+   "jump_height_2": 2.3,
+   "mantle_reach": 2.0,
+   "mantle_time": 0.35
+  },
+  "Maps": {},
+  "Melee": {
+   "lunge_aim": 0.5,
+   "lunge_angle": 20.0,
+   "lunge_range": 3.7,
+   "lunge_speed": 12.0,
+   "lunge_vertical": 1.0,
+   "melee_arm_fov": 90.0,
+   "melee_arm_hold": 0.01,
+   "melee_arm_pitch": 8.0,
+   "melee_arm_push": 0.05,
+   "melee_arm_retract": 0.2,
+   "melee_arm_yaw": 16.0,
+   "melee_damage": 80.0,
+   "melee_hitstop": 0.015,
+   "melee_jolt": 2.0,
+   "melee_kill_boost": 1.4,
+   "melee_kill_knockback": 2.0,
+   "melee_knockback": 6.0,
+   "melee_punch_fov": -4.0,
+   "melee_punch_roll": 2.5,
+   "melee_punch_time": 0.25,
+   "melee_reach": 2.5,
+   "melee_rumble_strong": 0.75,
+   "melee_rumble_time": 0.11,
+   "melee_rumble_weak": 0.7,
+   "melee_time": 0.45
+  },
+  "Player": {
+   "base_health": 100.0,
+   "base_shield": 100.0,
+   "god_mode": 0.0,
+   "health_regen": 40.0,
+   "point_value": 0.05,
+   "ready_time": 0.07,
+   "recharge_delay": 4.0,
+   "respawn_time": 2.0,
+   "shield_regen": 60.0,
+   "swap_time": 0.35
+  },
+  "Soldier": {
+   "ai_enabled": 1.0,
+   "burst_cooldown": 1.4,
+   "burst_count": 3.0,
+   "burst_interval": 0.09,
+   "cover_health": 0.35,
+   "group_spacing": 0.6,
+   "max_health": 325.0,
+   "max_range": 25.0,
+   "min_range": 15.0,
+   "projectile_damage": 10.0,
+   "projectile_speed": 53.0,
+   "sight_range": 35.0,
+   "spread": 1.5,
+   "strafe_time": 1.8,
+   "turn_speed": 8.0,
+   "walk_speed": 4.0,
+   "windup_time": 0.5
+  },
+  "Swarm": {
+   "ai_enabled": 1.0,
+   "bite_damage": 10.0,
+   "bite_interval": 0.8,
+   "bite_range": 1.4,
+   "leap_cooldown": 2.5,
+   "leap_damage": 15.0,
+   "leap_height": 1.2,
+   "leap_range": 4.0,
+   "leap_speed": 11.0,
+   "max_health": 75.0,
+   "sight_range": 30.0,
+   "spread_distance": 1.6,
+   "turn_speed": 12.0,
+   "walk_speed": 7.5
+  },
+  "Tank": {
+   "ai_enabled": 1.0,
+   "lob_damage": 35.0,
+   "lob_flight_time": 1.2,
+   "lob_interval": 3.0,
+   "lob_radius": 3.0,
+   "max_health": 1200.0,
+   "shield": 300.0,
+   "shield_regen_delay": 6.0,
+   "shield_regen_rate": 75.0,
+   "sight_range": 40.0,
+   "slam_cooldown": 4.0,
+   "slam_damage": 40.0,
+   "slam_radius": 4.5,
+   "slam_range": 4.0,
+   "slam_recover": 1.5,
+   "slam_windup": 0.7,
+   "slow_amount": 0.5,
+   "slow_time": 2.5,
+   "turn_speed": 1.5,
+   "walk_speed": 3.0
+  },
+  "Targets": {
+   "respawn_time": 2.0,
+   "target_health": 200.0
+  },
+  "Ult": {
+   "blast_radius": 12.0,
+   "camera_blend": 0.25,
+   "camera_distance": 4.0,
+   "camera_height": 1.0,
+   "camera_side": 0.6,
+   "charge_time": 60.0,
+   "damage": 600.0,
+   "entrench_grenade_mult": 5.0,
+   "entrench_time": 10.0,
+   "hold_time": 0.4,
+   "veil_camera_blend": 0.15,
+   "veil_fog_radius": 7.0,
+   "veil_fog_time": 12.0,
+   "veil_hold": 0.35,
+   "veil_melee_mult": 3.0,
+   "veil_time": 12.0,
+   "windup_time": 0.4
+  },
+  "Walk / Sprint": {
+   "sprint_speed": 10.0,
+   "walk_speed": 5.0
+  },
+  "Waves": {
+   "break_time": 2.5,
+   "enabled": 1.0,
+   "size_scale": 2.0,
+   "spawn_stagger": 0.35,
+   "start_delay": 6.0,
+   "waves_to_win": 8.0
+  }
+ }
+}

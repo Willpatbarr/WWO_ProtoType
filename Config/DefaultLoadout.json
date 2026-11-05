@@ -1,0 +1,21 @@
+{
+	"abilities": [
+		"thornfist",
+		"static_charge"
+	],
+	"flora": "voltvine",
+	"frame": {
+		"arms": "strong_arms",
+		"core": "thruster_core",
+		"head": "scout_head",
+		"legs": "spring_legs"
+	},
+	"grenade": "volt_grenade",
+	"traits": [
+		"extra_speed",
+		"more_melee_damage",
+		"faster_melee",
+		"faster_shield_recovery"
+	],
+	"weapon": "rifle"
+}

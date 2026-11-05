@@ -1,0 +1,81 @@
+#pragma once
+
+// The ult (F, or L1 + R1 together). Which one depends on the equipped flora (Godot: ult_manager.gd):
+// - Blast (VoltVine): a massive grenade explosion centered on you. The camera glides out to
+//   third person, your body casts (an orb in your grenade's color grows between your hands),
+//   the blast goes off, then the camera glides back.
+// - Veil (VeilSpore): a quick third-person flash as you release a big spore fog; for a while
+//   you're invisible to enemies and hit harder in melee whenever you're inside spore fog.
+// - Entrench (IronBark): the same quick flash as roots burst up around you; you're rooted (can
+//   still look and shoot), can't be hurt, and your grenade recharges much faster.
+// You can't move, look, shoot or take damage while it plays. Charges over ChargeTime.
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "WWOUltComponent.generated.h"
+
+class UCameraComponent;
+class UStaticMeshComponent;
+class UPointLightComponent;
+
+UCLASS(ClassGroup = (WWO))
+class WHATWASOURS_API UWWOUltComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	UWWOUltComponent();
+	virtual void BeginPlay() override;
+	void UpdateUlt(float DeltaSeconds); // called by the character
+
+	UPROPERTY(EditAnywhere, Category = "Ult") float ChargeTime = 60.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float Damage = 600.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float BlastRadius = 12.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float WindupTime = 0.4f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float HoldTime = 0.4f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float CameraDistance = 4.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float CameraHeight = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float CameraSide = 0.6f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float CameraBlend = 0.25f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilTime = 12.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilFogRadius = 7.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilFogTime = 12.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilMeleeMult = 3.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilCameraBlend = 0.15f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float VeilHold = 0.35f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float EntrenchTime = 10.f;
+	UPROPERTY(EditAnywhere, Category = "Ult") float EntrenchGrenadeMult = 5.f;
+
+	float Charge = 1.f; // start full so it's easy to test
+	bool bActive = false;
+
+	bool IsReady() const { return Charge >= 1.f; }
+	bool CanActivate() const;
+	bool ActivateUlt();
+	void Fill() { Charge = 1.f; }
+
+private:
+	UPROPERTY() TObjectPtr<UCameraComponent> UltCamera;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Orb;
+	UPROPERTY() TObjectPtr<UPointLightComponent> OrbLight;
+
+	enum class EKind : uint8 { Blast, Veil, Entrench };
+	EKind Kind = EKind::Blast;
+	float Clock = 0.f;
+	float Blend = 0.25f;
+	float ExplodeAt = 0.f;
+	float CastAt = 0.f;
+	float FinishAt = 0.f;
+	bool bExploded = false;
+	bool bCast = false;
+	bool bGlidingBack = false;
+	FTransform GlideFrom, GlideTo;
+	FLinearColor Color = FLinearColor::White;
+
+	FTransform ThirdPersonTransform() const;
+	FTransform FirstPersonTransform() const;
+	void Begin();
+	void Finish();
+	void Release();
+	void PlaceOrb();
+};

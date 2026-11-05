@@ -1,0 +1,137 @@
+#include "Flora/WWOSporeFog.h"
+#include "Enemies/WWOEnemy.h"
+#include "Player/WWOCharacter.h"
+#include "Player/WWOAbilityComponent.h"
+#include "FX/WWOFX.h"
+#include "Systems/WWOLoadoutSubsystem.h"
+#include "Systems/WWOWorldSubsystem.h"
+#include "Data/WWOData.h"
+#include "WWOTypes.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/World.h"
+
+namespace
+{
+	constexpr float FogTick = 0.5f; // seconds between damage ticks
+	constexpr float Fade = 0.6f;    // seconds to fade in and out
+}
+
+AWWOSporeFog::AWWOSporeFog()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+}
+
+AWWOSporeFog* AWWOSporeFog::SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick)
+{
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.bDeferConstruction = true;
+	AWWOSporeFog* Fog = World->SpawnActor<AWWOSporeFog>(At, FRotator::ZeroRotator, Params);
+	if (!Fog) return nullptr;
+	Fog->Radius = RadiusM;
+	Fog->Duration = Seconds * (1.f + UWWOLoadoutSubsystem::Bonus(World, "fog_longer")); // Longer Fog trait
+	Fog->bBlocksSight = bThick;
+	Fog->Opacity = bThick ? 0.32f : 0.22f;
+	Fog->FinishSpawning(FTransform(At));
+	return Fog;
+}
+
+void AWWOSporeFog::BeginPlay()
+{
+	Super::BeginPlay();
+	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->RegisterFog(this);
+	const FVector Offsets[] = { FVector::ZeroVector, FVector(0.2f, 0.35f, 0.1f), FVector(-0.25f, -0.3f, 0.05f), FVector(-0.3f, 0.1f, 0.3f), FVector(0.3f, -0.2f, 0.25f) };
+	for (const FVector& Offset : Offsets)
+	{
+		UStaticMeshComponent* Puff = WWOFX::AddSoftSphere(this, GetRootComponent(), Color(), 0.f, 0.9f, false);
+		if (!Material) Material = WWOFX::MID(Puff);
+		else Puff->SetMaterial(0, Material);
+		Puff->SetRelativeLocation(Offset * Radius * WWO::M);
+		const FVector Size = FVector(1.f, 1.f, 0.7f) * Radius * WWO::M / 50.f * FMath::FRandRange(0.7f, 0.85f);
+		Puff->SetRelativeScale3D(Size);
+		Puffs.Add(Puff);
+		Sizes.Add(Size);
+	}
+	if (AWWOParticles* P = AWWOParticles::Burst(GetWorld(), GetActorLocation(), WWO::WithAlpha(WWO::Lightened(Color(), 0.45f), 0.9f),
+		FMath::RoundToInt(Radius * 12.f), 2.5f, 0.05f, 0.3f, 0.07f, FVector(0, 0, 0.05f), EWWOParticleStyle::Glow, false))
+	{
+		P->bOneShot = false;
+		P->Shape = EWWOEmitShape::Sphere;
+		P->ShapeRadius = Radius * 0.8f;
+		P->Start();
+		Motes = P;
+	}
+}
+
+void AWWOSporeFog::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->UnregisterFog(this);
+	if (Motes.IsValid()) Motes->StopAndFade();
+	Super::EndPlay(Reason);
+}
+
+float AWWOSporeFog::Strength() const
+{
+	return FMath::Clamp(FMath::Min(Age / Fade, (Duration - Age) / Fade), 0.f, 1.f);
+}
+
+bool AWWOSporeFog::Contains(const UWorld* World, const FVector& Point)
+{
+	const UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(World);
+	if (!WS) return false;
+	for (const TWeakObjectPtr<AWWOSporeFog>& Fog : WS->Fogs())
+	{
+		if (Fog.IsValid() && Fog->Strength() > 0.3f && FVector::Dist(Point, Fog->GetActorLocation()) <= Fog->Radius * WWO::M) return true;
+	}
+	return false;
+}
+
+bool AWWOSporeFog::Blocks(const UWorld* World, const FVector& From, const FVector& To)
+{
+	const UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(World);
+	if (!WS) return false;
+	for (const TWeakObjectPtr<AWWOSporeFog>& Fog : WS->Fogs())
+	{
+		if (!Fog.IsValid() || !Fog->bBlocksSight || Fog->Strength() < 0.5f) continue;
+		const FVector Closest = FMath::ClosestPointOnSegment(Fog->GetActorLocation(), From, To);
+		if (FVector::Dist(Closest, Fog->GetActorLocation()) <= Fog->Radius * WWO::M * 0.9f) return true;
+	}
+	return false;
+}
+
+void AWWOSporeFog::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	Age += DeltaSeconds;
+	if (Age >= Duration)
+	{
+		Destroy();
+		return;
+	}
+	if (Material) Material->SetScalarParameterValue("Alpha", Opacity * 2.2f * Strength()); // the soft edges thin it out
+	if (Duration - Age < Fade * 2.f && Motes.IsValid()) Motes->bEmitting = false;
+	for (int32 i = 0; i < Puffs.Num(); ++i) // a slow churn, each puff gently swelling and shrinking
+	{
+		Puffs[i]->AddRelativeRotation(FRotator(0.f, FMath::RadiansToDegrees(DeltaSeconds * (0.2f + 0.1f * i)), 0.f));
+		Puffs[i]->SetRelativeScale3D(Sizes[i] * (1.f + 0.05f * FMath::Sin(Age * 1.3f + i * 1.7f)));
+	}
+	// Spore Fog Damage: hurts the rank and file (Swarm and Soldiers) inside it.
+	TickLeft -= DeltaSeconds;
+	if (TickLeft > 0.f) return;
+	TickLeft = FogTick;
+	const AWWOCharacter* Player = UWWOWorldSubsystem::Get(this)->GetPlayer();
+	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
+	if (!Ability || Strength() < 0.3f) return;
+	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+	{
+		if (!Enemy->IsRankAndFile()) continue;
+		const FVector Chest = Enemy->FeetLocation() + FVector(0, 0, 80.f);
+		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M)
+		{
+			const float Dps = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")); // Stronger Poison
+			Enemy->TakeHit(Dps * FogTick, false, Chest, WWO::Lightened(Color(), 0.3f));
+		}
+	}
+}
