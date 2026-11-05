@@ -39,6 +39,7 @@ public:
 
 	void Restart();
 	void SkipWave(); // test helper: kill everything in the current wave
+	void JumpToWave(int32 Number); // test helper: clear this wave and start wave Number now
 	static void LoadMap(UObject* WorldContext, FName Level);
 	FString StatusText(FLinearColor& OutColor) const;
 
@@ -49,6 +50,24 @@ private:
 	TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
 	bool bBoundToPlayer = false;
 	bool bStarted = false;
+
+	// -WWOWaveTest: plays every wave with god mode on, cuts each fight short after a while
+	// (SkipWave), and logs what each enemy is doing, flagging any stuck or not facing its target.
+	bool bWaveTest = false;
+	bool bWaveTestNavChecked = false;
+	FVector WaveTestHome = FVector::ZeroVector; // where you started
+	float WaveTestFight = 0.f;
+	float WaveTestLog = 0.f;
+	float WaveTestSample = 0.f;
+	int32 WaveTestStuck = 0, WaveTestBlocked = 0, WaveTestHolding = 0, WaveTestTurned = 0, WaveTestOverlaps = 0;
+	struct FWaveTestTrack
+	{
+		FVector Pos = FVector::ZeroVector, Wish = FVector::ZeroVector;
+		float Still = 0.f, Off = 0.f, Air = 0.f;
+		bool bFlipped = false, bStuckLogged = false, bTurnLogged = false, bAirLogged = false;
+	};
+	TMap<TWeakObjectPtr<ACharacter>, FWaveTestTrack> WaveTestTracks;
+	void UpdateWaveTest(float DeltaSeconds);
 
 	void Begin();
 	void Countdown(float Seconds);

@@ -20,6 +20,13 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   ability in turn and sets it off, and casts each flora's ult (Blast, Veil, Entrench), logging
   `AutoTest ability:` / `AutoTest ult:` with 23_ability_* and 24_ult_* screenshots, and puts the loadout back) and saves
   screenshots to `Saved/AutoTest/`.
+- `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
+  reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
+  shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
+  state each 3 s, and flags anyone stuck (`WaveTest STUCK`, with what's in the way and its path), stuck
+  in the air, or not facing its target; ends with a `WaveTest done:` summary and `wave_*.png` shots.
+  Code: `Game/WWOGameModeWaveTest.cpp`.
+- Console: `wwo.SkipWave` kills the current wave; `wwo.Wave <n>` jumps straight to wave n.
 
 ## Where things are
 | Godot | Unreal |
@@ -33,7 +40,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 | groups, TargetManager, DamageNumbers | `Systems/WWOWorldSubsystem`, `WWOTargetable` interface |
 | enemies/*.gd | `Enemies/WWOEnemy`, `WWOEnemyTypes` (Soldier, Swarm, Tank), `WWOEnemyProjectile` |
 | allies/ally.gd | `Allies/WWOAlly` |
-| wave_manager.gd | `Game/WWOGameMode` |
+| wave_manager.gd | `Game/WWOGameMode` (navmesh built at runtime from the map's NavMeshBoundsVolume; one nav agent sized like Godot's: 0.5 m radius, 1.8 m tall. Effects (`AWWOFXActor`, enemy shots) are kept out of it: Unreal adds every new mesh component to the navigation octree, and the constant tile rebuilds around shots and tracers left holes in the navmesh. Training targets and bark walls are in it, so paths go around them; Godot's baked navmesh has neither) |
 | flora/*.gd | `Flora/WWOSporeFog`, `WWOFloraEffects`; `FX/WWOFX` (blasts, particles, lightning) |
 | character_model.gd | `Characters/WWOBodyComponent` (Manny + template AnimBPs, tint, grafts) |
 | hud.gd, settings_menu.gd, character_menu.gd, menu_cursor.gd | `UI/` (UMG built in C++) |
@@ -49,6 +56,10 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `Saved/WWO/SavedSettings.json`, applied on startup.
 - Your Godot `saved_settings.json` values are baked into the data assets and C++ defaults; your
   Godot loadout is `Config/DefaultLoadout.json` (used on first run).
+- Shots and sight lines trace `ECC_Visibility`. The player's capsule (Unreal's Pawn profile) ignores
+  that channel, so whatever should hit you or be blocked by you (enemy shots, a teammate's view of an
+  enemy) also tests the player's capsule directly; enemies are hit through their hitboxes, teammates
+  through their capsules.
 
 ## Regenerating
 - Data from Godot: `python3 Tools/tres_to_json.py ~/Documents/WhatWasOurs Tools/wwo_data.json`
@@ -79,4 +90,19 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   Godot's canvas_items stretch, so mouse sensitivity may differ.
 - Controller rumble counts down in game time, so a melee hit-stop (a few hundredths of a second at
   0.03 speed) stretches that buzz by about the hit-stop's length. Godot's rumble runs in real time.
+- Wave enemies retry their random spot near the spawn marker (up to 8 times) when it's inside a crate
+  stack or off the navmesh; Godot drops them wherever the offset lands. Their feet go on the marker
+  (the actor is the capsule's center).
+- An enemy whose target can't be reached on the navmesh stops at the closest spot when a wall or rail
+  is right in front, instead of pressing into it. A Soldier that's too close with a wall right behind
+  it strafes instead of backing into the wall. Something on a nav path that isn't in the navmesh is
+  sidestepped along its face instead of walked into head-on.
+  An enemy that keeps trying to walk the same way for 0.75 s without getting anywhere (wedged on a
+  door edge, in a gap between crates, behind another enemy) steps sideways for 0.6 s, alternating sides.
+- A teammate getting back up lands 2 m to your right as in Godot, but stops short of a wall instead of
+  being put on the far side of it. One that's closer than 3 m to you doesn't back into a wall.
+- Also true in Godot (not changed): the arena ramps climb away from their raised platforms (each
+  `stairs()` call's high end is on the side away from the platform), so the 2 m platforms are islands
+  on the navmesh. Soldiers that spawn up there stay up there and shoot from the rails. A Soldier that
+  can't see you right at its 15 m minimum range dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.

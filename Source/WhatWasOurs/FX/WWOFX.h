@@ -73,6 +73,9 @@ class WHATWASOURS_API AWWOFXActor : public AActor
 public:
 	AWWOFXActor();
 	virtual void Tick(float DeltaSeconds) override;
+	// Effects never shape the navmesh. (Without this, Unreal adds each new effect's shapes to the
+	// navigation octree, and the runtime navmesh rebuilds a hole wherever a shot or tracer lands.)
+	virtual bool IsComponentRelevantForNavigation(UActorComponent* Component) const override { return false; }
 
 	static AWWOFXActor* Spawn(UWorld* World, const FVector& At, float Lifetime);
 

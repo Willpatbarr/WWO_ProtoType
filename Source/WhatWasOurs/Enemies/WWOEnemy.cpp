@@ -21,6 +21,24 @@ namespace
 	constexpr float EnemyGravity = 20.f; // m/s^2, as in Godot
 }
 
+TArray<FVector> WWONav::FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial)
+{
+	bOutPartial = false;
+	UWorld* World = Querier ? Querier->GetWorld() : nullptr;
+	const UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!Nav) return {};
+	auto Snap = [Nav](const FVector& Point)
+	{
+		FNavLocation Out;
+		if (Nav->ProjectPointToNavigation(Point, Out)) return Point;
+		return Nav->ProjectPointToNavigation(Point, Out, FVector(400.f, 400.f, 250.f)) ? Out.Location : Point;
+	};
+	const UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, Snap(Start), Snap(End), Querier);
+	if (!NavPath || !NavPath->IsValid()) return {};
+	bOutPartial = NavPath->IsPartial();
+	return NavPath->PathPoints;
+}
+
 UWWOEnemyMovement::UWWOEnemyMovement()
 {
 	GravityScale = EnemyGravity / 9.8f;
@@ -75,6 +93,12 @@ AWWOEnemy::AWWOEnemy(const FObjectInitializer& ObjectInitializer)
 UWWOEnemyMovement* AWWOEnemy::EnemyMovement() const
 {
 	return Cast<UWWOEnemyMovement>(GetCharacterMovement());
+}
+
+FVector AWWOEnemy::GetWish() const
+{
+	const UWWOEnemyMovement* Move = EnemyMovement();
+	return Move && Move->bSteering ? Move->Wish : FVector::ZeroVector;
 }
 
 void AWWOEnemy::BeginPlay()
@@ -251,6 +275,7 @@ void AWWOEnemy::Tick(float DeltaSeconds)
 	{
 		StandDown(); // AI off, or the player is dead
 	}
+	Wish = Unstick(Wish, DeltaSeconds);
 	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
 	if (SlowLeft > 0.f) Wish *= 1.f - SlowAmount;
 	Move->Wish = FVector(Wish.X, Wish.Y, 0.f) * WWO::M;
@@ -258,6 +283,39 @@ void AWWOEnemy::Tick(float DeltaSeconds)
 	Flash = WWO::MoveToward(Flash, 0.f, 6.f * DeltaSeconds);
 	Body->SetFlash(Flash);
 	Animate(DeltaSeconds);
+}
+
+FVector AWWOEnemy::Unstick(const FVector& Wish, float DeltaSeconds)
+{
+	// Not in Godot: if it has kept trying to walk the same way for most of a second and isn't
+	// getting anywhere (wedged on a corner, in a gap between crates, behind another enemy), it
+	// steps off to one side for a moment, then carries on. Each try goes the other way.
+	const float WishSize = Wish.Size2D();
+	if (UnstickLeft > 0.f)
+	{
+		UnstickLeft -= DeltaSeconds;
+		return WishSize > 0.5f ? UnstickDir * WishSize : Wish;
+	}
+	const FVector Dir = Wish.GetSafeNormal2D();
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	const bool bSameWay = FVector::DotProduct(Dir, LastWishDir) > 0.5f; // not flipping back and forth at a range edge
+	LastWishDir = Dir;
+	if (WishSize > 1.f && bSameWay && EnemyMovement()->bSteering && Move->IsMovingOnGround() && Move->Velocity.Size2D() / WWO::M < WishSize * 0.15f)
+	{
+		StuckFor += DeltaSeconds;
+		if (StuckFor >= 0.75f)
+		{
+			StuckFor = 0.f;
+			UnstickSide = -UnstickSide;
+			UnstickDir = FVector::CrossProduct(Dir, FVector::UpVector) * UnstickSide;
+			UnstickLeft = 0.6f;
+		}
+	}
+	else
+	{
+		StuckFor = 0.f;
+	}
+	return Wish;
 }
 
 void AWWOEnemy::Retarget(float DeltaSeconds)
@@ -339,11 +397,7 @@ FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 	Straight.Z = 0.f;
 	if (PathAge > 0.3f || FVector::Dist(Goal, PathGoal) > 150.f)
 	{
-		Path.Reset();
-		if (UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), FeetLocation(), Goal, this))
-		{
-			if (NavPath->IsValid()) Path = NavPath->PathPoints;
-		}
+		Path = WWONav::FindPath(this, FeetLocation(), Goal, bPathPartial);
 		PathAge = 0.f;
 		PathGoal = Goal;
 	}
@@ -353,10 +407,60 @@ FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 		if (FVector2D(ToNext.X, ToNext.Y).Size() > 60.f) break;
 		Path.RemoveAt(0); // reached that point
 	}
-	if (Path.Num() < 2) return Straight.GetSafeNormal();
+	if (Path.Num() < 2)
+	{
+		// Godot heads straight for the goal from here. When the goal can't be reached on the
+		// navmesh (you're up on a platform it has no way onto) and a wall or rail is right in
+		// front, it would just press into it, so it stands at the closest spot instead.
+		if (bPathPartial && WallAhead(Straight)) return FVector::ZeroVector;
+		return Straight.GetSafeNormal();
+	}
 	FVector Step = Path[0] - GetActorLocation();
 	Step.Z = 0.f;
-	return Step.Size() > 1.f ? Step.GetSafeNormal() : Straight.GetSafeNormal();
+	Step = Step.Size() > 1.f ? Step.GetSafeNormal() : Straight.GetSafeNormal();
+	// Something that isn't in the navmesh (a training target, a bark wall) can sit right on the
+	// path. Walking square into it would stop it dead, so it sidesteps along its face instead
+	// (keeping to one side until the way is clear).
+	FVector Normal;
+	if (WallAhead(Step, &Normal) && FVector::DotProduct(Step, -Normal) > 0.7f)
+	{
+		FVector Along = Step - Normal * FVector::DotProduct(Step, Normal);
+		if (Along.Size() < 0.2f) Along = FVector::CrossProduct(Normal, FVector::UpVector) * SidestepSide;
+		SidestepSide = FVector::DotProduct(Along, FVector::CrossProduct(Normal, FVector::UpVector)) >= 0.f ? 1.f : -1.f;
+		return Along.GetSafeNormal();
+	}
+	return Step;
+}
+
+FString AWWOEnemy::PathDebug() const
+{
+	FString Out = FString::Printf(TEXT("path %d points%s"), Path.Num(), bPathPartial ? TEXT(" (partial)") : TEXT(""));
+	for (const FVector& Point : Path) Out += TEXT(" ") + Point.ToCompactString();
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (Path.Num() == 0 && Nav)
+	{
+		// Why there's no path.
+		FNavLocation Near;
+		Out += FString::Printf(TEXT(" (start %s, goal %s %s)"), Nav->ProjectPointToNavigation(FeetLocation(), Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"),
+			*PathGoal.ToCompactString(), Nav->ProjectPointToNavigation(PathGoal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
+	}
+	return Out;
+}
+
+bool AWWOEnemy::WallAhead(const FVector& Direction, FVector* OutNormal) const
+{
+	// Level geometry (not people) within a step of its capsule along Direction?
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const FVector From = GetActorLocation() + FVector(0, 0, 10.f); // clear of the floor
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	FHitResult Hit;
+	const bool bHit = GetWorld()->SweepSingleByObjectType(Hit, From, From + Direction.GetSafeNormal2D() * 30.f, FQuat::Identity, Objects,
+		FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
+		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyWall), false, this));
+	if (bHit && OutNormal) *OutNormal = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+	return bHit;
 }
 
 void AWWOEnemy::PinCrit(FName Bone, const FVector& WorldPoint, const FVector& HalfExtentCm)

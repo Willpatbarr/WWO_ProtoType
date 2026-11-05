@@ -6,10 +6,13 @@
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+
+int32 AWWOEnemyProjectile::PlayerHits = 0;
 
 AWWOEnemyProjectile::AWWOEnemyProjectile()
 {
@@ -71,7 +74,20 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOEnemyShot), false, this);
 	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies()) Params.AddIgnoredActor(Enemy); // shots pass through enemies
 	FHitResult Hit;
-	if (!GetWorld()->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params))
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params);
+	// The player's capsule (Unreal's Pawn profile) ignores Visibility traces, but in Godot the
+	// shot's ray hits the player's body, so test it too and keep whichever comes first.
+	if (AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer())
+	{
+		FHitResult PlayerHit;
+		if (P->GetCapsuleComponent()->LineTraceComponent(PlayerHit, From, To, FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyShot), false))
+			&& (!bHit || PlayerHit.Time < Hit.Time))
+		{
+			Hit = PlayerHit;
+			bHit = true;
+		}
+	}
+	if (!bHit)
 	{
 		SetActorLocation(To);
 		return;
@@ -82,6 +98,7 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	}
 	else if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()))
 	{
+		if (!P->Health->bDead) ++PlayerHits;
 		P->Health->TakeDamage(Damage);
 	}
 	else if (AWWOAlly* A = Cast<AWWOAlly>(Hit.GetActor()))

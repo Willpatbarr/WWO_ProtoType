@@ -108,6 +108,14 @@ void AWWOSoldier::AfterMove(float DeltaSeconds)
 	bBlocked = false;
 }
 
+FString AWWOSoldier::DebugState() const
+{
+	if (!bAlerted) return TEXT("idle");
+	const FString Attack = Windup >= 0.f ? TEXT("+windup") : (ShotsLeft > 0 ? TEXT("+burst") : TEXT(""));
+	if (Cover.IsValid() && Health <= MaxHealth * D()->CoverHealth) return TEXT("cover") + Attack;
+	return (bSees ? TEXT("engage") : TEXT("seek")) + Attack;
+}
+
 FVector AWWOSoldier::MuzzleLocation() const
 {
 	return Gun ? Gun->GetComponentTransform().TransformPosition(FVector(26.f, 0, 0)) : GetActorLocation();
@@ -146,8 +154,10 @@ FVector AWWOSoldier::ChooseMove(const FVector& ToTarget, float Distance, float D
 			return ToSpot.Size() > 40.f ? PathDirection(Spot, DeltaSeconds) : FVector::ZeroVector;
 		}
 	}
-	if (Distance < S->MinRange) return -Toward;
-	if (Distance > S->MaxRange || !bSees) return PathDirection(TargetActor->GetActorLocation(), DeltaSeconds); // walk around walls to get a shot
+	// Too close: back off. With a wall right behind it, Godot keeps backing into the wall;
+	// here it strafes instead (below), so it doesn't stand pinned there.
+	if (Distance < S->MinRange && !WallAhead(-Toward)) return -Toward;
+	if (Distance >= S->MinRange && (Distance > S->MaxRange || !bSees)) return PathDirection(TargetActor->GetActorLocation(), DeltaSeconds); // walk around walls to get a shot
 	StrafeLeft -= DeltaSeconds;
 	if (StrafeLeft <= 0.f)
 	{
@@ -277,6 +287,14 @@ void AWWOSwarm::Setup()
 {
 	PinCrit("head", BonePos(GetMesh(), "head") + FVector(0, 0, 10.f * ModelScale) + GetActorForwardVector() * 2.f, FVector(12.f, 11.f, 13.f));
 	if (const UWWOSwarmData* S = D()) LeapCooldown = FMath::FRandRange(0.f, S->LeapCooldown);
+}
+
+FString AWWOSwarm::DebugState() const
+{
+	if (!bAlerted) return TEXT("idle");
+	if (bLeaping) return TEXT("leap");
+	const FVector To = FlatToTarget();
+	return To.Size() / WWO::M <= D()->BiteRange ? TEXT("bite") : TEXT("rush");
 }
 
 void AWWOSwarm::OnReset()
@@ -451,6 +469,13 @@ void AWWOTank::ShieldBreak()
 		FX->ScaleTween(Pop, Scale, Scale * 1.3f, 0.25f);
 		FX->ParamTween(WWOFX::MID(Pop), "Alpha", 0.6f, 0.f, 0.25f);
 	}
+}
+
+FString AWWOTank::DebugState() const
+{
+	if (!bAlerted) return TEXT("idle");
+	if (SlamTime >= 0.f) return SlamTime < D()->SlamWindup ? TEXT("slam-windup") : TEXT("slam-recover");
+	return Lobbing > 0.f ? TEXT("lob") : TEXT("advance");
 }
 
 bool AWWOTank::IsCriticalComponent(const UPrimitiveComponent* Component) const

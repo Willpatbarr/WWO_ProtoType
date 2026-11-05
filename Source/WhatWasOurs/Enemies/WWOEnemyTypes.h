@@ -26,6 +26,7 @@ class WHATWASOURS_API AWWOSoldier : public AWWOEnemy
 public:
 	AWWOSoldier(const FObjectInitializer& ObjectInitializer);
 	virtual void MoveBlockedBy(const FHitResult& Impact) override;
+	virtual FString DebugState() const override;
 
 protected:
 	virtual UWWOEnemyData* Data() const override;
@@ -66,6 +67,7 @@ class WHATWASOURS_API AWWOSwarm : public AWWOEnemy
 
 public:
 	AWWOSwarm(const FObjectInitializer& ObjectInitializer);
+	virtual FString DebugState() const override;
 
 protected:
 	virtual UWWOEnemyData* Data() const override;
@@ -97,6 +99,7 @@ public:
 	virtual float GetShield() const override { return Shield; }
 	virtual float GetMaxShield() const override { return MaxShield; }
 	virtual bool IsRankAndFile() const override { return false; }
+	virtual FString DebugState() const override;
 
 protected:
 	virtual UWWOEnemyData* Data() const override;

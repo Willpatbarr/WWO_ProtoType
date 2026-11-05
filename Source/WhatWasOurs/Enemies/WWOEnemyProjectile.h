@@ -1,7 +1,7 @@
 #pragma once
 
 // A slow glowing shot fired by enemies (Godot: enemies/enemy_projectile.gd). Moves each
-// step with a sweep so it can't skip through thin things; hurts the player or a teammate on
+// step with a ray so it can't skip through thin things; hurts the player or a teammate on
 // contact and pops on anything else. Enemies don't hit each other. With Gravity it arcs;
 // with SplashRadius it explodes where it lands (full damage at the center, half at the edge).
 
@@ -17,6 +17,7 @@ class WHATWASOURS_API AWWOEnemyProjectile : public AActor
 public:
 	AWWOEnemyProjectile();
 	virtual void Tick(float DeltaSeconds) override;
+	virtual bool IsComponentRelevantForNavigation(UActorComponent* Component) const override { return false; } // never shapes the navmesh
 
 	static AWWOEnemyProjectile* Fire(UWorld* World, const FVector& From, const FVector& VelocityCm, float Damage, float Life = 3.f,
 		float GravityCm = 0.f, float SplashRadiusM = 0.f, const FLinearColor& Color = FLinearColor(1.f, 0.35f, 0.1f), float SizeM = 0.09f);
@@ -28,6 +29,7 @@ public:
 	float SplashRadius = 0.f; // meters
 	FLinearColor Color = FLinearColor(1.f, 0.35f, 0.1f);
 	float Size = 0.09f;       // meters
+	static int32 PlayerHits;  // direct hits on the player, for the wave test log
 
 private:
 	void Splash(const FVector& Point);

@@ -19,6 +19,15 @@ class UWWOEnemyData;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FWWOOnEnemyDied, class AWWOEnemy*);
 
+namespace WWONav
+{
+	// A navmesh path like Godot's map_get_path: a start or end that's off the navmesh (pressed
+	// against a crate, a teammate standing in a corner) snaps to the closest navmesh point first,
+	// and an unreachable end gives the path to the closest reachable spot (bOutPartial).
+	// Empty when there's no navmesh here.
+	WHATWASOURS_API TArray<FVector> FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial);
+}
+
 // Enemy movement: the velocity eases toward what the AI wants at a set acceleration (and
 // knockback / leaps are left alone while bSteering is off).
 UCLASS()
@@ -69,6 +78,12 @@ public:
 	bool bRespawns = true; // wave enemies don't
 	float SlowLeft = 0.f, SlowAmount = 0.f, BlindLeft = 0.f;
 
+	// For the wave test log: what it's doing, who it's after, and the velocity it wants (cm/s).
+	virtual FString DebugState() const { return bAlerted ? TEXT("hunt") : TEXT("idle"); }
+	AActor* GetTargetActor() const { return TargetActor.Get(); }
+	FVector GetWish() const;
+	FString PathDebug() const;
+
 	void ApplyBlind(float Seconds);
 	void ApplySlow(float Amount, float Seconds);
 	virtual bool IsRankAndFile() const { return true; } // spore fog hurts these (not the Tank)
@@ -91,6 +106,7 @@ protected:
 	// Helpers for the types.
 	UWWOEnemyMovement* EnemyMovement() const;
 	FVector PathDirection(const FVector& Goal, float DeltaSeconds);
+	bool WallAhead(const FVector& Direction, FVector* OutNormal = nullptr) const;
 	FVector FlatToTarget() const;
 	FVector TargetAimPoint() const;
 	bool CanSeeTarget(const FVector& From) const;
@@ -114,8 +130,14 @@ private:
 	TArray<FVector> Path;
 	float PathAge = 99.f;
 	FVector PathGoal = FVector(1e9f);
+	bool bPathPartial = false;
+	float SidestepSide = 1.f;
+
+	float StuckFor = 0.f, UnstickLeft = 0.f, UnstickSide = 1.f;
+	FVector UnstickDir = FVector::ZeroVector, LastWishDir = FVector::ZeroVector;
 
 	void Retarget(float DeltaSeconds);
+	FVector Unstick(const FVector& Wish, float DeltaSeconds);
 	void Die();
 	void SetCollision(bool bOn);
 	bool TargetIsInvisible() const;

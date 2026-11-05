@@ -11,8 +11,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "NavigationSystem.h"
-#include "NavigationPath.h"
 #include "Engine/World.h"
 
 AWWOAlly::AWWOAlly(const FObjectInitializer& ObjectInitializer)
@@ -107,7 +105,19 @@ void AWWOAlly::GetUp()
 	Gun->SetVisibility(true, true);
 	if (const AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer())
 	{
-		TeleportTo(P->GetActorLocation() + P->GetActorRightVector() * 200.f, GetActorRotation());
+		// 2 m to your right, as in Godot, but not through a wall: it stops short of one.
+		const FVector From = P->GetActorLocation();
+		FVector Spot = From + P->GetActorRightVector() * 200.f;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAllyGetUp), false, this);
+		Params.AddIgnoredActor(P);
+		FHitResult Hit;
+		const UCapsuleComponent* Capsule = GetCapsuleComponent();
+		if (GetWorld()->SweepSingleByChannel(Hit, From, Spot, FQuat::Identity, ECC_Pawn,
+			FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 10.f), Params))
+		{
+			Spot = Hit.Location;
+		}
+		TeleportTo(Spot, GetActorRotation());
 	}
 	GetCharacterMovement()->StopMovementImmediately();
 	Body->Revive();
@@ -136,6 +146,7 @@ void AWWOAlly::Tick(float DeltaSeconds)
 	{
 		DownLeft -= DeltaSeconds;
 		Move->Wish = FVector::ZeroVector;
+		Move->Velocity.X = Move->Velocity.Y = 0.f; // down: drops where it stands
 		if (DownLeft <= 0.f) GetUp();
 		return;
 	}
@@ -178,17 +189,28 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 	FVector To = P->GetActorLocation() - GetActorLocation();
 	To.Z = 0.f;
 	const float Distance = To.Size() / WWO::M;
-	if (Distance < Data->FollowMin) return -To.GetSafeNormal() * 0.5f; // give you some room
+	if (Distance < Data->FollowMin)
+	{
+		// Give you some room. Godot backs straight off even into a wall; here it stays put
+		// when a wall is right behind it.
+		const FVector Away = -To.GetSafeNormal();
+		const UCapsuleComponent* Capsule = GetCapsuleComponent();
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+		const FVector From = GetActorLocation() + FVector(0, 0, 10.f);
+		const bool bWall = GetWorld()->SweepTestByObjectType(From, From + Away * 30.f, FQuat::Identity, Objects,
+			FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
+			FCollisionQueryParams(SCENE_QUERY_STAT(WWOAllyBack), false, this));
+		return bWall ? FVector::ZeroVector : Away * 0.5f;
+	}
 	if (Distance <= Data->FollowMax) return FVector::ZeroVector;
 	// Walk back toward you, around walls.
 	PathAge += DeltaSeconds;
 	if (PathAge > 0.4f || Path.Num() < 2)
 	{
-		Path.Reset();
-		if (UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), GetActorLocation(), P->GetActorLocation(), this))
-		{
-			if (NavPath->IsValid()) Path = NavPath->PathPoints;
-		}
+		bool bPartial = false;
+		Path = WWONav::FindPath(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), bPartial);
 		PathAge = 0.f;
 	}
 	while (Path.Num() > 1 && FVector2D(Path[0].X - GetActorLocation().X, Path[0].Y - GetActorLocation().Y).Size() < 60.f) Path.RemoveAt(0);
@@ -215,6 +237,7 @@ AWWOEnemy* AWWOAlly::NearestVisibleEnemy() const
 	float BestDistance = D()->SightRange * WWO::M;
 	const FVector Eyes = GetActorLocation() + FVector(0, 0, 60.f);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAllySight), false, this);
+	const AWWOCharacter* Player = UWWOWorldSubsystem::Get(this)->GetPlayer();
 	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
 	{
 		const FVector Aim = Enemy->GetAimParts().Last().Position;
@@ -222,6 +245,10 @@ AWWOEnemy* AWWOAlly::NearestVisibleEnemy() const
 		if (Distance >= BestDistance) continue;
 		FHitResult Hit;
 		if (!GetWorld()->LineTraceSingleByChannel(Hit, Eyes, Aim, ECC_Visibility, Params) || Hit.GetActor() != Enemy) continue;
+		// The player's capsule ignores Visibility traces; in Godot you block a teammate's view.
+		FHitResult PlayerHit;
+		if (Player && Player->GetCapsuleComponent()->LineTraceComponent(PlayerHit, Eyes, Aim, FCollisionQueryParams(SCENE_QUERY_STAT(WWOAllySight), false))
+			&& PlayerHit.Time < Hit.Time) continue;
 		Best = Enemy;
 		BestDistance = Distance;
 	}

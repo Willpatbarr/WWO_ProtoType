@@ -5,6 +5,11 @@
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyTypes.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "WhatWasOurs.h"
+#include "Components/CapsuleComponent.h"
+#include "HAL/IConsoleManager.h"
+#include "NavigationSystem.h"
+#include "Misc/CommandLine.h"
 #include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -13,6 +18,17 @@ namespace
 {
 	constexpr float MinSpawnDistance = 1400.f; // enemies don't appear right next to you (cm)
 	constexpr float CorpseCleanup = 4.f;
+
+	AWWOGameMode* WaveMode(UWorld* World) { return World ? Cast<AWWOGameMode>(World->GetAuthGameMode()) : nullptr; }
+
+	// Console helpers for testing later waves.
+	FAutoConsoleCommandWithWorld SkipWaveCommand(TEXT("wwo.SkipWave"), TEXT("Kill everything in the current wave"),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World) { if (AWWOGameMode* GM = WaveMode(World)) GM->SkipWave(); }));
+	FAutoConsoleCommandWithWorldAndArgs WaveCommand(TEXT("wwo.Wave"), TEXT("wwo.Wave <n>: clear this wave and start wave n now"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (AWWOGameMode* GM = WaveMode(World)) GM->JumpToWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : GM->Wave + 1);
+		}));
 
 	// The waves, in order. Past the last one, it repeats the last wave 25% bigger each time.
 	const TArray<TMap<FName, int32>>& Waves()
@@ -38,6 +54,12 @@ AWWOGameMode::AWWOGameMode()
 void AWWOGameMode::StartPlay()
 {
 	Super::StartPlay();
+	bWaveTest = FParse::Param(FCommandLine::Get(), TEXT("WWOWaveTest"));
+	if (bWaveTest)
+	{
+		StartDelay = 3.f;
+		UE_LOG(LogWWO, Display, TEXT("WaveTest: %d waves, size scale %.2f, break %.1f s, stagger %.2f s"), FMath::RoundToInt(WavesToWin), SizeScale, BreakTime, SpawnStagger);
+	}
 	Begin();
 }
 
@@ -83,6 +105,19 @@ void AWWOGameMode::SkipWave()
 	}
 }
 
+void AWWOGameMode::JumpToWave(int32 Number)
+{
+	if (State == EWWOWaveState::Idle || Number < 1) return;
+	Queue.Reset();
+	for (const TWeakObjectPtr<AWWOEnemy>& Enemy : Alive)
+	{
+		if (Enemy.IsValid()) Enemy->Destroy();
+	}
+	Alive.Reset();
+	Wave = Number - 1;
+	StartWave();
+}
+
 void AWWOGameMode::Countdown(float Seconds)
 {
 	State = EWWOWaveState::Countdown;
@@ -100,6 +135,7 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 			bBoundToPlayer = true;
 		}
 	}
+	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (RestartLeft > 0.f && (RestartLeft -= DeltaSeconds) <= 0.f)
 	{
 		Restart();
@@ -189,11 +225,38 @@ void AWWOGameMode::SpawnEnemy(FName Kind)
 	const AActor* Point = PickPoint(Kind);
 	if (!Point) return;
 	UClass* Class = Kind == "tank" ? AWWOTank::StaticClass() : (Kind == "soldier" ? AWWOSoldier::StaticClass() : AWWOSwarm::StaticClass());
-	const FVector Offset = Kind != "tank" ? FVector(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 0.f) : FVector::ZeroVector;
+	// Godot drops the enemy within 1.5 m of the marker (the Tank right on it) with its feet on
+	// the marker, wherever that lands. Here the actor is its capsule's center, and a spot inside a
+	// crate stack or off the navmesh is tried again (up to 8 times), so nobody starts boxed in.
+	const UCapsuleComponent* Capsule = Class->GetDefaultObject<AWWOEnemy>()->GetCapsuleComponent();
+	const float Radius = Capsule->GetScaledCapsuleRadius();
+	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FCollisionQueryParams Overlap(SCENE_QUERY_STAT(WWOWaveSpawn), false);
+	FVector Feet = Point->GetActorLocation();
+	for (int32 Try = 0; Try < 8; ++Try)
+	{
+		const FVector Offset = Kind != "tank" ? FVector(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 0.f) : FVector::ZeroVector;
+		const FVector Spot = Point->GetActorLocation() + Offset;
+		FNavLocation OnMesh;
+		const bool bOnMesh = !Nav || Nav->ProjectPointToNavigation(Spot, OnMesh, FVector(Radius, Radius, 100.f));
+		const bool bClear = !GetWorld()->OverlapBlockingTestByChannel(Spot + FVector(0, 0, HalfHeight), FQuat::Identity, ECC_Pawn,
+			FCollisionShape::MakeCapsule(Radius, HalfHeight - 2.f), Overlap);
+		if (bOnMesh && bClear)
+		{
+			Feet = Spot;
+			break;
+		}
+		FNavLocation Near;
+		if (Try == 7 && Nav && Nav->ProjectPointToNavigation(Point->GetActorLocation(), Near, FVector(300.f, 300.f, 100.f)))
+		{
+			Feet = FVector(Near.Location.X, Near.Location.Y, Point->GetActorLocation().Z); // nothing clear nearby: the closest navmesh spot
+		}
+	}
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	Params.bDeferConstruction = true;
-	const FTransform Where(FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), Point->GetActorLocation() + Offset + FVector(0, 0, 150.f));
+	const FTransform Where(FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), Feet + FVector(0, 0, HalfHeight));
 	AWWOEnemy* Enemy = GetWorld()->SpawnActor<AWWOEnemy>(Class, Where, Params);
 	if (!Enemy) return;
 	Enemy->bRespawns = false; // wave enemies don't respawn
