@@ -367,7 +367,7 @@ AWWOEntrenchRoots* AWWOEntrenchRoots::Spawn(UWorld* World, AActor* Player, float
 		const float H = FMath::FRandRange(0.9f, 1.4f);
 		UStaticMeshComponent* Root = WWOFX::AddShape(Roots, Roots->GetRootComponent(), WWOFX::Cone(), TEXT("M_WWO_Solid"), BarkColor);
 		Root->SetRelativeScale3D(FVector(0.24f, 0.24f, H));
-		const FRotator Lean = FRotationMatrix::MakeFromZ((FVector::UpVector + Out * 0.45f).GetSafeNormal()).Rotator();
+		const FRotator Lean = FRotationMatrix::MakeFromZ(FVector::UpVector * FMath::Cos(0.45f) + Out * FMath::Sin(0.45f)).Rotator(); // 0.45 rad outward
 		Root->SetRelativeLocationAndRotation(Out * 75.f + FVector(0, 0, H * 40.f), Lean);
 	}
 	UStaticMeshComponent* Ring = WWOFX::AddGroundDisc(Roots, Roots->GetRootComponent(), FLinearColor(0.95f, 0.65f, 0.3f), 0.15f, 0.25f, 0.6f);
@@ -397,7 +397,8 @@ void AWWOEntrenchRoots::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
-	if (RingMat) RingMat->SetScalarParameterValue("Alpha", 0.7f + 0.2f * FMath::Sin(Age * UE_PI / 0.8f)); // a slow pulse
+	RingAge += DeltaSeconds;
+	if (RingMat) RingMat->SetScalarParameterValue("Alpha", 0.7f - 0.2f * FMath::Cos(RingAge * UE_PI / 0.8f)); // a slow pulse: 0.5 -> 0.9 -> 0.5 every 1.6 s
 	if (!bEnding)
 	{
 		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(BackOut(Age / 0.2f), 0.01f)));
@@ -467,7 +468,8 @@ void AWWOChainLightning::Burst(AActor* Target, int32 Arcs, float Reach, float Ti
 {
 	if (!Target) return;
 	const FVector Impact = AWWOLightningBolt::CenterOf(Target);
-	const FVector Away = Player.IsValid() ? (Impact - Player->GetActorLocation()).GetSafeNormal() : FVector::ForwardVector;
+	const AWWOCharacter* P = Cast<AWWOCharacter>(Player.Get());
+	const FVector Away = P ? (Impact - P->EyeLocation()).GetSafeNormal() : FVector::ForwardVector; // from the camera, like Godot
 	AWWODischarge::Spawn(GetWorld(), Target, Impact, Away, Color, Arcs, Reach, Time);
 }
 

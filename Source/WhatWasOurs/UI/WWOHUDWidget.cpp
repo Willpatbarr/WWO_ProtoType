@@ -334,7 +334,11 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 		{
 			const UWWOAbilityData* A = Loadout->GetAbility(Slot);
-			if (!A) continue;
+			if (!A)
+			{
+				Pos.X += 64 + Pad; // an empty slot keeps its place in the row (Godot's empty column)
+				continue;
+			}
 			const FVector2D Box(64, 64);
 			switch (A->Kind)
 			{
@@ -397,17 +401,16 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Box(HAt, FVector2D(FullH, 14), FLinearColor(0, 0, 0, 0.45f));
 		P.Box(HAt, FVector2D(FullH * Frac, 14), Frac < 0.35f ? HealthLowColor : HealthColor);
 		P.Outline(HAt, FVector2D(FullH, 14), FLinearColor(1, 1, 1, 0.5f), 1.f);
-		// Status tags above the vitals.
-		float TagY = Origin.Y - 50.f;
-		auto Tag = [&](bool bOn, const TCHAR* Text, const FLinearColor& Color)
+		// Status tags above the vitals, each on its own line (Godot's labels have fixed spots:
+		// VEILED 28 px and ENTRENCHED 56 px above SLOWED, shown or not).
+		const float TagY = Origin.Y - 50.f;
+		auto Tag = [&](bool bOn, int32 Line, const TCHAR* Text, const FLinearColor& Color)
 		{
-			if (!bOn) return;
-			P.Text(Text, FVector2D(Center.X, TagY), 20.f, Color, 0.5f);
-			TagY -= 28.f;
+			if (bOn) P.Text(Text, FVector2D(Center.X, TagY - 28.f * Line), 20.f, Color, 0.5f);
 		};
-		Tag(Pl->SlowLeft > 0.f, TEXT("SLOWED"), FLinearColor(0.6f, 0.85f, 1.f));
-		Tag(Pl->IsInvisible(), TEXT("VEILED"), FLinearColor(0.8f, 0.65f, 1.f));
-		Tag(Pl->EntrenchLeft > 0.f, TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f));
+		Tag(Pl->SlowLeft > 0.f, 0, TEXT("SLOWED"), FLinearColor(0.6f, 0.85f, 1.f));
+		Tag(Pl->IsInvisible(), 1, TEXT("VEILED"), FLinearColor(0.8f, 0.65f, 1.f));
+		Tag(Pl->EntrenchLeft > 0.f, 2, TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f));
 		// Damage flash and death screen.
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.8f, 0.05f, 0.02f, DamageFlash));
 		if (H->bDead)

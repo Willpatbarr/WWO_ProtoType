@@ -16,7 +16,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   and the rifle's fire rate as `AutoTest gun:`; then throws every grenade in turn at a training target
   (the Blinding Grenade and Snare Mine at an enemy), logging each throw and what it did as
   `AutoTest grenade:` / `Grenade <id>:`, with blast, after and throw-arm screenshots; then a melee lunge onto the
-  target, a punch on an enemy (knockback) and a swing at nothing, as `AutoTest melee:`) and saves
+  target, a punch on an enemy (knockback) and a swing at nothing, as `AutoTest melee:`; then equips every
+  ability in turn and sets it off, and casts each flora's ult (Blast, Veil, Entrench), logging
+  `AutoTest ability:` / `AutoTest ult:` with 23_ability_* and 24_ult_* screenshots, and puts the loadout back) and saves
   screenshots to `Saved/AutoTest/`.
 
 ## Where things are

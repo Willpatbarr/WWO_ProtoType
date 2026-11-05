@@ -109,7 +109,7 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> RingMat;
-	float Duration = 10.f, Age = 0.f;
+	float Duration = 10.f, Age = 0.f, RingAge = 0.f;
 	bool bEnding = false;
 	void BurstDirt();
 };

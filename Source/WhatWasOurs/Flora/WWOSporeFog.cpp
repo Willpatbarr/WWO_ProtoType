@@ -42,7 +42,8 @@ void AWWOSporeFog::BeginPlay()
 {
 	Super::BeginPlay();
 	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->RegisterFog(this);
-	const FVector Offsets[] = { FVector::ZeroVector, FVector(0.2f, 0.35f, 0.1f), FVector(-0.25f, -0.3f, 0.05f), FVector(-0.3f, 0.1f, 0.3f), FVector(0.3f, -0.2f, 0.25f) };
+	// Godot's offsets, converted (x, y, z) -> (-z, x, y).
+	const FVector Offsets[] = { FVector::ZeroVector, FVector(-0.2f, 0.35f, 0.1f), FVector(0.25f, -0.3f, 0.05f), FVector(0.3f, 0.1f, 0.3f), FVector(-0.3f, -0.2f, 0.25f) };
 	for (const FVector& Offset : Offsets)
 	{
 		UStaticMeshComponent* Puff = WWOFX::AddSoftSphere(this, GetRootComponent(), Color(), 0.f, 0.9f, false);

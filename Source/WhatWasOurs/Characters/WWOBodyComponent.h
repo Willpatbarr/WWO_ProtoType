@@ -50,6 +50,9 @@ public:
 	void Revive();
 	void FollowLoadout(bool bShadow); // rebuild the grafts whenever the loadout changes
 	void RebuildGrafts();
+	// Godot's set_shadow_only: only the shadow shows in first person; off for the ult's third
+	// person, where the whole body and its grafts show.
+	void SetShadowOnly(bool bOn);
 
 	// A box pinned to a bone at a world point (measured now), e.g. Tank armor plates.
 	UStaticMeshComponent* AttachBox(FName Bone, const FVector& WorldCenter, const FVector& SizeM, const FLinearColor& Color, float Glow = 0.f);

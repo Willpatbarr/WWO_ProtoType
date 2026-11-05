@@ -704,7 +704,9 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	// Grenades: every grenade, one by one, at a training target. Then melee.
 	else if (At(45.f)) { if (UpdateAutoGrenadeTest(P, DeltaTime)) Next(45.1f); }
 	else if (At(45.1f)) { if (UpdateAutoMeleeTest(P, DeltaTime)) Next(45.2f); }
-	else if (At(45.2f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	// Abilities and ults: each ability equipped and set off, then each flora's ult.
+	else if (At(45.2f)) { if (UpdateAutoAbilityTest(P, DeltaTime)) Next(45.3f); }
+	else if (At(45.3f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }
 
 bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)

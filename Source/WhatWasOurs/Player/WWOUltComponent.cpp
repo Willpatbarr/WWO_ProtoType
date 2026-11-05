@@ -93,9 +93,7 @@ void UWWOUltComponent::Begin()
 	UCharacterMovementComponent* Move = P->GetCharacterMovement();
 	Move->Velocity = FVector(0, 0, FMath::Min(Move->Velocity.Z, 0.f));
 	P->Weapon->SetVisibility(false, true);
-	P->GetMesh()->SetOwnerNoSee(false); // the whole body shows in third person
-	P->GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::None;
-	P->GetMesh()->MarkRenderStateDirty();
+	P->Body->SetShadowOnly(false); // the whole body (and its grafts) shows in third person
 	Clock = 0.f;
 	bExploded = false;
 	bCast = false;
@@ -184,9 +182,7 @@ void UWWOUltComponent::Finish()
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	UltCamera->Deactivate();
 	P->Camera->Activate();
-	P->GetMesh()->SetOwnerNoSee(true);
-	P->GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
-	P->GetMesh()->MarkRenderStateDirty();
+	P->Body->SetShadowOnly(true);
 	P->Weapon->SetVisibility(true, true);
 	P->bUlting = false;
 	P->ResetInputEdges(); // a button held through the ult doesn't fire on release

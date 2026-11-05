@@ -151,6 +151,24 @@ void UWWOBodyComponent::FollowLoadout(bool bShadow)
 	RebuildGrafts();
 }
 
+void UWWOBodyComponent::SetShadowOnly(bool bOn)
+{
+	bShadowOnly = bOn;
+	if (USkeletalMeshComponent* Mesh = GetMesh())
+	{
+		Mesh->SetOwnerNoSee(bOn);
+		Mesh->FirstPersonPrimitiveType = bOn ? EFirstPersonPrimitiveType::WorldSpaceRepresentation : EFirstPersonPrimitiveType::None;
+		Mesh->MarkRenderStateDirty();
+	}
+	for (UStaticMeshComponent* C : Grafts)
+	{
+		if (!C) continue;
+		C->SetOwnerNoSee(bOn);
+		C->bCastHiddenShadow = bOn;
+		C->MarkRenderStateDirty();
+	}
+}
+
 FVector UWWOBodyComponent::BonePoint(FName Bone) const
 {
 	const USkeletalMeshComponent* Mesh = GetMesh();

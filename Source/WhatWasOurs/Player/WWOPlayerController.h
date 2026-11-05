@@ -134,6 +134,22 @@ private:
 	FVector AutoMeleeFrom = FVector::ZeroVector;
 	float AutoLungeTime = 0.f;
 	bool bAutoSawLunge = false, bAutoMeleeLogged = false, bAutoShotPunch = false;
+	// Ability and ult steps (WWOPlayerControllerAutoAbility.cpp): every ability equipped and
+	// set off in turn, then each flora's ult; the loadout is put back afterwards.
+	TArray<TObjectPtr<class UWWOAbilityData>> AutoAbilities;
+	TArray<TObjectPtr<class UWWOFloraData>> AutoFloras;
+	TObjectPtr<class UWWOFloraData> AutoFloraBefore;
+	TObjectPtr<class UWWOGrenadeData> AutoAbilityGrenadeBefore;
+	TArray<TObjectPtr<class UWWOAbilityData>> AutoAbilitiesBefore;
+	TArray<TObjectPtr<class UWWOTraitData>> AutoTraitsBefore;
+	TMap<TWeakObjectPtr<AActor>, float> AutoHealths; // living targets' health before a hit
+	TWeakObjectPtr<AActor> AutoAbilityTarget;
+	int32 AutoAbilityIndex = -1;
+	float AutoAbilityPhase = -1.f;
+	float AutoAbilityValue = 0.f;
+	FVector AutoAbilityFrom = FVector::ZeroVector;
+	bool bAutoAbilityShot = false, bAutoAbilityFlag = false;
+	bool UpdateAutoAbilityTest(class AWWOCharacter* P, float DeltaTime);
 	bool UpdateAutoGrenadeTest(class AWWOCharacter* P, float DeltaTime);
 	bool UpdateAutoMeleeTest(class AWWOCharacter* P, float DeltaTime);
 	bool PlaceForAutoTest(class AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove = true);
