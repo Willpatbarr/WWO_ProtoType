@@ -6,6 +6,7 @@
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
+#include "Components/CapsuleComponent.h"
 
 UWWOAimAssistComponent::UWWOAimAssistComponent()
 {
@@ -115,7 +116,10 @@ void UWWOAimAssistComponent::UpdateAdhesion()
 	}
 	// Direction from your eyes to the target, ignoring where you're looking, so this only
 	// measures movement (theirs or yours), not your own turning.
-	const FVector Eye = P->GetActorLocation() + FVector(0, 0, 60.f);
+	// Godot's origin stays 1 m above the feet when crouched (the capsule shrinks from the feet),
+	// so this eye point doesn't move on a crouch; Unreal's capsule center drops, so measure from the feet.
+	const float FeetZ = P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const FVector Eye(P->GetActorLocation().X, P->GetActorLocation().Y, FeetZ + 160.f); // feet + 1 m + STAND_EYE_HEIGHT
 	const FVector Dir = (Part.Position - Eye).GetSafeNormal();
 	const FString Key = FString::Printf(TEXT("%d:%d"), Part.Target->GetUniqueID(), Part.bCritical ? 1 : 0);
 	if (Key == AdhesionKey)

@@ -58,4 +58,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   DualSense is mapped to the Create button and I.
 - Jumps peak at exactly the set height (the Godot formula's intent). Godot's 60 Hz step adds about
   5 cm (2.05 m for a 2 m jump) and about 0.02 s of air time.
+- Right-stick look Y has a Negate in the look mapping: Will saw it inverted without one. (Mac's
+  GameController reports stick-up as +Y, which would need no flip, so recheck if it ever feels inverted again.)
+- Mouse look ignores the first 2 s of play and, for 0.25 s after a menu closes, single jumps over
+  250 px (the cursor recapture). Godot has no such filter. Mouse pixel scale isn't matched to
+  Godot's canvas_items stretch, so mouse sensitivity may differ.
 - Not yet checked hands-on with the DualSense.

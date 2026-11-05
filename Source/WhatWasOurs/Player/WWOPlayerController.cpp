@@ -212,8 +212,12 @@ void AWWOPlayerController::OnMouseLook(const FInputActionInstance& Instance)
 	AWWOCharacter* Player = GetWWOCharacter();
 	if (!Player || Player->bUlting) return;
 	const FVector2D Delta = Instance.GetValue().Get<FVector2D>();
-	// The cursor jumps when the window first captures it: ignore the first moments of play.
-	if (GetWorld()->GetRealTimeSeconds() < 2.0 || Delta.Size() > 250.f) return;
+	// The cursor jumps when the window first captures it: ignore the first moments of play, and a
+	// big jump right after a menu hands the mouse back. Godot has no filter, so real input
+	// (fast flicks, deltas piled up over a slow frame) always gets through otherwise.
+	const double Now = GetWorld()->GetRealTimeSeconds();
+	if (Now < 2.0) return;
+	if (Now - MouseRecaptureTime < 0.25 && Delta.Size() > 250.f) return;
 	Player->Look(Delta * Player->MouseSensitivity * 0.001f);
 }
 
@@ -405,6 +409,7 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 	else
 	{
 		SetInputMode(FInputModeGameOnly());
+		MouseRecaptureTime = GetWorld()->GetRealTimeSeconds();
 		if (MenuCursor.IsValid() && FSlateApplication::IsInitialized())
 		{
 			FSlateApplication::Get().UnregisterInputPreProcessor(MenuCursor);
@@ -503,7 +508,12 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
 	else if (At(12.f)) { Shot(TEXT("02_firing")); Next(13.f); }
 	else if (At(13.f)) { Held[(int32)EWWOAction::Fire] = false; Held[(int32)EWWOAction::Aim] = true; Next(13.5f); }
-	else if (At(13.5f)) { Shot(TEXT("03_ads")); Held[(int32)EWWOAction::Aim] = false; Next(14.f); }
+	else if (At(13.5f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest look: ADS amount %.2f fov %.2f look multiplier %.3f"), P->Weapon->AdsAmount,
+			P->Camera->FieldOfView, P->Weapon->LookMultiplier());
+		Shot(TEXT("03_ads")); Held[(int32)EWWOAction::Aim] = false; Next(14.f);
+	}
 	else if (At(14.f)) { P->Grenades->ThrowGrenade(); Next(15.2f); }
 	else if (At(15.2f)) { Shot(TEXT("04_grenade")); Next(16.f); }
 	else if (At(16.f)) { JustPressed[(int32)EWWOAction::Melee] = true; Next(16.2f); }
@@ -607,7 +617,25 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 		UE_LOG(LogWWO, Display, TEXT("AutoTest jump: after the crate jump feet %.1f cm (crate top 112), on floor %d"), FeetZ(), P->IsOnFloor());
 		Shot(TEXT("13_crate_top"));
 		P->Health->GodMode = 0.f;
+		Next(36.f);
+	}
+	// Stick look: half a second at full right and half up (y = up after the mapping's flip).
+	else if (At(36.f)) // (a while after the screenshot, whose long frame would skew the timing)
+	{
+		AutoLookYaw = GetControlRotation().Yaw;
+		AutoLookPitch = P->GetPitch();
+		AutoLookFrom = AutoTestClock;
+		LookValue = FVector2D(1.f, 0.5f);
 		Next(36.5f);
 	}
-	else if (At(36.5f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	else if (At(36.5f))
+	{
+		LookValue = FVector2D::ZeroVector;
+		const float Seconds = AutoTestClock - AutoLookFrom;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest look: stick %.2f s turned %.1f deg right, %.1f deg up (no friction: %.1f / %.1f), hip fov %.2f"),
+			Seconds, FMath::FindDeltaAngleDegrees(AutoLookYaw, GetControlRotation().Yaw), FMath::RadiansToDegrees(P->GetPitch() - AutoLookPitch),
+			FMath::RadiansToDegrees(P->StickSensitivity * Seconds), FMath::RadiansToDegrees(P->StickSensitivity * Seconds * 0.5f), P->Camera->FieldOfView);
+		Next(37.f);
+	}
+	else if (At(37.f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }

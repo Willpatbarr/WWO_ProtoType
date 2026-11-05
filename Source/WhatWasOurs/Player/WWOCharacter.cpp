@@ -489,6 +489,10 @@ void AWWOCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAd
 
 void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 {
+	// Godot's ult/entrench branch returns before any camera update, so the eye, dip and bob
+	// hold still while you're frozen or rooted.
+	const bool bFrozen = bUlting || EntrenchLeft > 0.f;
+	if (bFrozen) DeltaSeconds = 0.f;
 	// Eye height eases between standing and crouched.
 	const float Target = bIsCrouched ? CrouchCameraZ : StandCameraZ;
 	CameraBaseZ = FMath::Lerp(CameraBaseZ, Target, FMath::Min(CameraSmoothing * DeltaSeconds, 1.f));
@@ -499,11 +503,13 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 
 	// Head bob: up/down once per step, side to side once per two steps.
 	const float Speed = FVector2D(GetVelocity().X, GetVelocity().Y).Size() / WWO::M;
-	const bool bWalking = IsOnFloor() && !bSliding && !bMantling && Speed > 0.5f;
-	SprintBlend = WWO::MoveToward(SprintBlend, bSprinting ? 1.f : 0.f, 3.f * DeltaSeconds);
+	// Godot skips the head bob while mantling, so the bob holds where it was until you're up.
+	const float BobDelta = bMantling ? 0.f : DeltaSeconds;
+	const bool bWalking = IsOnFloor() && !bSliding && Speed > 0.5f;
+	SprintBlend = WWO::MoveToward(SprintBlend, bSprinting ? 1.f : 0.f, 3.f * BobDelta);
 	const float Stride = FMath::Max(FMath::Lerp(WalkStride, SprintStride, SprintBlend), 0.1f);
-	if (bWalking) BobTime += Speed / Stride * UE_PI * DeltaSeconds; // one step = half a sine wave
-	BobWeight = WWO::MoveToward(BobWeight, bWalking ? 1.f : 0.f, 4.f * DeltaSeconds);
+	if (bWalking) BobTime += Speed / Stride * UE_PI * BobDelta; // one step = half a sine wave
+	BobWeight = WWO::MoveToward(BobWeight, bWalking ? 1.f : 0.f, 4.f * BobDelta);
 	const float Amount = BobIntensity * BobWeight * (1.f - 0.75f * Weapon->AdsAmount); // steadier when aimed
 	const float Up = FMath::Lerp(WalkBobUp, SprintBobUp, SprintBlend) * Amount;
 	const float Side = FMath::Lerp(WalkBobSide, SprintBobSide, SprintBlend) * Amount;

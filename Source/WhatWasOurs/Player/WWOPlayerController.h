@@ -82,6 +82,7 @@ private:
 	bool JustPressed[(int32)EWWOAction::Count] = {};
 	FVector2D MoveValue = FVector2D::ZeroVector;
 	FVector2D LookValue = FVector2D::ZeroVector;
+	double MouseRecaptureTime = 0.0; // real time the game last took the mouse back from a menu
 
 	TMap<EWWOChord, float> ChordPending; // bumper -> seconds since pressed
 	TMap<EWWOChord, int32> ChordFired;   // chord -> frames it stays readable
@@ -114,6 +115,7 @@ private:
 	bool bAutoSawMantle = false;
 	float AutoJumpTime = 0.f, AutoJumpFromZ = 0.f, AutoJumpPeak = 0.f, AutoJumpPeakTime = 0.f, AutoJumpLandTime = 0.f, AutoJumpDip = 0.f;
 	FVector AutoCrateAt = FVector::ZeroVector;
+	float AutoLookYaw = 0.f, AutoLookPitch = 0.f, AutoLookFrom = 0.f; // stick look step
 	void UpdateAutoTest(float DeltaTime);
 	void Shot(const TCHAR* Name);
 };
