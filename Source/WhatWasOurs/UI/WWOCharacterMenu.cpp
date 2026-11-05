@@ -25,6 +25,7 @@
 #include "Components/WidgetSwitcher.h"
 #include "Components/WrapBox.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -94,6 +95,24 @@ AWWOPreviewActor::AWWOPreviewActor()
 	Backdrop->CastShadow = false;
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
 	Body->BodyColor = FLinearColor(0.3f, 0.42f, 0.55f);
+	Mesh->LightingChannels.bChannel0 = false; // the grafts copy the body's channels
+	Mesh->LightingChannels.bChannel2 = true;
+	// Godot's light: rotation (-35, 30, 0) degrees, seen from the preview camera (Godot +Z, toward
+	// the camera, is +X here; Godot +X, the camera's right, is -Y).
+	auto MakeLight = [this](const TCHAR* Name, const FRotator& Rotation, float Lux)
+	{
+		UDirectionalLightComponent* Light = CreateDefaultSubobject<UDirectionalLightComponent>(Name);
+		Light->SetupAttachment(GetRootComponent());
+		Light->SetRelativeRotation(Rotation);
+		Light->Intensity = Lux;
+		Light->CastShadows = false;
+		Light->bAtmosphereSunLight = false;
+		Light->LightingChannels.bChannel0 = false;
+		Light->LightingChannels.bChannel2 = true;
+		return Light;
+	};
+	KeyLight = MakeLight(TEXT("KeyLight"), FRotator(-35.f, 150.f, 0.f), UE_PI);
+	FillLight = MakeLight(TEXT("FillLight"), FRotator(-10.f, 180.f, 0.f), UE_PI * 0.5f);
 }
 
 void AWWOPreviewActor::BeginPlay()
@@ -110,7 +129,7 @@ void AWWOPreviewActor::BeginPlay()
 		if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_Unlit")))
 		{
 			UMaterialInstanceDynamic* Mat = UMaterialInstanceDynamic::Create(M, this);
-			Mat->SetVectorParameterValue("Color", BackdropColor);
+			Mat->SetVectorParameterValue("Color", BackdropFor(ExposureBias));
 			Backdrop->SetMaterial(0, Mat);
 		}
 	}

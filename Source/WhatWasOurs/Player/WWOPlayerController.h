@@ -113,6 +113,15 @@ private:
 	bool bAutoTest = false;
 	bool bAutoTestMenusOnly = false; // -WWOAutoTestMenus: just the controller-only menu steps
 	bool bAutoTestBodyOnly = false; // -WWOAutoTestBody: just the body animation steps
+	bool bAutoTestGraftsOnly = false; // -WWOAutoTestGrafts: just the flora graft steps
+	// Graft steps (WWOPlayerControllerAutoGrafts.cpp): loadouts shown in the character preview.
+	float AutoGraftClock = 0.f;
+	float AutoGraftCaptureFov = 0.f;
+	TObjectPtr<class UWWOFloraData> AutoGraftFlora;
+	TObjectPtr<class UWWOGrenadeData> AutoGraftGrenade;
+	TArray<TObjectPtr<class UWWOAbilityData>> AutoGraftAbilities;
+	TArray<TObjectPtr<class UWWOFramePartData>> AutoGraftFrame;
+	bool UpdateAutoGraftTest(class AWWOCharacter* P, float DeltaTime);
 	// Body steps (WWOPlayerControllerAutoBody.cpp): a row of mannequins in each body state.
 	int32 AutoBodyStep = 0;
 	float AutoBodyClock = 0.f;

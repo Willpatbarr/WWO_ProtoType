@@ -28,9 +28,11 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   aim and hit flinch, death, knockback death, Swarm run, ult charge and cast, Tank slam warning) with a
   close-up of each, your own body in third person crouched, crouch walking and sliding, and the
   first-person throw and punch arms in slow motion, logging `AutoTest body:` with 30_body_row,
-  31_body_*, 32_player_* and 33_fp_* shots, and saves screenshots to `Saved/AutoTest/`.
+  31_body_*, 32_player_* and 33_fp_* shots; then six loadouts (two per flora, with frame parts) in the
+  character menu preview, front and back (34_grafts_*) and close up (35_grafts_*), logging `AutoTest grafts:`,
+  and puts the loadout back. Screenshots go to `Saved/AutoTest/`.
   `-WWOAutoTestMenus` runs only the menu steps (about 30 s), `-WWOAutoTestBody` only the body steps
-  (about 1 minute).
+  (about 1 minute), `-WWOAutoTestGrafts` only the graft steps (about 25 s).
 - `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
   reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
   shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
@@ -52,8 +54,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 | enemies/*.gd | `Enemies/WWOEnemy`, `WWOEnemyTypes` (Soldier, Swarm, Tank), `WWOEnemyProjectile` |
 | allies/ally.gd | `Allies/WWOAlly` |
 | wave_manager.gd | `Game/WWOGameMode` (navmesh built at runtime from the map's NavMeshBoundsVolume; one nav agent sized like Godot's: 0.5 m radius, 1.8 m tall. Effects (`AWWOFXActor`, enemy shots) are kept out of it: Unreal adds every new mesh component to the navigation octree, and the constant tile rebuilds around shots and tracers left holes in the navmesh. Training targets and bark walls are in it, so paths go around them; Godot's baked navmesh has neither) |
+| flora/vine_graft.gd, bark_graft.gd, spore_graft.gd | `Characters/WWOGraftBuilder`: the same procedural meshes (vines, leaves, thorns, crystal pods, bark plates, seed pods, mycelium, shelf mushrooms) as ProceduralMeshComponent sections, with the graft shaders as `M_WWO_Graft*` materials. region_color.gdshader is `M_WWO_Body` |
 | flora/*.gd | `Flora/WWOSporeFog`, `WWOFloraEffects`; `FX/WWOFX` (blasts, particles, lightning) |
-| character_model.gd | `Characters/WWOBodyComponent` (Manny, tint, grafts) + `WWOBodyAnimInstance` (a native AnimInstance, no AnimBP: AnimationPlayer-style play / crossfade / speed / queue, the Soldier's upper-body aim and flinch layers, HunchModifier's bend). The Godot body animations are baked onto the mannequin skeleton as `/Game/WWO/Anims/UAL/A_<Godot name>` by `Tools/bake_ual_anims.py`, and each owner picks them by their Godot names as its Godot script does |
+| character_model.gd | `Characters/WWOBodyComponent` (Manny, region tints, grafts; the grafts and frame part colors in `WWOBodyGrafts.cpp`) + `WWOBodyAnimInstance` (a native AnimInstance, no AnimBP: AnimationPlayer-style play / crossfade / speed / queue, the Soldier's upper-body aim and flinch layers, HunchModifier's bend). The Godot body animations are baked onto the mannequin skeleton as `/Game/WWO/Anims/UAL/A_<Godot name>` by `Tools/bake_ual_anims.py`, and each owner picks them by their Godot names as its Godot script does |
 | hud.gd, settings_menu.gd, character_menu.gd, menu_cursor.gd | `UI/` (UMG built in C++) |
 | data/*.tres | Data assets in `Content/WWO/Data` (Asset Manager primary assets) |
 | tools/build_*.gd | `Tools/create_assets.py`, `Tools/build_maps.py` (run with UnrealEditor-Cmd -run=pythonscript) |
@@ -80,6 +83,10 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Data from Godot: `python3 Tools/tres_to_json.py ~/Documents/WhatWasOurs Tools/wwo_data.json`
 - Then `Tools/create_assets.py` (materials + data assets) and `Tools/build_maps.py` (delete
   `Content/WWO/Maps/*.umap` first).
+- Body and graft assets: `Tools/create_graft_assets.py` (UnrealEditor-Cmd -run=pythonscript; reads
+  `WWO_GODOT` or `~/Documents/WhatWasOurs`): the nature pack textures and two mushrooms, the `M_WWO_Graft*`
+  materials, and `M_WWO_Body` (a copy of the mannequin material whose paint tint is picked per region)
+  with `MI_WWO_Body_01` / `_02`.
 - Body animations: `Tools/bake_ual_anims.py` (UnrealEditor-Cmd -run=pythonscript; reads the UAL glb files
   from the Godot project, `WWO_GODOT` or `~/Documents/WhatWasOurs`). It retargets each clip in mesh space:
   the UAL rig rests in a T-pose with three spine bones, Manny in an A-pose with five; mapped bones take the
@@ -89,8 +96,19 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 ## Differences from the Godot version
 - Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and
   speeds), not the Godot robot / UAL mesh. The Godot clips loop where their names end in _Loop.
-- Flora grafts are simplified gray-box pods, caps and plates (not the procedural vines/mushrooms/bark).
-  Frame part region colors show on the first-person arm only.
+- Flora grafts are built as in Godot, from the same calls, but their random leaf, vein and bump
+  layout differs (a seeded FRandomStream, not Godot's RNG), and they sit on the mannequin's bones
+  (Godot's spine_02 / spine_03 / Head are Manny's spine_03 / spine_05 / head), so they fit Manny's
+  proportions, not the UAL body's. The pack mushrooms' turn is measured on the body facing front;
+  Godot turns them in world space, which only matches when the body faces -Z.
+- Frame part region colors: Godot picks each vertex's region from the bone that moves it most;
+  Unreal materials can't read bone weights, so `M_WWO_Body` picks it from where the vertex sits in
+  Manny's reference pose (arms out from the shoulders, head above the neck, legs below the hips).
+  Manny's second material slot (torso, forearms, trim) keeps the joint color, or takes a darker
+  shade of the region's part color when one is equipped, as the first-person arm does.
+- The character preview is lit by its own key and fill light (Godot's preview light and ambient),
+  which reach only lighting channel 2 (the preview body and its grafts): the level above it shades
+  it from the level's sun.
 - Effects are C++ shapes and instanced-mesh particles, not Niagara.
 - The first-person arms are the mannequin's right arm, flat-colored like fp_arm.gd. Godot's arm is the
   robot's, all in the skin color; the mannequin's forearm and hand are mostly its trim, so the trim

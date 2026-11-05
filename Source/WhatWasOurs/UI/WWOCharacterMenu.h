@@ -46,9 +46,18 @@ public:
 
 	// The preview's area in the Godot layout: what's left of the menu row beside the tiles.
 	static inline const FVector2D Size = FVector2D(592.f, 693.f);
-	// The backdrop's color, so it comes out as the panel's (0.1, 0.11, 0.13) after the capture's tonemapping.
+	// The backdrop's color, so it comes out as the panel's (0.1, 0.11, 0.13) after the capture's
+	// tonemapping, at BackdropBias; at another exposure it's scaled to match (BackdropFor).
 	static inline const FLinearColor BackdropColor = FLinearColor(0.0366f, 0.0381f, 0.0417f);
-	static constexpr float ExposureBias = 5.5f;
+	static constexpr float BackdropBias = 5.5f;
+	static constexpr float ExposureBias = 1.f;
+	static FLinearColor BackdropFor(float Bias) { return BackdropColor * FMath::Pow(2.f, (BackdropBias - Bias) / 2.2f); }
+	// Godot's preview lights: a DirectionalLight3D (energy 1, no shadows) and an ambient color of
+	// (0.5, 0.5, 0.55), here a key light and a fill from the camera. They light only lighting
+	// channel 2, which only the preview body and its grafts are on (the level sits above them and
+	// would shade the level's own sun).
+	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> KeyLight;
+	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> FillLight;
 };
 
 UCLASS()
@@ -66,6 +75,7 @@ public:
 	void Close();
 	void Back();
 	FString DebugState() const; // for the autotest
+	AWWOPreviewActor* GetPreviewActor() const { return PreviewActor; } // for the autotest
 
 private:
 	bool bOpen = false;

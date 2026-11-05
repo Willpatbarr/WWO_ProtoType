@@ -10,7 +10,7 @@ public class WhatWasOurs : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
 			"UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem",
-			"Json", "JsonUtilities", "ApplicationCore"
+			"Json", "JsonUtilities", "ApplicationCore", "ProceduralMeshComponent"
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);
