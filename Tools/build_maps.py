@@ -1,6 +1,6 @@
 """Builds the three levels (Godot: tools/build_scifi_map.gd + tools/build_arena.gd + main.tscn).
 
-Run headless from the project folder after Tools/create_assets.py:
+Run headless from the project folder after Tools/create_assets.py and Tools/import_kit.py:
   UnrealEditor-Cmd WhatWasOurs.uproject -run=pythonscript -script=Tools/build_maps.py -unattended -nullrhi
 
 - L_Arena: the small arena, a grid of 4 m tiles, 16 wide by 12 deep: spawn room (south), a
@@ -9,9 +9,14 @@ Run headless from the project folder after Tools/create_assets.py:
 - L_ArenaLarge: 24 x 16 tiles, two levels: spawn room, atrium with a 4 m central tower, north hall,
   east hallway with three side rooms; upper west wing with two rooms and an overlook, two staircases,
   and a bridge to the tower. 9 spawn points.
-- L_TestRange: the original gray-box range (no spawn points, so it stays a sandbox).
-The arena pieces are gray-box blocks with the template's prototype grid materials (the Godot maps
-used the Quaternius Sci-Fi kit). Stairs collide as smooth ramps, like the Godot ones.
+- L_TestRange: the original gray-box range in Godot's flat colors (no spawn points, so it stays a sandbox).
+The arenas are built from the same Quaternius Sci-Fi kit pieces as the Godot maps (imported by
+Tools/import_kit.py), placed as build_scifi_map.gd places them: positions and yaws are worked out in
+Godot space and converted. Each piece collides as its own mesh (Godot's trimesh shapes); stairs
+collide as smooth ramps, like the Godot ones. Platform blocks and corner posts are flat-colored
+boxes, as Godot's CSG boxes are.
+Fix over Godot: the small arena's three stairs climb toward their 2 m platforms (Godot's calls name
+the side away from the platform, so the platforms can't be reached).
 Coordinates: a Godot point (x, y, z) in meters is Unreal (-z, x, y) * 100.
 """
 import math
@@ -26,43 +31,73 @@ levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 mel = unreal.MaterialEditingLibrary
 
 TILE = 4.0
+PLATFORM_HEIGHT = 2.0
 CUBE = unreal.load_asset("/Engine/BasicShapes/Cube.Cube")
 CYLINDER = unreal.load_asset("/Engine/BasicShapes/Cylinder.Cylinder")
 SPHERE = unreal.load_asset("/Engine/BasicShapes/Sphere.Sphere")
-GRID = unreal.load_asset("/Game/LevelPrototyping/Materials/M_PrototypeGrid.M_PrototypeGrid")
+SKY_SPHERE = unreal.load_asset("/Engine/EngineSky/SM_SkySphere.SM_SkySphere")
+SOLID = unreal.load_asset("/Game/WWO/Materials/M_WWO_Solid.M_WWO_Solid")
+KIT = "/Game/WWO/Kit/Meshes/SM_"
 
 
 def log(msg):
     unreal.log_warning("WWO: " + msg)
 
 
+def g(x, y, z):
+    """A Godot position (meters) in Unreal cm."""
+    return unreal.Vector(-z * 100.0, x * 100.0, y * 100.0)
+
+
+def vadd(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def vscale(a, k):
+    return (a[0] * k, a[1] * k, a[2] * k)
 
 
 _materials = {}
 
 
-def grid_material(name, background, grid=None):
-    """A prototype grid material instance tinted with a Godot color."""
+def solid_material(name, color):
+    """A flat M_WWO_Solid instance in a Godot (sRGB) color, like a StandardMaterial3D albedo."""
     if name in _materials:
         return _materials[name]
-    path = "/Game/WWO/Materials/Map/MI_" + name
+    folder = "/Game/WWO/Materials/Map"
+    path = folder + "/MI_Solid_" + name
     if eal.does_asset_exist(path):
         mi = eal.load_asset(path)
     else:
-        mi = tools.create_asset("MI_" + name, "/Game/WWO/Materials/Map", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-    mi.set_editor_property("parent", GRID)
-    lin = lambda c: tuple(v ** 2.2 for v in c)  # Godot colors are sRGB
-    background = lin(background)
-    grid = lin(grid) if grid else None
-    mel.set_material_instance_vector_parameter_value(mi, "SurfaceColor", unreal.LinearColor(*background, 1.0))
-    if grid:
-        mel.set_material_instance_vector_parameter_value(mi, "GridColor", unreal.LinearColor(*grid, 1.0))
+        mi = tools.create_asset("MI_Solid_" + name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    mi.set_editor_property("parent", SOLID)
+    mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(color[0], color[1], color[2], 1.0))
     eal.save_loaded_asset(mi)
     _materials[name] = mi
     return mi
 
 
+_kit = {}
+
+
+def kit_mesh(path):
+    name = path.split("/")[-1]
+    if name not in _kit:
+        _kit[name] = unreal.load_asset(KIT + name)
+        if not _kit[name]:
+            raise RuntimeError("missing kit mesh %s: run Tools/import_kit.py first" % name)
+    return _kit[name]
+
+
 class Builder:
+    # Godot edges (build_scifi_map.gd): yaw that turns a wall piece (on a tile's -X edge) onto
+    # the edge, and the edge's outward direction, both in Godot space.
+    EDGE_YAW = {"W": 0.0, "S": 90.0, "E": 180.0, "N": 270.0}
+    EDGE_DIR = {"W": (-1, 0, 0), "E": (1, 0, 0), "N": (0, 0, -1), "S": (0, 0, 1)}
+    OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
+    FILLER_COLOR = (0.2, 0.22, 0.26)
+    PLATFORM_COLOR = (0.24, 0.26, 0.3)
+
     def __init__(self, width, depth, seed):
         self.W = width
         self.D = depth
@@ -71,37 +106,43 @@ class Builder:
         self.wall_edges = {}
         self.rails = []
         self.stair_tops = set()
-        self.FLOOR = grid_material("Floor", (0.32, 0.33, 0.36))
-        self.FLOOR_DARK = grid_material("FloorDark", (0.2, 0.21, 0.24))
-        self.FLOOR_METAL = grid_material("FloorMetal", (0.4, 0.41, 0.44))
-        self.WALL = grid_material("Wall", (0.5, 0.51, 0.54))
-        self.WALL_BAND = grid_material("WallBand", (0.36, 0.38, 0.43))
-        self.WALL_WINDOW = grid_material("WallWindow", (0.3, 0.38, 0.48))
-        self.PLATFORM = grid_material("Platform", (0.24, 0.26, 0.3))
-        self.FILLER = grid_material("Filler", (0.2, 0.22, 0.26))
-        self.RAIL = grid_material("Rail", (0.12, 0.12, 0.14))
-        self.CRATE = grid_material("Crate", (0.55, 0.42, 0.25))
-        self.BARREL = grid_material("Barrel", (0.62, 0.32, 0.15))
-        self.PROP = grid_material("Prop", (0.25, 0.3, 0.38))
+        self.PLATFORM = solid_material("Platform", self.PLATFORM_COLOR)
+        self.FILLER = solid_material("Filler", self.FILLER_COLOR)
 
     # --- Coordinates -------------------------------------------------------------------------
 
+    def gtile(self, x, z, y=0.0):
+        """Center of tile (x, z) at height y, in Godot space (meters)."""
+        return ((x - (self.W - 1) * 0.5) * TILE, y, (z - (self.D - 1) * 0.5) * TILE)
+
     def tile(self, x, z, y=0.0):
         """Center of Godot tile (x, z) at height y, in Unreal cm."""
-        gx = (x - (self.W - 1) * 0.5) * TILE
-        gz = (z - (self.D - 1) * 0.5) * TILE
-        return unreal.Vector(-gz * 100.0, gx * 100.0, y * 100.0)
+        return g(*self.gtile(x, z, y))
 
-    # Godot edge -> Unreal direction (N = Godot -z = Unreal +x, W = Godot -x = Unreal -y).
-    EDGE_DIR = {"N": (1, 0), "S": (-1, 0), "W": (0, -1), "E": (0, 1)}
-
-    def edge_point(self, x, z, edge, y=0.0, inset=0.0):
-        c = self.tile(x, z, y)
-        dx, dy = self.EDGE_DIR[edge]
-        d = (TILE * 0.5 - inset) * 100.0
-        return unreal.Vector(c.x + dx * d, c.y + dy * d, c.z)
+    def edge(self, edge, k):
+        return vscale(self.EDGE_DIR[edge], k)
 
     # --- Pieces ------------------------------------------------------------------------------
+
+    def label(self, actor, label):
+        actor.set_actor_label("%s_%d" % (label, self.count))
+        self.count += 1
+
+    def piece(self, path, at, yaw, cover=False, collide=True):
+        """A kit piece at Godot position `at`, turned `yaw` degrees about Godot's up axis.
+        Imported pieces lie in glTF axes as Interchange converts them (x, z, y), so 90 degrees of
+        Unreal yaw puts them in this port's Godot convention, and a Godot yaw is a negative
+        Unreal one."""
+        actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, g(*at), unreal.Rotator(0.0, 0.0, 90.0 - yaw))
+        comp = actor.static_mesh_component
+        comp.set_mobility(unreal.ComponentMobility.STATIC)
+        comp.set_static_mesh(kit_mesh(path))
+        if not collide:
+            comp.set_collision_profile_name("NoCollision")
+        if cover:
+            actor.set_editor_property("tags", ["Cover"])
+        self.label(actor, path.split("/")[-1])
+        return actor
 
     def box(self, center, size_m, material, label, tags=(), yaw=0.0, pitch=0.0, hidden=False, mesh=None):
         actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, center, unreal.Rotator(0.0, pitch, yaw))
@@ -111,8 +152,7 @@ class Builder:
         if material:
             comp.set_material(0, material)
         actor.set_actor_scale3d(unreal.Vector(*size_m))
-        actor.set_actor_label("%s_%d" % (label, self.count))
-        self.count += 1
+        self.label(actor, label)
         if tags:
             actor.set_editor_property("tags", list(tags))
         if hidden:
@@ -120,113 +160,115 @@ class Builder:
             comp.set_editor_property("cast_shadow", False)
         return actor
 
-    def edge_box(self, x, z, edge, y, length, height, thickness, material, label, tags=(), inset=0.0, z_base=0.0):
-        p = self.edge_point(x, z, edge, y, inset)
-        p.z += (z_base + height * 0.5) * 100.0
-        along_y = edge in ("N", "S")
-        size = (thickness, length, height) if along_y else (length, thickness, height)
-        return self.box(p, size, material, label, tags)
+    def floor_tile(self, x, z, kind, y=0.0):
+        self.piece("Platforms/" + kind, self.gtile(x, z, y), 0.0)
 
-    def floor_tile(self, x, z, kind="squares", y=0.0):
-        material = {"metal": self.FLOOR_METAL, "dark": self.FLOOR_DARK}.get(kind, self.FLOOR)
-        c = self.tile(x, z, y)
-        c.z -= 10.0
-        self.box(c, (TILE, TILE, 0.2), material, "Floor")
-
-    def wall(self, x, z, edge, kind="astra", tall=False, y=0.0):
-        material = {"band": self.WALL_BAND, "window": self.WALL_WINDOW}.get(kind, self.WALL)
-        self.edge_box(x, z, edge, y, TILE, 5.0 if tall else 4.0, 0.3, material, "Wall")
+    def wall(self, x, z, edge, kind, tall=False, y=0.0):
+        # Wall pieces sit on a tile's -X edge by default; turn them onto the edge we want.
+        self.piece("Walls/" + kind, self.gtile(x, z, y), self.EDGE_YAW[edge])
+        if tall:
+            self.piece("Walls/TopSimple_Straight", self.gtile(x, z, y), self.EDGE_YAW[edge])
         self.wall_edges[(x, z, edge, y)] = True
 
     def door(self, x, z, edge, y=0.0):
-        # A doorway: 2.2 m wide, 3 m tall, in a 4 m wall.
-        p = self.edge_point(x, z, edge, y)
-        along_y = edge in ("N", "S")
-        for side in (-1, 1):
-            offset = side * (1.1 + 0.45) * 100.0
-            c = unreal.Vector(p.x + (0 if along_y else offset), p.y + (offset if along_y else 0), p.z + 200.0)
-            self.box(c, (0.3, 0.9, 4.0) if along_y else (0.9, 0.3, 4.0), self.WALL_BAND, "DoorSide")
-        c = unreal.Vector(p.x, p.y, p.z + 350.0)
-        self.box(c, (0.3, 2.2, 1.0) if along_y else (2.2, 0.3, 1.0), self.WALL_BAND, "DoorTop")
+        # Door frames run along X through their origin, so move them onto the edge.
+        yaw = 0.0 if edge in ("N", "S") else 90.0
+        self.piece("Platforms/Door_Frame_Square", vadd(self.gtile(x, z, y), self.edge(edge, TILE * 0.5)), yaw)
         self.wall_edges[(x, z, edge, y)] = True
 
     def low_wall(self, x, z, edge, y=0.0):
         # A 2 m wall on a tile edge: cover you can shoot over by jumping, or mantle.
-        self.edge_box(x, z, edge, y, TILE, 2.0, 0.3, self.WALL_BAND, "LowWall", tags=("Cover",), inset=-0.02)
+        self.piece("Walls/ShortWall_Metal2_Straight", vadd(self.gtile(x, z, y), self.edge(edge, 0.02)), self.EDGE_YAW[edge], True)
 
-    def block(self, x0, z0, x1, z1, height, base=0.0, material=None):
+    def prop(self, path, at, yaw, cover=False):
+        self.piece(path, at, yaw, cover)
+
+    def crate_stack(self, at):
+        # One to three crates, as cover.
+        r = self.rng
+        self.piece("Props/Prop_Crate4", vadd(at, (0, 0.56, 0)), r.random() * 30.0, True)
+        if r.random() < 0.6:
+            self.piece("Props/Prop_Crate3", vadd(at, (r.uniform(-0.2, 0.2), 1.62, r.uniform(-0.2, 0.2))), r.random() * 90.0)
+        if r.random() < 0.5:
+            self.piece("Props/Prop_Crate3", vadd(at, (1.1, 0.5, r.uniform(-0.3, 0.3))), r.random() * 90.0)
+
+    def block(self, x0, z0, x1, z1, height, base=0.0):
+        # Just the solid block (Godot: a CSG box in the platform color).
         a = self.tile(x0, z0)
         b = self.tile(x1, z1)
         center = unreal.Vector((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (base + height * 0.5) * 100.0)
         size = ((z1 - z0 + 1) * TILE, (x1 - x0 + 1) * TILE, height)
-        self.box(center, size, material or self.PLATFORM, "Block")
+        self.box(center, size, self.PLATFORM, "PlatformBlock")
 
-    def raised_platform(self, x0, z0, x1, z1, height=2.0, rails=True, base=0.0):
+    def raised_platform(self, x0, z0, x1, z1, height=PLATFORM_HEIGHT, rails=True, base=0.0):
+        # A solid block with metal plates on top, short-wall facades and rails on its edges
+        # (except where stairs climb onto it).
         self.block(x0, z0, x1, z1, height, base)
-        if not rails:
-            return
         for x in range(x0, x1 + 1):
-            self.rails.append((x, z0, "N", base + height))
-            self.rails.append((x, z1, "S", base + height))
+            for z in range(z0, z1 + 1):
+                self.floor_tile(x, z, "Platform_Metal", base + height + 0.01)
+        for x in range(x0, x1 + 1):
+            self.platform_edge(x, z0, "N", base, height, rails)
+            self.platform_edge(x, z1, "S", base, height, rails)
         for z in range(z0, z1 + 1):
-            self.rails.append((x0, z, "W", base + height))
-            self.rails.append((x1, z, "E", base + height))
+            self.platform_edge(x0, z, "W", base, height, rails)
+            self.platform_edge(x1, z, "E", base, height, rails)
+
+    def platform_edge(self, x, z, edge, base, height, rails):
+        # Short-wall facades up the side (one per 2 m), and a rail along the top.
+        level = 0.0
+        while level < height - 0.01:
+            self.piece("Walls/ShortWall_Metal2_Straight", vadd(self.gtile(x, z, base + level), self.edge(edge, 0.03)), self.EDGE_YAW[edge])
+            level += 2.0
+        if rails:
+            self.rails.append((x, z, edge, base + height))
 
     def open_edge(self, x, z, edge):
+        # No rail on this edge (where a landing, bridge or stairs joins).
         self.stair_tops.add((x, z, edge))
 
-    OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
-    EDGE_YAW = {"N": 0.0, "S": 180.0, "E": 90.0, "W": -90.0}
-
     def stairs(self, x, z, toward, y=0.0):
-        # A 2 m climb across one tile toward `toward`, colliding as a smooth ramp.
+        # Stairs in tile (x, z) climbing 2 m toward the platform on its `toward` side, starting
+        # at height y. The kit's stairs are high at their origin and run down along +Z.
+        d = self.EDGE_DIR[toward]
+        high_edge = vadd(self.gtile(x, z, y), vscale(d, TILE * 0.5))
+        yaw = math.degrees(math.atan2(-d[0], -d[2]))
+        self.piece("Platforms/Platform_Stairs_4Wide", high_edge, yaw, collide=False)
+        # Collision is a smooth ramp, not the steps: the player can walk up a slope but has no
+        # step-up for 25 cm stairs.
         c = self.tile(x, z, y)
         run, rise = TILE, 2.0
         length = math.sqrt(run * run + rise * rise)
         c.z += rise * 50.0 - 10.0
-        self.box(c, (length, TILE, 0.2), self.FLOOR_METAL, "Stairs", yaw=self.EDGE_YAW[toward], pitch=math.degrees(math.atan2(rise, run)))
-        dx, dz = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}[toward]
-        self.stair_tops.add((x + dx, z + dz, self.OPPOSITE[toward]))  # no rail across the top
+        ue_yaw = {"N": 0.0, "S": 180.0, "E": 90.0, "W": -90.0}[toward]
+        self.box(c, (length, TILE, 0.2), None, "Ramp", yaw=ue_yaw, pitch=math.degrees(math.atan2(rise, run)), hidden=True)
+        self.stair_tops.add((x + int(d[0]), z + int(d[2]), self.OPPOSITE[toward]))  # no rail across the top
         self.stair_tops.add((x, z, toward))
 
     def bridge(self, x0, x1, z, y):
+        # A catwalk along x at height y, one tile wide: plates on a thin slab, rails both sides.
         self.block(x0, z, x1, z, 0.25, y - 0.25)
         for x in range(x0, x1 + 1):
+            self.floor_tile(x, z, "Platform_Metal2", y + 0.01)
             self.rails.append((x, z, "N", y))
             self.rails.append((x, z, "S", y))
 
     def place_rails(self):
         for x, z, edge, y in self.rails:
-            if (x, z, edge) not in self.stair_tops:
-                self.edge_box(x, z, edge, y, TILE, 1.0, 0.1, self.RAIL, "Rail", inset=0.15)
+            if (x, z, edge) in self.stair_tops:
+                continue
+            yaw = self.EDGE_YAW[edge] + 180.0
+            # Rails run along -Z from their origin; shift so one spans the tile edge.
+            along = (math.sin(math.radians(yaw)), 0.0, math.cos(math.radians(yaw)))
+            at = vadd(vadd(self.gtile(x, z, y), self.edge(edge, TILE * 0.5 - 0.15)), vscale(along, TILE * 0.5 - 0.04))
+            self.piece("Props/Prop_Rail_4", at, yaw)
 
-    def column(self, center):
-        center.z += 250.0
-        self.box(center, (1.2, 1.2, 5.0), self.WALL_BAND, "Column", mesh=CYLINDER)
+    def column(self, x, z):
+        self.piece("Columns/Column_Large_Straight", vadd(self.gtile(x, z), (2, 0, 0)), 0.0)
 
-    def crate_stack(self, at):
-        # One to three crates, as cover.
-        c = unreal.Vector(at.x, at.y, at.z + 56.0)
-        self.box(c, (1.12, 1.12, 1.12), self.CRATE, "Crate", tags=("Cover",), yaw=self.rng.uniform(0, 30))
-        if self.rng.random() < 0.6:
-            self.box(unreal.Vector(at.x + self.rng.uniform(-20, 20), at.y + self.rng.uniform(-20, 20), at.z + 157.0), (0.9, 0.9, 0.9), self.CRATE, "Crate",
-                     yaw=self.rng.uniform(0, 90))
-        if self.rng.random() < 0.5:
-            self.box(unreal.Vector(at.x + self.rng.uniform(-30, 30), at.y + 110.0, at.z + 45.0), (0.9, 0.9, 0.9), self.CRATE, "Crate", yaw=self.rng.uniform(0, 90))
-
-    def barrel(self, at):
-        self.box(unreal.Vector(at.x, at.y, at.z + 60.0), (1.0, 1.0, 1.2), self.BARREL, "Barrel", tags=("Cover",), mesh=CYLINDER)
-
-    def prop(self, at, size, label):
-        self.box(unreal.Vector(at.x, at.y, at.z + size[2] * 50.0), size, self.PROP, label)
-
-    def floor_light(self, at):
-        self.box(unreal.Vector(at.x, at.y, at.z + 15.0), (0.3, 0.3, 0.3), self.PROP, "FloorLight", mesh=CYLINDER)
-        light = actors.spawn_actor_from_class(unreal.PointLight, unreal.Vector(at.x, at.y, at.z + 60.0))
-        lc = light.point_light_component
-        lc.set_editor_property("intensity", 3000.0)
-        lc.set_editor_property("attenuation_radius", 900.0)
-        lc.set_light_color(unreal.LinearColor(0.75, 0.85, 1.0, 1.0))
+    def floor_light(self, at, yaw):
+        # The kit's floor light: an emissive strip (Godot adds no light of its own for it).
+        self.piece("Props/Prop_Light_Floor", at, yaw)
 
     def spawn_point(self, x, z, kinds, y=0.0):
         p = self.tile(x, z, y + 0.1)
@@ -272,17 +314,83 @@ class Builder:
         log("nav bounds extent %s" % vol.get_actor_bounds(False)[1])
 
 
+# --- Lighting ---------------------------------------------------------------------------------
+# Godot (main.tscn, arena.tscn): a DirectionalLight3D turned -60 degrees about x (white, energy 1,
+# shadows), and a WorldEnvironment with the default ProceduralSkyMaterial as background and
+# ambient light, no fog, linear tonemap. Here the sun keeps its direction and color, the sky is
+# Godot's procedural sky on a sky dome (M_WWO_Sky) that the sky light captures in real time, so
+# the ambient light comes from the same colors. In Godot a white surface facing the sun shows
+# the sun's energy (1) and the sky shows its colors as they are, so the sky's emissive is scaled
+# to the sun's lux / pi (what a lit white surface gives off in Unreal) to keep that ratio.
+SUN_LUX = 6.0
+SUN_PITCH = -60.0  # Godot's rotation about x; it shines toward Godot -z (north, Unreal +x)
+SKY_ENERGY = SUN_LUX / math.pi
+HORIZON = tuple(c ** 2.2 for c in (0.6463, 0.6558, 0.6708))
+
+
+def sky_instance():
+    path = "/Game/WWO/Materials/Map/MI_WWO_Sky"
+    if eal.does_asset_exist(path):
+        mi = eal.load_asset(path)
+    else:
+        mi = tools.create_asset("MI_WWO_Sky", "/Game/WWO/Materials/Map", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    mi.set_editor_property("parent", unreal.load_asset("/Game/WWO/Materials/M_WWO_Sky.M_WWO_Sky"))
+    p = math.radians(-SUN_PITCH)
+    mel.set_material_instance_vector_parameter_value(mi, "SunDir", unreal.LinearColor(-math.cos(p), 0.0, math.sin(p), 0.0))
+    mel.set_material_instance_scalar_parameter_value(mi, "Energy", SKY_ENERGY)
+    eal.save_loaded_asset(mi)
+    return mi
+
+
 def lighting():
-    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1000.0), unreal.Rotator(0.0, -55.0, 30.0))
-    sun.light_component.set_editor_property("intensity", 6.0)
-    sun.light_component.set_editor_property("atmosphere_sun_light", True)
+    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1000.0), unreal.Rotator(0.0, SUN_PITCH, 0.0))
+    sun.light_component.set_editor_property("intensity", SUN_LUX)
+    sun.light_component.set_light_color(unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
     sun.set_actor_label("Sun")
-    actors.spawn_actor_from_class(unreal.SkyAtmosphere, unreal.Vector(0, 0, 0))
+    dome = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0))
+    comp = dome.static_mesh_component
+    comp.set_static_mesh(SKY_SPHERE)
+    comp.set_material(0, sky_instance())
+    comp.set_collision_profile_name("NoCollision")
+    comp.set_editor_property("cast_shadow", False)
+    comp.set_editor_property("can_ever_affect_navigation", False)
+    radius = max(SKY_SPHERE.get_bounding_box().max.x, 1.0)
+    dome.set_actor_scale3d(unreal.Vector(1, 1, 1) * (500000.0 / radius))  # a 5 km dome
+    dome.set_actor_label("SkyDome")
     sky = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 500.0))
-    sky.light_component.set_editor_property("real_time_capture", True)
-    sky.light_component.set_editor_property("intensity", 1.2)
+    sc = sky.light_component
+    sc.set_editor_property("real_time_capture", True)
+    sc.set_editor_property("lower_hemisphere_is_black", False)  # Godot's sky has a ground half
+    sc.set_editor_property("intensity", 1.0)
+    sky.set_actor_label("SkyLight")
+    # Godot has no fog; a thin haze in the horizon's color only softens the far walls.
     fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, -200.0))
-    fog.component.set_editor_property("fog_density", 0.004)
+    fc = fog.component
+    fc.set_editor_property("fog_density", 0.0025)
+    fc.set_editor_property("fog_height_falloff", 0.2)
+    fc.set_editor_property("start_distance", 2500.0)
+    fc.set_editor_property("fog_max_opacity", 0.6)
+    fc.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(*(c * SKY_ENERGY for c in HORIZON), 1.0))
+    fog.set_actor_label("HeightFog")
+    # Auto exposure, kept to a band around Godot's look: Godot's exposure doesn't adapt, and its
+    # sky and lit walls come out as they do here at about EV100 0.9 (the sky's colors measured in
+    # the map screenshots). The band lets the dark metal arenas open up a little and the white test
+    # range close down a little, and stops a sunlit wall blowing out when you look out of the
+    # shade (or the shade going black under a bright sky).
+    ppv = actors.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0))
+    ppv.set_editor_property("unbound", True)
+    s = ppv.get_editor_property("settings")
+    for k, v in (("auto_exposure_method", unreal.AutoExposureMethod.AEM_HISTOGRAM), ("auto_exposure_min_brightness", EXPOSURE_MIN_EV),
+                 ("auto_exposure_max_brightness", EXPOSURE_MAX_EV), ("auto_exposure_bias", EXPOSURE_BIAS)):
+        s.set_editor_property("override_" + k, True)
+        s.set_editor_property(k, v)
+    ppv.set_editor_property("settings", s)
+    ppv.set_actor_label("PostProcess")
+
+
+EXPOSURE_MIN_EV = 0.5
+EXPOSURE_MAX_EV = 1.5
+EXPOSURE_BIAS = 0.0
 
 
 def face_yaw(at, look):
@@ -331,83 +439,85 @@ def build_arena():
     new_level("/Game/WWO/Maps/L_Arena")
     b = Builder(16, 12, 3)
     t = b.tile
+    gt = b.gtile
     lighting()
+    # Floors.
     for x in range(0, 13):
         for z in range(0, 3):
-            b.floor_tile(x, z, "metal")
+            b.floor_tile(x, z, "Platform_Metal" if (x + z) % 2 == 0 else "Platform_Metal2")
     for x in range(0, 2):
         for z in range(3, 10):
-            b.floor_tile(x, z, "dark")
+            b.floor_tile(x, z, "Platform_DarkPlates")
     for x in range(2, 14):
         for z in range(3, 9):
-            b.floor_tile(x, z)
+            b.floor_tile(x, z, "Platform_Squares" if (x + z) % 3 else "Platform_CenterPlate")
     for x in range(6, 10):
         for z in range(9, 12):
-            b.floor_tile(x, z, "dark")
-    # North hall: windows along the back, solid sides, two doors south.
+            b.floor_tile(x, z, "Platform_DarkPlates")
+    # North hall walls: windows along the back, solid sides, two doors south.
     for x in range(0, 13):
-        b.wall(x, 0, "N", "window", True)
+        b.wall(x, 0, "N", "WallWindow_Straight", True)
     for z in range(0, 3):
-        b.wall(0, z, "W", "astra", True)
-        b.wall(12, z, "E", "astra", True)
+        b.wall(0, z, "W", "WallAstra_Straight", True)
+        b.wall(12, z, "E", "WallAstra_Straight", True)
     for x in range(2, 13):
         if x in (5, 10):
             b.door(x, 2, "S")
         else:
-            b.wall(x, 2, "S", "band")
+            b.wall(x, 2, "S", "WallBand_Straight")
     for px, pz in ((3, 1), (6, 1), (9, 1)):
-        c = t(px, pz)
-        b.column(unreal.Vector(c.x, c.y + 200.0, 0.0))
+        b.column(px, pz)
     # West corridor: long walls with two doorways into the courtyard.
     for z in range(3, 10):
-        b.wall(0, z, "W", "astra", True)
+        b.wall(0, z, "W", "WallAstra_Straight", True)
         if z in (4, 7):
             b.door(1, z, "E")
         else:
-            b.wall(1, z, "E", "band")
+            b.wall(1, z, "E", "WallBand_Straight")
     for x in range(0, 2):
-        b.wall(x, 9, "S", "astra", True)
+        b.wall(x, 9, "S", "WallAstra_Straight", True)
     # Courtyard outer walls.
     for z in range(3, 9):
-        b.wall(13, z, "E", "astra", True)
-    b.wall(13, 3, "N", "astra", True)
+        b.wall(13, z, "E", "WallAstra_Straight", True)
+    b.wall(13, 3, "N", "WallAstra_Straight", True)
     for x in (2, 3, 4, 5, 10, 11, 12, 13):
-        b.wall(x, 8, "S", "astra", True)
+        b.wall(x, 8, "S", "WallAstra_Straight", True)
     # Spawn room: one wide (8 m) opening north into the courtyard.
     for x in range(6, 10):
         if x in (6, 9):
-            b.wall(x, 9, "N", "band")
-        b.wall(x, 11, "S", "astra", True)
+            b.wall(x, 9, "N", "WallBand_Straight")
+        b.wall(x, 11, "S", "WallAstra_Straight", True)
     for z in range(9, 12):
-        b.wall(6, z, "W", "astra", True)
-        b.wall(9, z, "E", "astra", True)
-    b.prop(t(6, 11) + unreal.Vector(-120.0, -100.0, 0), (0.7, 1.0, 1.4), "Computer")
-    b.prop(t(9, 11) + unreal.Vector(-130.0, 80.0, 0), (0.7, 1.2, 0.8), "Chest")
-    b.floor_light(t(7.5, 11) + unreal.Vector(-140.0, 0, 0))
-    # Raised platforms (2 m) with stairs and rails.
-    b.raised_platform(2, 3, 3, 4)
-    b.stairs(4, 3, "E")
-    b.raised_platform(12, 6, 13, 8)
-    b.stairs(11, 6, "W")
-    b.stairs(12, 5, "N")
+        b.wall(6, z, "W", "WallAstra_Straight", True)
+        b.wall(9, z, "E", "WallAstra_Straight", True)
+    b.prop("Props/Prop_Computer", vadd(gt(6, 11), (-1.0, 0, 1.2)), 180.0)
+    b.prop("Props/Prop_Chest", vadd(gt(9, 11), (0.8, 0, 1.3)), 180.0)
+    b.prop("Props/Prop_Light_Floor", vadd(gt(7.5, 11), (0, 0, 1.4)), 0.0)
+    # Raised platforms (2 m) with stairs, facades and rails. Godot's calls climb away from the
+    # platforms (stairs(4, 3, "E"), (11, 6, "W"), (12, 5, "N")); these climb onto them.
+    b.raised_platform(2, 3, 3, 4)  # west, by the corridor and hall doors
+    b.stairs(4, 3, "W")  # up from the courtyard
+    b.raised_platform(12, 6, 13, 8)  # east, high ground over the spawn doors
+    b.stairs(11, 6, "E")
+    b.stairs(12, 5, "S")
     # Courtyard cover.
     b.low_wall(6, 4, "N")
-    b.low_wall(7, 4, "N")
+    b.low_wall(7, 4, "N")  # a long barrier in the middle
     b.low_wall(9, 6, "W")
     b.low_wall(9, 7, "W")
     b.low_wall(4, 7, "N")
     for cx, cz in ((5.5, 5.2), (8.0, 3.4), (10.6, 4.6), (3.3, 6.3), (11.2, 7.8), (7.2, 7.4)):
-        b.crate_stack(t(cx, cz))
+        b.crate_stack(gt(cx, cz))
     for bx, bz in ((6.2, 6.6), (10.2, 3.2), (2.6, 7.6)):
-        b.barrel(t(bx, bz))
+        b.prop("Props/Prop_Barrel_Large", gt(bx, bz), b.rng.random() * 360.0, True)
     for lx, lz in ((4.5, 5.5), (10.5, 5.5)):
-        b.floor_light(t(lx, lz))
+        b.floor_light(gt(lx, lz), 90.0)
     # North hall clutter.
-    b.crate_stack(t(2, 1))
-    b.crate_stack(t(8, 0.4))
-    b.crate_stack(t(11, 1.6))
-    b.prop(t(4.5, 0.2), (0.7, 1.2, 0.8), "Chest")
-    b.prop(t(7.5, 0) + unreal.Vector(130.0, 0, 0), (0.7, 1.0, 1.4), "Computer")
+    b.crate_stack(gt(2, 1))
+    b.crate_stack(gt(8, 0.4))
+    b.crate_stack(gt(11, 1.6))
+    b.prop("Props/Prop_Chest", gt(4.5, 0.2), 0.0, True)
+    b.prop("Props/Prop_Computer", vadd(gt(7.5, 0), (0, 0, -1.3)), 0.0)
     # Enemy spawn points for the waves; the tags limit which enemies use each.
     b.spawn_point(0.5, 3.5, "swarm")
     b.spawn_point(1.0, 8.4, "swarm")
@@ -415,11 +525,11 @@ def build_arena():
     b.spawn_point(7.5, 1.0, "tank soldier")
     b.spawn_point(11.2, 1.0, "swarm soldier")
     b.spawn_point(12.5, 3.6, "swarm soldier")
-    b.spawn_point(12.5, 7.0, "soldier", 2.0)
-    b.spawn_point(2.5, 3.5, "soldier", 2.0)
-    # West corridor clutter.
-    b.crate_stack(t(0.6, 5.5))
-    b.barrel(t(1.3, 8.4))
+    b.spawn_point(12.5, 7.0, "soldier", PLATFORM_HEIGHT)
+    b.spawn_point(2.5, 3.5, "soldier", PLATFORM_HEIGHT)
+    # West corridor clutter (cover for the swarm to come around).
+    b.crate_stack(gt(0.6, 5.5))
+    b.prop("Props/Prop_Barrel_Large", gt(1.3, 8.4), 0.0, True)
     b.place_rails()
     b.corner_fillers()
     b.boundary()
@@ -442,103 +552,104 @@ def build_arena_large():
     new_level("/Game/WWO/Maps/L_ArenaLarge")
     b = Builder(24, 16, 7)
     t = b.tile
+    gt = b.gtile
     UPPER = 4.0
     lighting()
+    # Ground floors.
     for x in range(6, 18):
         for z in range(0, 5):
-            b.floor_tile(x, z, "metal")
+            b.floor_tile(x, z, "Platform_Metal" if (x + z) % 2 == 0 else "Platform_Metal2")
         for z in range(5, 13):
-            b.floor_tile(x, z)
+            b.floor_tile(x, z, "Platform_Squares" if (x + z) % 3 else "Platform_CenterPlate")
     for x in range(18, 20):
         for z in range(0, 16):
-            b.floor_tile(x, z, "dark")
+            b.floor_tile(x, z, "Platform_DarkPlates")
     for x in range(20, 24):
         for z in (0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15):
-            b.floor_tile(x, z, "dark")
+            b.floor_tile(x, z, "Platform_Simple2")
     for x in range(10, 14):
         for z in range(13, 16):
-            b.floor_tile(x, z, "dark")
+            b.floor_tile(x, z, "Platform_DarkPlates")
     # Outer walls (ground).
     for x in range(6, 24):
-        b.wall(x, 0, "N", "window" if x < 18 else "astra", True)
+        b.wall(x, 0, "N", "WallWindow_Straight" if x < 18 else "WallAstra_Straight", True)
     for z in (0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15):
-        b.wall(23, z, "E", "astra", True)
+        b.wall(23, z, "E", "WallAstra_Straight", True)
     for x in (10, 11, 12, 13, 18, 19, 20, 21, 22, 23):
-        b.wall(x, 15, "S", "astra", True)
+        b.wall(x, 15, "S", "WallAstra_Straight", True)
     for x in (6, 7, 8, 9, 14, 15, 16, 17):
-        b.wall(x, 12, "S", "astra", True)
+        b.wall(x, 12, "S", "WallAstra_Straight", True)
     for z in range(13, 16):
-        b.wall(10, z, "W", "astra", True)
-        b.wall(13, z, "E", "astra", True)
-        b.wall(18, z, "W", "astra", True)
-    b.wall(10, 13, "N", "band")
-    b.wall(13, 13, "N", "band")
+        b.wall(10, z, "W", "WallAstra_Straight", True)
+        b.wall(13, z, "E", "WallAstra_Straight", True)
+        b.wall(18, z, "W", "WallAstra_Straight", True)
+    b.wall(10, 13, "N", "WallBand_Straight")
+    b.wall(13, 13, "N", "WallBand_Straight")  # the spawn room opens north between these
     # North hall: three doorways into the atrium, one into the east hallway.
     for x in range(6, 18):
         if x in (8, 11, 15):
             b.door(x, 4, "S")
         else:
-            b.wall(x, 4, "S", "band")
+            b.wall(x, 4, "S", "WallBand_Straight")
     for z in range(0, 5):
         if z == 2:
             b.door(17, z, "E")
         else:
-            b.wall(17, z, "E", "astra")
+            b.wall(17, z, "E", "WallAstra_Straight")
     for px, pz in ((9, 2), (13, 2)):
-        c = t(px, pz)
-        b.column(unreal.Vector(c.x, c.y + 200.0, 0.0))
+        b.column(px, pz)
     # Atrium east wall: two doorways into the hallway.
     for z in range(5, 13):
         if z in (7, 10):
             b.door(17, z, "E")
         else:
-            b.wall(17, z, "E", "astra")
+            b.wall(17, z, "E", "WallAstra_Straight")
     # East hallway: doorways into each side room.
     for z in range(0, 16):
         if z in (2, 7, 13):
             b.door(19, z, "E")
         else:
-            b.wall(19, z, "E", "band")
+            b.wall(19, z, "E", "WallBand_Straight")
     for x in range(20, 24):
-        b.wall(x, 4, "S", "astra")
-        b.wall(x, 6, "N", "astra")
-        b.wall(x, 9, "S", "astra")
-        b.wall(x, 11, "N", "astra")
+        b.wall(x, 4, "S", "WallAstra_Straight")
+        b.wall(x, 6, "N", "WallAstra_Straight")
+        b.wall(x, 9, "S", "WallAstra_Straight")
+        b.wall(x, 11, "N", "WallAstra_Straight")
     # West wing: a solid 4 m block; its top is the upper floor.
     b.raised_platform(0, 0, 5, 15, UPPER, False)
     for z in range(0, 13):
         if z not in (8, 9):
             b.rails.append((5, z, "E", UPPER))  # the overlook rail (gaps where the landings join)
     for z in range(0, 16):
-        b.wall(0, z, "W", "astra", True, UPPER)
+        b.wall(0, z, "W", "WallAstra_Straight", True, UPPER)
     for x in range(0, 6):
-        b.wall(x, 0, "N", "window", True, UPPER)
-        b.wall(x, 15, "S", "astra", True, UPPER)
+        b.wall(x, 0, "N", "WallWindow_Straight", True, UPPER)
+        b.wall(x, 15, "S", "WallAstra_Straight", True, UPPER)
     for z in range(13, 16):
-        b.wall(5, z, "E", "astra", True, UPPER)
+        b.wall(5, z, "E", "WallAstra_Straight", True, UPPER)  # the wing's south end is closed
     # Upper rooms U1 (north) and U2 (south), with the open hallway between them and the atrium.
     for z in range(0, 6):
         if z == 2:
             b.door(3, z, "E", UPPER)
         else:
-            b.wall(3, z, "E", "band", False, UPPER)
+            b.wall(3, z, "E", "WallBand_Straight", False, UPPER)
     for x in range(0, 4):
         if x == 1:
             b.door(x, 5, "S", UPPER)
         else:
-            b.wall(x, 5, "S", "band", False, UPPER)
+            b.wall(x, 5, "S", "WallBand_Straight", False, UPPER)
     for x in range(0, 4):
         if x == 2:
             b.door(x, 10, "N", UPPER)
         else:
-            b.wall(x, 10, "N", "band", False, UPPER)
+            b.wall(x, 10, "N", "WallBand_Straight", False, UPPER)
     for z in range(10, 16):
         if z == 13:
             b.door(3, z, "E", UPPER)
         else:
-            b.wall(3, z, "E", "band", False, UPPER)
+            b.wall(3, z, "E", "WallBand_Straight", False, UPPER)
     # Staircases up to the wing (two flights each, on a 2 m support), with landings.
-    b.stairs(6, 11, "N")
+    b.stairs(6, 11, "N")  # you walk on from the atrium floor in front of it (tile 6, 12)
     b.block(6, 10, 6, 10, 2.0)
     b.stairs(6, 10, "N", 2.0)
     b.raised_platform(6, 9, 6, 9, UPPER)
@@ -550,7 +661,7 @@ def build_arena_large():
     b.raised_platform(6, 8, 6, 8, UPPER)
     b.open_edge(6, 8, "W")
     b.open_edge(6, 8, "E")
-    b.open_edge(6, 8, "S")
+    b.open_edge(6, 8, "S")  # joins the south landing
     # Central tower (4 m) with stairs up both sides, and the bridge from the north landing.
     b.raised_platform(10, 8, 13, 9, UPPER)
     b.stairs(11, 11, "N")
@@ -563,30 +674,30 @@ def build_arena_large():
     b.open_edge(10, 8, "W")
     # Cover.
     for cx, cz in ((8, 6.3), (15.5, 6), (8.6, 11), (15, 11.2), (14.6, 8.6), (8.2, 9)):
-        b.crate_stack(t(cx, cz))
+        b.crate_stack(gt(cx, cz))
     b.low_wall(9, 6, "N")
     b.low_wall(14, 10, "S")
     b.low_wall(16, 8, "W")
     b.low_wall(7, 11, "E")
     for bx, bz in ((10, 6.5), (13.5, 11.6), (16.4, 5.4)):
-        b.barrel(t(bx, bz))
+        b.prop("Props/Prop_Barrel_Large", gt(bx, bz), b.rng.random() * 360.0, True)
     for lx, lz in ((9, 7.5), (15, 7.5), (11.5, 12.5)):
-        b.floor_light(t(lx, lz))
-    b.crate_stack(t(7, 1))
-    b.crate_stack(t(11.5, 0.5))
-    b.crate_stack(t(16, 3))
-    b.prop(t(14, 0.3), (0.7, 1.2, 0.8), "Chest")
-    b.crate_stack(t(18.6, 4.5))
-    b.crate_stack(t(19.2, 11))
-    b.crate_stack(t(21, 2.5))
-    b.crate_stack(t(22.5, 8))
-    b.crate_stack(t(21.5, 13.5))
-    b.prop(t(23, 7.5) + unreal.Vector(0, 130.0, 0), (1.0, 0.7, 1.4), "Computer")
-    b.crate_stack(t(1.5, 2.5, UPPER))
-    b.crate_stack(t(2, 12.5, UPPER))
-    b.crate_stack(t(4.6, 6, UPPER))
-    b.prop(t(1, 14.5, UPPER), (0.7, 1.2, 0.8), "Chest")
-    b.prop(t(11, 15) + unreal.Vector(-120.0, -100.0, 0), (0.7, 1.0, 1.4), "Computer")
+        b.floor_light(gt(lx, lz), 90.0)
+    b.crate_stack(gt(7, 1))
+    b.crate_stack(gt(11.5, 0.5))
+    b.crate_stack(gt(16, 3))
+    b.prop("Props/Prop_Chest", gt(14, 0.3), 0.0, True)
+    b.crate_stack(gt(18.6, 4.5))
+    b.crate_stack(gt(19.2, 11))
+    b.crate_stack(gt(21, 2.5))
+    b.crate_stack(gt(22.5, 8))
+    b.crate_stack(gt(21.5, 13.5))
+    b.prop("Props/Prop_Computer", vadd(gt(23, 7.5), (1.3, 0, 0)), 270.0)
+    b.crate_stack(gt(1.5, 2.5, UPPER))
+    b.crate_stack(gt(2, 12.5, UPPER))
+    b.crate_stack(gt(4.6, 6, UPPER))
+    b.prop("Props/Prop_Chest", gt(1, 14.5, UPPER), 0.0, True)
+    b.prop("Props/Prop_Computer", vadd(gt(11, 15), (-1.0, 0, 1.2)), 180.0)
     # Enemy spawn points for the waves.
     b.spawn_point(8.5, 2, "tank soldier")
     b.spawn_point(15, 2, "tank soldier swarm")
@@ -615,21 +726,16 @@ def build_arena_large():
 
 # --- Test range -----------------------------------------------------------------------------
 
-def g(x, y, z):
-    """A Godot position (meters) in Unreal cm."""
-    return unreal.Vector(-z * 100.0, x * 100.0, y * 100.0)
-
-
 def build_test_range():
     new_level("/Game/WWO/Maps/L_TestRange")
     b = Builder(1, 1, 1)
     lighting()
-    floor = grid_material("RangeFloor", (0.35, 0.36, 0.38))
+    floor = solid_material("RangeFloor", (1.0, 1.0, 1.0))  # Godot's default material
     colors = {
         "cube": (0.9, 0.45, 0.1), "teal": (0.1, 0.6, 0.6), "blue": (0.15, 0.3, 0.85), "green": (0.2, 0.7, 0.25), "purple": (0.5, 0.25, 0.75),
         "yellow": (0.95, 0.8, 0.15), "red": (0.8, 0.15, 0.15), "pink": (0.9, 0.45, 0.65), "navy": (0.1, 0.12, 0.4), "lime": (0.6, 0.9, 0.2),
     }
-    mats = {k: grid_material("Range_" + k, v) for k, v in colors.items()}
+    mats = {k: solid_material("Range_" + k, v) for k, v in colors.items()}
     # Godot CSG size (x, y, z) -> Unreal scale (z, x, y).
     def csg(pos, size, mat, label, tags=(), pitch=0.0, mesh=None):
         return b.box(g(*pos), (size[2], size[0], size[1]), mat, label, tags, pitch=pitch, mesh=mesh)

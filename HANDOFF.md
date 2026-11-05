@@ -31,8 +31,10 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   31_body_*, 32_player_* and 33_fp_* shots; then six loadouts (two per flora, with frame parts) in the
   character menu preview, front and back (34_grafts_*) and close up (35_grafts_*), logging `AutoTest grafts:`,
   and puts the loadout back. Screenshots go to `Saved/AutoTest/`.
+  Last, the level from fixed cameras (spawn, overview, platforms and ramps, halls, top), 36_map_*.
   `-WWOAutoTestMenus` runs only the menu steps (about 30 s), `-WWOAutoTestBody` only the body steps
-  (about 1 minute), `-WWOAutoTestGrafts` only the graft steps (about 25 s).
+  (about 1 minute), `-WWOAutoTestGrafts` only the graft steps (about 25 s), `-WWOAutoTestMaps` only the
+  map views (about 25 s; works on all three maps).
 - `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
   reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
   shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
@@ -59,7 +61,8 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 | character_model.gd | `Characters/WWOBodyComponent` (Manny, region tints, grafts; the grafts and frame part colors in `WWOBodyGrafts.cpp`) + `WWOBodyAnimInstance` (a native AnimInstance, no AnimBP: AnimationPlayer-style play / crossfade / speed / queue, the Soldier's upper-body aim and flinch layers, HunchModifier's bend). The Godot body animations are baked onto the mannequin skeleton as `/Game/WWO/Anims/UAL/A_<Godot name>` by `Tools/bake_ual_anims.py`, and each owner picks them by their Godot names as its Godot script does |
 | hud.gd, settings_menu.gd, character_menu.gd, menu_cursor.gd | `UI/` (UMG built in C++) |
 | data/*.tres | Data assets in `Content/WWO/Data` (Asset Manager primary assets) |
-| tools/build_*.gd | `Tools/create_assets.py`, `Tools/build_maps.py` (run with UnrealEditor-Cmd -run=pythonscript) |
+| tools/build_*.gd | `Tools/create_assets.py`, `Tools/import_kit.py`, `Tools/build_maps.py` (run with UnrealEditor-Cmd -run=pythonscript) |
+| maps/scifi (Quaternius Sci-Fi kit), WorldEnvironment + Sun | `/Game/WWO/Kit` (imported by `Tools/import_kit.py`: the pieces the arenas use, `M_WWO_Kit` + one `MI_Kit_*` per glTF material); per-level Sun, `SkyDome` (`M_WWO_Sky`, Godot's procedural sky), real-time `SkyLight`, `HeightFog`, `PostProcess` (from `build_maps.py`) |
 
 ## Conventions
 - Tunables keep Godot units (meters, seconds, degrees), so slider values match; code converts
@@ -81,7 +84,8 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 
 ## Regenerating
 - Data from Godot: `python3 Tools/tres_to_json.py ~/Documents/WhatWasOurs Tools/wwo_data.json`
-- Then `Tools/create_assets.py` (materials + data assets) and `Tools/build_maps.py` (delete
+- Then `Tools/create_assets.py` (materials + data assets), `Tools/import_kit.py` (the Sci-Fi kit from the
+  Godot project's `maps/scifi`, `WWO_GODOT` or `~/Documents/WhatWasOurs`) and `Tools/build_maps.py` (delete
   `Content/WWO/Maps/*.umap` first).
 - Body and graft assets: `Tools/create_graft_assets.py` (UnrealEditor-Cmd -run=pythonscript; reads
   `WWO_GODOT` or `~/Documents/WhatWasOurs`): the nature pack textures and two mushrooms, the `M_WWO_Graft*`
@@ -117,7 +121,18 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Wall Grenade walls stand on the ground under the blast. In Godot the ground ray also hits the
   grenade itself (it isn't excluded), so walls there start at the grenade's top: 24 cm up when it
   rests on the floor, higher if it goes off mid-bounce. Probably a Godot bug; not copied.
-- Arena layout is identical but built from prototype-grid blocks instead of the Quaternius kit.
+- Arenas are built from the same Quaternius kit pieces, placed as build_scifi_map.gd places them, each
+  colliding as its own mesh. Lighting: Godot's sun (-60 degrees, white, shadows) and its default
+  procedural sky, here on a sky dome the sky light captures (Lumen GI and reflections, so shade and metal
+  floors come out darker than Godot's unshadowed ambient). Godot has no fog; a thin height fog in the
+  horizon color only softens the far walls. Godot's exposure is fixed and its tonemap linear; here auto
+  exposure is held to EV100 0.5 to 1.5 around the Godot look (about 0.9) with the filmic tonemapper.
+  Floor lights are the kit's emissive strip only, as in Godot (the port's old point lights are gone).
+  The test range is in Godot's flat CSG colors (its floor in Godot's default white), not the grid.
+- Fix over Godot: the small arena's three stairs climb onto their 2 m platforms. Godot's `stairs()`
+  calls name the side away from each platform (`stairs(4, 3, "E")`, `(11, 6, "W")`, `(12, 5, "N")`), so
+  there the platforms are islands on the navmesh and Soldiers that spawn up there stay up there. The
+  large arena's stairs were already right.
 - Input actions are created in code (Enhanced Input), not as assets. The character menu is on I,
   the DualSense touchpad click (Godot's button; Unreal's Mac controller code reports it as
   Gamepad_Special_Left) and also the Create button, which Unreal doesn't read on Mac, so it's
@@ -147,8 +162,6 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   door edge, in a gap between crates, behind another enemy) steps sideways for 0.6 s, alternating sides.
 - A teammate getting back up lands 2 m to your right as in Godot, but stops short of a wall instead of
   being put on the far side of it. One that's closer than 3 m to you doesn't back into a wall.
-- Also true in Godot (not changed): the arena ramps climb away from their raised platforms (each
-  `stairs()` call's high end is on the side away from the platform), so the 2 m platforms are islands
-  on the navmesh. Soldiers that spawn up there stay up there and shoot from the rails. A Soldier that
-  can't see you right at its 15 m minimum range dithers in place (backs off, then walks back in).
+- Also true in Godot (not changed): a Soldier that can't see you right at its 15 m minimum range
+  dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.

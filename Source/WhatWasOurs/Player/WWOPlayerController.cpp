@@ -77,7 +77,8 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
 	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
 	bAutoTestGraftsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGrafts"));
-	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly;
+	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
+	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly || bAutoTestMapsOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
 	// menus instead while the game viewport has focus (stop PIE with the toolbar's Stop button).
@@ -567,6 +568,7 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 		if (bAutoTestMenusOnly) { AutoTestClock = 45.3f; Next(45.3f); }
 		else if (bAutoTestBodyOnly) { AutoTestClock = 45.4f; Next(45.4f); }
 		else if (bAutoTestGraftsOnly) { AutoTestClock = 45.5f; Next(45.5f); }
+		else if (bAutoTestMapsOnly) { AutoTestClock = 45.6f; Next(45.6f); }
 		else Next(11.f);
 	}
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
@@ -766,12 +768,14 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	// Abilities and ults: each ability equipped and set off, then each flora's ult.
 	else if (At(45.2f)) { if (UpdateAutoAbilityTest(P, DeltaTime)) Next(45.3f); }
 	// Menus by controller alone: injected DualSense buttons and sticks (and Esc / Tab / I).
-	else if (At(45.3f)) { if (UpdateAutoMenuTest(P, DeltaTime)) Next(bAutoTestMenusOnly ? 45.6f : 45.4f); }
+	else if (At(45.3f)) { if (UpdateAutoMenuTest(P, DeltaTime)) Next(bAutoTestMenusOnly ? 45.7f : 45.4f); }
 	// Body animations: a row of mannequins in each state, then your body crouching and sliding.
-	else if (At(45.4f)) { if (UpdateAutoBodyTest(P, DeltaTime)) Next(bAutoTestBodyOnly ? 45.6f : 45.5f); }
+	else if (At(45.4f)) { if (UpdateAutoBodyTest(P, DeltaTime)) Next(bAutoTestBodyOnly ? 45.7f : 45.5f); }
 	// Flora grafts and frame part colors: loadouts in the character preview, then close up.
-	else if (At(45.5f)) { if (UpdateAutoGraftTest(P, DeltaTime)) Next(45.6f); }
-	else if (At(45.6f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	else if (At(45.5f)) { if (UpdateAutoGraftTest(P, DeltaTime)) Next(bAutoTestGraftsOnly ? 45.7f : 45.6f); }
+	// Map look: the level from fixed cameras (spawn, overviews, platforms, halls).
+	else if (At(45.6f)) { if (UpdateAutoMapTest(P, DeltaTime)) Next(45.7f); }
+	else if (At(45.7f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }
 
 bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)

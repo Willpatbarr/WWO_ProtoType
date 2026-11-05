@@ -3,7 +3,8 @@
 Run headless from the project folder:
   UnrealEditor-Cmd WhatWasOurs.uproject -run=pythonscript -script=Tools/create_assets.py -unattended -nullrhi
 
-- Materials in /Game/WWO/Materials (solid, unlit, soft glow, ground rings, particles, HUD overlays).
+- Materials in /Game/WWO/Materials (solid, unlit, soft glow, ground rings, particles, HUD overlays,
+  the arenas' sky dome).
 - Data assets in /Game/WWO/Data from Tools/wwo_data.json (made from the Godot .tres files plus the
   tuned values in saved_settings.json by Tools/tres_to_json.py).
 Safe to rerun: existing assets are updated in place.
@@ -265,8 +266,48 @@ def make_ui(name, code):
     finish(m)
 
 
+SKY_CODE = """
+// Godot 4's default ProceduralSkyMaterial (sky_top / sky_horizon / ground colors, curves, the
+// sun's halo), seen along the view ray; Unreal's z is Godot's y. Colors are sRGB like Godot's.
+float3 d = normalize(-V);
+float PI_2 = 1.5707963;
+float3 top = pow(float3(0.385, 0.454, 0.55), 2.2);
+float3 horizon = pow(float3(0.6463, 0.6558, 0.6708), 2.2);
+float3 bottom = pow(float3(0.2, 0.169, 0.133), 2.2);
+float v = acos(clamp(d.z, -1.0, 1.0));
+float c = 1.0 - v / PI_2;
+float3 sky = lerp(horizon, top, saturate(1.0 - pow(saturate(1.0 - c), 1.0 / 0.15)));
+float sun = acos(clamp(dot(normalize(SunDir), d), -1.0, 1.0));
+float sun_max = 0.5235988; // sun_angle_max 30 degrees, light_angular_distance 0
+if (sun < sun_max) {
+    sky = lerp(float3(1, 1, 1), sky, saturate(1.0 - pow(saturate(1.0 - sun / sun_max), 1.0 / 0.15)));
+}
+c = (v - PI_2) / PI_2;
+float3 ground = lerp(horizon, bottom, saturate(1.0 - pow(saturate(1.0 - c), 1.0 / 0.02)));
+return (d.z >= 0.0 ? sky : ground) * Energy;
+"""
+
+
+def make_sky():
+    # The arenas' sky dome (Godot: the WorldEnvironment's default ProceduralSkyMaterial). Is Sky, so
+    # the sky light's real-time capture lights the level from it as Godot's ambient light does.
+    # Energy scales it to the sun (build_maps.py sets it to the sun's lux / pi, so the sky and the
+    # sun keep Godot's ratio); SunDir points at the sun.
+    m = new_material("M_WWO_Sky")
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    m.set_editor_property("two_sided", True)
+    m.set_editor_property("is_sky", True)
+    view = mel.create_material_expression(m, unreal.MaterialExpressionCameraVectorWS, -700, -100)
+    sun = vec_param(m, "SunDir", (-0.5, 0.0, 0.866, 0.0), -700, 0)
+    energy = scalar_param(m, "Energy", 1.0, -700, 150)
+    c = custom(m, SKY_CODE, [("V", view), ("SunDir", (sun, "RGB")), ("Energy", energy)], unreal.CustomMaterialOutputType.CMOT_FLOAT3, -400, 0, "GodotSky")
+    mel.connect_material_property(c, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    finish(m)
+
+
 def make_materials():
     make_solid()
+    make_sky()
     make_unlit()
     make_soft("M_WWO_SoftAdd", True)
     make_soft("M_WWO_SoftAlpha", False)

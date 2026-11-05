@@ -114,6 +114,12 @@ private:
 	bool bAutoTestMenusOnly = false; // -WWOAutoTestMenus: just the controller-only menu steps
 	bool bAutoTestBodyOnly = false; // -WWOAutoTestBody: just the body animation steps
 	bool bAutoTestGraftsOnly = false; // -WWOAutoTestGrafts: just the flora graft steps
+	bool bAutoTestMapsOnly = false; // -WWOAutoTestMaps: just the map views
+	// Map steps (WWOPlayerControllerAutoMaps.cpp): the level from fixed cameras.
+	int32 AutoMapIndex = -1;
+	float AutoMapClock = 0.f;
+	UPROPERTY() TObjectPtr<class ACameraActor> AutoMapCamera;
+	bool UpdateAutoMapTest(class AWWOCharacter* P, float DeltaTime);
 	// Graft steps (WWOPlayerControllerAutoGrafts.cpp): loadouts shown in the character preview.
 	float AutoGraftClock = 0.f;
 	float AutoGraftCaptureFov = 0.f;
