@@ -10,12 +10,14 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Standalone: `UnrealEditor WhatWasOurs.uproject /Game/WWO/Maps/L_Arena -game -windowed -ResX=1600 -ResY=900`
 - In the editor's Play-in-Editor, Esc ends PIE: use Tab to open the settings menu.
 - `-WWOAutoTest` plays a scripted run (fire, ADS, grenade, melee, ult, both menus, then walk / crouch /
-  sprint / slide / stop, logging speeds as `AutoTest move:`) and saves screenshots to `Saved/AutoTest/`.
+  sprint / slide / stop, logging speeds as `AutoTest move:`; then, by the nearest crate with damage off, a
+  standing jump, a double jump and a hop onto the crate, logging arcs as `AutoTest jump:`) and saves
+  screenshots to `Saved/AutoTest/`.
 
 ## Where things are
 | Godot | Unreal |
 |---|---|
-| player.gd | `Player/WWOCharacter` + `WWOCharacterMovement` (CharacterMovementComponent subclass: it runs the character's movement rules right before each move, takes horizontal velocity and gravity from them, climbs slopes like Godot's move_and_slide, crouches from the feet, and steps up only 15 cm like Godot's capsule; floors and collision are Unreal's) |
+| player.gd | `Player/WWOCharacter` + `WWOCharacterMovement` (CharacterMovementComponent subclass: it runs the character's movement rules right before each move, takes horizontal velocity and gravity from them, climbs slopes like Godot's move_and_slide, crouches from the feet, and steps up only 15 cm like Godot's capsule; falls without a terminal velocity in substeps no longer than Godot's 60 Hz step; the player stands on enemies and allies instead of Unreal's jump-off bounce; floors and collision are Unreal's) |
 | gun.gd, aim_assist.gd | `Player/WWOWeaponComponent`, `WWOAimAssistComponent` (viewmodel uses Unreal First Person Rendering for its own FOV) |
 | player_health / ability_manager / grenade_thrower / ult_manager | `Player/WWOHealthComponent`, `WWOAbilityComponent`, `WWOGrenadeComponent`, `WWOUltComponent` |
 | grenade.gd | `Weapons/WWOGrenade` (ProjectileMovementComponent) |
@@ -54,4 +56,6 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Arena layout is identical but built from prototype-grid blocks instead of the Quaternius kit.
 - Input actions are created in code (Enhanced Input), not as assets. Character menu on the
   DualSense is mapped to the Create button and I.
+- Jumps peak at exactly the set height (the Godot formula's intent). Godot's 60 Hz step adds about
+  5 cm (2.05 m for a 2 m jump) and about 0.02 s of air time.
 - Not yet checked hands-on with the DualSense.

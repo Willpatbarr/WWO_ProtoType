@@ -108,6 +108,12 @@ private:
 	int32 AutoTestStep = 0;
 	FVector AutoSlideFrom = FVector::ZeroVector; // ground movement steps: where the slide started
 	bool bAutoTrackSlide = false;
+	// Jump steps: one jump's arc (feet height above takeoff), then the landing dip.
+	bool bAutoTrackJump = false;
+	bool bAutoJumpLanded = false;
+	bool bAutoSawMantle = false;
+	float AutoJumpTime = 0.f, AutoJumpFromZ = 0.f, AutoJumpPeak = 0.f, AutoJumpPeakTime = 0.f, AutoJumpLandTime = 0.f, AutoJumpDip = 0.f;
+	FVector AutoCrateAt = FVector::ZeroVector;
 	void UpdateAutoTest(float DeltaTime);
 	void Shot(const TCHAR* Name);
 };

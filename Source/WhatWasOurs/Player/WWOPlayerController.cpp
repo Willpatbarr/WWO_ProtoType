@@ -1,6 +1,7 @@
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
+#include "Player/WWOHealthComponent.h"
 #include "UI/WWOHUDWidget.h"
 #include "UI/WWOSettingsMenu.h"
 #include "UI/WWOCharacterMenu.h"
@@ -25,6 +26,9 @@
 #include "WhatWasOurs.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "Engine/StaticMeshActor.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "EngineUtils.h"
 
 namespace
 {
@@ -463,6 +467,37 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 		bAutoTrackSlide = false;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide covered %.2f m"), FVector2D(P->GetActorLocation() - AutoSlideFrom).Size() / WWO::M);
 	}
+	auto FeetZ = [P]() { return P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight(); };
+	auto StartJumpTrack = [this, P, FeetZ]()
+	{
+		bAutoTrackJump = true;
+		bAutoJumpLanded = false;
+		bAutoSawMantle = false;
+		AutoJumpTime = AutoJumpPeak = AutoJumpPeakTime = AutoJumpLandTime = AutoJumpDip = 0.f;
+		AutoJumpFromZ = FeetZ();
+		JustPressed[(int32)EWWOAction::Jump] = true;
+	};
+	if (bAutoTrackJump)
+	{
+		AutoJumpTime += DeltaTime;
+		bAutoSawMantle |= P->IsMantling();
+		const float Rise = (FeetZ() - AutoJumpFromZ) / WWO::M;
+		if (!bAutoJumpLanded)
+		{
+			if (Rise > AutoJumpPeak) { AutoJumpPeak = Rise; AutoJumpPeakTime = AutoJumpTime; }
+			if (AutoJumpTime > 0.05f && P->IsOnFloor() && !P->IsMantling()) { bAutoJumpLanded = true; AutoJumpLandTime = AutoJumpTime; }
+		}
+		else
+		{
+			AutoJumpDip = FMath::Min(AutoJumpDip, P->LandOffset);
+			if (AutoJumpTime > AutoJumpLandTime + 0.3f)
+			{
+				bAutoTrackJump = false;
+				UE_LOG(LogWWO, Display, TEXT("AutoTest jump: apex %.3f m at %.3f s, landed at %.3f s (%.3f m from takeoff), jumps used %d, mantled %d, dip %.3f m"),
+					AutoJumpPeak, AutoJumpPeakTime, AutoJumpLandTime, Rise, P->JumpsUsed, bAutoSawMantle, AutoJumpDip);
+			}
+		}
+	}
 	if (AutoTestStep == 0) AutoTestStep = 100; // start at 10 s (shaders, AI settle)
 	if (At(10.f)) { Shot(TEXT("01_start")); Next(11.f); }
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
@@ -518,7 +553,61 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	{
 		UE_LOG(LogWWO, Display, TEXT("AutoTest move: after slide crouched %d eye %.1f cm above feet"), P->bIsCrouched,
 			P->EyeLocation().Z - (P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
-		Next(31.f);
+		Next(30.f);
 	}
-	else if (At(31.f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	// Jump and air, next to the nearest crate (1.12 m) with damage off so the waves can't
+	// interrupt: a standing ground jump, a ground jump with the air jump 0.3 s in (heights,
+	// timings, landing dip), then a running jump onto the crate from 3.5 m.
+	else if (At(30.f))
+	{
+		P->Health->GodMode = 1.f;
+		if (P->Health->bDead) P->Health->Respawn();
+		AStaticMeshActor* Crate = nullptr;
+		float BestD = 1e9f;
+		for (TActorIterator<AStaticMeshActor> It(GetWorld()); It; ++It)
+		{
+			const FVector S = It->GetActorScale3D();
+			if (!It->Tags.Contains(FName("Cover")) || !FMath::IsNearlyEqual(S.Z, 1.12f, 0.01f) || FMath::Abs(It->GetActorLocation().Z - 56.f) > 5.f) continue;
+			const float D = FVector::Dist(It->GetActorLocation(), P->GetActorLocation());
+			if (D < BestD) { BestD = D; Crate = *It; }
+		}
+		if (Crate)
+		{
+			const FVector Face = -Crate->GetActorForwardVector();
+			const FVector From = Crate->GetActorLocation() + Face * (56.f + 350.f);
+			const bool bMoved = P->TeleportTo(FVector(From.X, From.Y, 102.f), P->GetActorRotation());
+			AutoCrateAt = Crate->GetActorLocation();
+			P->GetCharacterMovement()->Velocity = FVector::ZeroVector;
+			P->SetViewRotation(0.f, (-Face).Rotation().Yaw);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest jump: crate %s at %s (teleported %d, %.0f cm away)"), *Crate->GetName(),
+				*Crate->GetActorLocation().ToCompactString(), bMoved, FVector2D(P->GetActorLocation() - Crate->GetActorLocation()).Size());
+		}
+		UE_LOG(LogWWO, Display, TEXT("AutoTest jump: heights %.2f / %.2f, gravity %.1f / %.1f, apex hang %.2f, air control %.1f, coyote %.2f"),
+			P->M("jump_height", P->JumpHeight1), P->M("jump_height", P->JumpHeight2), P->AscentGravity, P->DescentGravity, P->ApexHang,
+			P->M("air_control", P->AirControl), P->CoyoteTime);
+		Next(30.5f);
+	}
+	else if (At(30.5f)) { StartJumpTrack(); Next(32.f); }
+	else if (At(32.f)) { StartJumpTrack(); Next(32.3f); }
+	else if (At(32.3f)) { JustPressed[(int32)EWWOAction::Jump] = true; Next(34.f); }
+	else if (At(34.f))
+	{
+		// Up against the crate: jump standing, then steer onto it with air control.
+		const FVector Fwd = P->GetActorForwardVector();
+		P->TeleportTo(AutoCrateAt - Fwd * (56.f + 60.f) + FVector(0.f, 0.f, 102.f - AutoCrateAt.Z), P->GetActorRotation());
+		Next(34.3f);
+	}
+	else if (At(34.3f)) { StartJumpTrack(); Next(34.4f); }
+	else if (At(34.4f)) { MoveValue = FVector2D(0.f, 1.f); Next(34.6f); }
+	else if (At(34.6f)) { MoveValue = FVector2D::ZeroVector; Next(34.7f); } // drift on with the speed you built
+	else if (At(34.7f)) { Shot(TEXT("12_crate_jump")); Next(35.6f); }
+	else if (At(35.6f))
+	{
+		MoveValue = FVector2D::ZeroVector;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest jump: after the crate jump feet %.1f cm (crate top 112), on floor %d"), FeetZ(), P->IsOnFloor());
+		Shot(TEXT("13_crate_top"));
+		P->Health->GodMode = 0.f;
+		Next(36.5f);
+	}
+	else if (At(36.5f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }

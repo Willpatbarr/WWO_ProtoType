@@ -22,6 +22,10 @@ UWWOCharacterMovement::UWWOCharacterMovement()
 	// Godot's floor_max_angle (45°) plus its 0.01 rad floor threshold.
 	SetWalkableFloorAngle(45.57f);
 	bUseFlatBaseForFloorChecks = true;
+	// Substeps no longer than Godot's 60 Hz physics step, so at low frame rates gravity still
+	// switches between ascent, apex hang and descent as often as it does there (a 30 fps frame
+	// that crossed the apex-hang speed would otherwise rise with full gravity, cutting cm off a jump).
+	MaxSimulationTimeStep = 1.f / 60.f;
 }
 
 void UWWOCharacterMovement::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -54,6 +58,12 @@ float UWWOCharacterMovement::GetGravityZ() const
 {
 	const AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);
 	return Owner ? Owner->CurrentGravityZ() : Super::GetGravityZ();
+}
+
+FVector UWWOCharacterMovement::NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const
+{
+	// Godot's player just adds gravity each step; there's no terminal-velocity cap.
+	return DeltaTime > 0.f ? InitialVelocity + Gravity * DeltaTime : InitialVelocity;
 }
 
 FVector UWWOCharacterMovement::ComputeGroundMovementDelta(const FVector& Delta, const FHitResult& RampHit, const bool bHitFromLineTrace) const

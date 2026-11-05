@@ -7,6 +7,7 @@
 // - CalcVelocity: horizontal velocity comes from AWWOCharacter::WishVelocity (and the full
 //   3D velocity while lunging), instead of Unreal's acceleration/friction model.
 // - GetGravityZ: separate ascent and descent gravity, eased near the jump's apex.
+// - NewFallVelocity: no terminal velocity (Godot has none).
 // - ComputeGroundMovementDelta: up a slope you slide along it like Godot's move_and_slide
 //   (slower), down a slope you keep your horizontal speed.
 // - Crouch / UnCrouch: the capsule shrinks and grows from the feet, in the air too (Godot).
@@ -27,6 +28,7 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
 	virtual float GetGravityZ() const override;
+	virtual FVector NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const override;
 	virtual FVector ComputeGroundMovementDelta(const FVector& Delta, const FHitResult& RampHit, const bool bHitFromLineTrace) const override;
 	virtual bool CanCrouchInCurrentState() const override;
 	virtual void Crouch(bool bClientSimulation = false) override;

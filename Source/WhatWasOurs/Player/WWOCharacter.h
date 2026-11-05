@@ -36,6 +36,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Landed(const FHitResult& Hit) override;
+	virtual void BaseChange() override;
 	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
@@ -163,7 +164,8 @@ private:
 	void StartSlide(const FVector& WishDir);
 	void UpdateAir(float DeltaSeconds);
 	void HandleJump(const FVector& WishDir);
-	void ApplyHorizontal(const FVector& WishDir, float DeltaSeconds);
+	void ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float DeltaSeconds);
+	void Land(float FallSpeedM); // Godot's _land: landing dip, land-slide window, queued slide
 	void ApplyLunge(float DeltaSeconds);
 	void UpdateCamera(float DeltaSeconds);
 	void UpdateRecoil(float DeltaSeconds);

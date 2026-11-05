@@ -257,8 +257,11 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	UpdateSprint(Input);
 	UpdateCrouchAndSlide(WishDir, DeltaSeconds);
 	UpdateAir(DeltaSeconds);
+	// Godot's is_on_floor() is where the last move left you, so the frame you jump still uses
+	// the ground rule for horizontal speed (full speed toward the stick, not air steering).
+	const bool bOnFloor = IsOnFloor();
 	HandleJump(WishDir);
-	ApplyHorizontal(WishDir, DeltaSeconds);
+	ApplyHorizontal(WishDir, bOnFloor, DeltaSeconds);
 	if (bLunging) ApplyLunge(DeltaSeconds);
 	if (!IsOnFloor()) LastFallSpeed = -Move->Velocity.Z / WWO::M;
 }
@@ -403,7 +406,7 @@ void AWWOCharacter::HandleJump(const FVector& WishDir)
 	bSliding = false;
 }
 
-void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, float DeltaSeconds)
+void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float DeltaSeconds)
 {
 	const FVector V = GetCharacterMovement()->Velocity / WWO::M; // m/s
 	if (bSliding)
@@ -422,7 +425,7 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, float DeltaSeconds)
 	if (bIsCrouched || bCrouching) Speed = M("crouch_speed", CrouchSpeed);
 	else if (bSprinting) Speed = M("sprint_speed", SprintSpeed);
 	Speed *= Abilities->SpeedMultiplier() * Weapon->MoveMultiplier() * SlowMultiplier();
-	if (!IsOnFloor() || LaunchTime > 0.f)
+	if (!bOnFloor || LaunchTime > 0.f)
 	{
 		// In the air you keep your momentum and can only steer it gradually.
 		Speed = FMath::Max(Speed, TakeoffSpeed);
@@ -449,6 +452,20 @@ void AWWOCharacter::Landed(const FHitResult& Hit)
 	Super::Landed(Hit);
 	const float FallSpeed = FMath::Max(-GetCharacterMovement()->Velocity.Z / WWO::M, LastFallSpeed);
 	LastFallSpeed = 0.f;
+	Land(FallSpeed);
+}
+
+void AWWOCharacter::BaseChange()
+{
+	// Unreal bounces a character off any pawn it lands on (JumpOff). Godot's player stands on
+	// enemies and allies like on any other body, so skip that and keep the floor.
+	const AActor* Base = GetMovementBaseActor(this);
+	if (Base && Base->IsA<APawn>()) return;
+	Super::BaseChange();
+}
+
+void AWWOCharacter::Land(float FallSpeed)
+{
 	SinceLanded = 0.f;
 	bLandedSprinting = bSprinting || TakeoffSpeed > M("walk_speed", WalkSpeed) * 1.05f;
 	if (bSlideQueued)
@@ -561,7 +578,9 @@ bool AWWOCharacter::TryMantle(const FVector2D& Input)
 	const float Feet = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 
 	// 1. A wall right in front of you at chest height.
-	const FVector Chest = GetActorLocation() + FVector(0, 0, 20.f);
+	// Godot's body origin stays 1 m above the feet when crouched (the capsule shrinks to the
+	// feet), so the chest is 1.2 m up either way.
+	const FVector Chest(GetActorLocation().X, GetActorLocation().Y, Feet + StandHalfHeight + 20.f);
 	FHitResult Wall;
 	if (!World->LineTraceSingleByChannel(Wall, Chest, Chest + Forward * MantleWallCheck * WWO::M, ECC_Visibility, Params)) return false;
 	if (Cast<IWWOTargetable>(Wall.GetActor())) return false;
@@ -582,12 +601,12 @@ bool AWWOCharacter::TryMantle(const FVector2D& Input)
 
 	bMantling = true;
 	MantleT = 0.f;
-	MantleFrom = GetActorLocation();
-	MantleTo = Stand;
 	bCrouchToggled = false;
 	bCrouching = false;
 	bSprinting = false;
-	if (bIsCrouched) UnCrouch();
+	if (bIsCrouched) UnCrouch(); // grows from the feet, so the capsule center moves up
+	MantleFrom = GetActorLocation();
+	MantleTo = Stand;
 	LungeVelocity = FVector::ZeroVector;
 	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	return true;
@@ -611,7 +630,7 @@ void AWWOCharacter::UpdateMantle(float DeltaSeconds)
 		TakeoffSpeed = 0.f;
 		GetCharacterMovement()->Velocity = FVector::ZeroVector;
 		GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-		LandKick = -FMath::Clamp(4.f * LandingDipPerSpeed, 0.f, LandingDipMax) * LandingDip; // a small dip over the top
+		Land(4.f); // a small landing dip as you come over the top (and a queued slide starts)
 	}
 }
 
