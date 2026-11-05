@@ -10,6 +10,7 @@
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
+#include "Player/WWOFPArmPaths.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -51,15 +52,11 @@ namespace
 	const FLinearColor SightColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor SightOnTargetColor(1.f, 0.1f, 0.08f);
 
-	// The punch, as fist positions (Godot camera space) at animation times 0..3:
-	// rest (below the view), chambered, contact, then pulled back.
-	const FVector PunchKeys[] = { FVector(0.34f, -0.55f, -0.15f), FVector(0.26f, -0.27f, -0.18f), FVector(0.04f, -0.09f, -0.62f), FVector(0.3f, -0.4f, -0.35f) };
-	constexpr float PunchChambered = 1.f, PunchContact = 2.f, PunchEnd = 3.f;
-	const FVector RightShoulder(0.32f, -0.5f, 0.2f);
-	// The overhand throw (left arm) at the Godot animation's times.
+	// The punch (Melee_Hook, seconds into it): fist chambered, landed, starts pulling back
+	// (fp_arm.gd PUNCH_TIMING), and its length.
+	constexpr float PunchChambered = 0.2f, PunchContact = 0.264f, PunchRetract = 0.3f, PunchEnd = WWOArmPaths::MeleeHookLength;
+	// The overhand throw (left arm: OverhandThrow, mirrored), seconds into it.
 	constexpr float ThrowAnimStart = 0.05f, ThrowAnimCocked = 0.2f, ThrowAnimRelease = 0.363f, ThrowAnimEnd = 0.42f;
-	const FVector ThrowKeys[] = { FVector(-0.28f, -0.5f, -0.3f), FVector(-0.22f, 0.1f, 0.25f), FVector(-0.06f, 0.f, -0.55f), FVector(-0.18f, -0.6f, -0.45f) };
-	const FVector LeftShoulder(-0.32f, -0.5f, 0.2f);
 
 	struct FGunPart { const TCHAR* Name; int32 Kind; FVector Size; FVector Pos; FVector RotDeg; FLinearColor Color; float Glow; };
 	enum { Box, Cyl, Sphere };
@@ -123,27 +120,27 @@ namespace
 		return Rifle;
 	}
 
-	FVector PathAt(const FVector* Keys, const float* Times, int32 Count, float T)
+	// One arm joint (0 shoulder, 1 elbow, 2 wrist, 3 knuckles) at Seconds into a baked path,
+	// in Godot model space relative to the eyes (see WWOFPArmPaths.h).
+	template <int32 N>
+	FVector ArmJoint(const FVector (&Path)[N][4], int32 Joint, float Seconds)
 	{
-		if (T <= Times[0]) return Keys[0];
-		for (int32 i = 1; i < Count; ++i)
-		{
-			if (T <= Times[i])
-			{
-				const float A = (T - Times[i - 1]) / FMath::Max(Times[i] - Times[i - 1], 1e-4f);
-				return FMath::Lerp(Keys[i - 1], Keys[i], WWO::SmoothStep(0.f, 1.f, A));
-			}
-		}
-		return Keys[Count - 1];
+		const float F = FMath::Clamp(Seconds * WWOArmPaths::FrameRate, 0.f, float(N - 1));
+		const int32 I = FMath::Min(FMath::FloorToInt32(F), N - 2);
+		return FMath::Lerp(Path[I][Joint], Path[I + 1][Joint], F - I);
 	}
 
-	// Godot rotations: about y (yaw, + turns left) then about x (pitch, + lifts).
-	FVector Place(const FVector& P, float YawDeg, float PitchDeg, float Push)
+	// fp_arm.gd place() + pose(): the rig turned to face -z (mirrored for the left arm), aimed by
+	// Basis.from_euler(pitch, yaw) (yaw applied after pitch), with the eyes at the camera,
+	// pushed forward and dropped. Godot camera space out.
+	FVector PlaceJoint(FVector P, bool bMirror, float YawDeg, float PitchDeg, float Push, float Drop)
 	{
-		const float Y = FMath::DegreesToRadians(YawDeg), X = FMath::DegreesToRadians(PitchDeg);
-		const FVector A(P.X * FMath::Cos(Y) + P.Z * FMath::Sin(Y), P.Y, -P.X * FMath::Sin(Y) + P.Z * FMath::Cos(Y));
-		const FVector B(A.X, A.Y * FMath::Cos(X) - A.Z * FMath::Sin(X), A.Y * FMath::Sin(X) + A.Z * FMath::Cos(X));
-		return B + FVector(0, 0, -Push);
+		if (bMirror) P.X = -P.X;
+		P = FVector(-P.X, P.Y, -P.Z); // Basis(UP, PI)
+		const float X = FMath::DegreesToRadians(PitchDeg), Y = FMath::DegreesToRadians(YawDeg);
+		P = FVector(P.X, P.Y * FMath::Cos(X) - P.Z * FMath::Sin(X), P.Y * FMath::Sin(X) + P.Z * FMath::Cos(X));
+		P = FVector(P.X * FMath::Cos(Y) + P.Z * FMath::Sin(Y), P.Y, -P.X * FMath::Sin(Y) + P.Z * FMath::Cos(Y));
+		return P + FVector(0.f, -Drop, -Push);
 	}
 }
 
@@ -294,7 +291,6 @@ void UWWOWeaponComponent::BuildArm(FWWOFPArm& Arm, bool bLeft)
 	Arm.Fore = Shape(Arm.Root, WWOFX::Cylinder());
 	Arm.Fist = Shape(Arm.Root, WWOFX::Cube());
 	Arm.Ball = Shape(Arm.Root, WWOFX::Sphere());
-	Arm.Ball->SetRelativeScale3D(FVector(0.12f));
 	Arm.Root->SetVisibility(false, true);
 }
 
@@ -698,8 +694,11 @@ void UWWOWeaponComponent::UpdateFov()
 	const float Fov = FMath::Clamp(HipFov + PunchFovValue * Punch, 1.f, 170.f);
 	const float Half = FMath::Tan(FMath::DegreesToRadians(Fov) * 0.5f) / FMath::Lerp(1.f, Weapon->Zoom, AdsAmount);
 	Camera->SetFieldOfView(FMath::RadiansToDegrees(FMath::Atan(Half) * 2.f));
-	const bool bArmOut = MeleeArm.Root && MeleeArm.Root->IsVisible();
-	Camera->FirstPersonFieldOfView = bArmOut ? MeleeArmFov : Weapon->ViewmodelFov;
+	// The gun draws with its own FOV. Both arms draw with the arm FOV in Godot (a per-material
+	// projection); Unreal has one first-person FOV, so PlaceArm squeezes the arms toward the view
+	// center by ArmFovRatio, which projects them exactly as the arm FOV would.
+	Camera->FirstPersonFieldOfView = Weapon->ViewmodelFov;
+	ArmFovRatio = FMath::Tan(FMath::DegreesToRadians(Weapon->ViewmodelFov) * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(MeleeArmFov, 1.f, 170.f)) * 0.5f);
 	// Scoped weapons hide the gun once the scope is up (the HUD draws the scope).
 	const bool bShowModel = !(Weapon->ScopeOverlay >= 0.5f && AdsAmount > 0.85f);
 	for (const auto& Pair : Parts)
@@ -814,7 +813,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(ThrowArm.Ball->GetMaterial(0)))
 	{
 		Mat->SetVectorParameterValue("Color", ThrowColor);
-		Mat->SetScalarParameterValue("Glow", 3.f);
+		Mat->SetScalarParameterValue("Glow", 2.f); // Godot: the held ball's glow
 	}
 }
 
@@ -830,7 +829,7 @@ float UWWOWeaponComponent::MeleeAnimTime(float Progress) const
 	const float SinceHit = (Progress - MeleeImpactAt) * M("melee_time", MeleeTime);
 	if (SinceHit < MeleeArmHold) return PunchContact;
 	const float T = FMath::Clamp((SinceHit - MeleeArmHold) / FMath::Max(MeleeArmRetract, 0.01f), 0.f, 1.f);
-	return FMath::Lerp(PunchContact, PunchEnd + 0.01f, WWO::SmoothStep(0.f, 1.f, T));
+	return FMath::Lerp(PunchRetract, PunchEnd, WWO::SmoothStep(0.f, 1.f, T)); // skips the animation's own long hold
 }
 
 float UWWOWeaponComponent::MeleeRetracting(float Progress) const
@@ -860,24 +859,22 @@ void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float
 	if (!Arm.Root) return;
 	Arm.Root->SetVisibility(bVisible, true);
 	if (!bVisible) return;
-	FVector Fist, Shoulder;
-	if (Arm.bLeft)
+	FVector J[4];
+	for (int32 i = 0; i < 4; ++i)
 	{
-		static const float Times[] = { ThrowAnimStart, ThrowAnimCocked, ThrowAnimRelease, ThrowAnimEnd };
-		Fist = PathAt(ThrowKeys, Times, 4, AnimT);
-		Shoulder = LeftShoulder;
+		const FVector Joint = Arm.bLeft ? ArmJoint(WWOArmPaths::OverhandThrow, i, AnimT) : ArmJoint(WWOArmPaths::MeleeHook, i, AnimT);
+		J[i] = PlaceJoint(Joint, Arm.bLeft, Yaw, PitchDeg, Push, Drop);
 	}
-	else
+	// The arm FOV (see UpdateFov): x and y scaled toward the view axis, thickness with them.
+	const float K = ArmFovRatio;
+	for (FVector& V : J) V *= FVector(K, K, 1.f);
+	const FVector& Shoulder = J[0];
+	const FVector& Elbow = J[1];
+	const FVector& Wrist = J[2];
+	const FVector& Knuckles = J[3];
+	auto Limb = [K](UStaticMeshComponent* C, const FVector& A, const FVector& B, float Thick)
 	{
-		static const float Times[] = { 0.f, PunchChambered, PunchContact, PunchEnd };
-		Fist = PathAt(PunchKeys, Times, 4, AnimT);
-		Shoulder = RightShoulder;
-	}
-	Fist = Place(Fist, Yaw, PitchDeg, Push) + FVector(0.f, -Drop, 0.f);
-	Shoulder = Place(Shoulder, Yaw, PitchDeg, Push);
-	const FVector Elbow = FMath::Lerp(Shoulder, Fist, 0.5f) + FVector(Arm.bLeft ? -0.08f : 0.08f, -0.1f, 0.f);
-	auto Limb = [](UStaticMeshComponent* C, const FVector& A, const FVector& B, float Thick)
-	{
+		Thick *= K;
 		const FVector UA = G2U(A), UB = G2U(B);
 		const float Length = FVector::Dist(UA, UB);
 		const FRotator Rot = FRotationMatrix::MakeFromZ((UB - UA).GetSafeNormal()).Rotator(); // cylinder runs along z
@@ -885,10 +882,13 @@ void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float
 		C->SetRelativeScale3D(FVector(Thick, Thick, Length / 100.f));
 	};
 	Limb(Arm.Upper, Shoulder, Elbow, 0.11f);
-	Limb(Arm.Fore, Elbow, Fist, 0.09f);
-	const FVector UFist = G2U(Fist);
-	Arm.Fist->SetRelativeLocationAndRotation(UFist, FRotationMatrix::MakeFromX((UFist - G2U(Elbow)).GetSafeNormal()).Rotator());
-	Arm.Fist->SetRelativeScale3D(FVector(0.11f, 0.1f, 0.1f));
+	Limb(Arm.Fore, Elbow, Wrist, 0.085f);
+	// The fist: a block from the wrist out past the knuckles.
+	const FVector UWrist = G2U(Wrist), UKnuckles = G2U(Knuckles);
+	const FVector Along = UKnuckles - UWrist;
+	Arm.Fist->SetRelativeLocationAndRotation(UWrist + Along * 0.6f, FRotationMatrix::MakeFromX(Along.GetSafeNormal()).Rotator());
+	Arm.Fist->SetRelativeScale3D(FVector(Along.Size() / 100.f * 1.3f, 0.1f * K, 0.09f * K));
 	if (!Arm.bLeft) Arm.Ball->SetVisibility(false); // only the throwing hand holds a grenade
-	Arm.Ball->SetRelativeLocation(UFist + FVector(4.f, 0.f, 4.f));
+	Arm.Ball->SetRelativeScale3D(FVector(0.08f * K)); // Godot: a 4 cm radius ball held at the middle finger's base
+	Arm.Ball->SetRelativeLocation(UWrist + Along * 1.25f); // (just past the block, so it shows)
 }

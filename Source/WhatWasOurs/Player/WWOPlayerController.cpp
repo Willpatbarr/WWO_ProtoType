@@ -31,6 +31,9 @@
 #include "Engine/StaticMeshActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "EngineUtils.h"
+#include "World/WWOTarget.h"
+#include "Weapons/WWOGrenade.h"
+#include "Enemies/WWOEnemy.h"
 
 namespace
 {
@@ -697,5 +700,266 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 			Seconds, P->Weapon->GetWeaponData()->FireRate, Seconds * P->Weapon->GetWeaponData()->FireRate / 60.f);
 		Next(44.5f);
 	}
-	else if (At(44.5f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	else if (At(44.5f)) { AutoGrenadeIndex = -1; AutoMeleeIndex = -1; Next(45.f); }
+	// Grenades: every grenade, one by one, at a training target. Then melee.
+	else if (At(45.f)) { if (UpdateAutoGrenadeTest(P, DeltaTime)) Next(45.1f); }
+	else if (At(45.1f)) { if (UpdateAutoMeleeTest(P, DeltaTime)) Next(45.2f); }
+	else if (At(45.2f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+}
+
+bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)
+{
+	// Stand DistanceM from the target on the clearest side, facing it (turned YawOffset
+	// degrees off it): flat ground all the way and nothing in between at chest or eye height.
+	// Returns false if no side is clear. bMove false only checks.
+	const IWWOTargetable* T = Cast<IWWOTargetable>(Target);
+	if (!T) return false;
+	const FVector Feet = T->FeetLocation();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAutoTest), false, P);
+	Params.AddIgnoredActor(Target);
+	FCollisionObjectQueryParams Static(ECC_WorldStatic);
+	for (int32 I = 0; I < 16; ++I)
+	{
+		const FVector Dir = FRotator(0.f, 180.f + I * 22.5f, 0.f).Vector();
+		const FVector Stand = Feet + Dir * DistanceM * WWO::M;
+		FHitResult Hit;
+		bool bClear = true;
+		for (const float Up : { 100.f, 175.f })
+		{
+			bClear &= !GetWorld()->SweepSingleByObjectType(Hit, Feet + Dir * 50.f + FVector(0, 0, Up), Stand + Dir * 60.f + FVector(0, 0, Up), FQuat::Identity,
+				Static, FCollisionShape::MakeSphere(35.f), Params);
+		}
+		for (float D = 1.f; bClear && D <= DistanceM + 0.01f; D += 1.f)
+		{
+			const FVector At = Feet + Dir * D * WWO::M;
+			bClear = GetWorld()->LineTraceSingleByObjectType(Hit, At + FVector(0, 0, 60.f), At - FVector(0, 0, 60.f), Static, Params)
+				&& FMath::Abs(Hit.ImpactPoint.Z - Feet.Z) < 15.f;
+		}
+		if (!bClear) continue;
+		if (!bMove) return true;
+		GetWorld()->LineTraceSingleByObjectType(Hit, Stand + FVector(0, 0, 60.f), Stand - FVector(0, 0, 60.f), Static, Params);
+		if (!P->TeleportTo(Hit.ImpactPoint + FVector(0, 0, P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.f), FRotator(0.f, (-Dir).Rotation().Yaw, 0.f))) continue;
+		P->GetCharacterMovement()->Velocity = FVector::ZeroVector;
+		P->SetViewRotation(0.f, (-Dir).Rotation().Yaw + YawOffset);
+		return true;
+	}
+	return false;
+}
+
+bool AWWOPlayerController::UpdateAutoGrenadeTest(AWWOCharacter* P, float DeltaTime)
+{
+	auto bShortThrow = [](const UWWOGrenadeData* G) { return G->Kind == EWWOGrenadeKind::Spike || G->Kind == EWWOGrenadeKind::Tripmine; };
+	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+	if (!Loadout) return true;
+	P->Health->GodMode = 1.f; // the waves keep running
+	if (P->Health->bDead) P->Health->Respawn();
+	if (AutoGrenadeIndex < 0)
+	{
+		// The nearest standing (not strafing) training target, and every grenade, the wall last
+		// (it stays up for 10 s and would block the rest).
+		AutoTarget = nullptr;
+		float BestD = 1e9f;
+		for (TActorIterator<AWWOTarget> It(GetWorld()); It; ++It)
+		{
+			const float D = FVector::Dist(It->GetActorLocation(), P->GetActorLocation());
+			if (It->StrafeDistance <= 0.f && D < BestD && PlaceForAutoTest(P, *It, 17.f, 0.f, false)) { BestD = D; AutoTarget = *It; }
+		}
+		AutoGrenadeBefore = Loadout->GetGrenade();
+		AutoGrenades.Reset();
+		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind != EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind == EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		UE_LOG(LogWWO, Display, TEXT("AutoTest grenade: %d grenades at %s; throw distance %.1f m, fuse %.2f s, release %.2f s, recharge %.1f s"),
+			AutoGrenades.Num(), AutoTarget.IsValid() ? *AutoTarget->GetName() : TEXT("no target"), P->Grenades->EffectiveThrowDistance(),
+			P->Grenades->DetonationTime, P->Weapon->ThrowRelease, P->Grenades->EffectiveRechargeTime());
+		if (!AutoTarget.IsValid()) return true;
+		AutoGrenadeIndex = 0;
+		AutoPhase = -1.f; // set up the first throw
+	}
+	if (AutoGrenadeIndex >= AutoGrenades.Num())
+	{
+		Loadout->EquipGrenade(AutoGrenadeBefore);
+		return true;
+	}
+	UWWOGrenadeData* G = AutoGrenades[AutoGrenadeIndex];
+	const FString Id = G->Id.ToString();
+	auto ShotNamed = [this, &Id](const TCHAR* What) { Shot(*FString::Printf(TEXT("19_grenade_%s_%s"), *Id, What)); };
+	if (AutoPhase < -0.5f)
+	{
+		// The Blinding Grenade and the Snare Mine go at the nearest enemy (they blind and slow
+		// enemies); the rest at the training target. Stand 17 m (or 6 m) away, and throw a few
+		// frames later (a screenshot's long frame would otherwise release it at once and fly it
+		// 7 m in one step).
+		AutoGrenadeTarget = AutoTarget;
+		if (G->Kind == EWWOGrenadeKind::Blind || G->Kind == EWWOGrenadeKind::Tripmine)
+		{
+			float BestD = 1e9f;
+			for (AWWOEnemy* E : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+			{
+				const float D = FVector::Dist(E->GetActorLocation(), P->GetActorLocation());
+				if (D < BestD && E->GetCharacterMovement()->IsMovingOnGround() && PlaceForAutoTest(P, E, bShortThrow(G) ? 6.f : 17.f, 0.f, false))
+				{
+					BestD = D;
+					AutoGrenadeTarget = E;
+				}
+			}
+		}
+		const IWWOTargetable* T = Cast<IWWOTargetable>(AutoGrenadeTarget.Get());
+		if (!T) return true;
+		if (T->IsDead()) return false; // wait for the training target to respawn
+		Loadout->EquipGrenade(G);
+		bAutoLongThrow = !bShortThrow(G) && PlaceForAutoTest(P, AutoGrenadeTarget.Get(), 17.f, 0.f);
+		if (!bAutoLongThrow) PlaceForAutoTest(P, AutoGrenadeTarget.Get(), 6.f, 0.f);
+		AutoPhase = -0.5f;
+		return false;
+	}
+	IWWOTargetable* Target = Cast<IWWOTargetable>(AutoGrenadeTarget.Get());
+	if (!Target || (AutoPhase < 0.f && Target->IsDead()))
+	{
+		AutoPhase = -1.f; // pick again
+		return false;
+	}
+	if (AutoPhase < 0.f)
+	{
+		AutoPhase += DeltaTime;
+		if (AutoPhase < 0.f) return false;
+		// Fuse grenades: from 17 m, looking level (a level throw lands about 18 m out, right as
+		// the 1 s fuse runs out). The Poison Spike from 6 m at the target's body (it homes in
+		// when it passes close); the Snare Mine from 6 m at the ground 1.5 m short of it.
+		const bool bPlaced = FVector2D(P->GetActorLocation() - Target->FeetLocation()).Size() > 5.f * WWO::M;
+		const FVector Aim = G->Kind == EWWOGrenadeKind::Spike ? Target->GetAimParts().Last().Position
+			: Target->FeetLocation() + (P->GetActorLocation() - Target->FeetLocation()).GetSafeNormal2D() * 150.f;
+		const FVector Dir = (Aim - P->EyeLocation()).GetSafeNormal();
+		P->SetViewRotation(!bAutoLongThrow ? FMath::Asin(Dir.Z) : 0.f, Dir.Rotation().Yaw);
+		P->Grenades->Charge = P->Grenades->MaxCharges();
+		AutoTargetHealth = Target->GetHealth();
+		const bool bThrown = P->Grenades->ThrowGrenade();
+		UE_LOG(LogWWO, Display, TEXT("AutoTest grenade: %s (%s, %s) at %s thrown %d from %.1f m (placed %d): damage %.0f, radius %.1f m, bounce %.2f, fuse %.2f s"), *Id,
+			*UEnum::GetValueAsString(G->Kind), *G->Flora.ToString(), *AutoGrenadeTarget->GetName(), bThrown, FVector2D(P->GetActorLocation() - Target->FeetLocation()).Size() / WWO::M, bPlaced,
+			G->Damage, G->BlastRadius, G->Bounce, P->Grenades->EffectiveFuse(G));
+		AutoPhase = 0.f;
+		AutoGoneAt = -1.f;
+		bAutoGrenadeOut = bAutoShotBlast = bAutoShotArmed = false;
+		return false;
+	}
+	AutoPhase += DeltaTime;
+	// The throwing arm (one moment per throw: a screenshot's long frame would skip the next).
+	const float ArmShotAt = AutoGrenadeIndex == 0 ? 0.17f : AutoGrenadeIndex == 1 ? 0.2f : AutoGrenadeIndex == 2 ? 0.235f : -1.f;
+	if (ArmShotAt > 0.f && AutoPhase >= ArmShotAt && AutoPhase - DeltaTime < ArmShotAt)
+	{
+		Shot(*FString::Printf(TEXT("19_throw_arm_%03d"), FMath::RoundToInt(P->Weapon->GetThrowClock() * 1000.f)));
+	}
+	bool bOut = false;
+	for (TActorIterator<AWWOGrenade> It(GetWorld()); It; ++It) bOut |= It->Spec.Data == G;
+	bAutoGrenadeOut |= bOut;
+	if (bAutoGrenadeOut && !bOut && AutoGoneAt < 0.f) AutoGoneAt = AutoPhase;
+	if (G->Kind == EWWOGrenadeKind::Tripmine && bOut && !bAutoShotArmed && AutoPhase > 1.f) { bAutoShotArmed = true; ShotNamed(TEXT("armed")); }
+	if (AutoGoneAt >= 0.f && !bAutoShotBlast && AutoPhase >= AutoGoneAt + 0.06f) { bAutoShotBlast = true; ShotNamed(TEXT("blast")); }
+	const float AfterFor = G->Kind == EWWOGrenadeKind::Pool ? 1.5f : G->Kind == EWWOGrenadeKind::Wall ? 0.8f : 1.f;
+	const bool bTimedOut = AutoPhase > 9.f;
+	if ((AutoGoneAt >= 0.f && AutoPhase >= AutoGoneAt + AfterFor) || bTimedOut)
+	{
+		ShotNamed(TEXT("after"));
+		UE_LOG(LogWWO, Display, TEXT("AutoTest grenade: %s went off %.2f s after the throw%s; target health %.0f -> %.0f; charge now %.2f"), *Id, AutoGoneAt,
+			bTimedOut ? TEXT(" (TIMED OUT)") : TEXT(""), AutoTargetHealth, Target->GetHealth(), P->Grenades->Charge);
+		for (TActorIterator<AWWOGrenade> It(GetWorld()); It; ++It) if (It->Spec.Data == G) It->Destroy(); // (a timed-out one)
+		AutoGrenadeIndex++;
+		AutoPhase = -1.f;
+	}
+	return false;
+}
+
+bool AWWOPlayerController::UpdateAutoMeleeTest(AWWOCharacter* P, float DeltaTime)
+{
+	// 0: lunge onto the training target from 3.2 m, starting 8 degrees off it. 1: punch the
+	// nearest enemy from 2.5 m and log its knockback. 2: a punch at nothing (the arm winding up).
+	P->Health->GodMode = 1.f;
+	if (P->Health->bDead) P->Health->Respawn();
+	if (AutoMeleeIndex < 0) { AutoMeleeIndex = 0; AutoPhase = -1.f; }
+	if (AutoMeleeIndex > 2) return true;
+	if (AutoMeleeIndex == 2)
+	{
+		if (AutoPhase < 0.f)
+		{
+			P->SetViewRotation(FMath::DegreesToRadians(60.f), P->GetActorRotation().Yaw); // at the sky: nothing to lunge at
+			JustPressed[(int32)EWWOAction::Melee] = true;
+			AutoPhase = 0.f;
+			return false;
+		}
+		AutoPhase += DeltaTime;
+		if (!bAutoShotPunch && P->Weapon->bMeleeing && P->Weapon->MeleeProgress >= 0.33f)
+		{
+			bAutoShotPunch = true;
+			Shot(*FString::Printf(TEXT("22_melee_swing_%02d"), FMath::RoundToInt(P->Weapon->MeleeProgress * 100.f)));
+		}
+		if ((!P->Weapon->bMeleeing && AutoPhase > 0.2f) || AutoPhase > 3.f) AutoMeleeIndex++;
+		return false;
+	}
+	AActor* TargetActor = AutoTarget.Get();
+	if (AutoMeleeIndex == 1)
+	{
+		if (AutoPhase < 0.f)
+		{
+			AWWOEnemy* Best = nullptr;
+			float BestD = 1e9f;
+			for (AWWOEnemy* E : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+			{
+				const float D = FVector::Dist(E->GetActorLocation(), P->GetActorLocation());
+				if (D < BestD && E->GetCharacterMovement()->IsMovingOnGround()) { BestD = D; Best = E; }
+			}
+			AutoTarget = Best;
+			TargetActor = Best;
+		}
+	}
+	IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor);
+	if (!Target)
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest melee: step %d has no target"), AutoMeleeIndex);
+		AutoMeleeIndex++;
+		AutoPhase = -1.f;
+		return false;
+	}
+	if (AutoPhase < 0.f && Target->IsDead()) return false; // wait for it to respawn
+	if (AutoPhase < 0.f)
+	{
+		const bool bPlaced = PlaceForAutoTest(P, TargetActor, AutoMeleeIndex == 0 ? 3.2f : 2.5f, AutoMeleeIndex == 0 ? 8.f : 0.f);
+		AutoMeleeFrom = P->GetActorLocation();
+		AutoTargetHealth = Target->GetHealth();
+		AutoLungeTime = 0.f;
+		bAutoSawLunge = bAutoMeleeLogged = bAutoShotPunch = false;
+		JustPressed[(int32)EWWOAction::Melee] = true;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest melee: at %s from %.2f m (placed %d); reach %.1f, lunge range %.1f angle %.0f speed %.1f, damage %.0f, knockback %.1f"),
+			*TargetActor->GetName(), FVector2D(P->GetActorLocation() - Target->FeetLocation()).Size() / WWO::M, bPlaced, P->Weapon->MeleeReach,
+			P->Weapon->LungeRange, P->Weapon->LungeAngle, P->Weapon->LungeSpeed, P->Weapon->MeleeDamage, P->Weapon->MeleeKnockback);
+		AutoPhase = 0.f;
+		return false;
+	}
+	AutoPhase += DeltaTime;
+	if (P->IsLunging()) { bAutoSawLunge = true; AutoLungeTime += GetWorld()->GetDeltaSeconds(); }
+	const bool bLanded = P->Weapon->bMeleeing && P->Weapon->MeleeProgress >= 0.4f;
+	if (bLanded && !bAutoMeleeLogged)
+	{
+		bAutoMeleeLogged = true;
+		const FVector ToHead = Target->GetAimParts()[0].Position - P->EyeLocation();
+		const AWWOEnemy* Enemy = Cast<AWWOEnemy>(TargetActor);
+		UE_LOG(LogWWO, Display, TEXT("AutoTest melee: landed at progress %.2f; lunged %d for %.3f game s, moved %.2f m, now %.2f m from it (flat); view %.1f deg off its head; health %.0f -> %.0f; time dilation %.2f%s"),
+			P->Weapon->MeleeProgress, bAutoSawLunge, AutoLungeTime, FVector::Dist(AutoMeleeFrom, P->GetActorLocation()) / WWO::M,
+			FVector2D(P->GetActorLocation() - Target->FeetLocation()).Size() / WWO::M,
+			FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(ToHead.GetSafeNormal(), P->AimForward()), -1.f, 1.f))),
+			AutoTargetHealth, Target->GetHealth(), GetWorld()->GetWorldSettings()->GetEffectiveTimeDilation(),
+			Enemy ? *FString::Printf(TEXT("; enemy pushed at %.2f m/s"), FVector2D(Enemy->GetVelocity()).Size() / WWO::M) : TEXT(""));
+	}
+	// The punching arm: at the hit on the lunge, winding up on the enemy.
+	if (bAutoMeleeLogged && !bAutoShotPunch && P->Weapon->bMeleeing && P->Weapon->MeleeProgress >= 0.42f)
+	{
+		bAutoShotPunch = true;
+		Shot(*FString::Printf(TEXT("%s_%02d"), AutoMeleeIndex == 0 ? TEXT("20_melee_lunge") : TEXT("21_melee_enemy"), FMath::RoundToInt(P->Weapon->MeleeProgress * 100.f)));
+	}
+	if ((!P->Weapon->bMeleeing && AutoPhase > 0.2f) || AutoPhase > 3.f)
+	{
+		if (!bAutoMeleeLogged) UE_LOG(LogWWO, Display, TEXT("AutoTest melee: step %d never landed (lunged %d)"), AutoMeleeIndex, bAutoSawLunge);
+		AutoMeleeIndex++;
+		AutoPhase = -1.f;
+		bAutoShotPunch = false;
+	}
+	return false;
 }

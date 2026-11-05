@@ -554,8 +554,11 @@ void AWWOCharacter::ApplyLunge(float DeltaSeconds)
 	LungeTime += DeltaSeconds;
 	// Aim for where the target's "player-height center" would be: a flat dash on level
 	// ground, pulled up or down toward a raised or lowered target.
+	// Measured from where Godot's player origin is: 1 m above the feet (the standing capsule's
+	// center), crouched or not; Unreal's capsule center drops when you crouch.
 	const FVector Goal = Target->FeetLocation() + FVector(0, 0, 1.f * WWO::M);
-	FVector To = Goal - GetActorLocation();
+	const FVector Origin = GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - 1.f * WWO::M);
+	FVector To = Goal - Origin;
 	To.Z *= Weapon->LungeVertical;
 	const float Flat = FVector2D(To.X, To.Y).Size();
 	const TArray<FWWOAimPart> Parts = Target->GetAimParts();
@@ -569,10 +572,20 @@ void AWWOCharacter::ApplyLunge(float DeltaSeconds)
 		bLunging = false;
 		LungeVelocity = FVector::ZeroVector;
 		GetCharacterMovement()->Velocity = FVector::ZeroVector; // stop dead; gravity takes over
+		WishVelocity = FVector::ZeroVector; // (this frame's move too, like Godot's velocity = ZERO)
 		GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 		return;
 	}
 	LungeVelocity = bArrived ? FVector::ZeroVector : To.GetSafeNormal() * Weapon->LungeSpeed * WWO::M;
+	if (!bArrived && DeltaSeconds > 0.f && To.Size() > 1.f)
+	{
+		// Godot checks for arrival every 60 Hz step, so a lunge ends up to one step (20 cm at
+		// 12 m/s) past the stop distance. Stop where that step lands, at any frame rate.
+		const float Step = Weapon->LungeSpeed * WWO::M / 60.f * Flat / To.Size(); // flat cm per 60 Hz step
+		const float Left = FMath::CeilToFloat((Flat - Reach) / FMath::Max(Step, 1.f)) * Step;
+		const float FlatThisFrame = Step * 60.f * DeltaSeconds;
+		if (FlatThisFrame > Left) LungeVelocity *= Left / FlatThisFrame;
+	}
 	TurnToward(Parts[0].Position, Weapon->LungeAim, DeltaSeconds); // upper body, so you arrive looking at it
 }
 

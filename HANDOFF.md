@@ -13,7 +13,11 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   sprint / slide / stop, logging speeds as `AutoTest move:`; then, by the nearest crate with damage off, a
   standing jump, a double jump and a hop onto the crate, logging arcs as `AutoTest jump:`; then cycles
   through every weapon, firing each, and logs hand-cannon kick and recovery, a reload, the sniper scope
-  and the rifle's fire rate as `AutoTest gun:`) and saves screenshots to `Saved/AutoTest/`.
+  and the rifle's fire rate as `AutoTest gun:`; then throws every grenade in turn at a training target
+  (the Blinding Grenade and Snare Mine at an enemy), logging each throw and what it did as
+  `AutoTest grenade:` / `Grenade <id>:`, with blast, after and throw-arm screenshots; then a melee lunge onto the
+  target, a punch on an enemy (knockback) and a swing at nothing, as `AutoTest melee:`) and saves
+  screenshots to `Saved/AutoTest/`.
 
 ## Where things are
 | Godot | Unreal |
@@ -21,7 +25,8 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 | player.gd | `Player/WWOCharacter` + `WWOCharacterMovement` (CharacterMovementComponent subclass: it runs the character's movement rules right before each move, takes horizontal velocity and gravity from them, climbs slopes like Godot's move_and_slide, crouches from the feet, and steps up only 15 cm like Godot's capsule; falls without a terminal velocity in substeps no longer than Godot's 60 Hz step; the player stands on enemies and allies instead of Unreal's jump-off bounce; floors and collision are Unreal's) |
 | gun.gd, aim_assist.gd | `Player/WWOWeaponComponent`, `WWOAimAssistComponent` (viewmodel uses Unreal First Person Rendering for its own FOV) |
 | player_health / ability_manager / grenade_thrower / ult_manager | `Player/WWOHealthComponent`, `WWOAbilityComponent`, `WWOGrenadeComponent`, `WWOUltComponent` |
-| grenade.gd | `Weapons/WWOGrenade` (ProjectileMovementComponent) |
+| grenade.gd | `Weapons/WWOGrenade` (ProjectileMovementComponent, plus Godot's rigid-body damping and contact friction with spin, so it bounces and rolls like the Godot ball) |
+| characters/fp_arm.gd | First-person arms in `Player/WWOWeaponComponent`, moved by `Player/WWOFPArmPaths.h` (baked from the Godot UAL animations by `Tools/bake_fp_arm_paths.py`) |
 | loadout.gd + modifiers.gd | `Systems/WWOLoadoutSubsystem` (GameInstance subsystem, SaveGame slot "Loadout") |
 | groups, TargetManager, DamageNumbers | `Systems/WWOWorldSubsystem`, `WWOTargetable` interface |
 | enemies/*.gd | `Enemies/WWOEnemy`, `WWOEnemyTypes` (Soldier, Swarm, Tank), `WWOEnemyProjectile` |
@@ -54,6 +59,12 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Flora grafts are simplified gray-box pods, caps and plates (not the procedural vines/mushrooms/bark).
   Frame part region colors show on the first-person arm only.
 - Effects are C++ shapes and instanced-mesh particles, not Niagara.
+- The first-person punch and throw arms are simple limbs (cylinders and a fist block) instead of the
+  mannequin's arm, but they follow the Godot animations' shoulder, elbow, wrist and knuckle paths
+  (Melee_Hook, OverhandThrow) with the same timings, placement and arm FOV.
+- Wall Grenade walls stand on the ground under the blast. In Godot the ground ray also hits the
+  grenade itself (it isn't excluded), so walls there start at the grenade's top: 24 cm up when it
+  rests on the floor, higher if it goes off mid-bounce. Probably a Godot bug; not copied.
 - Arena layout is identical but built from prototype-grid blocks instead of the Quaternius kit.
 - Input actions are created in code (Enhanced Input), not as assets. Character menu on the
   DualSense is mapped to the Create button and I.

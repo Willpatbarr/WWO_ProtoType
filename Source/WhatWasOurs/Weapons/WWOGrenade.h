@@ -65,6 +65,8 @@ public:
 	static constexpr float Radius = 0.12f; // meters (seeds are smaller)
 	static constexpr float EdgeDamage = 0.5f;
 	static constexpr float Proximity = 0.45f; // the Poison Spike counts as a hit this far from a body
+	static constexpr float LinearDamp = 0.1f;     // Godot's default rigid-body damping (per second)
+	static constexpr float ContactFriction = 0.8f; // the Godot grenade's physics material friction
 
 	FWWOGrenadeSpec Spec;
 
@@ -86,9 +88,13 @@ private:
 	int32 PatchesLeft = 0;
 	float PatchCooldown = 0.f;
 	bool bCounted = false;
+	FVector ReleasedAt = FVector::ZeroVector;
+	bool bBounced = false;
+	FVector Spin = FVector::ZeroVector; // angular velocity (rad/s), for rolling contact friction
 
 	void Setup(AActor* InThrower);
 	UFUNCTION() void OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity);
+	void ApplyContactFriction(const FHitResult& Hit, const FVector& ImpactVelocity);
 	void Seek(float DeltaSeconds);
 	void UpdateMine(float DeltaSeconds);
 	void Stick();

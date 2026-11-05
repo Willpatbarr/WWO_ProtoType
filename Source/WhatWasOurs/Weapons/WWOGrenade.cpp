@@ -11,6 +11,7 @@
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
+#include "WhatWasOurs.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
@@ -37,7 +38,7 @@ AWWOGrenade::AWWOGrenade()
 	Movement->MaxSpeed = 0.f; // no limit
 	Movement->bShouldBounce = true;
 	Movement->Bounciness = 0.35f;
-	Movement->Friction = 0.4f;
+	Movement->Friction = 0.f; // OnBounce applies Godot's rigid-body contact friction (with spin) instead
 	Movement->ProjectileGravityScale = 1.f; // 9.8 m/s^2, like Godot's rigid bodies
 	Movement->BounceVelocityStopSimulatingThreshold = 30.f;
 }
@@ -71,6 +72,7 @@ void AWWOGrenade::ExplodeAt(UWorld* World, const FWWOGrenadeSpec& InSpec, const 
 void AWWOGrenade::Setup(AActor* InThrower)
 {
 	Thrower = InThrower;
+	ReleasedAt = GetActorLocation();
 	if (InThrower) Collision->IgnoreActorWhenMoving(InThrower, true); // don't bounce off yourself on the way out
 	const float Size = Radius * (Spec.bIsSeed ? 0.65f : 1.f) * Spec.SizeScale * WWO::M;
 	Collision->SetSphereRadius(Size);
@@ -118,7 +120,6 @@ void AWWOGrenade::Setup(AActor* InThrower)
 	{
 		LifeLimit = Spec.Data->MineLife; // no fuse: it waits for an enemy
 		bFuseIsFizzle = true;
-		Movement->Bounciness = 0.f;
 	}
 	else if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike)
 	{
@@ -156,6 +157,13 @@ void AWWOGrenade::Tick(float DeltaSeconds)
 	Age += DeltaSeconds;
 	PatchCooldown -= DeltaSeconds;
 	if (Trail.IsValid()) Trail->SetActorLocation(GetActorLocation());
+	if (!bStuck)
+	{
+		// Godot's default rigid-body damping (0.1 per second, linear and angular).
+		const float Damp = FMath::Max(1.f - LinearDamp * DeltaSeconds, 0.f);
+		Movement->Velocity *= Damp;
+		Spin *= Damp;
+	}
 	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike) Seek(DeltaSeconds);
 	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Tripmine && bStuck) UpdateMine(DeltaSeconds);
 	if (bSpent) return;
@@ -198,14 +206,44 @@ void AWWOGrenade::Seek(float DeltaSeconds)
 	const float Angle = FMath::Acos(FMath::Clamp(FVector::DotProduct(Heading, To), -1.f, 1.f));
 	if (Angle < 0.001f) return;
 	const float Turn = FMath::DegreesToRadians(Spec.Data->SeekStrength) * (1.f + (1.f - BestDistance / (Spec.Data->SeekRadius * WWO::M))) * DeltaSeconds;
-	const FQuat Q = FQuat::Slerp(Heading.ToOrientationQuat(), To.ToOrientationQuat(), FMath::Min(Turn / Angle, 1.f));
-	Movement->Velocity = Q.GetForwardVector() * Speed;
+	// Godot's Vector3.slerp: turn the heading along the great circle toward the target.
+	const FVector Axis = FVector::CrossProduct(Heading, To).GetSafeNormal();
+	if (Axis.IsNearlyZero()) return;
+	Movement->Velocity = Heading.RotateAngleAxisRad(Angle * FMath::Min(Turn / Angle, 1.f), Axis) * Speed;
+}
+
+void AWWOGrenade::ApplyContactFriction(const FHitResult& Hit, const FVector& ImpactVelocity)
+{
+	// Godot's rigid-body contact: the bounce keeps the tangential speed (Movement->Friction is 0),
+	// then friction (0.8, the grenade's against a default surface) pushes against the contact
+	// point's slip, up to mu * the normal impulse, and spins the ball. Once it's rolling there's
+	// no slip, so it keeps rolling (only the damping slows it), like the Godot ball.
+	const FVector N = Hit.ImpactNormal.GetSafeNormal();
+	const float Vn = FVector::DotProduct(ImpactVelocity, N);
+	if (Vn >= 0.f || N.IsNearlyZero()) return;
+	const float R = Collision->GetUnscaledSphereRadius();
+	const FVector V = Movement->Velocity;
+	FVector Slip = V - R * FVector::CrossProduct(Spin, N); // the contact point's velocity (r = -R n)...
+	Slip -= FVector::DotProduct(Slip, N) * N; // ...along the surface
+	const float SlipSpeed = Slip.Size();
+	if (SlipSpeed < KINDA_SMALL_NUMBER) return;
+	const float Normal = -Vn * (1.f + Movement->Bounciness); // normal impulse per unit mass
+	const FVector J = -Slip / SlipSpeed * FMath::Min(ContactFriction * Normal, SlipSpeed * 2.f / 7.f); // a solid ball stops slipping at 2/7
+	Movement->Velocity = V + J;
+	Spin -= 5.f / (2.f * R) * FVector::CrossProduct(N, J);
 }
 
 void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 {
 	if (bSpent) return;
 	AActor* Other = Hit.GetActor();
+	if (!bStuck) ApplyContactFriction(Hit, ImpactVelocity);
+	if (!bBounced && Spec.Data)
+	{
+		bBounced = true;
+		UE_LOG(LogWWO, Log, TEXT("Grenade %s: first touched %s %.1f m from the hand after %.2f s, %.1f m/s in, %.1f m/s out"), *Spec.Data->Id.ToString(),
+			Other ? *Other->GetName() : TEXT("-"), FVector::Dist(GetActorLocation(), ReleasedAt) / WWO::M, Age, ImpactVelocity.Size() / WWO::M, Movement->Velocity.Size() / WWO::M);
+	}
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Other);
 	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike && Target && !Target->IsDead())
 	{
@@ -237,6 +275,7 @@ void AWWOGrenade::Stick()
 	Movement->ProjectileGravityScale = 0.f;
 	Movement->Deactivate();
 	ArmLeft = Spec.Data->ArmTime;
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: stuck at %s after %.2f s"), *Spec.Data->Id.ToString(), *GetActorLocation().ToCompactString(), Age);
 	if (Trail.IsValid()) Trail->StopAndFade();
 	Halo = WWOFX::AddSoftSphere(this, Collision, Spec.Color, 0.f, 2.f);
 	Halo->SetRelativeScale3D(FVector(40.f / 50.f));
@@ -276,6 +315,8 @@ void AWWOGrenade::SpikeHit(AActor* TargetActor)
 	IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor);
 	const bool bKilled = Target->TakeHit(Spec.Damage, false, Point);
 	Confirm(bKilled);
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: spiked %s for %.0f after %.2f s (killed %d), poison %.0f/s for %.1f s"), *Spec.Data->Id.ToString(),
+		*TargetActor->GetName(), Spec.Damage, Age, bKilled, Spec.Data->PoisonDps, Spec.Data->PoisonTime);
 	if (!bKilled)
 	{
 		const float Potency = 1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage"); // Stronger Poison
@@ -290,6 +331,7 @@ void AWWOGrenade::Fizzle()
 {
 	if (bSpent) return;
 	bSpent = true;
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: fizzled after %.2f s"), Spec.Data ? *Spec.Data->Id.ToString() : TEXT("?"), Age);
 	Spec.BlastRadius = 0.6f;
 	SpawnBlast(GetActorLocation());
 	Destroy();
@@ -302,6 +344,8 @@ void AWWOGrenade::Explode()
 	UWorld* World = GetWorld();
 	const FVector Center = GetActorLocation();
 	SpawnBlast(Center);
+	int32 HitCount = 0;
+	float DealtTotal = 0.f;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOBlast), false, this);
 	if (Thrower.IsValid()) Params.AddIgnoredActor(Thrower.Get());
 	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
@@ -328,7 +372,11 @@ void AWWOGrenade::Explode()
 		}
 		const float Dealt = Spec.Damage * FMath::Lerp(1.f, EdgeDamage, BestDistance / (Spec.BlastRadius * WWO::M));
 		Confirm(Target->TakeHit(Dealt, false, BestPart.Position));
+		HitCount++;
+		DealtTotal += Dealt;
 	}
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: exploded at %s after %.2f s (radius %.1f m), hit %d for %.0f in all"),
+		Spec.Data ? *Spec.Data->Id.ToString() : (Spec.bIsSeed ? TEXT("seed") : TEXT("blast")), *Center.ToCompactString(), Age, Spec.BlastRadius, HitCount, DealtTotal);
 	if (Spec.Seedburst) Burst(Center);
 	ShareShields(Center);
 	if (Spec.Data)
@@ -337,23 +385,29 @@ void AWWOGrenade::Explode()
 		const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
 		if (D->Kind == EWWOGrenadeKind::Wall)
 		{
-			AWWOBarkWall::Raise(World, Center, Spec.ThrownFrom, D->WallWidth, D->WallHeight,
+			const AWWOBarkWall* Wall = AWWOBarkWall::Raise(World, Center, Spec.ThrownFrom, D->WallWidth, D->WallHeight,
 				D->WallTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "wall_longer"))); // Longer Walls
+			if (Wall) UE_LOG(LogWWO, Log, TEXT("Grenade %s: raised a %.1f x %.1f m wall at %s facing yaw %.0f"), *D->Id.ToString(), D->WallWidth, D->WallHeight,
+				*Wall->GetActorLocation().ToCompactString(), Wall->GetActorRotation().Yaw);
 		}
 		if (D->Kind == EWWOGrenadeKind::Blind || D->Kind == EWWOGrenadeKind::Tripmine)
 		{
+			int32 Affected = 0;
 			const float SlowTime = D->SlowTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "slow_longer")); // Longer Snare
 			for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
 			{
 				if (FVector::Dist(Enemy->FeetLocation(), Center) > Reach) continue;
 				if (D->Kind == EWWOGrenadeKind::Blind) Enemy->ApplyBlind(D->BlindTime);
 				else Enemy->ApplySlow(D->SlowAmount, SlowTime);
+				Affected++;
 			}
+			UE_LOG(LogWWO, Log, TEXT("Grenade %s: %s %d enemies"), *D->Id.ToString(), D->Kind == EWWOGrenadeKind::Blind ? TEXT("blinded") : TEXT("slowed"), Affected);
 		}
 		if (D->Kind == EWWOGrenadeKind::Pool)
 		{
 			AWWOSporePool::Spawn(World, Center - FVector(0, 0, Radius * WWO::M), Spec.BlastRadius,
 				D->PoolDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")), D->PoolTime, Spec.Color, Spec.Flavor, Thrower.Get());
+			UE_LOG(LogWWO, Log, TEXT("Grenade %s: left a %.1f m pool (%.0f/s for %.1f s)"), *D->Id.ToString(), Spec.BlastRadius, D->PoolDps, D->PoolTime);
 		}
 	}
 	Destroy();

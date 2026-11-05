@@ -112,6 +112,7 @@ public:
 	void CancelReload();
 	void StartThrowPose(const FLinearColor& GrenadeColor);
 	bool IsWindingThrow() const { return ThrowClock < ThrowRelease; }
+	float GetThrowClock() const { return ThrowClock; }
 	void StartPunch(float FovDegrees, float RollDegrees, float Seconds);
 	void Rumble(float Weak, float Strong, float Seconds);
 	int32 MagazineSize() const;
@@ -133,6 +134,7 @@ private:
 	FVector2D LookDelta = FVector2D::ZeroVector;
 	FVector2D SwayValue = FVector2D::ZeroVector;
 	float SprintPose = 0.f, SlidePose = 0.f, AirLag = 0.f, MantlePose = 0.f;
+	float ArmFovRatio = 1.f; // tan(gun half-FOV) / tan(arm half-FOV): see UpdateFov
 	float ThrowTime = 0.f;
 	float ThrowClock = 1e9f;
 	FLinearColor ThrowColor = FLinearColor::White;

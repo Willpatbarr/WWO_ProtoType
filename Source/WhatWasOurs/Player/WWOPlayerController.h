@@ -119,6 +119,24 @@ private:
 	float AutoGunPitch = 0.f; // gun steps
 	int32 AutoGunAmmo = 0;
 	double AutoGunTime = 0.0;
+	// Grenade steps: each grenade kind thrown at a training target in turn (the wall last).
+	TArray<TObjectPtr<class UWWOGrenadeData>> AutoGrenades;
+	TObjectPtr<class UWWOGrenadeData> AutoGrenadeBefore; // equipped again afterwards
+	TWeakObjectPtr<AActor> AutoTarget; // the training target
+	TWeakObjectPtr<AActor> AutoGrenadeTarget; // this grenade's (an enemy for blind and slow)
+	int32 AutoGrenadeIndex = -1;
+	float AutoPhase = 0.f;    // seconds into this grenade (or melee) step
+	float AutoGoneAt = -1.f;  // when the thrown grenade went off (-1: still out)
+	float AutoTargetHealth = 0.f;
+	bool bAutoGrenadeOut = false, bAutoShotBlast = false, bAutoShotArmed = false, bAutoLongThrow = false;
+	// Melee steps: a lunge onto the training target, then a punch on the nearest enemy.
+	int32 AutoMeleeIndex = -1;
+	FVector AutoMeleeFrom = FVector::ZeroVector;
+	float AutoLungeTime = 0.f;
+	bool bAutoSawLunge = false, bAutoMeleeLogged = false, bAutoShotPunch = false;
+	bool UpdateAutoGrenadeTest(class AWWOCharacter* P, float DeltaTime);
+	bool UpdateAutoMeleeTest(class AWWOCharacter* P, float DeltaTime);
+	bool PlaceForAutoTest(class AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove = true);
 	void UpdateAutoTest(float DeltaTime);
 	void Shot(const TCHAR* Name);
 };
