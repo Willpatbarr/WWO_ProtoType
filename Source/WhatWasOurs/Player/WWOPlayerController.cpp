@@ -141,7 +141,13 @@ void AWWOPlayerController::BuildInput()
 		UInputModifierDeadZone* Dead = NewObject<UInputModifierDeadZone>(this);
 		Dead->LowerThreshold = 0.15f;
 		Dead->Type = EDeadZoneType::Radial;
-		GameContext->MapKey(LookAction, EKeys::Gamepad_Right2D).Modifiers.Add(Dead);
+		// The stick's Y came out inverted compared to the Godot build: flip it.
+		UInputModifierNegate* FlipY = NewObject<UInputModifierNegate>(this);
+		FlipY->bX = false;
+		FlipY->bZ = false;
+		FEnhancedActionKeyMapping& Stick = GameContext->MapKey(LookAction, EKeys::Gamepad_Right2D);
+		Stick.Modifiers.Add(Dead);
+		Stick.Modifiers.Add(FlipY);
 	}
 	MouseLookAction = NewObject<UInputAction>(this);
 	MouseLookAction->ValueType = EInputActionValueType::Axis2D;
