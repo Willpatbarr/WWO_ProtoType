@@ -116,6 +116,9 @@ private:
 	float AutoJumpTime = 0.f, AutoJumpFromZ = 0.f, AutoJumpPeak = 0.f, AutoJumpPeakTime = 0.f, AutoJumpLandTime = 0.f, AutoJumpDip = 0.f;
 	FVector AutoCrateAt = FVector::ZeroVector;
 	float AutoLookYaw = 0.f, AutoLookPitch = 0.f, AutoLookFrom = 0.f; // stick look step
+	float AutoGunPitch = 0.f; // gun steps
+	int32 AutoGunAmmo = 0;
+	double AutoGunTime = 0.0;
 	void UpdateAutoTest(float DeltaTime);
 	void Shot(const TCHAR* Name);
 };

@@ -80,24 +80,26 @@ namespace
 		{
 			for (float R = Radius; R > 0.f; R -= 0.75f) Circle(Center, R, Color, 1.5f, 16);
 		}
-		FSlateFontInfo Font(float Px, bool bBold = true, int32 Outline = 6) const
+		FSlateFontInfo Font(float Px, bool bBold = true, float Outline = 6.f, float OutlineAlpha = 0.75f) const
 		{
 			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::Max(1, FMath::RoundToInt(Px * 0.75f * S)));
 			F.OutlineSettings.OutlineSize = FMath::RoundToInt(Outline * 0.5f * S);
-			F.OutlineSettings.OutlineColor = FLinearColor(0, 0, 0, 0.75f);
+			F.OutlineSettings.OutlineColor = FLinearColor(0, 0, 0, OutlineAlpha);
 			return F;
 		}
 		FVector2D Measure(const FString& Text, const FSlateFontInfo& F) const
 		{
 			return FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text, F) / S;
 		}
-		// Align: 0 = left, 0.5 = center, 1 = right of Pos.
-		void Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, bool bBold = true, int32 Outline = 6) const
+		// Align: 0 = left / top, 0.5 = center, 1 = right / bottom of Pos. The outline fades with
+		// the text, like a Godot modulate (Slate doesn't tint outlines on its own).
+		void Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, bool bBold = true, float Outline = 6.f,
+			float OutlineAlpha = 0.75f, float AlignY = 0.f) const
 		{
 			if (Str.IsEmpty() || Color.A <= 0.001f) return;
-			const FSlateFontInfo F = Font(Px, bBold, Outline);
+			const FSlateFontInfo F = Font(Px, bBold, Outline, OutlineAlpha * Color.A);
 			const FVector2D M = Measure(Str, F);
-			const FVector2D At = Pos - FVector2D(M.X * AlignX, 0.f);
+			const FVector2D At = Pos - FVector2D(M.X * AlignX, M.Y * AlignY);
 			FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
 				ESlateDrawEffect::None, WWO::Lin(Color));
 		}
@@ -150,7 +152,7 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	AWWOCharacter* P = Player();
 	if (P && BoundPlayer.Get() != P) Bind(P);
-	HitTime -= InDeltaTime;
+	HitTime -= GetWorld() ? GetWorld()->GetDeltaSeconds() : InDeltaTime; // game time, like Godot's _process (slows in a hit-stop)
 	DamageFlash = WWO::MoveToward(DamageFlash, 0.f, 1.2f * InDeltaTime);
 	if (!VignetteMat)
 	{
@@ -197,14 +199,19 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Material(ScopeMat);
 	}
 
-	// Floating damage numbers and words (same size on screen no matter how far away).
-	for (const FWWOFloatingText& T : WS->FloatingTexts())
+	// Floating damage numbers and words: Godot's fixed-size Label3D (font 36, crits 48, pixel
+	// size 0.0006, outline 8). Fixed size keeps it at depth 1 m, so it's the same size at any
+	// distance but still scales with the camera FOV (bigger when zoomed in). Centered on its point.
 	{
-		FVector2D At;
-		const FVector World = T.Start + FVector(T.Jitter, 0, 60.f * FMath::Min(T.Age / 0.7f, 1.f));
-		if (!ToScreen(World, At)) continue;
-		const float Alpha = 1.f - FMath::Clamp((T.Age - 0.25f) / 0.45f, 0.f, 1.f);
-		P.Text(T.Text, At - FVector2D(0, 14), T.bCritical ? 26.f : 20.f, WWO::WithAlpha(T.Color, Alpha), 0.5f);
+		const float PxPerFontPx = 0.0006f * Size.X / (2.f * FMath::Tan(FMath::DegreesToRadians(Pl->Camera->FieldOfView) * 0.5f));
+		for (const FWWOFloatingText& T : WS->FloatingTexts())
+		{
+			FVector2D At;
+			const FVector World = T.Start + FVector(0, T.Jitter, 60.f * FMath::Min(T.Age / FWWOFloatingText::RiseTime, 1.f));
+			if (!ToScreen(World, At)) continue;
+			const float FontPx = T.bCritical ? 48.f : 36.f;
+			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, true, 8.f * PxPerFontPx, 0.8f, 0.5f);
+		}
 	}
 	// Teammate labels.
 	for (const AWWOAlly* Ally : WS->AllTeammates())
@@ -284,16 +291,20 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	// Ammo (bottom right): weapon name, the count (red when low), reload bar.
 	if (W)
 	{
+		// Godot stacks these in a bottom-right VBox (4 px apart): the hidden reload bar takes no
+		// room, so the labels sit 12 px lower when not reloading, and the bar spans the widest row.
 		const int32 Mag = Gun->MagazineSize();
 		const FVector2D Corner(Size.X - 40.f, Size.Y - 40.f);
-		P.Text(W->DisplayName, Corner - FVector2D(0, 92), 20.f, FLinearColor::White, 1.f);
+		const FVector2D Lift(0.f, Gun->bReloading ? 0.f : -12.f);
+		P.Text(W->DisplayName, Corner - FVector2D(0, 92) - Lift, 20.f, FLinearColor::White, 1.f, true, 6.f, 0.7f);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
 		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
-		P.Text(Count, Corner - FVector2D(0, 66), 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, true, 8);
+		P.Text(Count, Corner - FVector2D(0, 66) - Lift, 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, true, 8.f, 0.7f);
 		if (Gun->bReloading)
 		{
-			P.Box(Corner - FVector2D(160, 8), FVector2D(160, 8), FLinearColor(0.15f, 0.15f, 0.17f, 0.9f));
-			P.Box(Corner - FVector2D(160, 8), FVector2D(160 * Gun->ReloadProgress, 8), FLinearColor(0.75f, 0.78f, 0.85f));
+			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(44.f, true, 8.f)).X, P.Measure(W->DisplayName, P.Font(20.f)).X);
+			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth, 8), FLinearColor(0.15f, 0.15f, 0.17f, 0.9f));
+			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth * Gun->ReloadProgress, 8), FLinearColor(0.75f, 0.78f, 0.85f));
 		}
 	}
 

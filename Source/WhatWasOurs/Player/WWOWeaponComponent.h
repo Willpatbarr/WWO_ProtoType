@@ -142,6 +142,7 @@ private:
 	float FireCooldown = 0.f;
 	float Kick = 0.f;
 	float FlashTime = 0.f;
+	bool bFlashVisible = false;
 	float PunchAge = 1e9f, PunchFovValue = 0.f, PunchRollValue = 0.f, PunchLength = 0.1f;
 	bool bMeleeLanded = false;
 	TWeakObjectPtr<AActor> MeleeTarget;

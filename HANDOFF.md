@@ -11,8 +11,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - In the editor's Play-in-Editor, Esc ends PIE: use Tab to open the settings menu.
 - `-WWOAutoTest` plays a scripted run (fire, ADS, grenade, melee, ult, both menus, then walk / crouch /
   sprint / slide / stop, logging speeds as `AutoTest move:`; then, by the nearest crate with damage off, a
-  standing jump, a double jump and a hop onto the crate, logging arcs as `AutoTest jump:`) and saves
-  screenshots to `Saved/AutoTest/`.
+  standing jump, a double jump and a hop onto the crate, logging arcs as `AutoTest jump:`; then cycles
+  through every weapon, firing each, and logs hand-cannon kick and recovery, a reload, the sniper scope
+  and the rifle's fire rate as `AutoTest gun:`) and saves screenshots to `Saved/AutoTest/`.
 
 ## Where things are
 | Godot | Unreal |
@@ -63,4 +64,6 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Mouse look ignores the first 2 s of play and, for 0.25 s after a menu closes, single jumps over
   250 px (the cursor recapture). Godot has no such filter. Mouse pixel scale isn't matched to
   Godot's canvas_items stretch, so mouse sensitivity may differ.
+- Controller rumble counts down in game time, so a melee hit-stop (a few hundredths of a second at
+  0.03 speed) stretches that buzz by about the hit-stop's length. Godot's rumble runs in real time.
 - Not yet checked hands-on with the DualSense.

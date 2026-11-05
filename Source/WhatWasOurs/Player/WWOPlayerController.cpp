@@ -22,6 +22,8 @@
 #include "Player/WWOGrenadeComponent.h"
 #include "Player/WWOUltComponent.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Systems/WWOLoadoutSubsystem.h"
+#include "Data/WWOData.h"
 #include "Systems/WWOTargetable.h"
 #include "WhatWasOurs.h"
 #include "Engine/LocalPlayer.h"
@@ -637,5 +639,63 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 			FMath::RadiansToDegrees(P->StickSensitivity * Seconds), FMath::RadiansToDegrees(P->StickSensitivity * Seconds * 0.5f), P->Camera->FieldOfView);
 		Next(37.f);
 	}
-	else if (At(37.f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	// Guns: cycle through every weapon (ending back on the first), fire each, and log recoil,
+	// ammo and fire rate as `AutoTest gun:`.
+	else if (At(37.f) || At(39.5f) || At(40.6f) || At(42.f))
+	{
+		const int32 Now = AutoTestStep;
+		P->Health->GodMode = 1.f; // no dying mid-test (waves are running)
+		if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this)) Loadout->CycleWeapon(1);
+		const UWWOWeaponData* W = P->Weapon->GetWeaponData();
+		UE_LOG(LogWWO, Display, TEXT("AutoTest gun: equipped %s, ammo %d / %d"), W ? *W->Id.ToString() : TEXT("none"), P->Weapon->Ammo, P->Weapon->MagazineSize());
+		Next(Now == 370 ? 37.5f : Now == 395 ? 40.f : Now == 406 ? 41.f : 42.5f);
+	}
+	else if (At(37.5f))
+	{
+		AimAtTarget();
+		AutoGunPitch = P->GetPitch();
+		AutoGunTime = GetWorld()->GetTimeSeconds();
+		JustPressed[(int32)EWWOAction::Fire] = true;
+		Next(37.6f);
+	}
+	else if (At(37.6f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest gun: hand cannon kick %.2f deg after %.3f game s (recoil up %.2f over %.3f s)"),
+			FMath::RadiansToDegrees(P->GetPitch() - AutoGunPitch), GetWorld()->GetTimeSeconds() - AutoGunTime,
+			P->Weapon->GetWeaponData()->RecoilUp, P->Weapon->GetWeaponData()->RecoilKickTime);
+		Shot(TEXT("14_handcannon"));
+		Next(38.1f);
+	}
+	else if (At(38.1f))
+	{
+		const UWWOWeaponData* W = P->Weapon->GetWeaponData();
+		UE_LOG(LogWWO, Display, TEXT("AutoTest gun: hand cannon at %.2f deg after %.3f game s (settles to %.2f at %.3f s), ammo %d"),
+			FMath::RadiansToDegrees(P->GetPitch() - AutoGunPitch), GetWorld()->GetTimeSeconds() - AutoGunTime, W->RecoilUp * (1.f - W->RecoilRecovery),
+			60.f / W->FireRate + W->RecoilRecoveryDelay, P->Weapon->Ammo);
+		JustPressed[(int32)EWWOAction::Reload] = true;
+		Next(38.7f);
+	}
+	else if (At(38.7f)) { Shot(TEXT("15_reload")); UE_LOG(LogWWO, Display, TEXT("AutoTest gun: reloading %d progress %.2f"), P->Weapon->bReloading, P->Weapon->ReloadProgress); Next(39.5f); }
+	else if (At(40.f)) { AimAtTarget(); JustPressed[(int32)EWWOAction::Fire] = true; Next(40.1f); }
+	else if (At(40.1f)) { Shot(TEXT("16_shotgun")); UE_LOG(LogWWO, Display, TEXT("AutoTest gun: shotgun ammo %d"), P->Weapon->Ammo); Next(40.6f); }
+	else if (At(41.f)) { AimAtTarget(); Held[(int32)EWWOAction::Aim] = true; Next(41.5f); }
+	else if (At(41.5f)) { Shot(TEXT("17_sniper_scope")); JustPressed[(int32)EWWOAction::Fire] = true; Next(41.6f); }
+	else if (At(41.6f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest gun: sniper ADS %.2f fov %.2f ammo %d"), P->Weapon->AdsAmount, P->Camera->FieldOfView, P->Weapon->Ammo);
+		Held[(int32)EWWOAction::Aim] = false;
+		Next(42.f);
+	}
+	else if (At(42.5f)) { AimAtTarget(); Held[(int32)EWWOAction::Aim] = true; Next(42.8f); }
+	else if (At(42.8f)) { Shot(TEXT("18_rifle_ads")); Next(43.f); } // (the screenshot's long frame would fire a burst)
+	else if (At(43.f)) { Held[(int32)EWWOAction::Fire] = true; AutoGunAmmo = P->Weapon->Ammo; AutoGunTime = GetWorld()->GetTimeSeconds(); Next(44.f); }
+	else if (At(44.f))
+	{
+		Held[(int32)EWWOAction::Fire] = Held[(int32)EWWOAction::Aim] = false;
+		const float Seconds = GetWorld()->GetTimeSeconds() - AutoGunTime;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest gun: rifle fired %d rounds in %.2f game s (fire rate %.0f rpm: about %.1f)"), AutoGunAmmo - P->Weapon->Ammo,
+			Seconds, P->Weapon->GetWeaponData()->FireRate, Seconds * P->Weapon->GetWeaponData()->FireRate / 60.f);
+		Next(44.5f);
+	}
+	else if (At(44.5f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }

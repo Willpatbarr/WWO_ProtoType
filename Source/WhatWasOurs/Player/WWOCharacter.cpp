@@ -169,6 +169,13 @@ void AWWOCharacter::ApplyRecoil(float PitchRad, float YawRad)
 {
 	const float Yaw = (Controller ? Controller->GetControlRotation().Yaw : GetActorRotation().Yaw) - FMath::RadiansToDegrees(YawRad);
 	SetViewRotation(Pitch + PitchRad, Yaw);
+	// Godot sets camera.rotation.x directly, so a shot's kick shows (and aims the next shot)
+	// this frame instead of at the next UpdateCamera.
+	if (!bUlting)
+	{
+		const FRotator CameraRotation = Camera->GetRelativeRotation();
+		Camera->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Pitch), CameraRotation.Yaw, CameraRotation.Roll));
+	}
 }
 
 void AWWOCharacter::TurnToward(const FVector& Point, float Strength, float DeltaSeconds)

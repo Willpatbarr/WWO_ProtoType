@@ -137,12 +137,13 @@ void UWWOWorldSubsystem::ShowText(const FString& Text, bool bCritical, const FVe
 	Entry.Start = Point + FVector(0, 0, 20.f);
 	Entry.Color = Color.A > 0.f ? Color : (bCritical ? CritColor() : FLinearColor::White);
 	Entry.bCritical = bCritical;
-	Entry.Jitter = FMath::FRandRange(-15.f, 15.f);
+	Entry.Jitter = FMath::FRandRange(-15.f, 15.f); // along world Y (Godot x)
 	Texts.Add(Entry);
 }
 
 void UWWOWorldSubsystem::Tick(float DeltaTime)
 {
 	for (FWWOFloatingText& T : Texts) T.Age += DeltaTime;
-	Texts.RemoveAll([](const FWWOFloatingText& T) { return T.Age >= 0.7f; });
+	// Godot's tween: rises for 0.7 s, fades from 0.25 s over 0.7 s, then frees itself.
+	Texts.RemoveAll([](const FWWOFloatingText& T) { return T.Age >= FWWOFloatingText::Lifetime; });
 }

@@ -78,7 +78,7 @@ namespace
 			{ TEXT("Magazine"), Box, FVector(0.04, 0.13, 0.06), FVector(0, -0.165, -0.02), FVector::ZeroVector, Orange, 0 },
 			{ TEXT("Stock"), Box, FVector(0.042, 0.07, 0.15), FVector(0, -0.08, 0.23), FVector::ZeroVector, Steel, 0 },
 			{ TEXT("SightBase"), Box, FVector(0.034, 0.01, 0.05), FVector(0, -0.0225, 0), FVector::ZeroVector, Dark, 0 },
-			{ TEXT("SightDot"), Sphere, FVector(0.0012, 0, 0), FVector::ZeroVector, FVector::ZeroVector, White, 2 },
+			{ TEXT("SightDot"), Sphere, FVector(0.0005, 0, 0), FVector::ZeroVector, FVector::ZeroVector, White, 2 },
 			{ TEXT("MuzzleFlash"), Sphere, FVector(0.03, 0, 0), FVector(0, -0.06, -0.41), FVector::ZeroVector, Flash, 6 },
 		};
 		static const TArray<FGunPart> HandCannon = {
@@ -88,7 +88,7 @@ namespace
 			{ TEXT("Magazine"), Cyl, FVector(0.032, 0.075, 0), FVector(0, -0.066, -0.005), FVector::ZeroVector, Gold, 0 },
 			{ TEXT("Grip"), Box, FVector(0.036, 0.12, 0.05), FVector(0, -0.14, 0.09), FVector(-20, 0, 0), Wood, 0 },
 			{ TEXT("Hammer"), Box, FVector(0.012, 0.026, 0.02), FVector(0, -0.026, 0.1), FVector::ZeroVector, Dark, 0 },
-			{ TEXT("SightDot"), Sphere, FVector(0.0016, 0, 0), FVector(0, 0, -0.12), FVector::ZeroVector, White, 2 },
+			{ TEXT("SightDot"), Sphere, FVector(0.0008, 0, 0), FVector(0, 0, -0.12), FVector::ZeroVector, White, 2 },
 			{ TEXT("MuzzleFlash"), Sphere, FVector(0.04, 0, 0), FVector(0, -0.046, -0.26), FVector::ZeroVector, Flash, 6 },
 		};
 		static const TArray<FGunPart> Shotgun = {
@@ -598,6 +598,7 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 	AWWOCharacter* P = GetPlayer();
 	Kick = WWO::MoveToward(Kick, 0.f, 12.f * DeltaSeconds);
 	FlashTime -= DeltaSeconds;
+	bFlashVisible = FlashTime > 0.f; // decided before this frame's shot, like Godot (a new flash shows from the next frame)
 
 	FireCooldown -= DeltaSeconds;
 	// Handling: the gun needs a moment to come up after a sprint or mantle. A trigger pull
@@ -703,7 +704,7 @@ void UWWOWeaponComponent::UpdateFov()
 	const bool bShowModel = !(Weapon->ScopeOverlay >= 0.5f && AdsAmount > 0.85f);
 	for (const auto& Pair : Parts)
 	{
-		if (Pair.Value) Pair.Value->SetVisibility(bShowModel && (Pair.Key != "MuzzleFlash" || FlashTime > 0.f));
+		if (Pair.Value) Pair.Value->SetVisibility(bShowModel && (Pair.Key != "MuzzleFlash" || bFlashVisible));
 	}
 }
 

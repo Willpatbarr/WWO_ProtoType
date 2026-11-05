@@ -25,6 +25,13 @@ struct FWWOFloatingText
 	float Age = 0.f;
 	float Jitter = 0.f;
 	TWeakObjectPtr<AActor> Follow; // attached labels (ally status) stay over their actor
+
+	// Godot's DamageNumbers tween: rise 0.6 m over 0.7 s; fade out over 0.7 s after 0.25 s.
+	static constexpr float RiseTime = 0.7f;
+	static constexpr float FadeDelay = 0.25f;
+	static constexpr float FadeTime = 0.7f;
+	static constexpr float Lifetime = FadeDelay + FadeTime;
+	float Alpha() const { return 1.f - FMath::Clamp((Age - FadeDelay) / FadeTime, 0.f, 1.f); }
 };
 
 UCLASS()
