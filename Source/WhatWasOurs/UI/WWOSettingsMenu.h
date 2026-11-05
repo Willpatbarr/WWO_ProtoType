@@ -21,6 +21,7 @@ class USlider;
 class UButton;
 class UWrapBox;
 class UPanelWidget;
+class UProgressBar;
 class AWWOCharacter;
 
 // Small UObjects that forward UMG's dynamic delegates to C++ lambdas.
@@ -89,6 +90,9 @@ class WHATWASOURS_API UWWOSettingsMenu : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
+		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
 	bool IsOpen() const { return bOpen; }
 	bool IsPrepared() const { return bBuilt; }
@@ -97,6 +101,10 @@ public:
 	void Close();
 	void Back();
 	void CycleGlobalTab(int32 Step);
+	int32 GetGlobalTab() const { return GlobalTab; }
+	// What's on screen, for the autotest: the open item of the browser that's showing ("" = its list).
+	FString OpenItemKey() const;
+	float GlobalScrollOffset() const; // the Global tab's scroll position
 
 	float GetValue(const FString& Key, FName Id) const;
 	void SetValue(const FString& Key, FName Id, float Value);
@@ -104,12 +112,15 @@ public:
 	void ResetAll();
 	bool SaveDefaults();
 
-	// Shared styling helpers (the character menu uses them too).
-	static FSlateFontInfo Font(float Px, bool bBold = false);
+	// Shared styling helpers (the character menu uses them too). Godot draws every label in its
+	// default font, Open Sans SemiBold; Roboto Medium is the engine's closest weight.
+	static FSlateFontInfo Font(float Px);
 	static FSlateBrush RoundBrush(const FLinearColor& Color, float Radius = 8.f, const FLinearColor& Outline = FLinearColor(0, 0, 0, 0), float OutlineWidth = 0.f);
 	UButton* MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx = 22.f, const FLinearColor& Color = FLinearColor(0.2f, 0.21f, 0.25f),
-		bool bLeftAlign = false, float MinHeight = 0.f);
-	UTextBlock* MakeText(const FString& Text, float FontPx, const FLinearColor& Color = FLinearColor::White, bool bBold = false, bool bWrap = false);
+		bool bLeftAlign = false, FMargin Padding = FMargin(10.f, 4.f), bool bWrap = false);
+	UTextBlock* MakeText(const FString& Text, float FontPx, const FLinearColor& Color = FLinearColor::White, bool bWrap = false);
+	// Godot's ring cursor, drawn over an open menu (see FWWOMenuCursor).
+	static void PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer);
 
 	static constexpr float K = 1.2f; // Godot's 1600 x 900 sizes -> Unreal's 1080p reference
 
@@ -119,13 +130,14 @@ private:
 	TArray<FWWOSettingSection> Sections;
 	TArray<FString> GlobalKeys;
 	TMap<FString, TMap<FName, float>> Defaults;
-	struct FLiveSlider { TWeakObjectPtr<USlider> Slider; TWeakObjectPtr<UTextBlock> Value; FString Key; int32 Row; };
+	struct FLiveSlider { TWeakObjectPtr<USlider> Slider; TWeakObjectPtr<UTextBlock> Value; TWeakObjectPtr<UProgressBar> Fill; FString Key; int32 Row; };
 	TArray<FLiveSlider> Live;
 	TArray<FWWOBrowser> Browsers;
 	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers;
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> GlobalSwitcher;
 	UPROPERTY() TArray<TObjectPtr<UButton>> GlobalTabButtons;
 	UPROPERTY() TObjectPtr<UButton> SaveButton;
+	double SaveRevertAt = 0.0; // real time the "Saved ✓" label goes back to "Save as defaults"
 	int32 GlobalTab = 0;
 
 	void Build();
@@ -142,6 +154,7 @@ private:
 	UWidget* MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Provider);
 	void ShowList(int32 BrowserIndex);
 	void OpenItem(int32 BrowserIndex, const FString& Key);
-	UWidget* MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons, float FontPx);
+	UWidget* MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons);
+	static void StyleTab(UButton* Tab, bool bSelected);
 	static FString ValueText(const FWWOSettingRow& Row, float V);
 };

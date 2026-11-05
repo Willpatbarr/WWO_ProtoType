@@ -12,6 +12,9 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Engine/GameViewportClient.h"
+#include "HAL/PlatformApplicationMisc.h"
+#include "Widgets/SViewport.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
@@ -71,6 +74,24 @@ void AWWOPlayerController::BeginPlay()
 
 	SetMenuMode(false);
 	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
+	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
+	bAutoTest |= bAutoTestMenusOnly;
+
+	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
+	// menus instead while the game viewport has focus (stop PIE with the toolbar's Stop button).
+	if (GetWorld()->WorldType == EWorldType::PIE && FSlateApplication::IsInitialized())
+	{
+		MenuKeys = MakeShared<FWWOMenuKeys>();
+		TWeakObjectPtr<AWWOPlayerController> WeakThis = this;
+		MenuKeys->OnEscape = [WeakThis] { if (WeakThis.IsValid()) WeakThis->HandleMenuPress(EWWOAction::Menu); };
+		FSlateApplication::Get().RegisterInputPreProcessor(MenuKeys);
+	}
+}
+
+TSharedPtr<SWidget> AWWOPlayerController::GameViewportWidget() const
+{
+	const UGameViewportClient* Client = GetWorld() ? GetWorld()->GetGameViewport() : nullptr;
+	return Client ? StaticCastSharedPtr<SWidget>(Client->GetGameViewportWidget()) : nullptr;
 }
 
 void AWWOPlayerController::EndPlay(const EEndPlayReason::Type Reason)
@@ -80,6 +101,11 @@ void AWWOPlayerController::EndPlay(const EEndPlayReason::Type Reason)
 		FSlateApplication::Get().UnregisterInputPreProcessor(MenuCursor);
 	}
 	MenuCursor.Reset();
+	if (MenuKeys.IsValid() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().UnregisterInputPreProcessor(MenuKeys);
+	}
+	MenuKeys.Reset();
 	UGameplayStatics::SetGlobalTimeDilation(this, 1.f);
 	Super::EndPlay(Reason);
 }
@@ -122,9 +148,11 @@ void AWWOPlayerController::BuildInput()
 	Map(MakeAction(EWWOAction::WeaponPrev), { EKeys::MouseScrollDown });
 	// Menu keys work while paused (the menus pause the game).
 	Map(MakeAction(EWWOAction::Menu, true), { EKeys::Tab, EKeys::Escape, EKeys::Gamepad_Special_Right });
-	Map(MakeAction(EWWOAction::MenuBack, true), { EKeys::Escape, EKeys::Gamepad_FaceButton_Right });
+	Map(MakeAction(EWWOAction::MenuBack, true), { EKeys::Gamepad_FaceButton_Right }); // Esc is Menu, which also backs out (one step per press)
 	Map(MakeAction(EWWOAction::TabNext, true), { EKeys::E, EKeys::Gamepad_RightShoulder });
 	Map(MakeAction(EWWOAction::TabPrev, true), { EKeys::Q, EKeys::Gamepad_LeftShoulder });
+	// Gamepad_Special_Left is the DualSense touchpad click on Mac (Godot's button too). The Create
+	// button isn't a key in Unreal's Apple controller code; Tick polls it (FWWOMenuKeys).
 	Map(MakeAction(EWWOAction::CharacterMenu, true), { EKeys::I, EKeys::Gamepad_Special_Left });
 
 	// Movement: WASD and the left stick (dead zone 0.2).
@@ -186,6 +214,7 @@ void AWWOPlayerController::OnActionStarted(const FInputActionInstance& Instance)
 {
 	const EWWOAction* Id = ActionIds.Find(Instance.GetSourceAction());
 	if (!Id) return;
+	if (BlockedUntilReleased[(int32)*Id]) return; // still held from the press that closed a menu
 	Held[(int32)*Id] = true;
 	JustPressed[(int32)*Id] = true;
 	if (*Id == EWWOAction::GrenadePad && !IsPaused()) ChordPending.Add(EWWOChord::Grenade, 0.f);
@@ -198,6 +227,7 @@ void AWWOPlayerController::OnActionCompleted(const FInputActionInstance& Instanc
 	if (const EWWOAction* Id = ActionIds.Find(Instance.GetSourceAction()))
 	{
 		Held[(int32)*Id] = false;
+		BlockedUntilReleased[(int32)*Id] = false;
 	}
 }
 
@@ -258,6 +288,18 @@ void AWWOPlayerController::PlayerTick(float DeltaTime)
 void AWWOPlayerController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (IsLocalController())
+	{
+		// The DualSense Create button toggles the character menu, like the touchpad.
+		const bool bCreate = FWWOMenuKeys::IsCreateButtonDown() && FPlatformApplicationMisc::IsThisApplicationForeground();
+		if (bCreate && !bCreateHeld)
+		{
+			bUsingController = true;
+			HandleMenuPress(EWWOAction::CharacterMenu);
+		}
+		bCreateHeld = bCreate;
+		if (MenuKeys.IsValid() && !MenuKeys->Viewport.IsValid()) MenuKeys->Viewport = GameViewportWidget();
+	}
 	if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
 }
 
@@ -409,6 +451,7 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 			MenuCursor = MakeShared<FWWOMenuCursor>();
 			FSlateApplication::Get().RegisterInputPreProcessor(MenuCursor);
 		}
+		if (MenuCursor.IsValid()) MenuCursor->SetViewport(GameViewportWidget());
 		if (MenuCursor.IsValid()) MenuCursor->CenterCursor();
 	}
 	else
@@ -421,8 +464,15 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 		}
 		MenuCursor.Reset();
 		if (AWWOCharacter* Player = GetWWOCharacter()) Player->ResetInputEdges();
-		// The button that closed the menu shouldn't also act in the game.
+		// The button that closed the menu shouldn't also act in the game (Godot: reset_input_edges).
+		// Circle is also crouch, and Enhanced Input would start Crouch on the first unpaused frame
+		// while it's still held, so every game action whose key is down waits for its release.
 		FMemory::Memzero(Held, sizeof(Held));
+		for (const FEnhancedActionKeyMapping& Mapping : GameContext->GetMappings())
+		{
+			const EWWOAction* Id = ActionIds.Find(Mapping.Action.Get());
+			if (Id && !Mapping.Action->bTriggerWhenPaused && IsInputKeyDown(Mapping.Key)) BlockedUntilReleased[(int32)*Id] = true;
+		}
 	}
 }
 
@@ -509,7 +559,12 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 		}
 	}
 	if (AutoTestStep == 0) AutoTestStep = 100; // start at 10 s (shaders, AI settle)
-	if (At(10.f)) { Shot(TEXT("01_start")); Next(11.f); }
+	if (At(10.f))
+	{
+		Shot(TEXT("01_start"));
+		if (bAutoTestMenusOnly) { AutoTestClock = 45.3f; Next(45.3f); }
+		else Next(11.f);
+	}
 	else if (At(11.f)) { AimAtTarget(); Held[(int32)EWWOAction::Fire] = true; Next(12.f); }
 	else if (At(12.f)) { Shot(TEXT("02_firing")); Next(13.f); }
 	else if (At(13.f)) { Held[(int32)EWWOAction::Fire] = false; Held[(int32)EWWOAction::Aim] = true; Next(13.5f); }
@@ -706,7 +761,9 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	else if (At(45.1f)) { if (UpdateAutoMeleeTest(P, DeltaTime)) Next(45.2f); }
 	// Abilities and ults: each ability equipped and set off, then each flora's ult.
 	else if (At(45.2f)) { if (UpdateAutoAbilityTest(P, DeltaTime)) Next(45.3f); }
-	else if (At(45.3f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	// Menus by controller alone: injected DualSense buttons and sticks (and Esc / Tab / I).
+	else if (At(45.3f)) { if (UpdateAutoMenuTest(P, DeltaTime)) Next(45.4f); }
+	else if (At(45.4f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
 }
 
 bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)

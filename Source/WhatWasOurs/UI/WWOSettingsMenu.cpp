@@ -19,6 +19,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
+#include "Components/ProgressBar.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
 #include "Components/ScrollBoxSlot.h"
@@ -31,6 +32,8 @@
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
 #include "Styling/CoreStyle.h"
+#include "UI/WWOMenuCursor.h"
+#include "HAL/PlatformTime.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -105,9 +108,15 @@ namespace
 
 // --- Styling -----------------------------------------------------------------------------------
 
-FSlateFontInfo UWWOSettingsMenu::Font(float Px, bool bBold)
+FSlateFontInfo UWWOSettingsMenu::Font(float Px)
 {
-	return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::RoundToInt(Px * 0.75f * K));
+	// Godot font sizes are pixels; Slate's are points at 96 dpi (0.75 pt per px).
+	return FCoreStyle::GetDefaultFontStyle("Medium", Px * 0.75f * K);
+}
+
+void UWWOSettingsMenu::PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer)
+{
+	FWWOMenuCursor::PaintRing(Geometry, Menu->GetTickSpaceGeometry(), Out, Layer, K);
 }
 
 FSlateBrush UWWOSettingsMenu::RoundBrush(const FLinearColor& Color, float Radius, const FLinearColor& Outline, float OutlineWidth)
@@ -120,18 +129,18 @@ FSlateBrush UWWOSettingsMenu::RoundBrush(const FLinearColor& Color, float Radius
 	return Brush;
 }
 
-UTextBlock* UWWOSettingsMenu::MakeText(const FString& Text, float FontPx, const FLinearColor& Color, bool bBold, bool bWrap)
+UTextBlock* UWWOSettingsMenu::MakeText(const FString& Text, float FontPx, const FLinearColor& Color, bool bWrap)
 {
 	UTextBlock* T = WidgetTree->ConstructWidget<UTextBlock>();
 	T->SetText(FText::FromString(Text));
-	T->SetFont(Font(FontPx, bBold));
+	T->SetFont(Font(FontPx));
 	T->SetColorAndOpacity(FSlateColor(WWO::Lin(Color)));
 	T->SetAutoWrapText(bWrap);
 	return T;
 }
 
 UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx, const FLinearColor& Color,
-	bool bLeftAlign, float MinHeight)
+	bool bLeftAlign, FMargin Padding, bool bWrap)
 {
 	UButton* B = WidgetTree->ConstructWidget<UButton>();
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
@@ -144,20 +153,19 @@ UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunc
 	Style.SetNormalPadding(FMargin(0.f));
 	Style.SetPressedPadding(FMargin(0.f));
 	B->SetStyle(Style);
-	UTextBlock* Label = MakeText(Text, FontPx);
-	Label->SetAutoWrapText(true);
+	// Godot buttons don't wrap: the text sets their width. (Auto-wrap in Slate wraps at last
+	// frame's width, which broke two-line list items onto three lines.)
+	UTextBlock* Label = MakeText(Text, FontPx, FLinearColor::White, bWrap);
+	if (bLeftAlign) Label->SetJustification(ETextJustify::Left);
+	else Label->SetJustification(ETextJustify::Center);
 	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Label));
-	Slot->SetPadding(FMargin(14.f * K, 6.f * K));
+	Slot->SetPadding(Padding * K);
 	Slot->SetHorizontalAlignment(bLeftAlign ? HAlign_Left : HAlign_Center);
 	Slot->SetVerticalAlignment(VAlign_Center);
 	UWWOClickHandler* H = NewObject<UWWOClickHandler>(Outer ? Outer : this);
 	H->Fn = MoveTemp(Fn);
 	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
 	Handlers.Add(H);
-	if (MinHeight > 0.f)
-	{
-		// Height comes from the wrapping size box the caller adds.
-	}
 	return B;
 }
 
@@ -724,10 +732,64 @@ void UWWOSettingsMenu::Build()
 	// The panels are built once the player exists (the sliders bind to its components).
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>();
 	WidgetTree->RootWidget = Root;
+	SetCursor(EMouseCursor::None); // the menu draws Godot's ring cursor instead (NativePaint)
 }
 
-UWidget* UWWOSettingsMenu::MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons, float FontPx)
+void UWWOSettingsMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (SaveRevertAt > 0.0 && FPlatformTime::Seconds() >= SaveRevertAt)
+	{
+		SaveRevertAt = 0.0;
+		if (UTextBlock* Label = SaveButton ? Cast<UTextBlock>(SaveButton->GetChildAt(0)) : nullptr) Label->SetText(FText::FromString(TEXT("Save as defaults")));
+	}
+}
+
+int32 UWWOSettingsMenu::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
+	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
+{
+	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+	if (!bOpen) return Layer;
+	PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	return Layer + 1;
+}
+
+float UWWOSettingsMenu::GlobalScrollOffset() const
+{
+	const UScrollBox* Scroll = GlobalSwitcher ? Cast<UScrollBox>(GlobalSwitcher->GetActiveWidget()) : nullptr;
+	return Scroll ? Scroll->GetScrollOffset() : 0.f;
+}
+
+FString UWWOSettingsMenu::OpenItemKey() const
+{
+	for (const FWWOBrowser& B : Browsers)
+	{
+		bool bShown = true;
+		for (UWidget* Child = B.Switcher; Child && Child->GetParent(); Child = Child->GetParent())
+		{
+			if (const UWidgetSwitcher* Switcher = Cast<UWidgetSwitcher>(Child->GetParent())) bShown &= Switcher->GetActiveWidget() == Child;
+		}
+		if (bShown && B.Switcher->GetActiveWidgetIndex() == 1) return B.OpenKey;
+	}
+	return FString();
+}
+
+void UWWOSettingsMenu::StyleTab(UButton* Tab, bool bSelected)
+{
+	// Godot's tab styles from the settings theme: 4 px corners, 9 x 6 px padding.
+	const float Shade = bSelected ? 0.24f : 0.13f;
+	const FLinearColor Color(Shade, Shade + 0.01f, Shade + 0.04f);
+	FButtonStyle Style = Tab->GetStyle();
+	Style.SetNormal(RoundBrush(Color, 4.f));
+	Style.SetHovered(RoundBrush(bSelected ? Color : FLinearColor(0.18f, 0.19f, 0.22f), 4.f));
+	Style.SetPressed(RoundBrush(bSelected ? Color : FLinearColor(0.18f, 0.19f, 0.22f), 4.f));
+	Tab->SetStyle(Style);
+}
+
+UWidget* UWWOSettingsMenu::MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons)
+{
+	// Godot's TabContainer tab bar (font 15 in this menu's theme). Godot keeps one row and adds
+	// scroll arrows when the tabs don't fit; here they wrap, so every tab stays one click away.
 	UWrapBox* Bar = WidgetTree->ConstructWidget<UWrapBox>();
 	Bar->SetInnerSlotPadding(FVector2D(4.f * K, 4.f * K));
 	TSharedRef<TArray<UButton*>> Buttons = MakeShared<TArray<UButton*>>();
@@ -745,16 +807,13 @@ UWidget* UWWOSettingsMenu::MakeTabs(const TArray<FString>& Titles, UWidgetSwitch
 				return;
 			}
 			WeakSwitcher->SetActiveWidgetIndex(i);
-			for (int32 j = 0; j < Buttons->Num(); ++j)
-			{
-				(*Buttons)[j]->SetBackgroundColor(j == i ? FLinearColor(1.6f, 1.6f, 1.8f) : FLinearColor::White);
-			}
-		}, FontPx, FLinearColor(0.13f, 0.14f, 0.17f));
+			for (int32 j = 0; j < Buttons->Num(); ++j) StyleTab((*Buttons)[j], j == i);
+		}, 15.f, FLinearColor(0.13f, 0.14f, 0.17f), false, FMargin(9.f, 6.f));
+		StyleTab(B, i == 0);
 		Buttons->Add(B);
 		if (OutButtons) OutButtons->Add(B);
 		Bar->AddChild(B);
 	}
-	if (Buttons->Num() > 0) (*Buttons)[0]->SetBackgroundColor(FLinearColor(1.6f, 1.6f, 1.8f));
 	return Bar;
 }
 
@@ -762,10 +821,7 @@ void UWWOSettingsMenu::SelectGlobalTab(int32 Index)
 {
 	GlobalTab = (Index + GlobalKeys.Num()) % FMath::Max(GlobalKeys.Num(), 1);
 	if (GlobalSwitcher) GlobalSwitcher->SetActiveWidgetIndex(GlobalTab);
-	for (int32 j = 0; j < GlobalTabButtons.Num(); ++j)
-	{
-		GlobalTabButtons[j]->SetBackgroundColor(j == GlobalTab ? FLinearColor(1.6f, 1.6f, 1.8f) : FLinearColor::White);
-	}
+	for (int32 j = 0; j < GlobalTabButtons.Num(); ++j) StyleTab(GlobalTabButtons[j], j == GlobalTab);
 }
 
 void UWWOSettingsMenu::CycleGlobalTab(int32 Step)
@@ -781,71 +837,120 @@ FString UWWOSettingsMenu::ValueText(const FWWOSettingRow& Row, float V)
 
 UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 {
+	// Godot: [label, at least 270 px] 12 [slider, fills, 28 px tall] 12 [value, at least 80 px or
+	// 170 for custom readouts, right-aligned], all in the theme's 22 px font.
 	const FWWOSettingRow& Row = Find(Key)->Rows[RowIndex];
 	UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
 	USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>();
-	LabelBox->SetWidthOverride(270.f * K);
-	UTextBlock* Label = MakeText(Row.Label, 20.f);
-	Label->SetAutoWrapText(true);
-	LabelBox->AddChild(Label);
+	LabelBox->SetMinDesiredWidth(270.f * K);
+	LabelBox->AddChild(MakeText(Row.Label, 22.f));
 	Line->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
 
+	// The slider: Godot's theme draws a 6 px track (0.3, 0.32, 0.37) filled up to the grabber
+	// (0.55, 0.6, 0.7), with the default round grabber. A progress bar under the slider draws
+	// the track and the fill; the slider itself draws only the grabber.
+	const float Thumb = 16.f * K;
+	UOverlay* SliderBox = WidgetTree->ConstructWidget<UOverlay>();
+	UProgressBar* Fill = WidgetTree->ConstructWidget<UProgressBar>();
+	FProgressBarStyle BarStyle;
+	BarStyle.SetBackgroundImage(RoundBrush(FLinearColor(0.3f, 0.32f, 0.37f), 3.f));
+	BarStyle.SetFillImage(RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
+	BarStyle.SetMarqueeImage(RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
+	Fill->SetWidgetStyle(BarStyle);
+	Fill->SetFillColorAndOpacity(FLinearColor::White);
+	Fill->SetPercent(FMath::GetRangePct(Row.Min, Row.Max, Row.Get()));
+	USizeBox* FillBox = WidgetTree->ConstructWidget<USizeBox>();
+	FillBox->SetHeightOverride(6.f * K);
+	FillBox->AddChild(Fill);
+	UOverlaySlot* FillSlot = SliderBox->AddChildToOverlay(FillBox);
+	FillSlot->SetHorizontalAlignment(HAlign_Fill);
+	FillSlot->SetVerticalAlignment(VAlign_Center);
+	FillSlot->SetPadding(FMargin(Thumb * 0.5f, 0.f)); // the grabber's center travels from end to end of the fill
+
 	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	Slider->IsFocusable = false;
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	Slider->SetMinValue(Row.Min);
 	Slider->SetMaxValue(Row.Max);
 	Slider->SetStepSize(Row.Step);
 	Slider->SetValue(Row.Get());
-	Slider->SetSliderBarColor(WWO::Lin(FLinearColor(0.3f, 0.32f, 0.37f)));
-	Slider->SetSliderHandleColor(WWO::Lin(FLinearColor(0.7f, 0.76f, 0.88f)));
-	UHorizontalBoxSlot* SliderSlot = Line->AddChildToHorizontalBox(Slider);
-	SliderSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	FSliderStyle Style = Slider->GetWidgetStyle();
+	FSlateBrush NoBar;
+	NoBar.DrawAs = ESlateBrushDrawType::NoDrawType;
+	FSlateBrush Grabber = RoundBrush(FLinearColor(0.88f, 0.88f, 0.9f), 8.f);
+	Grabber.ImageSize = FVector2D(Thumb, Thumb);
+	FSlateBrush GrabberHover = RoundBrush(FLinearColor(1.f, 1.f, 1.f), 8.f);
+	GrabberHover.ImageSize = Grabber.ImageSize;
+	Style.SetNormalBarImage(NoBar).SetHoveredBarImage(NoBar).SetDisabledBarImage(NoBar);
+	Style.SetNormalThumbImage(Grabber).SetHoveredThumbImage(GrabberHover).SetDisabledThumbImage(Grabber);
+	Slider->SetWidgetStyle(Style);
+	Slider->SetSliderBarColor(FLinearColor::White);
+	Slider->SetSliderHandleColor(FLinearColor::White);
+	USizeBox* SliderHeight = WidgetTree->ConstructWidget<USizeBox>();
+	SliderHeight->SetHeightOverride(28.f * K);
+	SliderHeight->AddChild(Slider);
+	UOverlaySlot* SliderSlot = SliderBox->AddChildToOverlay(SliderHeight);
+	SliderSlot->SetHorizontalAlignment(HAlign_Fill);
 	SliderSlot->SetVerticalAlignment(VAlign_Center);
-	SliderSlot->SetPadding(FMargin(12.f * K, 0.f));
+	UHorizontalBoxSlot* BoxSlot = Line->AddChildToHorizontalBox(SliderBox);
+	BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	BoxSlot->SetVerticalAlignment(VAlign_Center);
+	BoxSlot->SetPadding(FMargin(12.f * K, 0.f));
 
 	USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
-	ValueBox->SetWidthOverride((Row.Show ? 170.f : 80.f) * K);
-	UTextBlock* Value = MakeText(ValueText(Row, Row.Get()), 20.f);
+	ValueBox->SetMinDesiredWidth((Row.Show ? 170.f : 80.f) * K);
+	UTextBlock* Value = MakeText(ValueText(Row, Row.Get()), 22.f);
 	Value->SetJustification(ETextJustify::Right);
 	ValueBox->AddChild(Value);
 	Line->AddChildToHorizontalBox(ValueBox)->SetVerticalAlignment(VAlign_Center);
 
 	UWWOSliderHandler* H = NewObject<UWWOSliderHandler>(this);
 	TWeakObjectPtr<UTextBlock> WeakValue = Value;
-	TWeakObjectPtr<USlider> WeakSlider = Slider;
+	TWeakObjectPtr<UProgressBar> WeakFill = Fill;
 	const FWWOSettingRow RowCopy = Row;
-	H->Fn = [RowCopy, WeakValue, WeakSlider](float V)
+	H->Fn = [RowCopy, WeakValue, WeakFill](float V)
 	{
 		if (RowCopy.Step > 0.f) V = RowCopy.Min + FMath::RoundToFloat((V - RowCopy.Min) / RowCopy.Step) * RowCopy.Step; // snap to the step
 		V = FMath::Clamp(V, RowCopy.Min, RowCopy.Max);
 		RowCopy.Set(V);
 		if (WeakValue.IsValid()) WeakValue->SetText(FText::FromString(ValueText(RowCopy, V)));
+		if (WeakFill.IsValid()) WeakFill->SetPercent(FMath::GetRangePct(RowCopy.Min, RowCopy.Max, V));
 	};
 	Slider->OnValueChanged.AddDynamic(H, &UWWOSliderHandler::Handle);
 	Handlers.Add(H);
-	Live.Add({ Slider, Value, Key, RowIndex });
+	Live.Add({ Slider, Value, Fill, Key, RowIndex });
 	return Line;
 }
 
 void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 {
+	// Godot: a 12 px margin around the rows, 8 px between them; headers in 18 px at 55%.
 	FWWOSettingSection* S = Find(Key);
 	if (!S) return;
-	for (int32 i = 0; i < S->Rows.Num(); ++i)
+	auto Add = [Container](UWidget* W, bool bFirst, bool bLeft)
 	{
-		UWidget* W = S->Rows[i].Header.IsEmpty() ? MakeRow(Key, i)
-			: (UWidget*)MakeText(S->Rows[i].Header, 18.f, FLinearColor(1, 1, 1, 0.55f), false, true);
-		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(Container->AddChild(W))) Slot->SetPadding(FMargin(12.f * K, 4.f * K));
-		else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(Container->AddChild(W))) VSlot->SetPadding(FMargin(12.f * K, 4.f * K));
+		const FMargin Pad(12.f * K, (bFirst ? 12.f : 8.f) * K, 12.f * K, 0.f);
+		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(Container->AddChild(W)))
+		{
+			Slot->SetPadding(Pad);
+			if (bLeft) Slot->SetHorizontalAlignment(HAlign_Left);
+		}
+	};
+	int32 Count = 0;
+	for (int32 i = 0; i < S->Rows.Num(); ++i, ++Count)
+	{
+		Add(S->Rows[i].Header.IsEmpty() ? MakeRow(Key, i) : (UWidget*)MakeText(S->Rows[i].Header, 18.f, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);
 	}
 	for (const FWWOMenuButton& Button : S->Buttons)
 	{
-		UButton* B = MakeButton(this, Button.Text, Button.Fn, 20.f);
-		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(Container->AddChild(B)))
-		{
-			Slot->SetHorizontalAlignment(HAlign_Left);
-			Slot->SetPadding(FMargin(12.f * K, 6.f * K));
-		}
+		Add(MakeButton(this, Button.Text, Button.Fn, 22.f), Count++ == 0, true);
+	}
+	if (UScrollBoxSlot* Last = Container->GetChildrenCount() > 0 ? Cast<UScrollBoxSlot>(Container->GetChildAt(Container->GetChildrenCount() - 1)->Slot) : nullptr)
+	{
+		FMargin Pad = Last->GetPadding();
+		Pad.Bottom = 12.f * K;
+		Last->SetPadding(Pad);
 	}
 }
 
@@ -857,9 +962,11 @@ void UWWOSettingsMenu::SyncSliders()
 	{
 		const FWWOSettingSection* S = Find(L.Key);
 		if (!S || !S->Rows.IsValidIndex(L.Row)) continue;
-		const float V = S->Rows[L.Row].Get();
+		const FWWOSettingRow& Row = S->Rows[L.Row];
+		const float V = Row.Get();
 		L.Slider->SetValue(V);
-		if (L.Value.IsValid()) L.Value->SetText(FText::FromString(ValueText(S->Rows[L.Row], V)));
+		if (L.Value.IsValid()) L.Value->SetText(FText::FromString(ValueText(Row, V)));
+		if (L.Fill.IsValid()) L.Fill->SetPercent(FMath::GetRangePct(Row.Min, Row.Max, V));
 	}
 }
 
@@ -876,8 +983,8 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 	UVerticalBox* Detail = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
 	TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
-	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("‹ Back"), [WeakThis, Index] { if (WeakThis.IsValid()) WeakThis->ShowList(Index); }, 20.f));
-	B.Title = MakeText(TEXT(""), 26.f, FLinearColor::White, true);
+	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("‹ Back"), [WeakThis, Index] { if (WeakThis.IsValid()) WeakThis->ShowList(Index); }, 22.f));
+	B.Title = MakeText(TEXT(""), 26.f);
 	UHorizontalBoxSlot* TitleSlot = Bar->AddChildToHorizontalBox(B.Title);
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetPadding(FMargin(12.f * K, 0.f));
@@ -885,8 +992,8 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("Reset item"), [WeakThis, Index]
 	{
 		if (WeakThis.IsValid()) WeakThis->ResetSection(WeakThis->Browsers[Index].OpenKey);
-	}, 20.f));
-	Detail->AddChildToVerticalBox(Bar)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f * K));
+	}, 22.f));
+	Detail->AddChildToVerticalBox(Bar);
 	B.Rows = WidgetTree->ConstructWidget<UScrollBox>();
 	Detail->AddChildToVerticalBox(B.Rows)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	B.Switcher->AddChild(Detail);
@@ -903,12 +1010,14 @@ void UWWOSettingsMenu::ShowList(int32 BrowserIndex)
 	{
 		const FString Text = Item.Title + (Item.Subtitle.IsEmpty() ? FString() : TEXT("\n") + Item.Subtitle);
 		const FString Key = Item.Key;
+		// Godot: left-aligned, at least 72 px tall, 20 px side padding, 10 px apart, 12 px page margin.
 		UButton* Button = MakeButton(this, Text, [WeakThis, BrowserIndex, Key] { if (WeakThis.IsValid()) WeakThis->OpenItem(BrowserIndex, Key); },
-			20.f, FLinearColor(0.18f, 0.19f, 0.23f), true);
+			22.f, FLinearColor(0.18f, 0.19f, 0.23f), true, FMargin(20.f, 5.f));
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetMinDesiredHeight(72.f * K);
 		Box->AddChild(Button);
-		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(B.List->AddChild(Box))) Slot->SetPadding(FMargin(8.f * K, 5.f * K));
+		const bool bFirst = B.List->GetChildrenCount() == 0;
+		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(B.List->AddChild(Box))) Slot->SetPadding(FMargin(12.f * K, (bFirst ? 12.f : 10.f) * K, 12.f * K, 0.f));
 	}
 	B.Switcher->SetActiveWidgetIndex(0);
 }
@@ -962,7 +1071,7 @@ void UWWOSettingsMenu::Prepare()
 		Panel->SetContent(Page);
 
 		UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Header->AddChildToHorizontalBox(MakeText(TEXT("Settings"), 32.f, FLinearColor::White, true))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Header->AddChildToHorizontalBox(MakeText(TEXT("Settings"), 32.f))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Header->AddChildToHorizontalBox(MakeText(TEXT("◯ / Esc to go back  ·  L1/R1 or Q/E: Global tabs"), 18.f, FLinearColor(1, 1, 1, 0.6f)))->SetVerticalAlignment(VAlign_Center);
 		Page->AddChildToVerticalBox(Header)->SetPadding(FMargin(0, 0, 0, 12.f * K));
 
@@ -971,7 +1080,7 @@ void UWWOSettingsMenu::Prepare()
 
 		// Global pane.
 		UVerticalBox* GlobalPane = WidgetTree->ConstructWidget<UVerticalBox>();
-		GlobalPane->AddChildToVerticalBox(MakeText(TEXT("Global"), 26.f, FLinearColor::White, true));
+		GlobalPane->AddChildToVerticalBox(MakeText(TEXT("Global"), 26.f));
 		GlobalSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
 		TArray<FString> GlobalTitles;
 		for (const FString& Key : GlobalKeys)
@@ -981,23 +1090,26 @@ void UWWOSettingsMenu::Prepare()
 			BuildRows(Scroll, Key);
 			GlobalSwitcher->AddChild(Scroll);
 		}
-		GlobalPane->AddChildToVerticalBox(MakeTabs(GlobalTitles, GlobalSwitcher, &GlobalTabButtons, 15.f))->SetPadding(FMargin(0, 6.f * K));
+		GlobalPane->AddChildToVerticalBox(MakeTabs(GlobalTitles, GlobalSwitcher, &GlobalTabButtons))->SetPadding(FMargin(0, 8.f * K, 0, 0));
 		UBorder* GlobalBack = WidgetTree->ConstructWidget<UBorder>();
 		GlobalBack->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.17f), 6.f));
+		GlobalBack->SetPadding(FMargin(0.f));
 		GlobalBack->SetContent(GlobalSwitcher);
 		GlobalPane->AddChildToVerticalBox(GlobalBack)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
-		GlobalPane->AddChildToVerticalBox(MakeButton(this, TEXT("Reset this tab"), [WeakThis]
+		UVerticalBoxSlot* ResetTabSlot = GlobalPane->AddChildToVerticalBox(MakeButton(this, TEXT("Reset this tab"), [WeakThis]
 		{
 			if (WeakThis.IsValid()) WeakThis->ResetSection(WeakThis->GlobalKeys[WeakThis->GlobalTab]);
-		}, 20.f))->SetHorizontalAlignment(HAlign_Left);
+		}, 22.f));
+		ResetTabSlot->SetHorizontalAlignment(HAlign_Left);
+		ResetTabSlot->SetPadding(FMargin(0, 8.f * K, 0, 0));
 		UHorizontalBoxSlot* GlobalSlot = Panes->AddChildToHorizontalBox(GlobalPane);
 		GlobalSlot->SetSize(WWOFillSize(1.15f));
 		GlobalSlot->SetPadding(FMargin(0, 0, 20.f * K, 0));
 
 		// Specific pane.
 		UVerticalBox* SpecificPane = WidgetTree->ConstructWidget<UVerticalBox>();
-		SpecificPane->AddChildToVerticalBox(MakeText(TEXT("Specific"), 26.f, FLinearColor::White, true));
+		SpecificPane->AddChildToVerticalBox(MakeText(TEXT("Specific"), 26.f));
 		UWidgetSwitcher* SpecificSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
 		TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 		SpecificSwitcher->AddChild(MakeBrowser([WL]
@@ -1046,7 +1158,7 @@ void UWWOSettingsMenu::Prepare()
 			}
 			return Items;
 		}));
-		FloraPage->AddChildToVerticalBox(MakeTabs({ TEXT("Grenades"), TEXT("Abilities"), TEXT("Traits") }, FloraSwitcher, nullptr, 17.f))->SetPadding(FMargin(0, 0, 0, 6.f * K));
+		FloraPage->AddChildToVerticalBox(MakeTabs({ TEXT("Grenades"), TEXT("Abilities"), TEXT("Traits") }, FloraSwitcher, nullptr));
 		FloraPage->AddChildToVerticalBox(FloraSwitcher)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		SpecificSwitcher->AddChild(FloraPage);
 		SpecificSwitcher->AddChild(MakeBrowser([WL]
@@ -1065,10 +1177,10 @@ void UWWOSettingsMenu::Prepare()
 			}
 			return Items;
 		}));
-		SpecificPane->AddChildToVerticalBox(MakeTabs({ TEXT("Equipped"), TEXT("Flora"), TEXT("Weapons"), TEXT("Frame Parts") }, SpecificSwitcher, nullptr, 17.f))->SetPadding(FMargin(0, 6.f * K));
+		SpecificPane->AddChildToVerticalBox(MakeTabs({ TEXT("Equipped"), TEXT("Flora"), TEXT("Weapons"), TEXT("Frame Parts") }, SpecificSwitcher, nullptr))->SetPadding(FMargin(0, 8.f * K, 0, 0));
 		UBorder* SpecificBack = WidgetTree->ConstructWidget<UBorder>();
 		SpecificBack->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.17f), 6.f));
-		SpecificBack->SetPadding(FMargin(6.f * K));
+		SpecificBack->SetPadding(FMargin(0.f));
 		SpecificBack->SetContent(SpecificSwitcher);
 		SpecificPane->AddChildToVerticalBox(SpecificBack)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Panes->AddChildToHorizontalBox(SpecificPane)->SetSize(WWOFillSize(1.f));
@@ -1084,6 +1196,7 @@ void UWWOSettingsMenu::Prepare()
 			{
 				Label->SetText(FText::FromString(bSaved ? TEXT("Saved ✓") : TEXT("Save failed")));
 			}
+			WeakThis->SaveRevertAt = FPlatformTime::Seconds() + 1.5; // Godot's 1.5 s timer (real time: the game is paused)
 		}, 22.f);
 		Buttons->AddChildToHorizontalBox(SaveButton)->SetPadding(FMargin(0, 0, 12.f * K, 0));
 		TWeakObjectPtr<APlayerController> WeakPC = GetOwningPlayer();
@@ -1106,6 +1219,7 @@ void UWWOSettingsMenu::Open()
 	{
 		if (Browsers[i].Switcher->GetActiveWidgetIndex() == 0) ShowList(i);
 	}
+	SaveRevertAt = 0.0;
 	if (SaveButton)
 	{
 		if (UTextBlock* Label = Cast<UTextBlock>(SaveButton->GetChildAt(0))) Label->SetText(FText::FromString(TEXT("Save as defaults")));

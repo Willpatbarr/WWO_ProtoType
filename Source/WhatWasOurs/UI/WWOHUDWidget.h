@@ -1,7 +1,7 @@
 #pragma once
 
 // The in-game HUD (Godot: hud.gd), painted directly like the Godot _draw code. Sizes are in
-// the Godot 1600 x 900 layout and scaled to the screen height, as Godot's stretch did.
+// the Godot 1600 x 900 layout and scaled by min(width / 1600, height / 900), as Godot's stretch did.
 // - Reticle (red over a target, fades as you aim in), hit / crit / kill markers.
 // - ADS vignette and the sniper scope overlay.
 // - Target health bar (and the Tank's shield bar) under the reticle target.

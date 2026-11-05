@@ -22,6 +22,8 @@ class UWWOSettingsMenu;
 class UWWOCharacterMenu;
 class AWWOCharacter;
 class FWWOMenuCursor;
+class FWWOMenuKeys;
+class SWidget;
 
 UENUM()
 enum class EWWOChord : uint8 { Grenade, Melee, Ult };
@@ -56,6 +58,7 @@ public:
 
 	// Menus
 	bool IsMenuOpen() const;
+	void HandleMenuPress(EWWOAction Id); // a menu key (Menu, MenuBack, TabNext / TabPrev, CharacterMenu) went down
 	void ToggleSettingsMenu();
 	void ToggleCharacterMenu();
 	void CloseMenus();
@@ -77,9 +80,13 @@ private:
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> SettingsMenu;
 	UPROPERTY() TObjectPtr<UWWOCharacterMenu> CharacterMenu;
 	TSharedPtr<FWWOMenuCursor> MenuCursor;
+	TSharedPtr<FWWOMenuKeys> MenuKeys; // Play-in-Editor only
+	bool bCreateHeld = false;
+	TSharedPtr<SWidget> GameViewportWidget() const;
 
 	bool Held[(int32)EWWOAction::Count] = {};
 	bool JustPressed[(int32)EWWOAction::Count] = {};
+	bool BlockedUntilReleased[(int32)EWWOAction::Count] = {};
 	FVector2D MoveValue = FVector2D::ZeroVector;
 	FVector2D LookValue = FVector2D::ZeroVector;
 	double MouseRecaptureTime = 0.0; // real time the game last took the mouse back from a menu
@@ -98,13 +105,19 @@ private:
 	void OnMove(const FInputActionInstance& Instance);
 	void OnLook(const FInputActionInstance& Instance);
 	void OnMouseLook(const FInputActionInstance& Instance);
-	void HandleMenuPress(EWWOAction Id);
 	void UpdateChord(float DeltaTime);
 	void UpdateDevice();
 	void SetMenuMode(bool bOpen);
 
 	// -WWOAutoTest: a scripted play-through that saves screenshots (for checking the port).
 	bool bAutoTest = false;
+	bool bAutoTestMenusOnly = false; // -WWOAutoTestMenus: just the controller-only menu steps
+	// Menu steps (WWOPlayerControllerAutoMenu.cpp): the menus driven by injected DualSense input.
+	int32 AutoMenuStep = 0;
+	float AutoMenuClock = 0.f;
+	int32 AutoMenuFails = 0;
+	float AutoMenuValue = 0.f;
+	bool UpdateAutoMenuTest(class AWWOCharacter* P, float DeltaTime);
 	float AutoTestClock = 0.f;
 	int32 AutoTestStep = 0;
 	FVector AutoSlideFrom = FVector::ZeroVector; // ground movement steps: where the slide started

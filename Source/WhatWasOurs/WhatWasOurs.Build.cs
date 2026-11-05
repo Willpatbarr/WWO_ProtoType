@@ -14,5 +14,10 @@ public class WhatWasOurs : ModuleRules
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);
+
+		if (Target.Platform == UnrealTargetPlatform.Mac)
+		{
+			PublicFrameworks.Add("GameController"); // the DualSense Create button (see UI/WWOMenuCursor)
+		}
 	}
 }

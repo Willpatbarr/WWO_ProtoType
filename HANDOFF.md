@@ -8,7 +8,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   Starts on `L_Arena`. Maps: `Content/WWO/Maps/L_Arena`, `L_ArenaLarge`, `L_TestRange`
   (switch in Settings -> Maps).
 - Standalone: `UnrealEditor WhatWasOurs.uproject /Game/WWO/Maps/L_Arena -game -windowed -ResX=1600 -ResY=900`
-- In the editor's Play-in-Editor, Esc ends PIE: use Tab to open the settings menu.
+- Menus: Tab / Esc / Options open Settings; I / touchpad / Create open Character. In Play-in-Editor,
+  Esc goes to the game while its viewport has focus (the editor would stop PIE): stop with the
+  toolbar's Stop button.
 - `-WWOAutoTest` plays a scripted run (fire, ADS, grenade, melee, ult, both menus, then walk / crouch /
   sprint / slide / stop, logging speeds as `AutoTest move:`; then, by the nearest crate with damage off, a
   standing jump, a double jump and a hop onto the crate, logging arcs as `AutoTest jump:`; then cycles
@@ -18,8 +20,11 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `AutoTest grenade:` / `Grenade <id>:`, with blast, after and throw-arm screenshots; then a melee lunge onto the
   target, a punch on an enemy (knockback) and a swing at nothing, as `AutoTest melee:`; then equips every
   ability in turn and sets it off, and casts each flora's ult (Blast, Veil, Entrench), logging
-  `AutoTest ability:` / `AutoTest ult:` with 23_ability_* and 24_ult_* screenshots, and puts the loadout back) and saves
-  screenshots to `Saved/AutoTest/`.
+  `AutoTest ability:` / `AutoTest ult:` with 23_ability_* and 24_ult_* screenshots, and puts the loadout back;
+  then drives both menus by injected DualSense input alone (Options, L1/R1, the left stick steering
+  the cursor onto buttons, cross clicks and slider drags, right-stick scrolling, circle, touchpad) plus
+  Tab / Esc / I, logging `AutoTest menu: ... ok|FAIL` with 25_menu_* to 29_menu_* shots) and saves
+  screenshots to `Saved/AutoTest/`. `-WWOAutoTestMenus` runs only the menu steps (about 30 s).
 - `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
   reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
   shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
@@ -52,6 +57,10 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   with `WWO::M` (100 cm per m). Godot (x, y, z) = Unreal (-z, x, y) * 100.
 - Colors are written as sRGB like Godot's; materials, HUD, menus and the mannequin tint convert to
   linear (`WWO::Lin`).
+- UI scale: Godot's canvas_items stretch with aspect "expand" on 1600 x 900. Project Settings use
+  the ScaleToFit rule at 1920 x 1080, so menus are laid out in Godot pixels x 1.2 (`UWWOSettingsMenu::K`);
+  the HUD paints in Godot pixels scaled by min(width / 1600, height / 900). Godot's default font
+  (Open Sans SemiBold) is Roboto Medium here; font sizes are Godot pixels (x 0.75 for Slate points).
 - Settings sliders bind to float UPROPERTYs by name. "Save as defaults" writes
   `Saved/WWO/SavedSettings.json`, applied on startup.
 - Your Godot `saved_settings.json` values are baked into the data assets and C++ defaults; your
@@ -79,8 +88,15 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   grenade itself (it isn't excluded), so walls there start at the grenade's top: 24 cm up when it
   rests on the floor, higher if it goes off mid-bounce. Probably a Godot bug; not copied.
 - Arena layout is identical but built from prototype-grid blocks instead of the Quaternius kit.
-- Input actions are created in code (Enhanced Input), not as assets. Character menu on the
-  DualSense is mapped to the Create button and I.
+- Input actions are created in code (Enhanced Input), not as assets. The character menu is on I,
+  the DualSense touchpad click (Godot's button; Unreal's Mac controller code reports it as
+  Gamepad_Special_Left) and also the Create button, which Unreal doesn't read on Mac, so it's
+  polled from GameController directly (`FWWOMenuKeys`).
+- Settings: the Global tab bar wraps onto two rows; Godot keeps one row with scroll arrows.
+  Buttons keep the port's rounded style rather than Godot's default theme. The OS pointer is
+  hidden over the menus, which draw Godot's ring cursor, as in Godot; the mouse moves it too.
+- The character preview's background is a flat backdrop in the panel color (Godot's SubViewport
+  is transparent).
 - Jumps peak at exactly the set height (the Godot formula's intent). Godot's 60 Hz step adds about
   5 cm (2.05 m for a 2 m jump) and about 0.02 s of air time.
 - Right-stick look Y has a Negate in the look mapping: Will saw it inverted without one. (Mac's

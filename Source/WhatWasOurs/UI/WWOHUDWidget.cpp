@@ -80,9 +80,11 @@ namespace
 		{
 			for (float R = Radius; R > 0.f; R -= 0.75f) Circle(Center, R, Color, 1.5f, 16);
 		}
-		FSlateFontInfo Font(float Px, bool bBold = true, float Outline = 6.f, float OutlineAlpha = 0.75f) const
+		// Godot draws every label in its default font, Open Sans SemiBold: Roboto Medium is the
+		// engine's closest weight. Sizes are Godot pixels; Slate's are points at 96 dpi (0.75 pt/px).
+		FSlateFontInfo Font(float Px, float Outline = 6.f, float OutlineAlpha = 0.75f) const
 		{
-			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::Max(1, FMath::RoundToInt(Px * 0.75f * S)));
+			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Medium", FMath::Max(1.f, Px * 0.75f * S));
 			F.OutlineSettings.OutlineSize = FMath::RoundToInt(Outline * 0.5f * S);
 			F.OutlineSettings.OutlineColor = FLinearColor(0, 0, 0, OutlineAlpha);
 			return F;
@@ -93,11 +95,11 @@ namespace
 		}
 		// Align: 0 = left / top, 0.5 = center, 1 = right / bottom of Pos. The outline fades with
 		// the text, like a Godot modulate (Slate doesn't tint outlines on its own).
-		void Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, bool bBold = true, float Outline = 6.f,
+		void Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, float Outline = 6.f,
 			float OutlineAlpha = 0.75f, float AlignY = 0.f) const
 		{
 			if (Str.IsEmpty() || Color.A <= 0.001f) return;
-			const FSlateFontInfo F = Font(Px, bBold, Outline, OutlineAlpha * Color.A);
+			const FSlateFontInfo F = Font(Px, Outline, OutlineAlpha * Color.A);
 			const FVector2D M = Measure(Str, F);
 			const FVector2D At = Pos - FVector2D(M.X * AlignX, M.Y * AlignY);
 			FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
@@ -168,8 +170,10 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	AWWOCharacter* Pl = Player();
 	APlayerController* PC = GetOwningPlayer();
 	if (!Pl || !PC) return Result;
+	// Godot's canvas_items stretch with aspect "expand": the 1600 x 900 layout scales by the
+	// tighter of the two ratios, and the extra width or height is added to the canvas.
 	const FVector2D Local = Geo.GetLocalSize();
-	const float S = Local.Y / 900.f;
+	const float S = FMath::Min(Local.X / 1600.f, Local.Y / 900.f);
 	FPainter P{ Out, Geo, LayerId + 1, S, Local / S };
 	const FVector2D Size = P.Size;
 	const FVector2D Center = Size * 0.5f;
@@ -210,7 +214,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			const FVector World = T.Start + FVector(0, T.Jitter, 60.f * FMath::Min(T.Age / FWWOFloatingText::RiseTime, 1.f));
 			if (!ToScreen(World, At)) continue;
 			const float FontPx = T.bCritical ? 48.f : 36.f;
-			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, true, 8.f * PxPerFontPx, 0.8f, 0.5f);
+			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, 8.f * PxPerFontPx, 0.8f, 0.5f);
 		}
 	}
 	// Teammate labels.
@@ -262,7 +266,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		FVector2D At;
 		if (Assist->FrictionPart.IsValid() && ToScreen(Assist->FrictionPart.Position, At)) P.Circle(At, 6.f, FLinearColor(1.f, 0.85f, 0.2f, 0.9f), 2.f, 16);
 		P.Text(FString::Printf(TEXT("Aim assist: %s (strength %d%%)  range %.0f m"), Assist->UsingController() ? TEXT("controller") : TEXT("mouse"),
-			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), Center + FVector2D(0, 120), 18.f, FLinearColor::White, 0.5f, false, 4);
+			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), Center + FVector2D(0, 120.f - 17.f), 18.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline at +120, no outline
 	}
 	// Health bar over the target under the reticle (and the Tank's shield above it).
 	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Gun->ReticleTarget.Get()))
@@ -284,7 +288,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 				if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
 				Pos = ShieldPos;
 			}
-			P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -22), 16.f, FLinearColor::White, 0.5f, false, 4);
+			P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
 		}
 	}
 
@@ -296,13 +300,13 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		const int32 Mag = Gun->MagazineSize();
 		const FVector2D Corner(Size.X - 40.f, Size.Y - 40.f);
 		const FVector2D Lift(0.f, Gun->bReloading ? 0.f : -12.f);
-		P.Text(W->DisplayName, Corner - FVector2D(0, 92) - Lift, 20.f, FLinearColor::White, 1.f, true, 6.f, 0.7f);
+		P.Text(W->DisplayName, Corner - FVector2D(0, 92) - Lift, 20.f, FLinearColor::White, 1.f, 6.f, 0.7f);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
 		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
-		P.Text(Count, Corner - FVector2D(0, 66) - Lift, 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, true, 8.f, 0.7f);
+		P.Text(Count, Corner - FVector2D(0, 66) - Lift, 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 8.f, 0.7f);
 		if (Gun->bReloading)
 		{
-			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(44.f, true, 8.f)).X, P.Measure(W->DisplayName, P.Font(20.f)).X);
+			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(44.f, 8.f)).X, P.Measure(W->DisplayName, P.Font(20.f)).X);
 			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth, 8), FLinearColor(0.15f, 0.15f, 0.17f, 0.9f));
 			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth * Gun->ReloadProgress, 8), FLinearColor(0.75f, 0.78f, 0.85f));
 		}
@@ -322,14 +326,14 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			{
 				// Extra Grenade: how many are ready, and the next one filling.
 				const int32 Ready = FMath::FloorToInt(Charges);
-				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(4, 2), 16.f, Ready > 0 ? FLinearColor::Black : FLinearColor::White, 0.f, true, 0);
+				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(4, 2), 16.f, Ready > 0 ? FLinearColor::Black : FLinearColor::White, 0.f, 0);
 				if (Ready >= 1 && Charges < Pl->Grenades->MaxCharges())
 				{
 					P.Box(Pos + FVector2D(0, 59), FVector2D(64 * (Charges - Ready), 5), FLinearColor(1, 1, 1, 0.8f));
 				}
 			}
-			P.Text(G->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f, false);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(16.f, false)).X - 64.f);
+			P.Text(G->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(16.f)).X - 64.f);
 		}
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 		{
@@ -368,8 +372,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 				}
 				break;
 			}
-			P.Text(A->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f, false);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(16.f, false)).X - 64.f);
+			P.Text(A->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(16.f)).X - 64.f);
 		}
 		// Ult: fills in the grenade's color, pulses when ready.
 		const FLinearColor UltColor = Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
@@ -378,7 +382,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		{
 			P.Outline(Pos - FVector2D(3, 3), FVector2D(70, 70), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)), 3.f);
 		}
-		P.Text(TEXT("Ult"), Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f, false);
+		P.Text(TEXT("Ult"), Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
 	}
 
 	// Vitals (bottom center): shield bar over health bar. Each bar's width is its max against
@@ -426,7 +430,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	{
 		FLinearColor C;
 		const FString Line = Mode->StatusText(C);
-		P.Text(Line, FVector2D(Center.X, 24.f), 28.f, C, 0.5f, true, 8);
+		P.Text(Line, FVector2D(Center.X, 24.f), 28.f, C, 0.5f, 8.f, 0.85f);
 	}
 	return Result + 3;
 }

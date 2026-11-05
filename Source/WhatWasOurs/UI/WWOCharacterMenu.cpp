@@ -26,6 +26,10 @@
 #include "Components/WrapBox.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "FX/WWOFX.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Misc/App.h"
@@ -59,12 +63,35 @@ AWWOPreviewActor::AWWOPreviewActor()
 	Mesh->PrimaryComponentTick.bTickEvenWhenPaused = true;
 	Capture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("Capture"));
 	Capture->SetupAttachment(GetRootComponent());
-	Capture->SetRelativeLocationAndRotation(FVector(440.f, 0.f, 100.f), FRotator(0.f, 180.f, 0.f)); // in front, at chest height
-	Capture->FOVAngle = 45.f;
+	// Godot's preview camera: 4.4 m in front, 1.1 m above the feet, level, 45 degrees tall (Godot
+	// FOVs are vertical; Unreal's are horizontal, so convert for the preview's shape).
+	Capture->SetRelativeLocationAndRotation(FVector(440.f, 0.f, 110.f), FRotator(0.f, 180.f, 0.f));
+	Capture->FOVAngle = FMath::RadiansToDegrees(2.f * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(22.5f)) * Size.X / Size.Y));
 	Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
 	Capture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
 	Capture->bCaptureEveryFrame = true;
 	Capture->PrimaryComponentTick.bTickEvenWhenPaused = true;
+	// Godot's preview has its own world and a transparent background (the panel shows through):
+	// no sky or fog here, and a flat backdrop in the panel's color behind the character.
+	Capture->ShowFlags.SetAtmosphere(false);
+	Capture->ShowFlags.SetFog(false);
+	Capture->ShowFlags.SetCloud(false);
+	Capture->ShowFlags.SetGrain(false);
+	// Fixed exposure, so the backdrop comes out the same shade every time (auto exposure would
+	// brighten it toward mid-gray).
+	Capture->PostProcessSettings.bOverride_AutoExposureMethod = true;
+	Capture->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+	Capture->PostProcessSettings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+	Capture->PostProcessSettings.AutoExposureApplyPhysicalCameraExposure = false;
+	Capture->PostProcessSettings.bOverride_AutoExposureBias = true;
+	Capture->PostProcessSettings.AutoExposureBias = ExposureBias;
+	Capture->PostProcessBlendWeight = 1.f;
+	Backdrop = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Backdrop"));
+	Backdrop->SetupAttachment(GetRootComponent());
+	Backdrop->SetRelativeLocationAndRotation(FVector(-400.f, 0.f, 100.f), FRotator(90.f, 0.f, 0.f));
+	Backdrop->SetRelativeScale3D(FVector(30.f));
+	Backdrop->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Backdrop->CastShadow = false;
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
 	Body->BodyColor = FLinearColor(0.3f, 0.42f, 0.55f);
 }
@@ -76,7 +103,17 @@ void AWWOPreviewActor::BeginPlay()
 	Target = NewObject<UTextureRenderTarget2D>(this);
 	Target->RenderTargetFormat = RTF_RGBA8;
 	Target->ClearColor = FLinearColor(0.07f, 0.08f, 0.1f, 1.f);
-	Target->InitAutoFormat(600, 820);
+	Target->InitAutoFormat(FMath::RoundToInt(Size.X * 1.2f), FMath::RoundToInt(Size.Y * 1.2f)); // 1080p pixels
+	if (UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")))
+	{
+		Backdrop->SetStaticMesh(Plane);
+		if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_Unlit")))
+		{
+			UMaterialInstanceDynamic* Mat = UMaterialInstanceDynamic::Create(M, this);
+			Mat->SetVectorParameterValue("Color", BackdropColor);
+			Backdrop->SetMaterial(0, Mat);
+		}
+	}
 	Capture->TextureTarget = Target;
 	Capture->ShowOnlyActors.Add(this);
 	Body->FollowLoadout(false); // flora grafts follow the loadout
@@ -85,7 +122,9 @@ void AWWOPreviewActor::BeginPlay()
 void AWWOPreviewActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	Turntable->AddRelativeRotation(FRotator(0.f, 30.f * FApp::GetDeltaTime(), 0.f)); // real time (the game is paused)
+	// Godot: rotate_y(0.6 * delta), counterclockwise seen from above (negative yaw here). Real
+	// time, since the menu has the game paused.
+	Turntable->AddRelativeRotation(FRotator(0.f, -FMath::RadiansToDegrees(0.6f) * FApp::GetDeltaTime(), 0.f));
 }
 
 // --- Menu ------------------------------------------------------------------------------------
@@ -96,25 +135,52 @@ void UWWOCharacterMenu::NativeOnInitialized()
 	Build();
 }
 
-void UWWOCharacterMenu::AddRowLabel(const FString& Text)
+int32 UWWOCharacterMenu::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
+	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
 {
-	UTextBlock* Label = Styler->MakeText(Text, 22.f, FLinearColor(1, 1, 1, 0.7f), true);
-	Content->AddChildToVerticalBox(Label)->SetPadding(FMargin(0, 8.f * K, 0, 2.f * K));
+	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+	if (!bOpen) return Layer;
+	UWWOSettingsMenu::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	return Layer + 1;
 }
 
-UButton* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLinearColor& Color, const FLinearColor& Border, float BorderWidth, float FontPx, TFunction<void()> Fn)
+void UWWOCharacterMenu::AddRowLabel(const FString& Text)
 {
-	UButton* B = Styler->MakeButton(this, Text, MoveTemp(Fn), FontPx, Color, true);
-	if (BorderWidth > 0.f)
+	// Godot: a 22 px label at 60%, 12 px below the row above (the content VBox's separation).
+	UTextBlock* Label = Styler->MakeText(Text, 22.f, FLinearColor(1, 1, 1, 0.6f));
+	Content->AddChildToVerticalBox(Label)->SetPadding(FMargin(0, Content->GetChildrenCount() > 0 ? 12.f * K : 0.f, 0, 0));
+}
+
+void UWWOCharacterMenu::AddContent(UWidget* Widget)
+{
+	Content->AddChildToVerticalBox(Widget)->SetPadding(FMargin(0, Content->GetChildrenCount() > 0 ? 12.f * K : 0.f, 0, 0));
+}
+
+UWidget* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLinearColor& Color, float FontPx, TFunction<void()> Fn,
+	const FLinearColor* Border, float BorderWidth, const FString& Tooltip, bool bWrap)
+{
+	// Godot's _make_slot: a button at least Size, centered text (font 20 unless set), 8 px corners,
+	// a 2 px border in the color lightened 35% (or _set_slot_border's), lighter when hovered/pressed.
+	const FLinearColor Edge = Border ? *Border : WWO::Lightened(Color, 0.35f);
+	const float Width = Border ? BorderWidth : 2.f;
+	UButton* B = Styler->MakeButton(this, Text, MoveTemp(Fn), FontPx, Color, false, FMargin(Width + 4.f, Width), false);
+	FButtonStyle Style = B->GetStyle();
+	Style.SetNormal(UWWOSettingsMenu::RoundBrush(Color, 8.f, Edge, Width));
+	Style.SetHovered(UWWOSettingsMenu::RoundBrush(WWO::Lightened(Color, 0.12f), 8.f, Edge, Width));
+	Style.SetPressed(UWWOSettingsMenu::RoundBrush(WWO::Lightened(Color, 0.2f), 8.f, Edge, Width));
+	B->SetStyle(Style);
+	if (!Tooltip.IsEmpty()) B->SetToolTipText(FText::FromString(Tooltip));
+	USizeBox* Box = Styler->WidgetTree->ConstructWidget<USizeBox>();
+	Box->SetMinDesiredWidth(Size.X * K);
+	Box->SetMinDesiredHeight(Size.Y * K);
+	if (bWrap)
 	{
-		FButtonStyle Style = B->GetStyle();
-		Style.SetNormal(UWWOSettingsMenu::RoundBrush(Color, 8.f, Border, BorderWidth));
-		Style.SetHovered(UWWOSettingsMenu::RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), 8.f, Border, BorderWidth));
-		Style.SetPressed(UWWOSettingsMenu::RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), 8.f, Border, BorderWidth));
-		B->SetStyle(Style);
+		// Godot's autowrap: the button keeps its minimum width and the text wraps inside it.
+		Box->SetWidthOverride(Size.X * K);
+		if (UTextBlock* Label = Cast<UTextBlock>(B->GetChildAt(0))) Label->SetWrapTextAt((Size.X - 2.f * (Width + 4.f)) * K);
 	}
-	B->SetToolTipText(FText());
-	return B;
+	Box->AddChild(B);
+	return Box;
 }
 
 void UWWOCharacterMenu::Build()
@@ -123,6 +189,7 @@ void UWWOCharacterMenu::Build()
 	Styler = CreateWidget<UWWOSettingsMenu>(GetOwningPlayer(), UWWOSettingsMenu::StaticClass());
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>();
 	WidgetTree->RootWidget = Root;
+	SetCursor(EMouseCursor::None); // the menu draws Godot's ring cursor instead (NativePaint)
 }
 
 void UWWOCharacterMenu::Open()
@@ -153,23 +220,28 @@ void UWWOCharacterMenu::Open()
 		Panel->SetContent(Page);
 
 		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
-		Header->AddChildToHorizontalBox(Styler->MakeText(TEXT("Character"), 40.f, FLinearColor::White, true))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Header->AddChildToHorizontalBox(Styler->MakeText(TEXT("Touchpad / I to close  ·  ◯ / Esc to go back"), 20.f, FLinearColor(1, 1, 1, 0.6f)))->SetVerticalAlignment(VAlign_Center);
+		Header->AddChildToHorizontalBox(Styler->MakeText(TEXT("Character"), 40.f))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Header->AddChildToHorizontalBox(Styler->MakeText(TEXT("Touchpad / Create / I to close  ·  ◯ / Esc to go back"), 20.f, FLinearColor(1, 1, 1, 0.6f)))->SetVerticalAlignment(VAlign_Center);
 		Page->AddChildToVerticalBox(Header)->SetPadding(FMargin(0, 0, 0, 16.f * K));
 
 		UHorizontalBox* Body = Tree->ConstructWidget<UHorizontalBox>();
 		Page->AddChildToVerticalBox(Body)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-		// Left: the three tiles, or one expanded tile.
+		// Left: the three tiles, or one expanded tile. Tiles: 40 px, left-aligned, 36 px padding.
 		TileSwitcher = Tree->ConstructWidget<UWidgetSwitcher>();
 		UVerticalBox* Tiles = Tree->ConstructWidget<UVerticalBox>();
 		TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 		for (const FString Tile : { FString(TEXT("Flora")), FString(TEXT("Weapons")), FString(TEXT("Frame Parts")) })
 		{
-			UButton* B = Styler->MakeButton(this, Tile, [WeakThis, Tile] { if (WeakThis.IsValid()) WeakThis->Expand(Tile); }, 40.f, FLinearColor(0.18f, 0.19f, 0.23f), true);
+			UButton* B = Styler->MakeButton(this, Tile, [WeakThis, Tile] { if (WeakThis.IsValid()) WeakThis->Expand(Tile); }, 40.f,
+				FLinearColor(0.18f, 0.19f, 0.23f), true, FMargin(36.f, 0.f));
+			FButtonStyle Style = B->GetStyle(); // Godot's tile shades
+			Style.SetHovered(UWWOSettingsMenu::RoundBrush(FLinearColor(0.26f, 0.28f, 0.33f), 8.f));
+			Style.SetPressed(UWWOSettingsMenu::RoundBrush(FLinearColor(0.32f, 0.34f, 0.4f), 8.f));
+			B->SetStyle(Style);
 			UVerticalBoxSlot* TileSlot = Tiles->AddChildToVerticalBox(B);
 			TileSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			TileSlot->SetPadding(FMargin(0, 0, 0, 16.f * K));
+			TileSlot->SetPadding(FMargin(0, Tiles->GetChildrenCount() > 1 ? 16.f * K : 0.f, 0, 0));
 		}
 		TileSwitcher->AddChild(Tiles);
 		UBorder* ExpandedPanel = Tree->ConstructWidget<UBorder>();
@@ -177,9 +249,11 @@ void UWWOCharacterMenu::Open()
 		ExpandedPanel->SetPadding(FMargin(28.f * K));
 		UVerticalBox* ExpandedPage = Tree->ConstructWidget<UVerticalBox>();
 		UHorizontalBox* Bar = Tree->ConstructWidget<UHorizontalBox>();
-		ExpandedTitle = Styler->MakeText(TEXT(""), 40.f, FLinearColor::White, true);
+		ExpandedTitle = Styler->MakeText(TEXT(""), 40.f);
 		Bar->AddChildToHorizontalBox(ExpandedTitle)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Bar->AddChildToHorizontalBox(Styler->MakeButton(this, TEXT("Collapse ✕"), [WeakThis] { if (WeakThis.IsValid()) WeakThis->Collapse(); }, 24.f));
+		// The menu theme's default font is 28 px.
+		Bar->AddChildToHorizontalBox(Styler->MakeButton(this, TEXT("Collapse ✕"), [WeakThis] { if (WeakThis.IsValid()) WeakThis->Collapse(); }, 28.f))
+			->SetVerticalAlignment(VAlign_Center);
 		ExpandedPage->AddChildToVerticalBox(Bar)->SetPadding(FMargin(0, 0, 0, 20.f * K));
 		ExpandedScroll = Tree->ConstructWidget<UScrollBox>();
 		Content = Tree->ConstructWidget<UVerticalBox>();
@@ -191,7 +265,7 @@ void UWWOCharacterMenu::Open()
 		TileArea->SetSize(WWOFillSize(1.4f));
 		TileArea->SetPadding(FMargin(0, 0, 24.f * K, 0));
 
-		// Right: the character preview.
+		// Right: the character preview, filling the rest of the row like Godot's SubViewportContainer.
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, Params);
@@ -200,13 +274,13 @@ void UWWOCharacterMenu::Open()
 		{
 			FSlateBrush Brush;
 			Brush.SetResourceObject(PreviewActor->Target);
-			Brush.ImageSize = FVector2D(600.f, 820.f);
+			Brush.ImageSize = AWWOPreviewActor::Size * K;
 			Preview->SetBrush(Brush);
 		}
 		UHorizontalBoxSlot* PreviewSlot = Body->AddChildToHorizontalBox(Preview);
 		PreviewSlot->SetSize(WWOFillSize(1.f));
-		PreviewSlot->SetHorizontalAlignment(HAlign_Center);
-		PreviewSlot->SetVerticalAlignment(VAlign_Center);
+		PreviewSlot->SetHorizontalAlignment(HAlign_Fill);
+		PreviewSlot->SetVerticalAlignment(VAlign_Fill);
 	}
 	bOpen = true;
 	Expanded.Reset();
@@ -226,7 +300,7 @@ void UWWOCharacterMenu::Back()
 	if (!Picker.IsEmpty())
 	{
 		Picker.Reset();
-		Rebuild();
+		Refresh();
 	}
 	else if (!Expanded.IsEmpty())
 	{
@@ -258,7 +332,15 @@ void UWWOCharacterMenu::Collapse()
 void UWWOCharacterMenu::TogglePicker(const FString& Name)
 {
 	Picker = Picker == Name ? FString() : Name;
+	Refresh();
+}
+
+void UWWOCharacterMenu::Refresh()
+{
+	// Rebuild the expanded tile in place, keeping the scroll position (Godot's _refresh).
+	const float Scroll = ExpandedScroll->GetScrollOffset();
 	Rebuild();
+	ExpandedScroll->SetScrollOffset(Scroll);
 }
 
 void UWWOCharacterMenu::Rebuild()
@@ -269,6 +351,20 @@ void UWWOCharacterMenu::Rebuild()
 	else if (Expanded == TEXT("Frame Parts")) BuildFrameRows();
 }
 
+namespace
+{
+	FString KindText(EWWOAbilityKind Kind)
+	{
+		switch (Kind)
+		{
+		case EWWOAbilityKind::Active: return TEXT("Active");
+		case EWWOAbilityKind::Triggered: return TEXT("Triggered");
+		case EWWOAbilityKind::Charged: return TEXT("Charged");
+		default: return TEXT("Passive");
+		}
+	}
+}
+
 void UWWOCharacterMenu::BuildFloraRows()
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
@@ -276,120 +372,141 @@ void UWWOCharacterMenu::BuildFloraRows()
 	UWidgetTree* Tree = Styler->WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	auto Sized = [Tree](UWidget* W, FVector2D Size) -> USizeBox*
-	{
-		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(Size.X * K);
-		Box->SetHeightOverride(Size.Y * K);
-		Box->AddChild(W);
-		return Box;
-	};
-	auto Wrap = [Tree]() -> UWrapBox*
+	auto Row = [Tree]() -> UHorizontalBox* { return Tree->ConstructWidget<UHorizontalBox>(); };
+	auto AddToRow = [](UHorizontalBox* R, UWidget* W) { R->AddChildToHorizontalBox(W)->SetPadding(FMargin(R->GetChildrenCount() > 1 ? 12.f * K : 0.f, 0, 0, 0)); };
+	auto Flow = [Tree]() -> UWrapBox*
 	{
 		UWrapBox* W = Tree->ConstructWidget<UWrapBox>();
 		W->SetInnerSlotPadding(FVector2D(10.f * K, 10.f * K));
 		return W;
 	};
+	auto Hint = [this](const FString& Text)
+	{
+		AddContent(Styler->MakeText(Text, 18.f, FLinearColor(1, 1, 1, 0.6f), true));
+	};
+	auto Pick = [WeakThis](TFunction<void()> Equip)
+	{
+		return [WeakThis, Equip] { Equip(); if (WeakThis.IsValid()) { WeakThis->Picker.Reset(); WeakThis->Refresh(); } };
+	};
 
 	// Flora
 	AddRowLabel(TEXT("Flora"));
-	const UWWOFloraData* Flora = L->GetFlora();
+	UWWOFloraData* Flora = L->GetFlora();
 	const FLinearColor FloraColor = Flora ? Flora->Color : FLinearColor(0.4f, 0.85f, 0.3f);
 	FString FloraText = TEXT("Flora\n") + (Flora ? Flora->DisplayName : FString(TEXT("None")));
 	if (Flora && !Flora->UltName.IsEmpty()) FloraText += TEXT("\nUlt: ") + Flora->UltName;
-	Content->AddChildToVerticalBox(Sized(Slot(FloraText, FVector2D(300, 120), WWO::Darkened(FloraColor, 0.6f), FloraColor, 3.f, 24.f,
-		[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("flora")); }), FVector2D(300, 120)))->SetHorizontalAlignment(HAlign_Left);
+	{
+		UHorizontalBox* R = Row();
+		AddToRow(R, Slot(FloraText, FVector2D(300, 120), WWO::Darkened(FloraColor, 0.6f), 20.f,
+			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("flora")); }, &FloraColor, 3.f));
+		AddContent(R);
+	}
 	if (Picker == TEXT("flora"))
 	{
 		AddRowLabel(TEXT("Choose a flora (switches your grenade, abilities and ult)"));
-		UWrapBox* Row = Wrap();
+		UHorizontalBox* R = Row();
 		for (UWWOFloraData* Option : L->Floras)
 		{
 			if (!Option->bUnlocked) continue;
 			const bool bOn = Option == Flora;
-			Row->AddChild(Sized(Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\nUlt: ") + Option->UltName, FVector2D(240, 90),
-				WWO::Darkened(Option->Color, 0.5f), bOn ? WWO::Lightened(Option->Color, 0.3f) : Option->Color, bOn ? 5.f : 2.f, 22.f,
-				[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipFlora(Option); if (WeakThis.IsValid()) { WeakThis->Picker.Reset(); WeakThis->Rebuild(); } }), FVector2D(240, 90)));
+			const FLinearColor Edge = bOn ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
+			AddToRow(R, Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\nUlt: ") + Option->UltName, FVector2D(240, 90),
+				WWO::Darkened(Option->Color, 0.5f), 20.f, Pick([WL, Option] { if (WL.IsValid()) WL->EquipFlora(Option); }), &Edge, bOn ? 5.f : 2.f, Option->Description));
 		}
-		Content->AddChildToVerticalBox(Row);
-		if (Flora) Content->AddChildToVerticalBox(Styler->MakeText(Flora->Description, 18.f, FLinearColor(1, 1, 1, 0.6f), false, true));
+		AddContent(R);
+		if (Flora) Hint(Flora->Description);
 	}
 
 	// Abilities: grenade, ability 1, ability 2.
 	AddRowLabel(TEXT("Abilities"));
-	UHorizontalBox* Abilities = Tree->ConstructWidget<UHorizontalBox>();
-	if (const UWWOGrenadeData* G = L->GetGrenade())
 	{
-		Abilities->AddChildToHorizontalBox(Sized(Slot(TEXT("Grenade\n") + G->DisplayName, FVector2D(220, 110), WWO::Darkened(G->Color, 0.6f), G->Color, 3.f, 22.f,
-			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("grenade")); }), FVector2D(220, 110)))->SetPadding(FMargin(0, 0, 12.f * K, 0));
+		UHorizontalBox* R = Row();
+		if (const UWWOGrenadeData* G = L->GetGrenade())
+		{
+			AddToRow(R, Slot(TEXT("Grenade\n") + G->DisplayName, FVector2D(220, 110), WWO::Darkened(G->Color, 0.6f), 20.f,
+				[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("grenade")); }, &G->Color, 3.f));
+		}
+		for (int32 SlotIndex = 0; SlotIndex < UWWOLoadoutSubsystem::AbilitySlots; ++SlotIndex)
+		{
+			const UWWOAbilityData* A = L->GetAbility(SlotIndex);
+			const FString Title = FString::Printf(TEXT("Ability %d"), SlotIndex + 1);
+			if (!A)
+			{
+				AddToRow(R, Slot(Title, FVector2D(220, 110), FLinearColor(0.24f, 0.25f, 0.3f), 20.f, [] {})); // an empty slot does nothing
+				continue;
+			}
+			const FString Name = FString::Printf(TEXT("ability%d"), SlotIndex);
+			AddToRow(R, Slot(Title + TEXT("\n") + A->DisplayName, FVector2D(220, 110), WWO::Darkened(A->Color, 0.6f), 20.f,
+				[WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }, &A->Color, 3.f));
+		}
+		AddContent(R);
 	}
-	for (int32 SlotIndex = 0; SlotIndex < UWWOLoadoutSubsystem::AbilitySlots; ++SlotIndex)
-	{
-		const UWWOAbilityData* A = L->GetAbility(SlotIndex);
-		const FLinearColor C = A ? A->Color : FLinearColor(0.3f, 0.3f, 0.3f);
-		const FString Name = FString::Printf(TEXT("ability%d"), SlotIndex);
-		Abilities->AddChildToHorizontalBox(Sized(Slot(FString::Printf(TEXT("Ability %d\n"), SlotIndex + 1) + (A ? A->DisplayName : FString(TEXT("Empty"))), FVector2D(220, 110),
-			WWO::Darkened(C, 0.6f), C, 3.f, 22.f, [WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }), FVector2D(220, 110)))->SetPadding(FMargin(0, 0, 12.f * K, 0));
-	}
-	Content->AddChildToVerticalBox(Abilities);
 	if (Picker == TEXT("grenade"))
 	{
 		AddRowLabel(TEXT("Choose a grenade"));
-		UWrapBox* Row = Wrap();
+		UHorizontalBox* R = Row();
 		for (UWWOGrenadeData* Option : L->GrenadesForFlora())
 		{
 			if (!Option->bUnlocked) continue;
 			const bool bOn = Option == L->GetGrenade();
-			Row->AddChild(Sized(Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")), FVector2D(220, 80), WWO::Darkened(Option->Color, 0.55f), Option->Color,
-				bOn ? 5.f : 2.f, 20.f, [WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipGrenade(Option); if (WeakThis.IsValid()) { WeakThis->Picker.Reset(); WeakThis->Rebuild(); } }),
-				FVector2D(220, 80)));
+			const FString Stats = FString::Printf(TEXT("%s · %d dmg · %s m"), *StaticEnum<EWWOGrenadeKind>()->GetNameStringByValue((int64)Option->Kind),
+				FMath::RoundToInt(Option->Damage), *FString::SanitizeFloat(Option->BlastRadius));
+			const FLinearColor Edge = bOn ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
+			AddToRow(R, Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(200, 90), WWO::Darkened(Option->Color, 0.45f), 20.f,
+				Pick([WL, Option] { if (WL.IsValid()) WL->EquipGrenade(Option); }), &Edge, bOn ? 5.f : 2.f));
 		}
-		Content->AddChildToVerticalBox(Row);
+		AddContent(R);
 	}
 	else if (Picker.StartsWith(TEXT("ability")))
 	{
 		const int32 SlotIndex = FCString::Atoi(*Picker.Mid(7));
-		AddRowLabel(FString::Printf(TEXT("Choose ability %d (picking the other slot's ability swaps them)"), SlotIndex + 1));
-		UWrapBox* Row = Wrap();
+		AddRowLabel(FString::Printf(TEXT("Choose ability %d"), SlotIndex + 1));
+		UHorizontalBox* R = Row();
+		TArray<FString> Lines;
 		for (UWWOAbilityData* Option : L->AbilitiesForFlora())
 		{
+			Lines.Add(FString::Printf(TEXT("%s: %s"), *Option->DisplayName, *Option->Description));
 			if (!Option->bUnlocked) continue;
 			const int32 In = L->AbilitySlotOf(Option);
-			const FString Mark = In == SlotIndex ? TEXT("  ✓") : (In != INDEX_NONE ? FString::Printf(TEXT("  (slot %d)"), In + 1) : FString());
-			Row->AddChild(Sized(Slot(Option->DisplayName + Mark + TEXT("\n") + Option->Description, FVector2D(260, 110), WWO::Darkened(Option->Color, 0.55f), Option->Color,
-				In == SlotIndex ? 5.f : 2.f, 15.f, [WeakThis, WL, Option, SlotIndex] { if (WL.IsValid()) WL->EquipAbility(SlotIndex, Option); if (WeakThis.IsValid()) { WeakThis->Picker.Reset(); WeakThis->Rebuild(); } }),
-				FVector2D(260, 110)));
+			const FString Tag = In == SlotIndex ? TEXT("  ✓") : (In != INDEX_NONE ? FString::Printf(TEXT("  (slot %d)"), In + 1) : FString());
+			const FLinearColor Edge = In == SlotIndex ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
+			AddToRow(R, Slot(Option->DisplayName + Tag + TEXT("\n") + KindText(Option->Kind), FVector2D(200, 90), WWO::Darkened(Option->Color, 0.5f), 20.f,
+				Pick([WL, Option, SlotIndex] { if (WL.IsValid()) WL->EquipAbility(SlotIndex, Option); }), &Edge, In == SlotIndex ? 5.f : 2.f, Option->Description));
 		}
-		Content->AddChildToVerticalBox(Row);
+		AddContent(R);
+		Hint(FString::Join(Lines, TEXT("\n")));
 	}
 
-	// Traits: the equipped ones, then the picker.
+	// Traits: the slots (equipped ones first), then the picker.
 	const TArray<UWWOTraitData*> Equipped = L->EquippedTraits();
 	AddRowLabel(FString::Printf(TEXT("Traits (%d of %d)"), Equipped.Num(), UWWOLoadoutSubsystem::TraitSlots));
-	UWrapBox* Slots = Wrap();
+	UWrapBox* Slots = Flow();
+	const FLinearColor TraitEdge(0.55f, 0.7f, 1.f);
 	for (int32 i = 0; i < UWWOLoadoutSubsystem::TraitSlots; ++i)
 	{
 		const bool bHas = i < Equipped.Num();
-		Slots->AddChild(Sized(Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(170, 90), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.25f),
-			FLinearColor(0.55f, 0.7f, 1.f), bHas ? 2.f : 0.f, 16.f, [WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("traits")); }), FVector2D(170, 90)));
+		Slots->AddChild(Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(170, 90), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.25f), 16.f,
+			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("traits")); }, bHas ? &TraitEdge : nullptr, 2.f, bHas ? Equipped[i]->Description : FString()));
 	}
-	Content->AddChildToVerticalBox(Slots);
+	AddContent(Slots);
 	if (Picker == TEXT("traits"))
 	{
 		AddRowLabel(FString::Printf(TEXT("Choose traits (click to equip / unequip, up to %d)"), UWWOLoadoutSubsystem::TraitSlots));
-		UWrapBox* Row = Wrap();
+		UWrapBox* R = Flow();
 		const bool bFull = Equipped.Num() >= UWWOLoadoutSubsystem::TraitSlots;
+		const FLinearColor OffEdge(0.4f, 0.42f, 0.5f);
 		for (UWWOTraitData* Option : L->TraitsForFlora())
 		{
 			if (!Option->bUnlocked) continue;
 			const bool bOn = L->IsTraitEquipped(Option);
-			UButton* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Option->Description, FVector2D(250, 110),
-				bOn ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.26f), bOn ? FLinearColor(0.55f, 0.7f, 1.f) : FLinearColor(0.4f, 0.42f, 0.5f), bOn ? 4.f : 1.f, 14.f,
-				[WeakThis, WL, Option] { if (WL.IsValid()) WL->ToggleTrait(Option); if (WeakThis.IsValid()) WeakThis->Rebuild(); });
+			UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Option->Description, FVector2D(250, 110),
+				bOn ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.26f), 14.f,
+				[WeakThis, WL, Option] { if (WL.IsValid()) WL->ToggleTrait(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); },
+				bOn ? &TraitEdge : &OffEdge, bOn ? 4.f : 1.f, FString(), true);
 			if (bFull && !bOn) B->SetRenderOpacity(0.5f); // every slot is taken
-			Row->AddChild(Sized(B, FVector2D(250, 110)));
+			R->AddChild(B);
 		}
-		Content->AddChildToVerticalBox(Row);
+		AddContent(R);
 	}
 }
 
@@ -401,34 +518,37 @@ void UWWOCharacterMenu::BuildWeaponRows()
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 	AddRowLabel(TEXT("Equipped"));
-	USizeBox* Current = Tree->ConstructWidget<USizeBox>();
-	Current->SetWidthOverride(320.f * K);
-	Current->SetHeightOverride(110.f * K);
-	Current->AddChild(Slot(L->GetWeapon()->DisplayName + TEXT("\n") + L->GetWeapon()->Archetype, FVector2D(320, 110), FLinearColor(0.24f, 0.25f, 0.3f),
-		FLinearColor(0.85f, 0.85f, 0.9f), 3.f, 24.f, [] {}));
-	Content->AddChildToVerticalBox(Current)->SetHorizontalAlignment(HAlign_Left);
+	const FLinearColor CurrentEdge(0.85f, 0.85f, 0.9f);
+	{
+		UHorizontalBox* R = Tree->ConstructWidget<UHorizontalBox>();
+		R->AddChildToHorizontalBox(Slot(L->GetWeapon()->DisplayName + TEXT("\n") + L->GetWeapon()->Archetype, FVector2D(320, 110), FLinearColor(0.24f, 0.25f, 0.3f), 20.f,
+			[] {}, &CurrentEdge, 3.f));
+		AddContent(R);
+	}
 	AddRowLabel(TEXT("Choose a weapon"));
 	UUniformGridPanel* Grid = Tree->ConstructWidget<UUniformGridPanel>();
-	Grid->SetSlotPadding(FMargin(6.f * K));
+	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
 	int32 Index = 0;
 	for (UWWOWeaponData* Option : L->Weapons)
 	{
 		if (!Option->bUnlocked) continue;
 		const bool bOn = Option == L->GetWeapon();
 		const FString Fire = Option->IsSemiAuto() ? TEXT("semi") : TEXT("auto");
-		const FString Dmg = Option->Pellets > 1.f ? FString::Printf(TEXT("%dx%d dmg"), FMath::RoundToInt(Option->Pellets), FMath::RoundToInt(Option->Damage))
+		const FString Dmg = Option->Pellets > 1.f ? FString::Printf(TEXT("%d×%d dmg"), FMath::RoundToInt(Option->Pellets), FMath::RoundToInt(Option->Damage))
 			: FString::Printf(TEXT("%d dmg"), FMath::RoundToInt(Option->Damage));
 		const FString Stats = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->FireRate), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
-		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(330.f * K);
-		Box->SetHeightOverride(90.f * K);
-		Box->AddChild(Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(330, 90), FLinearColor(0.2f, 0.21f, 0.26f),
-			FLinearColor(0.9f, 0.9f, 0.95f), bOn ? 4.f : 0.f, 20.f, [WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Rebuild(); }));
-		UUniformGridSlot* GridSlot = Grid->AddChildToUniformGrid(Box, Index / 2, Index % 2);
-		GridSlot->SetHorizontalAlignment(HAlign_Left);
+		UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(330, 90), FLinearColor(0.2f, 0.21f, 0.26f), 20.f,
+			[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f);
+		// Godot's GridContainer: 2 columns, 12 px apart.
+		UUniformGridSlot* GridSlot = Grid->AddChildToUniformGrid(B, Index / 2, Index % 2);
+		GridSlot->SetHorizontalAlignment(HAlign_Fill);
+		GridSlot->SetVerticalAlignment(VAlign_Fill);
 		++Index;
 	}
-	Content->AddChildToVerticalBox(Grid)->SetHorizontalAlignment(HAlign_Left);
+	Grid->SetSlotPadding(FMargin(0.f, 0.f, 12.f * K, 12.f * K));
+	UHorizontalBox* R = Tree->ConstructWidget<UHorizontalBox>();
+	R->AddChildToHorizontalBox(Grid);
+	AddContent(R);
 }
 
 void UWWOCharacterMenu::BuildFrameRows()
@@ -438,6 +558,7 @@ void UWWOCharacterMenu::BuildFrameRows()
 	UWidgetTree* Tree = Styler->WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
+	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
 	for (const FName& FrameSlot : UWWOLoadoutSubsystem::FrameSlots())
 	{
 		FString Title = FrameSlot.ToString();
@@ -449,16 +570,19 @@ void UWWOCharacterMenu::BuildFrameRows()
 		{
 			if (!Part->bUnlocked) continue;
 			const bool bOn = Part == L->GetFramePart(FrameSlot);
-			USizeBox* Box = Tree->ConstructWidget<USizeBox>();
-			Box->SetWidthOverride(200.f * K);
-			Box->SetHeightOverride(120.f * K);
-			Box->AddChild(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(200, 120), FLinearColor(0.2f, 0.22f, 0.27f),
-				FLinearColor(0.9f, 0.9f, 0.95f), bOn ? 4.f : 0.f, 15.f, [WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Rebuild(); }));
-			Row->AddChild(Box);
+			Row->AddChild(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(200, 120), FLinearColor(0.2f, 0.22f, 0.27f), 15.f,
+				[WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f));
 		}
-		Content->AddChildToVerticalBox(Row);
+		AddContent(Row);
 	}
 	AddRowLabel(TEXT("Net effect"));
 	const TArray<FString> Lines = L->GroupSummary();
-	Content->AddChildToVerticalBox(Styler->MakeText(Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), 18.f));
+	AddContent(Styler->MakeText(Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), 18.f));
+}
+
+// --- Autotest hooks -------------------------------------------------------------------------
+
+FString UWWOCharacterMenu::DebugState() const
+{
+	return FString::Printf(TEXT("expanded '%s' picker '%s'"), *Expanded, *Picker);
 }
