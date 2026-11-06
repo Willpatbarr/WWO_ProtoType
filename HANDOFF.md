@@ -174,3 +174,16 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Also true in Godot (not changed): a Soldier that can't see you right at its 15 m minimum range
   dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.
+
+## Weapon mods (draft)
+A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). The rifle is the Assault frame with all six slots open: barrel, magazine, stock, sight, chambering, grip.
+- **Mods:** 12 mods in `Config/WeaponMods.json`, one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.
+- **Equipping and configs:** `UWWOLoadoutSubsystem`, under "Weapon mods". Mods are kept per frame, and configs are saved in the loadout save. Fixed weapon stats are scaled in `UWWOWeaponComponent::RefreshStats`, which rebuilds a copy of the weapon asset each frame, so `GetWeaponData()` returns the modded copy and Settings sliders still edit the asset. Reload, aim-in, swap and ready times go through `M()`, where `Apply` adds `ModPercent`.
+- **Perks:** in `UWWOWeaponComponent::RefreshStats`, `OnShotResult` and `PerkStatus`.
+  - focus, brace and hunter: stat changes while they're active
+  - scavenger and adrenal: trigger on kills
+  - static: `AWWOChainLightning::SpawnFrom`
+  - The HUD shows perk counters above the weapon name.
+- **Menu:** Character, then Weapons. It has the mod slots, a picker per slot, the net changes, and configs (save new, apply, overwrite, delete).
+- **In game:** D-pad Down or B applies the next saved config (`EWWOAction::NextConfig`).
+- **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It backs up and restores `Saved/SaveGames/Loadout.sav`.

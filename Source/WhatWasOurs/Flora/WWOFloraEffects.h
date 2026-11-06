@@ -123,6 +123,9 @@ public:
 	AWWOChainLightning();
 	virtual void Tick(float DeltaSeconds) override;
 	static AWWOChainLightning* Spawn(UWorld* World, const UWWOAbilityData* Ability, AActor* First, AActor* Player, const FLinearColor& Color);
+	// Jumps on from First (already hit, so not damaged again), e.g. the Static Rounds perk.
+	static AWWOChainLightning* SpawnFrom(UWorld* World, AActor* First, AActor* Player, const FLinearColor& Color,
+		float Damage, float Range, float Falloff, int32 Jumps, float Delay);
 
 private:
 	TArray<TWeakObjectPtr<AActor>> Hit;

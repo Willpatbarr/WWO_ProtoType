@@ -95,7 +95,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Handling") float ReadyTime = 0.07f;
 
 	// --- State (HUD) ---
+	// The equipped weapon's stats with its mods and active perks applied (a copy, rebuilt each
+	// frame from the asset, so Settings sliders still tune the asset live).
 	UWWOWeaponData* GetWeaponData() const { return Weapon; }
+	UWWOWeaponData* GetBaseWeaponData() const { return BaseWeapon; }
+	FString PerkStatus() const;
+	FString ConfigToast; // "Config 2: Long Barrel, ..." for a moment after a quick swap
+	float ConfigToastLeft = 0.f; // active perks for the HUD, e.g. "Focus 3/5 · Static 7/10"
 	float AdsAmount = 0.f;
 	int32 Ammo = 30;
 	bool bReloading = false;
@@ -126,7 +132,14 @@ public:
 	AWWOCharacter* GetPlayer() const;
 
 private:
-	UPROPERTY() TObjectPtr<UWWOWeaponData> Weapon;
+	UPROPERTY() TObjectPtr<UWWOWeaponData> BaseWeapon; // the asset
+	UPROPERTY() TObjectPtr<UWWOWeaponData> Weapon;     // its modded copy
+	FString ModSignature; // the equipped mods, to refill the magazine when they change
+	int32 HitStreak = 0;  // Focus: hits in a row
+	int32 StaticHits = 0; // Static: hits toward the next arc
+	float AdrenalLeft = 0.f; // Adrenal: seconds of faster reloads left
+	void RefreshStats();
+	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills);
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	UPROPERTY() FWWOFPArm MeleeArm;

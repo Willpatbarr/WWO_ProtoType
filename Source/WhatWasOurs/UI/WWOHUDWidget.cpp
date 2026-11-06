@@ -312,6 +312,12 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		const FVector2D Corner(Size.X - 40.f, Size.Y - 40.f);
 		const FVector2D Lift(0.f, Gun->bReloading ? 0.f : -12.f);
 		P.Text(W->DisplayName, Corner - FVector2D(0, 92) - Lift, 20.f, FLinearColor::White, 1.f, 6.f, 0.7f);
+		if (Gun->ConfigToastLeft > 0.f)
+		{
+			P.Text(Gun->ConfigToast, FVector2D(Center.X, Size.Y - 150.f), 24.f, WWO::WithAlpha(FLinearColor::White, FMath::Min(Gun->ConfigToastLeft / 0.4f, 1.f)), 0.5f, 6.f, 0.7f);
+		}
+		// Weapon mod perks (draft): streaks, counters and timers above the weapon name.
+		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 120) - Lift, 18.f, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 6.f, 0.7f);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
 		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
 		P.Text(Count, Corner - FVector2D(0, 66) - Lift, 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 8.f, 0.7f);

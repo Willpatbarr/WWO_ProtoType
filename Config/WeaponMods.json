@@ -1,0 +1,34 @@
+{
+  "_comment": "Draft weapon mods for the Assault frame (the rifle). Stats are percent changes as fractions (0.25 = +25%). Stat names: range, recoil_side, recoil_up, magazine_size, reload_time, ads_move_speed, sway, zoom, ads_time, damage, fire_rate, crit_multiplier, swap_time, ready_time. Perks: focus, scavenger, brace, hunter, static, adrenal. Edit and restart the game to retune.",
+  "mods": [
+    { "id": "long_barrel", "name": "Long Barrel", "frame": "rifle", "slot": "barrel", "rarity": 2,
+      "stats": { "range": 0.25, "recoil_side": 0.15 } },
+    { "id": "focus_barrel", "name": "Focus Barrel", "frame": "rifle", "slot": "barrel", "rarity": 4,
+      "stats": { "range": -0.10 }, "perk": "focus", "perk_text": "Focus: after 5 hits in a row, +15% damage until you miss" },
+
+    { "id": "extended_mag", "name": "Extended Mag", "frame": "rifle", "slot": "magazine", "rarity": 2,
+      "stats": { "magazine_size": 0.40, "reload_time": 0.15 } },
+    { "id": "scavenger_mag", "name": "Scavenger Mag", "frame": "rifle", "slot": "magazine", "rarity": 4,
+      "stats": { "magazine_size": -0.15 }, "perk": "scavenger", "perk_text": "Scavenger: each kill puts 20% of the magazine back" },
+
+    { "id": "heavy_stock", "name": "Heavy Stock", "frame": "rifle", "slot": "stock", "rarity": 2,
+      "stats": { "recoil_up": -0.25, "ads_move_speed": -0.10 } },
+    { "id": "brace_stock", "name": "Brace Stock", "frame": "rifle", "slot": "stock", "rarity": 4,
+      "stats": { "sway": 0.10 }, "perk": "brace", "perk_text": "Brace: -40% recoil while crouched or sliding" },
+
+    { "id": "magnified_sight", "name": "Magnified Sight", "frame": "rifle", "slot": "sight", "rarity": 2,
+      "stats": { "zoom": 0.40, "ads_time": 0.15 } },
+    { "id": "hunters_lens", "name": "Hunter's Lens", "frame": "rifle", "slot": "sight", "rarity": 4,
+      "stats": { "ads_time": 0.10 }, "perk": "hunter", "perk_text": "Hunter: +0.3 crit multiplier while aiming" },
+
+    { "id": "heavy_rounds", "name": "Heavy Rounds", "frame": "rifle", "slot": "chambering", "rarity": 2,
+      "stats": { "damage": 0.20, "fire_rate": -0.15 } },
+    { "id": "static_rounds", "name": "Static Rounds", "frame": "rifle", "slot": "chambering", "rarity": 4,
+      "stats": { "damage": -0.05 }, "perk": "static", "perk_text": "Static: every 10th hit arcs lightning to 2 nearby enemies" },
+
+    { "id": "light_grip", "name": "Light Grip", "frame": "rifle", "slot": "grip", "rarity": 2,
+      "stats": { "swap_time": -0.25, "ready_time": -0.25, "sway": 0.10 } },
+    { "id": "adrenal_grip", "name": "Adrenal Grip", "frame": "rifle", "slot": "grip", "rarity": 4,
+      "stats": { "swap_time": 0.10 }, "perk": "adrenal", "perk_text": "Adrenal: a kill makes reloads 40% faster for 4 s" }
+  ]
+}

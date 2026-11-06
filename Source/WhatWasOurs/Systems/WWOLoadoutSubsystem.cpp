@@ -49,6 +49,7 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	LoadAllData();
+	LoadMods();
 	EquippedAbilities.SetNum(AbilitySlots);
 	if (!LoadSave())
 	{
@@ -66,8 +67,8 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 	if (!Weapon && Weapons.Num() > 0) Weapon = Weapons[0];
 	FillFloraSlots();
-	UE_LOG(LogWWO, Log, TEXT("Loadout: %d weapons, %d grenades, %d abilities, %d frame parts, %d floras, %d traits"),
-		Weapons.Num(), Grenades.Num(), Abilities.Num(), FrameParts.Num(), Floras.Num(), Traits.Num());
+	UE_LOG(LogWWO, Log, TEXT("Loadout: %d weapons, %d grenades, %d abilities, %d frame parts, %d floras, %d traits, %d weapon mods, %d configs"),
+		Weapons.Num(), Grenades.Num(), Abilities.Num(), FrameParts.Num(), Floras.Num(), Traits.Num(), WeaponMods.Num(), Configs.Num());
 }
 
 void UWWOLoadoutSubsystem::LoadAllData()
@@ -315,6 +316,14 @@ void UWWOLoadoutSubsystem::Save() const
 	for (const UWWOAbilityData* A : EquippedAbilities) Data->Abilities.Add(A ? A->Id : NAME_None);
 	for (const UWWOTraitData* T : EquippedTraitList) Data->Traits.Add(T->Id);
 	for (const auto& Pair : EquippedFrame) Data->Frame.Add(Pair.Key, Pair.Value->Id);
+	for (const auto& Frame : EquippedMods)
+	{
+		for (const auto& Pair : Frame.Value)
+		{
+			if (Pair.Value) Data->WeaponMods.Add(FName(Frame.Key.ToString() + TEXT(":") + Pair.Key.ToString()), Pair.Value->Id);
+		}
+	}
+	Data->ModConfigs = Configs;
 	UGameplayStatics::SaveGameToSlot(Data, SaveSlot, 0);
 }
 
@@ -342,6 +351,14 @@ void UWWOLoadoutSubsystem::ApplySave(const UWWOLoadoutSave* Data)
 		UWWOFramePartData* Part = FindById(FrameParts, Pair.Value);
 		if (Part && Part->Slot == Pair.Key) EquippedFrame.Add(Pair.Key, Part);
 	}
+	for (const auto& Pair : Data->WeaponMods)
+	{
+		FString WeaponId, ModSlot;
+		if (!Pair.Key.ToString().Split(TEXT(":"), &WeaponId, &ModSlot)) continue;
+		UWWOModData* Mod = FindById(WeaponMods, Pair.Value);
+		if (Mod && Mod->Frame == FName(WeaponId) && Mod->Slot == FName(ModSlot)) EquippedMods.FindOrAdd(Mod->Frame).Add(Mod->Slot, Mod);
+	}
+	Configs = Data->ModConfigs;
 	for (int32 Slot = 0; Slot < FMath::Min(Data->Abilities.Num(), AbilitySlots); ++Slot)
 	{
 		UWWOAbilityData* A = FindById(Abilities, Data->Abilities[Slot]);
@@ -419,6 +436,11 @@ namespace
 			{ "max_shield", TEXT("Shields") }, { "recharge_delay", TEXT("Recovery delay") },
 			{ "shield_regen", TEXT("Shield refill speed") }, { "melee_damage", TEXT("Melee damage") },
 			{ "grenade_recharge", TEXT("Grenade recharge time") },
+			// Weapon mod stats (read off the weapon, not through Apply's group points).
+			{ "range", TEXT("Range") }, { "recoil_side", TEXT("Side recoil") }, { "recoil_up", TEXT("Vertical recoil") },
+			{ "magazine_size", TEXT("Magazine size") }, { "ads_move_speed", TEXT("Move speed while aiming") },
+			{ "sway", TEXT("Sway") }, { "zoom", TEXT("Zoom") }, { "damage", TEXT("Damage") },
+			{ "fire_rate", TEXT("Fire rate") }, { "crit_multiplier", TEXT("Crit multiplier") },
 		};
 		return Names;
 	}
@@ -482,6 +504,7 @@ float UWWOLoadoutSubsystem::Apply(FName Stat, float Base) const
 			}
 		}
 	}
+	Percent += ModPercent(Stat);
 	return (Base + Flat) * FMath::Max(1.f + Percent, 0.f) * Multiply;
 }
 
@@ -512,4 +535,216 @@ TArray<FString> UWWOLoadoutSubsystem::NetChanges() const
 		Lines.Add(Line);
 	}
 	return Lines;
+}
+
+// --- Weapon mods (draft) --------------------------------------------------------------------
+
+void UWWOLoadoutSubsystem::LoadMods()
+{
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponMods.json")))) return;
+	TSharedPtr<FJsonObject> Json;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	{
+		UE_LOG(LogWWO, Warning, TEXT("Config/WeaponMods.json isn't valid JSON"));
+		return;
+	}
+	const TArray<TSharedPtr<FJsonValue>>* List;
+	if (!Json->TryGetArrayField(TEXT("mods"), List)) return;
+	int32 Order = 0;
+	for (const TSharedPtr<FJsonValue>& V : *List)
+	{
+		const TSharedPtr<FJsonObject> O = V->AsObject();
+		if (!O.IsValid()) continue;
+		UWWOModData* Mod = NewObject<UWWOModData>(this);
+		Mod->Id = FName(O->GetStringField(TEXT("id")));
+		Mod->DisplayName = O->GetStringField(TEXT("name"));
+		Mod->Frame = FName(O->GetStringField(TEXT("frame")));
+		Mod->Slot = FName(O->GetStringField(TEXT("slot")));
+		Mod->Rarity = O->HasField(TEXT("rarity")) ? (int32)O->GetNumberField(TEXT("rarity")) : 1;
+		Mod->Order = Order++;
+		O->TryGetStringField(TEXT("perk_text"), Mod->PerkText);
+		FString Perk;
+		if (O->TryGetStringField(TEXT("perk"), Perk)) Mod->Perk = FName(Perk);
+		const TSharedPtr<FJsonObject>* Stats;
+		if (O->TryGetObjectField(TEXT("stats"), Stats))
+		{
+			for (const auto& Pair : (*Stats)->Values)
+			{
+				FWWOStatModifier M;
+				M.Stat = FName(Pair.Key);
+				M.Op = EWWOStatOp::PercentAdd;
+				M.Value = (float)Pair.Value->AsNumber();
+				Mod->Mods.Add(M);
+			}
+		}
+		Mod->Description = Mod->Summary();
+		WeaponMods.Add(Mod);
+	}
+}
+
+const TArray<FName>& UWWOLoadoutSubsystem::ModSlots()
+{
+	static const TArray<FName> Slots = { "barrel", "magazine", "stock", "sight", "chambering", "grip" };
+	return Slots;
+}
+
+FString UWWOLoadoutSubsystem::ModSlotTitle(FName Slot)
+{
+	FString S = Slot.ToString();
+	return S.Left(1).ToUpper() + S.Mid(1);
+}
+
+bool UWWOLoadoutSubsystem::HasMods(const UWWOWeaponData* W) const
+{
+	if (!W) return false;
+	for (const UWWOModData* Mod : WeaponMods)
+	{
+		if (Mod->Frame == W->Id) return true;
+	}
+	return false;
+}
+
+TArray<UWWOModData*> UWWOLoadoutSubsystem::ModsFor(FName Slot) const
+{
+	TArray<UWWOModData*> Out;
+	for (UWWOModData* Mod : WeaponMods)
+	{
+		if (Weapon && Mod->Frame == Weapon->Id && Mod->Slot == Slot) Out.Add(Mod);
+	}
+	return Out;
+}
+
+UWWOModData* UWWOLoadoutSubsystem::GetMod(FName Slot) const
+{
+	if (!Weapon) return nullptr;
+	const TMap<FName, TObjectPtr<UWWOModData>>* Frame = EquippedMods.Find(Weapon->Id);
+	const TObjectPtr<UWWOModData>* Found = Frame ? Frame->Find(Slot) : nullptr;
+	return Found ? Found->Get() : nullptr;
+}
+
+void UWWOLoadoutSubsystem::EquipMod(FName Slot, UWWOModData* Mod)
+{
+	if (!Weapon) return;
+	TMap<FName, TObjectPtr<UWWOModData>>& Frame = EquippedMods.FindOrAdd(Weapon->Id);
+	if (Mod && (Mod->Frame != Weapon->Id || Mod->Slot != Slot)) return;
+	if (Mod) Frame.Add(Slot, Mod);
+	else Frame.Remove(Slot);
+	Changed();
+}
+
+bool UWWOLoadoutSubsystem::HasPerk(FName Perk) const
+{
+	if (!Weapon) return false;
+	if (const TMap<FName, TObjectPtr<UWWOModData>>* Frame = EquippedMods.Find(Weapon->Id))
+	{
+		for (const auto& Pair : *Frame)
+		{
+			if (Pair.Value && Pair.Value->Perk == Perk) return true;
+		}
+	}
+	return false;
+}
+
+float UWWOLoadoutSubsystem::ModPercent(FName Stat) const
+{
+	float Total = 0.f;
+	if (!Weapon) return Total;
+	if (const TMap<FName, TObjectPtr<UWWOModData>>* Frame = EquippedMods.Find(Weapon->Id))
+	{
+		for (const auto& Pair : *Frame)
+		{
+			if (!Pair.Value) continue;
+			for (const FWWOStatModifier& Mod : Pair.Value->Mods)
+			{
+				if (Mod.Stat == Stat && Mod.Op == EWWOStatOp::PercentAdd) Total += Mod.Value;
+			}
+		}
+	}
+	return Total;
+}
+
+TMap<FName, FName> UWWOLoadoutSubsystem::ModIds(FName WeaponId) const
+{
+	TMap<FName, FName> Ids;
+	if (const TMap<FName, TObjectPtr<UWWOModData>>* Frame = EquippedMods.Find(WeaponId))
+	{
+		for (const auto& Pair : *Frame)
+		{
+			if (Pair.Value) Ids.Add(Pair.Key, Pair.Value->Id);
+		}
+	}
+	return Ids;
+}
+
+void UWWOLoadoutSubsystem::SetModIds(FName WeaponId, const TMap<FName, FName>& Ids)
+{
+	TMap<FName, TObjectPtr<UWWOModData>>& Frame = EquippedMods.FindOrAdd(WeaponId);
+	Frame.Reset();
+	for (const auto& Pair : Ids)
+	{
+		UWWOModData* Mod = FindById(WeaponMods, Pair.Value);
+		if (Mod && Mod->Frame == WeaponId && Mod->Slot == Pair.Key) Frame.Add(Pair.Key, Mod);
+	}
+}
+
+void UWWOLoadoutSubsystem::SaveConfig(int32 Index)
+{
+	if (!Weapon) return;
+	FWWOModConfig Config;
+	Config.Weapon = Weapon->Id;
+	Config.Mods = ModIds(Weapon->Id);
+	if (Configs.IsValidIndex(Index))
+	{
+		Config.Name = Configs[Index].Name;
+		Configs[Index] = Config;
+	}
+	else
+	{
+		// Names are "Config 1", "Config 2", ...: the lowest number not taken.
+		int32 N = 1;
+		while (Configs.ContainsByPredicate([N](const FWWOModConfig& C) { return C.Name == FString::Printf(TEXT("Config %d"), N); })) ++N;
+		Config.Name = FString::Printf(TEXT("Config %d"), N);
+		Configs.Add(Config);
+	}
+	Changed();
+}
+
+void UWWOLoadoutSubsystem::ApplyConfig(int32 Index)
+{
+	if (!Configs.IsValidIndex(Index)) return;
+	const FWWOModConfig& Config = Configs[Index];
+	if (UWWOWeaponData* W = FindById(Weapons, Config.Weapon)) Weapon = W;
+	SetModIds(Config.Weapon, Config.Mods);
+	ActiveConfig = Index;
+	Changed();
+}
+
+int32 UWWOLoadoutSubsystem::CycleConfig()
+{
+	if (Configs.Num() == 0) return INDEX_NONE;
+	const int32 Next = Configs.IsValidIndex(ActiveConfig) ? (ActiveConfig + 1) % Configs.Num() : 0;
+	ApplyConfig(Next);
+	return Next;
+}
+
+void UWWOLoadoutSubsystem::DeleteConfig(int32 Index)
+{
+	if (!Configs.IsValidIndex(Index)) return;
+	Configs.RemoveAt(Index);
+	if (ActiveConfig == Index) ActiveConfig = INDEX_NONE;
+	else if (ActiveConfig > Index) --ActiveConfig;
+	Changed();
+}
+
+FString UWWOLoadoutSubsystem::ConfigSummary(const FWWOModConfig& Config, const UWWOLoadoutSubsystem* L)
+{
+	TArray<FString> Names;
+	for (const FName& Slot : ModSlots())
+	{
+		const FName* Id = Config.Mods.Find(Slot);
+		const UWWOModData* Mod = Id && L ? FindById(L->WeaponMods, *Id) : nullptr;
+		if (Mod) Names.Add(Mod->DisplayName);
+	}
+	return Names.Num() > 0 ? FString::Join(Names, TEXT(", ")) : FString(TEXT("No mods"));
 }

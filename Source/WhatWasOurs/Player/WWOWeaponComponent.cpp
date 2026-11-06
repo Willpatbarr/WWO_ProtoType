@@ -187,7 +187,23 @@ void UWWOWeaponComponent::BeginPlay()
 		Equip(Loadout->GetWeapon());
 		LoadoutHandle = Loadout->OnChanged.AddWeakLambda(this, [this, Loadout]()
 		{
-			if (Loadout->GetWeapon() != Weapon) Equip(Loadout->GetWeapon());
+			if (Loadout->GetWeapon() != BaseWeapon) Equip(Loadout->GetWeapon());
+			else
+			{
+				// New mods: a fresh, full magazine (it may have grown), like re-equipping.
+				FString Signature;
+				for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+				{
+					if (const UWWOModData* Mod = Loadout->GetMod(Slot)) Signature += Mod->Id.ToString() + TEXT(",");
+				}
+				if (Signature != ModSignature)
+				{
+					ModSignature = Signature;
+					RefreshStats();
+					Ammo = MagazineSize();
+					HitStreak = StaticHits = 0;
+				}
+			}
 			UpdateArmColor();
 		});
 	}
@@ -215,7 +231,18 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 {
 	// Swap in the weapon's model and start it with a full magazine.
 	if (!NewWeapon) return;
-	Weapon = NewWeapon;
+	BaseWeapon = NewWeapon;
+	Weapon = DuplicateObject<UWWOWeaponData>(NewWeapon, this);
+	HitStreak = StaticHits = 0;
+	ModSignature.Reset();
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	{
+		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+		{
+			if (const UWWOModData* Mod = L->GetMod(Slot)) ModSignature += Mod->Id.ToString() + TEXT(",");
+		}
+	}
+	RefreshStats();
 	BuildModel();
 	Ammo = MagazineSize();
 	CancelReload();
@@ -424,9 +451,19 @@ float UWWOWeaponComponent::CameraRoll() const
 void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 {
 	if (!Weapon) return;
+	AdrenalLeft = FMath::Max(AdrenalLeft - DeltaSeconds, 0.f);
+	RefreshStats();
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	if (Loadout && JustPressed((int32)EWWOAction::WeaponNext)) Loadout->CycleWeapon(1);
 	else if (Loadout && JustPressed((int32)EWWOAction::WeaponPrev)) Loadout->CycleWeapon(-1);
+	ConfigToastLeft = FMath::Max(ConfigToastLeft - DeltaSeconds, 0.f);
+	if (Loadout && JustPressed((int32)EWWOAction::NextConfig))
+	{
+		const int32 Index = Loadout->CycleConfig();
+		ConfigToast = Index == INDEX_NONE ? FString(TEXT("No saved configs (save one in the character menu)"))
+			: Loadout->GetConfigs()[Index].Name + TEXT(": ") + UWWOLoadoutSubsystem::ConfigSummary(Loadout->GetConfigs()[Index], Loadout);
+		ConfigToastLeft = 2.5f;
+	}
 	UpdateMelee(DeltaSeconds);
 	UpdateReload(DeltaSeconds);
 	UpdateAds(DeltaSeconds);
@@ -592,7 +629,8 @@ void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 	if (JustPressed((int32)EWWOAction::Reload)) StartReload();
 	if (bReloading && GetPlayer()->bSprinting) CancelReload(); // sprinting cancels a reload, like Destiny
 	if (!bReloading) return;
-	ReloadProgress += DeltaSeconds / FMath::Max(M("reload_time", Weapon->ReloadTime), 0.05f);
+	const float Adrenal = AdrenalLeft > 0.f ? 1.4f : 1.f; // Adrenal: reloads 40% faster after a kill
+	ReloadProgress += DeltaSeconds * Adrenal / FMath::Max(M("reload_time", Weapon->ReloadTime), 0.05f);
 	if (ReloadProgress >= ReloadSeated && Ammo < MagazineSize()) Ammo = MagazineSize(); // the new magazine is in
 	if (ReloadProgress >= 1.f) CancelReload();
 }
@@ -686,14 +724,20 @@ void UWWOWeaponComponent::Shoot()
 		Entry.bCritical |= bCritical;
 	}
 	bool bAnyCritical = false, bAnyKilled = false;
+	int32 Kills = 0;
+	AActor* FirstHit = nullptr;
 	for (const auto& Pair : Totals)
 	{
 		if (IWWOTargetable* Target = Cast<IWWOTargetable>(Pair.Key))
 		{
-			bAnyKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point) || bAnyKilled;
+			const bool bKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point);
+			bAnyKilled |= bKilled;
+			Kills += bKilled ? 1 : 0;
 			bAnyCritical |= Pair.Value.bCritical;
+			if (!FirstHit) FirstHit = Pair.Key;
 		}
 	}
+	OnShotResult(FirstHit, Totals.Num(), Kills);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
@@ -925,4 +969,81 @@ void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float
 	if (!Arm.bLeft) Arm.Ball->SetVisibility(false); // only the throwing hand holds a grenade
 	Arm.Ball->SetRelativeScale3D(FVector(0.08f * K));
 	Arm.Ball->SetRelativeLocation(Point(CS[Ref.FindBoneIndex("middle_01_r")].GetLocation()));
+}
+
+// --- Mods and perks (draft) -------------------------------------------------------------------
+
+void UWWOWeaponComponent::RefreshStats()
+{
+	// Copy the asset (Settings sliders edit it live), then apply the mods' percentages to the
+	// stats read straight off the weapon. Reload, aim-in, swap and ready times go through
+	// M() instead, where the loadout adds the mods' percentages itself.
+	if (!BaseWeapon || !Weapon) return;
+	for (TFieldIterator<FProperty> It(UWWOWeaponData::StaticClass()); It; ++It)
+	{
+		It->CopyCompleteValue_InContainer(Weapon, BaseWeapon);
+	}
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	if (!L) return;
+	auto Scale = [L](float& Value, FName Stat) { Value *= FMath::Max(1.f + L->ModPercent(Stat), 0.f); };
+	Scale(Weapon->FireRange, "range");
+	Scale(Weapon->RecoilSide, "recoil_side");
+	Scale(Weapon->RecoilUp, "recoil_up");
+	Scale(Weapon->MagazineSize, "magazine_size");
+	Scale(Weapon->AdsMoveSpeed, "ads_move_speed");
+	Scale(Weapon->Sway, "sway");
+	Scale(Weapon->Damage, "damage");
+	Scale(Weapon->FireRate, "fire_rate");
+	Scale(Weapon->CritMultiplier, "crit_multiplier");
+	// Zoom is a magnification: +40% means 40% more of the zoom past 1x.
+	Weapon->Zoom = 1.f + (Weapon->Zoom - 1.f) * FMath::Max(1.f + L->ModPercent("zoom"), 0.f);
+	Weapon->MagazineSize = FMath::Max(1.f, FMath::RoundToFloat(Weapon->MagazineSize));
+
+	// Perks that change stats while they're active.
+	const AWWOCharacter* Pl = GetPlayer();
+	if (L->HasPerk("focus") && HitStreak >= 5) Weapon->Damage *= 1.15f;
+	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding))
+	{
+		Weapon->RecoilUp *= 0.6f;
+		Weapon->RecoilSide *= 0.6f;
+	}
+	if (L->HasPerk("hunter")) Weapon->CritMultiplier += 0.3f * AdsAmount;
+}
+
+void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills)
+{
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	if (!L) return;
+	// Focus: a shot that hits nothing ends the streak.
+	HitStreak = HitCount > 0 ? HitStreak + 1 : 0;
+	if (Kills > 0 && L->HasPerk("scavenger"))
+	{
+		Ammo = FMath::Min(Ammo + FMath::Max(1, FMath::RoundToInt(MagazineSize() * 0.2f)) * Kills, MagazineSize());
+	}
+	if (Kills > 0 && L->HasPerk("adrenal")) AdrenalLeft = 4.f;
+	if (HitCount > 0 && L->HasPerk("static"))
+	{
+		StaticHits += 1;
+		if (StaticHits >= 10 && FirstHit)
+		{
+			StaticHits = 0;
+			// Two jumps from the target that was hit, for twice the gun's damage each.
+			AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(0.45f, 0.75f, 1.f),
+				Weapon->Damage * 2.f, 6.f, 0.85f, 2, 0.07f);
+		}
+	}
+}
+
+FString UWWOWeaponComponent::PerkStatus() const
+{
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	if (!L) return FString();
+	TArray<FString> Active;
+	if (L->HasPerk("focus")) Active.Add(HitStreak >= 5 ? FString(TEXT("Focus ACTIVE")) : FString::Printf(TEXT("Focus %d/5"), HitStreak));
+	if (L->HasPerk("static")) Active.Add(FString::Printf(TEXT("Static %d/10"), StaticHits));
+	if (L->HasPerk("adrenal") && AdrenalLeft > 0.f) Active.Add(FString::Printf(TEXT("Adrenal %.1fs"), AdrenalLeft));
+	const AWWOCharacter* Pl = GetPlayer();
+	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding)) Active.Add(TEXT("Braced"));
+	if (L->HasPerk("hunter") && AdsAmount > 0.5f) Active.Add(TEXT("Hunter"));
+	return FString::Join(Active, TEXT("  ·  "));
 }

@@ -75,6 +75,8 @@ public:
 	void Close();
 	void Back();
 	FString DebugState() const; // for the autotest
+	void AutoTestShow(const FString& Tile, const FString& PickerName); // for the autotest
+	void AutoTestScroll(float Offset);
 	AWWOPreviewActor* GetPreviewActor() const { return PreviewActor; } // for the autotest
 
 private:
@@ -86,6 +88,7 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> ExpandedTitle;
 	UPROPERTY() TObjectPtr<UScrollBox> ExpandedScroll;
 	UPROPERTY() TObjectPtr<UVerticalBox> Content;
+	UPROPERTY() TObjectPtr<UWidget> ModRowsStart; // the mod slots label (autotest scrolls to it)
 	UPROPERTY() TObjectPtr<UImage> Preview;
 	UPROPERTY() TObjectPtr<AWWOPreviewActor> PreviewActor;
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> Styler; // borrows the settings menu's widget helpers
@@ -102,5 +105,6 @@ private:
 		const FLinearColor* Border = nullptr, float BorderWidth = 2.f, const FString& Tooltip = FString(), bool bWrap = false);
 	void BuildFloraRows();
 	void BuildWeaponRows();
+	void BuildModRows();
 	void BuildFrameRows();
 };

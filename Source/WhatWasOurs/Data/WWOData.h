@@ -187,6 +187,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Extra Grenade") float ExtraCharges = 1.f;
 };
 
+// A weapon mod (draft): fits one slot on one frame (the weapon with Id == Frame). Changes stats
+// by percentages (PercentAdd modifiers) and may carry a perk, picked by Perk (see
+// UWWOWeaponComponent). Loaded from Config/WeaponMods.json, not an asset, while the design settles.
+UCLASS(BlueprintType)
+class WHATWASOURS_API UWWOModData : public UWWOItemData
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Frame = "rifle";
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Slot; // barrel, magazine, stock, sight, chambering, grip
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") int32 Rarity = 1; // 1 to 5
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mod") TArray<FWWOStatModifier> Mods;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Perk; // focus, scavenger, brace, hunter, static, adrenal
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FString PerkText;
+
+	FString Summary() const; // "+25% Range, +15% Side recoil" and the perk on its own line
+};
+
 // Frame parts give points in the stat groups (see UWWOLoadoutSubsystem::Groups).
 UCLASS(BlueprintType)
 class WHATWASOURS_API UWWOFramePartData : public UWWOItemData

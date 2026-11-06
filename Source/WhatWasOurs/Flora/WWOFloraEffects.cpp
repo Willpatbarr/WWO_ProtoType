@@ -441,6 +441,27 @@ AWWOChainLightning* AWWOChainLightning::Spawn(UWorld* World, const UWWOAbilityDa
 	return Chain;
 }
 
+AWWOChainLightning* AWWOChainLightning::SpawnFrom(UWorld* World, AActor* First, AActor* InPlayer, const FLinearColor& InColor,
+	float InDamage, float InRange, float InFalloff, int32 Jumps, float InDelay)
+{
+	if (!World || !First) return nullptr;
+	AWWOChainLightning* Chain = World->SpawnActor<AWWOChainLightning>(First->GetActorLocation(), FRotator::ZeroRotator, Always());
+	if (!Chain) return nullptr;
+	Chain->FinishSpawning(FTransform(First->GetActorLocation()));
+	Chain->Player = InPlayer;
+	Chain->Color = InColor;
+	Chain->Damage = InDamage;
+	Chain->Range = InRange;
+	Chain->Falloff = InFalloff;
+	Chain->Delay = FMath::Max(InDelay, 0.f);
+	Chain->JumpsLeft = Jumps;
+	Chain->Hit.Add(First);
+	Chain->Current = First;
+	Chain->Burst(First, 6, 1.2f, 0.35f); // a small crackle where it starts
+	Chain->Wait = Chain->Delay;
+	return Chain;
+}
+
 AActor* AWWOChainLightning::NextTarget() const
 {
 	// The nearest living target in range with a clear line from the last one.

@@ -53,3 +53,15 @@ FString UWWOFramePartData::Summary() const
 	}
 	return Lines.Num() == 0 ? TEXT("No changes") : FString::Join(Lines, TEXT("\n"));
 }
+
+FString UWWOModData::Summary() const
+{
+	TArray<FString> Parts;
+	for (const FWWOStatModifier& Mod : Mods)
+	{
+		Parts.Add(FString::Printf(TEXT("%+d%% %s"), FMath::RoundToInt(Mod.Value * 100.f), *UWWOLoadoutSubsystem::StatName(Mod.Stat)));
+	}
+	FString Text = FString::Join(Parts, TEXT(", "));
+	if (!PerkText.IsEmpty()) Text += (Text.IsEmpty() ? TEXT("") : TEXT("\n")) + PerkText;
+	return Text;
+}

@@ -15,6 +15,17 @@
 
 DECLARE_MULTICAST_DELEGATE(FWWOOnLoadoutChanged);
 
+// A saved weapon config (draft): a frame and the mod in each of its slots.
+USTRUCT()
+struct FWWOModConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FString Name;
+	UPROPERTY() FName Weapon;
+	UPROPERTY() TMap<FName, FName> Mods; // slot -> mod id
+};
+
 UCLASS()
 class WHATWASOURS_API UWWOLoadoutSave : public USaveGame
 {
@@ -27,6 +38,8 @@ public:
 	UPROPERTY() TArray<FName> Abilities;
 	UPROPERTY() TArray<FName> Traits;
 	UPROPERTY() TMap<FName, FName> Frame;
+	UPROPERTY() TMap<FName, FName> WeaponMods; // slot -> mod id
+	UPROPERTY() TArray<FWWOModConfig> ModConfigs;
 };
 
 UCLASS()
@@ -54,6 +67,7 @@ public:
 	UPROPERTY() TArray<TObjectPtr<UWWOFramePartData>> FrameParts;
 	UPROPERTY() TArray<TObjectPtr<UWWOFloraData>> Floras;
 	UPROPERTY() TArray<TObjectPtr<UWWOTraitData>> Traits;
+	UPROPERTY() TArray<TObjectPtr<UWWOModData>> WeaponMods; // Config/WeaponMods.json
 
 	// Shared enemy and ally tuning (one asset each).
 	UPROPERTY() TObjectPtr<UWWOSoldierData> SoldierData;
@@ -83,6 +97,23 @@ public:
 	void EquipAbility(int32 Slot, UWWOAbilityData* Choice);
 	bool ToggleTrait(UWWOTraitData* Choice);
 
+	// --- Weapon mods (draft): every slot of a frame is open ---
+	static const TArray<FName>& ModSlots();
+	static FString ModSlotTitle(FName Slot);
+	bool HasMods(const UWWOWeaponData* W) const; // is this weapon a frame with mods?
+	TArray<UWWOModData*> ModsFor(FName Slot) const; // for the equipped weapon
+	UWWOModData* GetMod(FName Slot) const; // on the equipped weapon, or null
+	void EquipMod(FName Slot, UWWOModData* Mod); // null empties the slot
+	bool HasPerk(FName Perk) const; // a mod with this perk is on the equipped weapon
+	float ModPercent(FName Stat) const; // sum of the equipped weapon's mods for this stat
+	const TArray<FWWOModConfig>& GetConfigs() const { return Configs; }
+	void SaveConfig(int32 Index); // INDEX_NONE adds a new one
+	void ApplyConfig(int32 Index);
+	int32 CycleConfig(); // applies the next saved config; returns its index or INDEX_NONE
+	int32 GetActiveConfig() const { return ActiveConfig; }
+	void DeleteConfig(int32 Index);
+	static FString ConfigSummary(const FWWOModConfig& Config, const UWWOLoadoutSubsystem* L);
+
 	// Sum of Amount for equipped traits with this effect (0 if none).
 	float TraitBonus(FName Effect) const;
 	static float Bonus(const UObject* WorldContext, FName Effect);
@@ -107,6 +138,14 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UWWOAbilityData>> EquippedAbilities;
 	UPROPERTY() TArray<TObjectPtr<UWWOTraitData>> EquippedTraitList;
 	UPROPERTY() TMap<FName, TObjectPtr<UWWOFramePartData>> EquippedFrame;
+	// Mods per frame (weapon id), each slot -> mod, so every frame keeps its own setup.
+	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> EquippedMods;
+	TArray<FWWOModConfig> Configs;
+	int32 ActiveConfig = INDEX_NONE; // the last one applied (this session)
+
+	void LoadMods();
+	TMap<FName, FName> ModIds(FName WeaponId) const;
+	void SetModIds(FName WeaponId, const TMap<FName, FName>& Ids);
 
 	void LoadAllData();
 	void FitFlora();

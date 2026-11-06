@@ -135,5 +135,6 @@ enum class EWWOAction : uint8
 	Melee, MeleePad, Grenade, GrenadePad, Ult,
 	Ability1, Ability2, WeaponNext, WeaponPrev,
 	Menu, MenuBack, TabNext, TabPrev, CharacterMenu,
+	NextConfig, // cycle saved weapon configs (draft mods)
 	Count UMETA(Hidden)
 };

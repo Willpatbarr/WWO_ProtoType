@@ -120,6 +120,14 @@ private:
 	float AutoMapClock = 0.f;
 	UPROPERTY() TObjectPtr<class ACameraActor> AutoMapCamera;
 	bool UpdateAutoMapTest(class AWWOCharacter* P, float DeltaTime);
+	// Weapon mod steps (WWOPlayerControllerAutoMods.cpp): draft mods, configs, perks.
+	bool bAutoTestModsOnly = false; // -WWOAutoTestMods
+	int32 AutoModStep = 0;
+	float AutoModClock = 0.f;
+	int32 AutoModConfig = INDEX_NONE;
+	TArray<float> AutoModBase;
+	float AutoModBaseReload = 0.f, AutoModBaseSwap = 0.f;
+	bool UpdateAutoModTest(class AWWOCharacter* P, float DeltaTime);
 	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
 	bool bPerfTest = false;
 	bool bPerfProfiled = false;
