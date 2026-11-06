@@ -173,7 +173,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 5:
 		if (AutoModClock < 0.5f) break;
-		CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_barrel"));
+		CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_barrel:long_barrel")); // its popup, previewing Long Barrel
 		Step(6);
 		break;
 	case 6:
@@ -183,7 +183,27 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 7:
 		if (AutoModClock < 0.5f) break;
-		Shot(TEXT("37_mods_barrel_picker"));
+		Shot(TEXT("37_mods_barrel_preview"));
+		Step(12);
+		break;
+	case 12:
+		if (AutoModClock < 0.3f) break; // let the screenshot happen first
+		CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_chambering:heavy_rounds"));
+		Step(10);
+		break;
+	case 10:
+		if (AutoModClock < 0.5f) break;
+		CharacterMenu->AutoTestScroll(-1.f);
+		Step(11);
+		break;
+	case 11:
+		if (AutoModClock < 0.4f) break;
+		Shot(TEXT("37_mods_chambering_preview"));
+		Step(13);
+		break;
+	case 13:
+		if (AutoModClock < 0.3f) break;
+		CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
 		Step(8);
 		break;
 	case 8:

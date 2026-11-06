@@ -67,6 +67,7 @@ class WHATWASOURS_API UWWOCharacterMenu : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
@@ -106,5 +107,17 @@ private:
 	void BuildFloraRows();
 	void BuildWeaponRows();
 	void BuildModRows();
+	// Weapon mods (draft): the open slot's popup and the hover preview on the stat bars.
+	static constexpr float ModSlotHeight = 82.f; // Godot pixels per slot, padding included
+	FName OpenSlot;
+	float PopupIdle = 0.f;
+	FName AutoTestPreview; // set by the autotest: a mod id to preview as if hovered
+	UPROPERTY() TObjectPtr<class UWWOStatBars> StatBars;
+	UPROPERTY() TObjectPtr<UWidget> PopupPanel;
+	TArray<TPair<TWeakObjectPtr<UButton>, FName>> SlotButtons;
+	TArray<TPair<TWeakObjectPtr<UButton>, TWeakObjectPtr<class UWWOModData>>> PopupButtons;
+	void OpenModSlot(FName ModSlot);
+	void UpdateModHover(float DeltaTime);
+	void UpdateStatBars(const class UWWOModData* PreviewMod, FName PreviewSlot, bool bPreview);
 	void BuildFrameRows();
 };

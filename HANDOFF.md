@@ -184,6 +184,10 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
   - scavenger and adrenal: trigger on kills
   - static: `AWWOChainLightning::SpawnFrom`
   - The HUD shows perk counters above the weapon name.
-- **Menu:** Character, then Weapons. It has the mod slots, a picker per slot, the net changes, and configs (save new, apply, overwrite, delete).
+- **Menu:** Character, then Weapons. The tile takes the full width and hides the character preview for now.
+  - **Stat bars:** `UWWOStatBars` paints them. Every bar reads as "longer is better", the halfway tick is the frame with no mods, and a full bar is twice that.
+  - **Slots:** all six are shown in one column. Hovering a slot opens a popup beside it listing Empty and that slot's mods, with the equipped one marked. The popup closes 0.35 s after the cursor leaves both the slots and the popup.
+  - **Preview:** hovering a mod in the popup shows on the bars what it would add (green) or remove (red). Clicking it equips it.
+  - **Configs:** listed under the slots, with save new, apply, overwrite and delete. Hover is polled in `NativeTick` (`UpdateModHover`).
 - **In game:** D-pad Down or B applies the next saved config (`EWWOAction::NextConfig`).
 - **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It backs up and restores `Saved/SaveGames/Loadout.sav`.

@@ -1,5 +1,8 @@
 #include "UI/WWOCharacterMenu.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOStatBars.h"
+#include "Player/WWOCharacter.h"
+#include "Player/WWOWeaponComponent.h"
 #include "Player/WWOPlayerController.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -316,7 +319,12 @@ void UWWOCharacterMenu::Close()
 
 void UWWOCharacterMenu::Back()
 {
-	if (!Picker.IsEmpty())
+	if (!OpenSlot.IsNone())
+	{
+		OpenSlot = NAME_None;
+		Refresh();
+	}
+	else if (!Picker.IsEmpty())
 	{
 		Picker.Reset();
 		Refresh();
@@ -333,6 +341,9 @@ void UWWOCharacterMenu::Back()
 
 void UWWOCharacterMenu::Expand(const FString& Tile)
 {
+	// The Weapons tile takes the whole width (it covers the character preview for now).
+	if (Preview) Preview->SetVisibility(Tile == TEXT("Weapons") ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	OpenSlot = NAME_None;
 	Expanded = Tile;
 	Picker.Reset();
 	ExpandedTitle->SetText(FText::FromString(Tile));
@@ -343,6 +354,8 @@ void UWWOCharacterMenu::Expand(const FString& Tile)
 
 void UWWOCharacterMenu::Collapse()
 {
+	if (Preview) Preview->SetVisibility(ESlateVisibility::Visible);
+	OpenSlot = NAME_None;
 	Expanded.Reset();
 	Picker.Reset();
 	TileSwitcher->SetActiveWidgetIndex(0);
@@ -560,7 +573,7 @@ void UWWOCharacterMenu::BuildWeaponRows()
 		UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(330, 90), FLinearColor(0.2f, 0.21f, 0.26f), 20.f,
 			[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f);
 		// Godot's GridContainer: 2 columns, 12 px apart.
-		UUniformGridSlot* GridSlot = Grid->AddChildToUniformGrid(B, Index / 2, Index % 2);
+		UUniformGridSlot* GridSlot = Grid->AddChildToUniformGrid(B, Index / 4, Index % 4); // the tile is full width
 		GridSlot->SetHorizontalAlignment(HAlign_Fill);
 		GridSlot->SetVerticalAlignment(VAlign_Fill);
 		++Index;
@@ -588,111 +601,292 @@ namespace
 	}
 }
 
+namespace
+{
+	// One stat bar: the mod stat it reads, whether lower is better, and how to show the value.
+	struct FWWOBarDef
+	{
+		const TCHAR* Label;
+		FName Stat;
+		bool bLowerBetter;
+		bool bThroughLoadout; // a time the loadout's Apply() scales (shell parts, traits, mods)
+		int32 Decimals;
+		const TCHAR* Suffix;
+	};
+
+	const TArray<FWWOBarDef>& BarDefs()
+	{
+		static const TArray<FWWOBarDef> Defs = {
+			{ TEXT("Damage"), "damage", false, false, 1, TEXT("") },
+			{ TEXT("Fire rate"), "fire_rate", false, false, 0, TEXT(" rpm") },
+			{ TEXT("Range"), "range", false, false, 0, TEXT(" m") },
+			{ TEXT("Magazine"), "magazine_size", false, false, 0, TEXT("") },
+			{ TEXT("Reload speed"), "reload_time", true, true, 2, TEXT(" s") },
+			{ TEXT("Aim-in speed"), "ads_time", true, true, 2, TEXT(" s") },
+			{ TEXT("Handling"), "swap_time", true, true, 2, TEXT(" s") },
+			{ TEXT("Stability"), "recoil_up", true, false, 2, TEXT("°") },
+			{ TEXT("Side stability"), "recoil_side", true, false, 2, TEXT("°") },
+			{ TEXT("Zoom"), "zoom", false, false, 2, TEXT("x") },
+			{ TEXT("Steadiness"), "sway", true, false, 2, TEXT("") },
+			{ TEXT("Aim move speed"), "ads_move_speed", false, false, 0, TEXT("%") },
+		};
+		return Defs;
+	}
+
+	float SumPercent(const TMap<FName, UWWOModData*>& Set, FName Stat)
+	{
+		float Total = 0.f;
+		for (const auto& Pair : Set)
+		{
+			if (!Pair.Value) continue;
+			for (const FWWOStatModifier& M : Pair.Value->Mods)
+			{
+				if (M.Stat == Stat && M.Op == EWWOStatOp::PercentAdd) Total += M.Value;
+			}
+		}
+		return Total;
+	}
+}
+
 void UWWOCharacterMenu::BuildModRows()
 {
-	// Draft weapon mods: every slot of the frame is open; a picker per slot; then saved configs.
+	// Draft weapon mods: stat bars, every slot at once, and a popup of a slot's mods while the
+	// cursor is over it (see UpdateModHover). Then saved configs.
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	SlotButtons.Reset();
+	PopupButtons.Reset();
 	if (!L || !L->HasMods(L->GetWeapon())) return;
 	UWidgetTree* Tree = Styler->WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
-	auto Flow = [Tree]() -> UWrapBox*
-	{
-		UWrapBox* W = Tree->ConstructWidget<UWrapBox>();
-		W->SetInnerSlotPadding(FVector2D(10.f * K, 10.f * K));
-		return W;
-	};
 
-	AddRowLabel(TEXT("Assault frame: mod slots (all open)"));
+	AddRowLabel(TEXT("Assault frame: stats and mod slots (hover a slot for its mods)"));
 	ModRowsStart = Content->GetChildAt(Content->GetChildrenCount() - 1);
-	UWrapBox* Slots = Flow();
+	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
+
+	// Stat bars.
+	StatBars = Tree->ConstructWidget<UWWOStatBars>(UWWOStatBars::StaticClass());
+	USizeBox* BarsBox = Tree->ConstructWidget<USizeBox>();
+	BarsBox->SetWidthOverride(UWWOStatBars::Width * K);
+	BarsBox->SetHeightOverride(UWWOStatBars::RowHeight * BarDefs().Num() * K);
+	BarsBox->AddChild(StatBars);
+	Row->AddChildToHorizontalBox(BarsBox)->SetVerticalAlignment(VAlign_Top);
+	UpdateStatBars(nullptr, NAME_None, false);
+
+	// Every slot, one column.
+	UVerticalBox* Slots = Tree->ConstructWidget<UVerticalBox>();
 	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
 	{
 		const UWWOModData* Mod = L->GetMod(ModSlot);
-		const FString Name = TEXT("mod_") + ModSlot.ToString();
 		const FLinearColor Edge = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
-		const bool bPicking = Picker == Name;
-		Slots->AddChild(Slot(UWWOLoadoutSubsystem::ModSlotTitle(ModSlot) + TEXT("\n") + (Mod ? Mod->DisplayName : FString(TEXT("Empty"))),
-			FVector2D(170, 90), Mod ? WWO::Darkened(Edge, 0.65f) : FLinearColor(0.2f, 0.21f, 0.25f), 17.f,
-			[WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }, bPicking ? &OnEdge : &Edge, bPicking ? 5.f : 2.f,
-			Mod ? Mod->Summary() : FString()));
+		const bool bOpenSlot = OpenSlot == ModSlot;
+		UWidget* W = Slot(UWWOLoadoutSubsystem::ModSlotTitle(ModSlot) + TEXT("\n") + (Mod ? Mod->DisplayName : FString(TEXT("Empty"))),
+			FVector2D(210, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : FLinearColor(0.2f, 0.21f, 0.25f), 17.f,
+			[WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); }, bOpenSlot ? &OnEdge : &Edge, bOpenSlot ? 5.f : 2.f);
+		if (USizeBox* Box = Cast<USizeBox>(W)) SlotButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), ModSlot });
+		Slots->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
-	AddContent(Slots);
+	Row->AddChildToHorizontalBox(Slots)->SetPadding(FMargin(28.f * K, 0, 0, 0));
 
-	if (Picker.StartsWith(TEXT("mod_")))
+	// The popup: the open slot's mods, lined up with the slot.
+	PopupPanel = nullptr;
+	if (!OpenSlot.IsNone())
 	{
-		const FName ModSlot(*Picker.Mid(4));
-		AddRowLabel(TEXT("Choose a ") + UWWOLoadoutSubsystem::ModSlotTitle(ModSlot).ToLower() + TEXT(" mod"));
-		UWrapBox* Row = Flow();
-		auto Pick = [WeakThis, WL, ModSlot](UWWOModData* Mod)
-		{
-			return [WeakThis, WL, ModSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ModSlot, Mod); if (WeakThis.IsValid()) { WeakThis->Picker.Reset(); WeakThis->Refresh(); } };
-		};
-		const UWWOModData* Current = L->GetMod(ModSlot);
-		const FLinearColor NoneEdge(0.4f, 0.42f, 0.5f);
-		Row->AddChild(Slot(FString(TEXT("Empty")) + (Current ? TEXT("") : TEXT("  ✓")) + TEXT("\nNo changes"), FVector2D(250, 110), FLinearColor(0.2f, 0.21f, 0.25f), 15.f,
-			Pick(nullptr), Current ? &NoneEdge : &OnEdge, Current ? 2.f : 4.f, FString(), true));
-		for (UWWOModData* Mod : L->ModsFor(ModSlot))
+		const int32 SlotIndex = UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(OpenSlot);
+		UBorder* Panel = Tree->ConstructWidget<UBorder>();
+		Panel->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0.12f, 0.13f, 0.16f), 8.f, FLinearColor(0.55f, 0.58f, 0.66f), 2.f));
+		Panel->SetPadding(FMargin(12.f * K));
+		UVerticalBox* List = Tree->ConstructWidget<UVerticalBox>();
+		List->AddChildToVerticalBox(Styler->MakeText(UWWOLoadoutSubsystem::ModSlotTitle(OpenSlot) + TEXT(" mods"), 20.f, FLinearColor(1, 1, 1, 0.7f)))
+			->SetPadding(FMargin(0, 0, 0, 8.f * K));
+		const UWWOModData* Current = L->GetMod(OpenSlot);
+		const FName ThisSlot = OpenSlot;
+		TArray<UWWOModData*> Options = L->ModsFor(OpenSlot);
+		Options.Insert(nullptr, 0); // Empty
+		for (UWWOModData* Mod : Options)
 		{
 			const bool bOn = Mod == Current;
-			const FLinearColor Edge = bOn ? OnEdge : RarityColor(Mod->Rarity);
-			Row->AddChild(Slot(Mod->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Mod->Summary(), FVector2D(250, 110),
-				WWO::Darkened(RarityColor(Mod->Rarity), 0.7f), 15.f, Pick(Mod), &Edge, bOn ? 4.f : 2.f, FString(), true));
+			const FLinearColor Base = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
+			const FString Title = (Mod ? Mod->DisplayName : FString(TEXT("Empty"))) + (bOn ? TEXT("   ✓ equipped") : TEXT(""));
+			const FString Body = Mod ? Mod->Summary() : FString(TEXT("No changes"));
+			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(470, 84), Mod ? WWO::Darkened(Base, 0.7f) : FLinearColor(0.2f, 0.21f, 0.25f), 15.f,
+				[WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); },
+				bOn ? &OnEdge : &Base, bOn ? 5.f : 2.f, FString(), true);
+			if (USizeBox* Box = Cast<USizeBox>(W)) PopupButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), Mod });
+			List->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 		}
-		AddContent(Row);
+		Panel->SetContent(List);
+		PopupPanel = Panel;
+		UHorizontalBoxSlot* PopupSlot = Row->AddChildToHorizontalBox(Panel);
+		// Beside the slot, a row up, but never past the bottom of the slot column (3 options fit from row 1.6).
+		PopupSlot->SetPadding(FMargin(16.f * K, FMath::Clamp(SlotIndex - 1.f, 0.f, 1.6f) * ModSlotHeight * K, 0, 0));
+		PopupSlot->SetVerticalAlignment(VAlign_Top);
 	}
+	AddContent(Row);
 
-	// Net stat changes from the mods.
-	AddRowLabel(TEXT("Mod stat changes"));
+	// Perks of the equipped mods.
+	TArray<FString> Perks;
+	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
 	{
-		TMap<FName, float> Totals;
-		TArray<FName> Order;
-		TArray<FString> Perks;
-		for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
-		{
-			const UWWOModData* Mod = L->GetMod(ModSlot);
-			if (!Mod) continue;
-			for (const FWWOStatModifier& M : Mod->Mods)
-			{
-				if (!Totals.Contains(M.Stat)) Order.Add(M.Stat);
-				Totals.FindOrAdd(M.Stat) += M.Value;
-			}
-			if (!Mod->PerkText.IsEmpty()) Perks.Add(Mod->PerkText);
-		}
-		TArray<FString> Lines;
-		for (const FName& Stat : Order)
-		{
-			const float V = Totals[Stat];
-			if (FMath::Abs(V) > 0.001f) Lines.Add(FString::Printf(TEXT("%+d%% %s"), FMath::RoundToInt(V * 100.f), *UWWOLoadoutSubsystem::StatName(Stat)));
-		}
-		for (const FString& Perk : Perks) Lines.Add(TEXT("Perk · ") + Perk);
-		AddContent(Styler->MakeText(Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No mods equipped"), 18.f, FLinearColor::White, true));
+		const UWWOModData* Mod = L->GetMod(ModSlot);
+		if (Mod && !Mod->PerkText.IsEmpty()) Perks.Add(TEXT("Perk · ") + Mod->PerkText);
 	}
+	AddContent(Styler->MakeText(Perks.Num() > 0 ? FString::Join(Perks, TEXT("\n")) : TEXT("No perks equipped"), 17.f, FLinearColor(0.6f, 0.85f, 1.f), true));
 
 	// Saved configs: save the current mods, or apply / overwrite / delete a saved one.
-	AddRowLabel(TEXT("Configs"));
+	AddRowLabel(TEXT("Configs  (in game: D-pad Down or B switches to the next one)"));
 	AddContent(Slot(TEXT("Save current as new config"), FVector2D(320, 56), FLinearColor(0.2f, 0.3f, 0.24f), 18.f,
 		[WeakThis, WL] { if (WL.IsValid()) WL->SaveConfig(INDEX_NONE); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
 	const TArray<FWWOModConfig>& Configs = L->GetConfigs();
 	for (int32 i = 0; i < Configs.Num(); ++i)
 	{
-		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
-		auto Add = [Row](UWidget* W) { Row->AddChildToHorizontalBox(W)->SetPadding(FMargin(Row->GetChildrenCount() > 1 ? 10.f * K : 0.f, 0, 0, 0)); };
-		Add(Slot(Configs[i].Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L), FVector2D(330, 80), FLinearColor(0.2f, 0.21f, 0.26f), 14.f,
-			[WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }, nullptr, 2.f, TEXT("Apply"), true));
-		Add(Slot(TEXT("Apply"), FVector2D(100, 80), FLinearColor(0.2f, 0.3f, 0.24f), 18.f,
+		UHorizontalBox* CRow = Tree->ConstructWidget<UHorizontalBox>();
+		auto Add = [CRow](UWidget* W) { CRow->AddChildToHorizontalBox(W)->SetPadding(FMargin(CRow->GetChildrenCount() > 1 ? 10.f * K : 0.f, 0, 0, 0)); };
+		const bool bActive = L->GetActiveConfig() == i;
+		Add(Slot(Configs[i].Name + (bActive ? TEXT("  (last applied)") : TEXT("")) + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L), FVector2D(560, 70),
+			FLinearColor(0.2f, 0.21f, 0.26f), 15.f, [WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); },
+			bActive ? &OnEdge : nullptr, 2.f, TEXT("Apply"), true));
+		Add(Slot(TEXT("Apply"), FVector2D(110, 70), FLinearColor(0.2f, 0.3f, 0.24f), 18.f,
 			[WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		Add(Slot(TEXT("Overwrite"), FVector2D(125, 80), FLinearColor(0.3f, 0.27f, 0.18f), 18.f,
+		Add(Slot(TEXT("Overwrite"), FVector2D(130, 70), FLinearColor(0.3f, 0.27f, 0.18f), 18.f,
 			[WeakThis, WL, i] { if (WL.IsValid()) WL->SaveConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		Add(Slot(TEXT("Delete"), FVector2D(100, 80), FLinearColor(0.32f, 0.17f, 0.17f), 18.f,
+		Add(Slot(TEXT("Delete"), FVector2D(110, 70), FLinearColor(0.32f, 0.17f, 0.17f), 18.f,
 			[WeakThis, WL, i] { if (WL.IsValid()) WL->DeleteConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		AddContent(Row);
+		AddContent(CRow);
 	}
-	if (Configs.Num() > 0)
+}
+
+void UWWOCharacterMenu::OpenModSlot(FName ModSlot)
+{
+	if (OpenSlot == ModSlot) return;
+	OpenSlot = ModSlot;
+	PopupIdle = 0.f;
+	Refresh();
+}
+
+void UWWOCharacterMenu::UpdateStatBars(const UWWOModData* PreviewMod, FName PreviewSlot, bool bPreview)
+{
+	// Values with the equipped mods, and with PreviewMod in PreviewSlot instead (null = empty).
+	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	const UWWOWeaponData* W = L ? L->GetWeapon() : nullptr;
+	if (!StatBars || !W) return;
+	TMap<FName, UWWOModData*> Now;
+	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots()) Now.Add(ModSlot, L->GetMod(ModSlot));
+	TMap<FName, UWWOModData*> Then = Now;
+	if (bPreview) Then.Add(PreviewSlot, const_cast<UWWOModData*>(PreviewMod));
+	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwningPlayerPawn());
+	const float SwapBase = P && P->Weapon ? P->Weapon->SwapTime : 0.35f;
+
+	auto Base = [W, SwapBase](FName Stat) -> float
 	{
-		AddContent(Styler->MakeText(TEXT("In game: D-pad Down or B switches to the next saved config."), 16.f, FLinearColor(1, 1, 1, 0.6f), true));
+		if (Stat == "damage") return W->Damage;
+		if (Stat == "fire_rate") return W->FireRate;
+		if (Stat == "range") return W->FireRange;
+		if (Stat == "magazine_size") return W->MagazineSize;
+		if (Stat == "reload_time") return W->ReloadTime;
+		if (Stat == "ads_time") return W->AdsTime;
+		if (Stat == "swap_time") return SwapBase;
+		if (Stat == "recoil_up") return W->RecoilUp;
+		if (Stat == "recoil_side") return W->RecoilSide;
+		if (Stat == "zoom") return W->Zoom;
+		if (Stat == "sway") return W->Sway;
+		if (Stat == "ads_move_speed") return W->AdsMoveSpeed;
+		return 1.f;
+	};
+	auto Value = [L, &Base](const FWWOBarDef& D, const TMap<FName, UWWOModData*>& Set) -> float
+	{
+		const float B = Base(D.Stat);
+		const float Pct = SumPercent(Set, D.Stat);
+		if (D.Stat == "zoom") return 1.f + (B - 1.f) * FMath::Max(1.f + Pct, 0.f);
+		if (D.Stat == "magazine_size") return FMath::Max(1.f, FMath::RoundToFloat(B * FMath::Max(1.f + Pct, 0.f)));
+		if (D.bThroughLoadout)
+		{
+			// Apply() = base * (1 + shell parts + traits + equipped mods): swap the mods' share.
+			return FMath::Max(L->Apply(D.Stat, B) + B * (Pct - L->ModPercent(D.Stat)), 0.f);
+		}
+		return B * FMath::Max(1.f + Pct, 0.f);
+	};
+	const TMap<FName, UWWOModData*> NoMods;
+	StatBars->Rows.Reset();
+	for (const FWWOBarDef& D : BarDefs())
+	{
+		const float Bare = FMath::Max(Value(D, NoMods), 0.0001f);
+		auto Fill = [&D, Bare](float V) { return 0.5f * (D.bLowerBetter ? Bare / FMath::Max(V, 0.0001f) : V / Bare); };
+		auto Shown = [&D](float V) { return FString::Printf(TEXT("%.*f%s"), D.Decimals, D.Stat == FName("ads_move_speed") ? V * 100.f : V, D.Suffix); };
+		const float A = Value(D, Now), B = Value(D, Then);
+		FWWOStatBar R;
+		R.Label = D.Label;
+		R.Fill = Fill(A);
+		R.PreviewFill = Fill(B);
+		R.Value = Shown(A);
+		R.PreviewValue = Shown(B);
+		R.bPreview = bPreview;
+		StatBars->Rows.Add(R);
 	}
+}
+
+void UWWOCharacterMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (bOpen && Expanded == TEXT("Weapons")) UpdateModHover(InDeltaTime);
+}
+
+void UWWOCharacterMenu::UpdateModHover(float DeltaTime)
+{
+	// Hovering a slot opens its popup; the popup stays while the cursor is on it or a slot, and
+	// closes a moment after it leaves both. Hovering a mod in the popup previews it on the bars.
+	bool bOnSlot = false;
+	for (const auto& Pair : SlotButtons)
+	{
+		if (Pair.Key.IsValid() && Pair.Key->IsHovered() && AutoTestPreview.IsNone())
+		{
+			bOnSlot = true;
+			if (Pair.Value != OpenSlot)
+			{
+				OpenModSlot(Pair.Value);
+				return; // rebuilt
+			}
+		}
+	}
+	const bool bOnPopup = PopupPanel && PopupPanel->IsHovered();
+	if (!OpenSlot.IsNone() && !bOnSlot && !bOnPopup && AutoTestPreview.IsNone())
+	{
+		PopupIdle += DeltaTime;
+		if (PopupIdle > 0.35f)
+		{
+			OpenSlot = NAME_None;
+			Refresh();
+			return;
+		}
+	}
+	else
+	{
+		PopupIdle = 0.f;
+	}
+	const UWWOModData* Hovered = nullptr;
+	bool bPreview = false;
+	for (const auto& Pair : PopupButtons)
+	{
+		if (Pair.Key.IsValid() && Pair.Key->IsHovered())
+		{
+			Hovered = Pair.Value.Get();
+			bPreview = true;
+		}
+	}
+	if (!AutoTestPreview.IsNone())
+	{
+		// The autotest previews a mod by id ("empty" for an empty slot).
+		for (const auto& Pair : PopupButtons)
+		{
+			if ((Pair.Value.IsValid() && Pair.Value->Id == AutoTestPreview) || (!Pair.Value.IsValid() && AutoTestPreview == "empty"))
+			{
+				Hovered = Pair.Value.Get();
+				bPreview = true;
+			}
+		}
+	}
+	UpdateStatBars(Hovered, OpenSlot, bPreview);
 }
 
 void UWWOCharacterMenu::BuildFrameRows()
@@ -733,8 +927,21 @@ FString UWWOCharacterMenu::DebugState() const
 
 void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerName)
 {
+	// "mod_<slot>" opens that slot's popup; "mod_<slot>:<mod id>" also previews that mod.
 	if (Expanded != Tile) Expand(Tile);
-	Picker = PickerName;
+	FString Name = PickerName, ModId;
+	PickerName.Split(TEXT(":"), &Name, &ModId);
+	AutoTestPreview = ModId.IsEmpty() ? NAME_None : FName(*ModId);
+	if (Name.StartsWith(TEXT("mod_")))
+	{
+		OpenSlot = FName(*Name.Mid(4));
+		Picker.Reset();
+	}
+	else
+	{
+		OpenSlot = NAME_None;
+		Picker = Name;
+	}
 	Refresh();
 }
 
