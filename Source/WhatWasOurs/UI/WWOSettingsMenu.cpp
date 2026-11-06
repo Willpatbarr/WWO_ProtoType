@@ -851,14 +851,16 @@ FString UWWOSettingsMenu::ValueText(const FWWOSettingRow& Row, float V)
 
 UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 {
-	// Godot: [label, at least 270 px] 12 [slider, fills, 28 px tall] 12 [value, at least 80 px or
-	// 170 for custom readouts, right-aligned], all in the theme's 22 px font.
+	// Two lines, so every slider gets the panel's full width: [label, fills] [value, right-aligned]
+	// in the theme's 22 px font, then the slider (28 px tall) underneath. (Godot had them on one line:
+	// label 270 px, slider, value.)
 	const FWWOSettingRow& Row = Find(Key)->Rows[RowIndex];
+	UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
-	USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>();
-	LabelBox->SetMinDesiredWidth(270.f * K);
-	LabelBox->AddChild(MakeText(Row.Label, 22.f));
-	Line->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* LabelSlot = Line->AddChildToHorizontalBox(MakeText(Row.Label, 22.f));
+	LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	LabelSlot->SetVerticalAlignment(VAlign_Center);
+	Root->AddChildToVerticalBox(Line);
 
 	// The slider: Godot's theme draws a 6 px track (0.3, 0.32, 0.37) filled up to the grabber
 	// (0.55, 0.6, 0.7), with the default round grabber. A progress bar under the slider draws
@@ -907,17 +909,16 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	UOverlaySlot* SliderSlot = SliderBox->AddChildToOverlay(SliderHeight);
 	SliderSlot->SetHorizontalAlignment(HAlign_Fill);
 	SliderSlot->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* BoxSlot = Line->AddChildToHorizontalBox(SliderBox);
-	BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	BoxSlot->SetVerticalAlignment(VAlign_Center);
-	BoxSlot->SetPadding(FMargin(12.f * K, 0.f));
+	Root->AddChildToVerticalBox(SliderBox)->SetPadding(FMargin(0.f, 2.f * K, 0.f, 0.f)); // the whole width, under the label
 
 	USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
 	ValueBox->SetMinDesiredWidth((Row.Show ? 170.f : 80.f) * K);
 	UTextBlock* Value = MakeText(ValueText(Row, Row.Get()), 22.f);
 	Value->SetJustification(ETextJustify::Right);
 	ValueBox->AddChild(Value);
-	Line->AddChildToHorizontalBox(ValueBox)->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* ValueSlot = Line->AddChildToHorizontalBox(ValueBox);
+	ValueSlot->SetVerticalAlignment(VAlign_Center);
+	ValueSlot->SetPadding(FMargin(12.f * K, 0.f, 0.f, 0.f));
 
 	UWWOSliderHandler* H = NewObject<UWWOSliderHandler>(this);
 	TWeakObjectPtr<UTextBlock> WeakValue = Value;
@@ -934,7 +935,7 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	Slider->OnValueChanged.AddDynamic(H, &UWWOSliderHandler::Handle);
 	Handlers.Add(H);
 	Live.Add({ Slider, Value, Fill, Key, RowIndex });
-	return Line;
+	return Root;
 }
 
 void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
