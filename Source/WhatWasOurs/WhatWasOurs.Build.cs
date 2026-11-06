@@ -8,7 +8,7 @@ public class WhatWasOurs : ModuleRules
 		bUseUnity = false; // files use same-named helpers in anonymous namespaces
 
 		PublicDependencyModuleNames.AddRange(new string[] {
-			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
+			"Core", "CoreUObject", "Engine", "RHI", "InputCore", "EnhancedInput",
 			"UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem",
 			"Json", "JsonUtilities", "ApplicationCore", "ProceduralMeshComponent"
 		});

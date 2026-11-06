@@ -120,6 +120,13 @@ private:
 	float AutoMapClock = 0.f;
 	UPROPERTY() TObjectPtr<class ACameraActor> AutoMapCamera;
 	bool UpdateAutoMapTest(class AWWOCharacter* P, float DeltaTime);
+	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
+	bool bPerfTest = false;
+	bool bPerfProfiled = false;
+	float PerfStartClock = 0.f;
+	TArray<FVector2D> PerfSums; // per view: (frame ms, GPU ms) summed
+	TArray<int32> PerfFrames;
+	void UpdatePerfTest(class AWWOCharacter* P, float DeltaTime);
 	// Graft steps (WWOPlayerControllerAutoGrafts.cpp): loadouts shown in the character preview.
 	float AutoGraftClock = 0.f;
 	float AutoGraftCaptureFov = 0.f;

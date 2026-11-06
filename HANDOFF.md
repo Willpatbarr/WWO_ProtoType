@@ -43,6 +43,15 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   Code: `Game/WWOGameModeWaveTest.cpp`.
 - Console: `wwo.SkipWave` kills the current wave; `wwo.Wave <n>` jumps straight to wave n.
 
+## Performance
+- Rendering is set up for an M4-class Mac (Config/DefaultEngine.ini): no Lumen (sky light ambient
+  + screen-space reflections, matching Godot's unshadowed ambient), TAA instead of TSR, virtual
+  shadow maps kept (cheaper than cascaded shadows here, thanks to Nanite). About 80 fps at
+  1600x900, up from 28.
+- `-WWOPerfTest` walks the map-autotest cameras, logs frame and GPU time per view
+  (`PerfTest ...` lines) plus one `profilegpu` dump, then quits. Use it before and after render
+  changes.
+
 ## Where things are
 | Godot | Unreal |
 |---|---|

@@ -78,6 +78,7 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
 	bAutoTestGraftsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGrafts"));
 	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
+	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
 	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly || bAutoTestMapsOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
@@ -303,7 +304,11 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 		bCreateHeld = bCreate;
 		if (MenuKeys.IsValid() && !MenuKeys->Viewport.IsValid()) MenuKeys->Viewport = GameViewportWidget();
 	}
-	if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
+	if (bPerfTest)
+	{
+		if (AWWOCharacter* P = GetWWOCharacter()) UpdatePerfTest(P, FApp::GetDeltaTime());
+	}
+	else if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
 }
 
 void AWWOPlayerController::UpdateDevice()
