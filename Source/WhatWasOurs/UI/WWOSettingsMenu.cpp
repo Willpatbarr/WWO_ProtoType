@@ -493,7 +493,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "AssistRange", TEXT("Assist range (m)"), 5.f, 300.f, 1.f),
 			Row(W, "AdsBoost", TEXT("ADS assist boost"), 1.f, 3.f, 0.05f),
 			Header(TEXT("Hidden assist (while this gun's recoil plays out)")),
-			Row(W, "RecoverySteer", TEXT("Recoil steer (recoil's kick and fall-back bend toward the target; 0 = off)"), 0.f, 3.f, 0.05f),
+			Row(W, "KickSteer", TEXT("Kick steer (the kick drifts sideways toward the target; 0 = off)"), 0.f, 3.f, 0.05f),
+			Row(W, "RecoverySteer", TEXT("Fall-back steer (the recoil falls back toward the target; 0 = off)"), 0.f, 3.f, 0.05f),
 			Row(W, "FollowupMagnetism", TEXT("Follow-up shot magnetism (x cone; 1 = off)"), 1.f, 4.f, 0.05f),
 			Row(W, "KickFriction", TEXT("Friction during recoil (x strength; 1 = off)"), 1.f, 4.f, 0.05f),
 			Row(W, "KickAdhesion", TEXT("Adhesion added during recoil (0 = off)"), 0.f, 1.f, 0.05f),
@@ -950,10 +951,53 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 			if (bLeft) Slot->SetHorizontalAlignment(HAlign_Left);
 		}
 	};
+	// Each header with sliders under it is a collapsible group: click it to open (+) or close (-). The first
+	// group of a section starts open, the rest closed; what you open or close stays that way while
+	// the game runs. A header with no sliders under it (a weapon's archetype) stays a plain label.
 	int32 Count = 0;
+	UVerticalBox* Group = nullptr;
 	for (int32 i = 0; i < S->Rows.Num(); ++i, ++Count)
 	{
-		Add(S->Rows[i].Header.IsEmpty() ? MakeRow(Key, i) : (UWidget*)MakeText(S->Rows[i].Header, 18.f, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);
+		const FWWOSettingRow& R = S->Rows[i];
+		if (R.Header.IsEmpty())
+		{
+			UWidget* Row = MakeRow(Key, i);
+			if (Group) Group->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f * K, 0.f, 0.f));
+			else Add(Row, Count == 0, false);
+			continue;
+		}
+		const bool bHasRows = S->Rows.IsValidIndex(i + 1) && S->Rows[i + 1].Header.IsEmpty();
+		if (!bHasRows)
+		{
+			Add(MakeText(R.Header, 18.f, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);
+			Group = nullptr;
+			continue;
+		}
+		const FString GroupKey = Key + TEXT("|") + R.Header;
+		const bool bFirst = Group == nullptr && !FirstGroupSeen.Contains(Key);
+		FirstGroupSeen.Add(Key);
+		if (bFirst && !GroupState.Contains(GroupKey)) GroupState.Add(GroupKey, true);
+		const bool bGroupOpen = GroupState.FindRef(GroupKey);
+		Group = WidgetTree->ConstructWidget<UVerticalBox>();
+		Group->SetVisibility(bGroupOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		TWeakObjectPtr<UVerticalBox> WeakGroup = Group;
+		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
+		const FString Title = R.Header;
+		TSharedRef<TWeakObjectPtr<UButton>> Self = MakeShared<TWeakObjectPtr<UButton>>();
+		UButton* Toggle = MakeButton(this, (bGroupOpen ? TEXT("-  ") : TEXT("+  ")) + Title, [WeakThis, WeakGroup, GroupKey, Title, Self]
+		{
+			if (!WeakThis.IsValid() || !WeakGroup.IsValid()) return;
+			const bool bNow = !WeakThis->GroupState.FindRef(GroupKey);
+			WeakThis->GroupState.Add(GroupKey, bNow);
+			WeakGroup->SetVisibility(bNow ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+			if (UTextBlock* Label = Self->IsValid() ? Cast<UTextBlock>(Self->Get()->GetChildAt(0)) : nullptr)
+			{
+				Label->SetText(FText::FromString((bNow ? TEXT("-  ") : TEXT("+  ")) + Title));
+			}
+		}, 18.f, FLinearColor(0.15f, 0.16f, 0.19f));
+		*Self = Toggle;
+		Add(Toggle, Count == 0, true);
+		Add(Group, false, false);
 	}
 	for (const FWWOMenuButton& Button : S->Buttons)
 	{

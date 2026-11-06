@@ -414,8 +414,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			Held[(int32)EWWOAction::Fire] = false;
 			const FVector Dir = (Head - P->EyeLocation()).GetSafeNormal();
 			const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(P->AimForward(), Dir), -1.f, 1.f)));
-			UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: assist %s, aim ends %.2f deg from the head, target health %.0f / %.0f"),
-				bOn ? TEXT("on") : TEXT("off"), Off, Target->GetHealth(), Target->GetMaxHealth());
+			const FVector Aim = P->AimForward();
+			const float Side = FMath::FindDeltaAngleDegrees(Dir.Rotation().Yaw, Aim.Rotation().Yaw);
+			const float Up = FMath::RadiansToDegrees(FMath::Asin(Aim.Z) - FMath::Asin(Dir.Z));
+			UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: assist %s, aim ends %.2f deg from the head (%.2f sideways, %.2f above), target health %.0f / %.0f"),
+				bOn ? TEXT("on") : TEXT("off"), Off, Side, Up, Target->GetHealth(), Target->GetMaxHealth());
 			if (!bOn) { AutoHiddenOff = Off; Step(61); }
 			else
 			{

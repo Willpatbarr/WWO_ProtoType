@@ -51,7 +51,9 @@ public:
 	// steer (called by the recoil as it falls back by StepRad this frame), and when each part last acted.
 	void UpdateHiddenWindow(float DeltaSeconds);
 	float HiddenWindow() const { return Window; }
-	void SteerRecovery(float StepRad); // called for every bit of recoil motion: the kick (instant or timed) and the fall-back
+	// Called for every bit of recoil motion: the kick (instant or timed; sideways steer only) and the
+	// fall-back (both ways).
+	void SteerRecoil(float StepRad, bool bKick);
 	void NotifyShot(); // a shot's recoil starts: open the window now
 	double LastSteer = -10.0, LastMagnet = -10.0, LastSticky = -10.0; // world seconds
 

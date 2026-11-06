@@ -175,6 +175,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.
 
+## Settings menu groups
+Every header with sliders under it is a collapsible group (`UWWOSettingsMenu::BuildRows`): + to open, - to close. The first group of each section starts open, the rest closed, and each stays as you left it while the game runs. A header with no sliders under it stays a plain label.
+
 ## Reticle and input latency
 - **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height), at the hip and aimed in. The camera looks up by the matching angle (`ReticleAngleForFov`, recomputed for the zoomed FOV so the point keeps its place on screen) while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle; the HUD draws the reticle, hit marker and assist cones there. The gun, drawn with its own FOV, tips down to point at it, and aimed in its sight point (the model's origin) moves down onto it; the sniper's scope overlay is drawn shifted down onto it with the strip above filled black.
 - **Latency:** `r.GTSyncType=1` and `r.OneFrameThreadLag=0` (DefaultEngine.ini) stop the game from running up to three frames ahead of the screen (the GPU is near its 16.7 ms budget at 60 Hz, so frames queued); mouse smoothing is off (DefaultInput.ini). Cost: the arena perf test went from 55.3 to 53.3 fps average. Test shots now log their game, render and GPU times.
@@ -182,11 +185,11 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 ## Hidden aim assist (after-shot)
 Extra controller assist that only works while a shot's recoil plays out, so it hides in motion the gun already makes (`UWWOAimAssistComponent`, toggles in Settings, Aim Assist; amounts per weapon under its "Hidden assist" header).
 - **Window:** opens on every shot (`NotifyShot` from `AddRecoil`), stays open while the recoil kicks or falls back and at least 0.15 s (for instant-recoil guns), then fades over 0.12 s. Works only with a target in the friction cone, scaled like the rest of the assist (none on mouse while Mouse assist is 0).
-- **Recoil steer** (`RecoverySteer`, default 0.6): every bit of recoil motion (the instant kick, a timed kick and the fall-back) also bends the view toward the target by up to that fraction of the motion. No side-recoil bias (kept random on purpose).
+- **Recoil steer:** recoil motion also bends the view toward the target by up to a fraction of that motion. `KickSteer` (0.6) during the kick (instant or timed) steers sideways only, so the kick climbs the same over a target as over a wall; `RecoverySteer` (0.35) during the fall-back steers both ways. No side-recoil bias (kept random on purpose).
 - **Follow-up magnetism** (`FollowupMagnetism`, x1.5): shots fired in the window get a wider magnetism cone.
 - **Kick friction / adhesion** (`KickFriction` x1.5, `KickAdhesion` +0.3) during the window.
 - **Markers** ("Show hidden assist markers"): STEER, MAGNET (a hit only the wider cone caught) and STICKY (boosted friction or adhesion while you were turning) under the reticle, and a faint ring while the window is open.
-- **Test:** `-WWOAutoTestHidden` (on `L_TestRange`) fires the rifle 2 degrees off a head with it off, then on, and logs where the aim ends and the damage done; `39_hidden_assist_markers` shows the markers. First run: off 4.9 degrees and no hits, on 2.5 degrees and hits.
+- **Test:** `-WWOAutoTestHidden` (on `L_TestRange`) fires the rifle 2 degrees off a head with it off, then on, and logs where the aim ends and the damage done; `39_hidden_assist_markers` shows the markers. It logs the sideways and vertical parts: with assist on the climb matches (3.90 degrees both) and the sideways drift closes (1.76 to 0.03).
 
 ## Character models (prototype)
 Placeholder models from Fab (all free): VoltVine = Paragon Wraith, IronBark = Paragon Murdock, VeilSpore = Paragon Kallari (her trailing cloth tentacles and daggers hidden), Soldier = Robot scout R21, Swarm = Paragon Minions (Dusk melee), Tank = Paragon Steel. The links are in the LaminarFlow doc "Model Assets (for now)". The packs are about 11 GB and are not in git (`.gitignore`): on a fresh checkout add each to your Fab library and "Add to Project" (the robot needs "Show all projects" and version 5.4), then run `Tools/build_retargeters.py`. Paragon content may not use the PARAGON name to advertise the game.

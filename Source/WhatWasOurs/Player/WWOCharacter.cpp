@@ -774,7 +774,7 @@ void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, floa
 	if (KickTime <= 0.f && Recovery <= 0.f)
 	{
 		ApplyRecoil(PitchRad, YawRad);
-		AimAssist->SteerRecovery(FMath::Sqrt(PitchRad * PitchRad + YawRad * YawRad)); // hides in the instant kick
+		AimAssist->SteerRecoil(FMath::Sqrt(PitchRad * PitchRad + YawRad * YawRad), true); // hides in the instant kick
 		return;
 	}
 	KickLeft += PitchRad;
@@ -806,7 +806,7 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 		KickLeft -= Step;
 		KickYawLeft -= YawStep;
 		ApplyRecoil(Step, YawStep);
-		AimAssist->SteerRecovery(FMath::Sqrt(Step * Step + YawStep * YawStep)); // hides in the kick
+		AimAssist->SteerRecoil(FMath::Sqrt(Step * Step + YawStep * YawStep), true); // hides in the kick
 		return;
 	}
 	if (!bRecovering) return;
@@ -824,7 +824,7 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 		RecoveryAge += DeltaSeconds;
 		const float After = TimedLeft(RecoveryAge);
 		SetViewRotation(FMath::Max(Pitch - (Before - After), RecoilRest), YawNow);
-		AimAssist->SteerRecovery(Before - After); // hidden assist: the fall-back bends toward the target
+		AimAssist->SteerRecoil(Before - After, false); // hidden assist: the fall-back bends toward the target
 		if (After <= 0.f) bRecovering = false;
 		return;
 	}
@@ -832,6 +832,6 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 	const float Before = RecoveryLeft;
 	RecoveryLeft *= FMath::Exp(-DeltaSeconds * 3.f / RecoveryTime);
 	SetViewRotation(FMath::Max(Pitch - (Before - RecoveryLeft), RecoilRest), YawNow);
-	AimAssist->SteerRecovery(Before - RecoveryLeft);
+	AimAssist->SteerRecoil(Before - RecoveryLeft, false);
 	if (RecoveryLeft <= 0.0002f) bRecovering = false;
 }

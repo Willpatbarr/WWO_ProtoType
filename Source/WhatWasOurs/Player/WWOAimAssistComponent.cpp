@@ -113,23 +113,25 @@ void UWWOAimAssistComponent::NotifyShot()
 	if (HiddenAssist >= 0.5f) Window = 1.f;
 }
 
-void UWWOAimAssistComponent::SteerRecovery(float StepRad)
+void UWWOAimAssistComponent::SteerRecoil(float StepRad, bool bKick)
 {
 	// As the recoil moves the view by StepRad (kicking up or falling back), also bend it toward the
 	// target in the friction cone, by up to RecoverySteer of that step: the camera is already
 	// moving, so this hides in it.
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const UWWOWeaponData* W = P ? P->Weapon->GetWeaponData() : nullptr;
-	if (!W || Window <= 0.f || W->RecoverySteer <= 0.f || StepRad <= 0.f || P->IsLunging()) return;
+	const float Strength = !W ? 0.f : bKick ? W->KickSteer : W->RecoverySteer;
+	if (!W || Window <= 0.f || Strength <= 0.f || StepRad <= 0.f || P->IsLunging()) return;
 	const FWWOAssistPart Part = FindPart(W->FrictionAngle);
 	if (!Part.IsValid()) return;
 	const FVector Aim = P->AimForward();
 	const FVector To = (Part.Position - P->EyeLocation()).GetSafeNormal();
 	const float YawRad = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(Aim.Rotation().Yaw, To.Rotation().Yaw));
-	const float PitchRad = FMath::Asin(FMath::Clamp(To.Z, -1.f, 1.f)) - FMath::Asin(FMath::Clamp(Aim.Z, -1.f, 1.f));
+	// The kick only steers sideways: its climb stays the same as over a wall.
+	const float PitchRad = bKick ? 0.f : FMath::Asin(FMath::Clamp(To.Z, -1.f, 1.f)) - FMath::Asin(FMath::Clamp(Aim.Z, -1.f, 1.f));
 	const float Off = FMath::Sqrt(YawRad * YawRad + PitchRad * PitchRad);
 	if (Off < 0.0002f) return;
-	const float Budget = W->RecoverySteer * StepRad * Window;
+	const float Budget = Strength * StepRad * Window;
 	const float T = FMath::Min(Budget / Off, 1.f);
 	const float YawNow = P->Controller ? P->Controller->GetControlRotation().Yaw : P->GetActorRotation().Yaw;
 	P->SetViewRotation(P->GetPitch() + PitchRad * T, YawNow + FMath::RadiansToDegrees(YawRad) * T);

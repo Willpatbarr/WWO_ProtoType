@@ -102,9 +102,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float AdsBoost = 1.4f;
 	// Hidden assist (not from Godot): extra help only while a shot's recoil plays out, so it hides in
 	// the motion the gun already makes. All work inside the friction cone, scaled like the rest.
-	// Recovery steer: as the recoil moves the view (the kick, and the fall-back), the camera also
-	// bends toward the target, up to this fraction of the recoil's own movement that frame (0 = off).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float RecoverySteer = 0.6f;
+	// Recoil steer: as the recoil moves the view, the camera also bends toward the target, up to this
+	// fraction of the recoil's own movement that frame (0 = off). During the kick only sideways, so
+	// the kick climbs the same over a target as over a wall; during the fall-back both ways.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float KickSteer = 0.6f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float RecoverySteer = 0.35f;
 	// Follow-up shots (fired while the last shot's recoil plays out) get this times the magnetism cone.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float FollowupMagnetism = 1.5f;
 	// During the recoil: friction strength times this, and this much adhesion added.

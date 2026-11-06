@@ -125,6 +125,11 @@ public:
 	static constexpr float K = 1.2f; // Godot's 1600 x 900 sizes -> Unreal's 1080p reference
 
 private:
+	// Collapsible slider groups (BuildRows): open or closed per section and header, and the sections
+	// whose first group has been opened by default.
+	TMap<FString, bool> GroupState;
+	TSet<FString> FirstGroupSeen;
+
 	bool bOpen = false;
 	bool bBuilt = false;
 	TArray<FWWOSettingSection> Sections;
