@@ -10,6 +10,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOAimAssistComponent.h"
 #include "UI/WWOCharacterMenu.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -86,7 +87,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 		AutoGunIdx = AutoGunStage = 0;
-		Step(bAutoTestGunsOnly ? 40 : 1);
+		Step(bAutoTestHiddenOnly ? 60 : bAutoTestGunsOnly ? 40 : 1);
 		break;
 	}
 	case 1:
@@ -363,6 +364,73 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		}
 		break;
 	}
+	case 60:
+	case 62:
+	{
+		// -WWOAutoTestHidden: the rifle on a controller, aimed 2 degrees right of a target's head,
+		// fires a burst; once with the hidden assist off (60), once on (62). Logs how far off the
+		// aim ends up after the recoil settles and how many hits landed.
+		const bool bOn = AutoModStep == 62;
+		if (AutoModClock <= DeltaTime * 1.5f)
+		{
+			bUsingController = true;
+			P->AimAssist->HiddenAssist = bOn ? 1.f : 0.f;
+			P->AimAssist->ShowHiddenAssist = 1.f;
+			if (!bOn)
+			{
+				EquipWeaponId("rifle");
+				AActor* Best = nullptr;
+				float BestD = 1e9f;
+				for (AActor* A : UWWOWorldSubsystem::Get(this)->LivingTargets())
+				{
+					const float D = FVector::Dist(A->GetActorLocation(), P->GetActorLocation());
+					if (D < BestD && Cast<IWWOTargetable>(A)->FeetLocation().Z < 100.f) { BestD = D; Best = A; }
+				}
+				AutoHiddenTarget = Best;
+				if (Best) PlaceForAutoTest(P, Best, 10.f, 0.f);
+			}
+		}
+		AActor* T = AutoHiddenTarget.Get();
+		const IWWOTargetable* Target = Cast<IWWOTargetable>(T);
+		if (!Target)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: no target"));
+			Step(8);
+			break;
+		}
+		const FVector Head = Target->GetAimParts()[0].Position;
+		if (AutoModClock < 0.4f)
+		{
+			// Aim 2 degrees right of the head (and keep the gun loaded).
+			const FVector Dir = (Head - P->EyeLocation()).GetSafeNormal();
+			P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw + 2.f);
+			Gun->Ammo = Gun->MagazineSize();
+		}
+		const bool bFire = AutoModClock > 0.5f && AutoModClock < 1.1f;
+		Held[(int32)EWWOAction::Fire] = bFire;
+		if (bOn && FMath::IsNearlyEqual(AutoModClock, 0.9f, DeltaTime * 0.6f)) Shot(TEXT("39_hidden_assist_markers"));
+		if (AutoModClock >= 2.f)
+		{
+			Held[(int32)EWWOAction::Fire] = false;
+			const FVector Dir = (Head - P->EyeLocation()).GetSafeNormal();
+			const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(P->AimForward(), Dir), -1.f, 1.f)));
+			UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: assist %s, aim ends %.2f deg from the head, target health %.0f / %.0f"),
+				bOn ? TEXT("on") : TEXT("off"), Off, Target->GetHealth(), Target->GetMaxHealth());
+			if (!bOn) { AutoHiddenOff = Off; Step(61); }
+			else
+			{
+				UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: on is %s (%.2f vs %.2f deg)"), Off < AutoHiddenOff ? TEXT("closer ok") : TEXT("not closer FAIL"), Off, AutoHiddenOff);
+				P->AimAssist->ShowHiddenAssist = 0.f;
+				bUsingController = false;
+				Step(8);
+			}
+		}
+		break;
+	}
+	case 61:
+		if (AutoModClock < 1.f) break; // let the target recover between runs
+		Step(62);
+		break;
 	case 23:
 		if (AutoModClock < 1.f) break;
 		CharacterMenu->AutoTestScroll(-1.f);

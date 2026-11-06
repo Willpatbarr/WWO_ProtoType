@@ -286,6 +286,29 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Text(FString::Printf(TEXT("Aim assist: %s (strength %d%%)  range %.0f m"), Assist->UsingController() ? TEXT("controller") : TEXT("mouse"),
 			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), AimAt + FVector2D(0, 120.f - 17.f), 18.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline at +120, no outline
 	}
+	// Hidden assist markers (Settings, Aim Assist): what the after-shot assist just did, under the
+	// reticle for 0.4 s each. Cyan STEER: the recoil's fall-back bent toward the target. Magenta
+	// MAGNET: a shot hit only thanks to the wider follow-up cone. Yellow STICKY: boosted friction or
+	// adhesion was working. A thin ring shows while the window is open.
+	if (Assist->ShowHiddenAssist >= 0.5f && Assist->HiddenAssist >= 0.5f)
+	{
+		const double Now = Pl->GetWorld()->GetTimeSeconds();
+		if (Assist->HiddenWindow() > 0.f) P.Circle(AimAt, 26.f, FLinearColor(1, 1, 1, 0.35f * Assist->HiddenWindow()), 1.f, 32);
+		struct FMark { double At; const TCHAR* Label; FLinearColor Color; };
+		const FMark Marks[] = {
+			{ Assist->LastSteer, TEXT("STEER"), FLinearColor(0.3f, 0.9f, 1.f) },
+			{ Assist->LastMagnet, TEXT("MAGNET"), FLinearColor(1.f, 0.35f, 0.9f) },
+			{ Assist->LastSticky, TEXT("STICKY"), FLinearColor(1.f, 0.85f, 0.2f) },
+		};
+		float Y = 34.f;
+		for (const FMark& M : Marks)
+		{
+			const float Age = (float)(Now - M.At);
+			if (Age > 0.4f) continue;
+			P.Text(M.Label, AimAt + FVector2D(0.f, Y), 15.f, WWO::WithAlpha(M.Color, 1.f - Age / 0.4f), 0.5f, 4.f);
+			Y += 17.f;
+		}
+	}
 	// Health bar over the target under the reticle (and the Tank's shield above it).
 	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Gun->ReticleTarget.Get()))
 	{

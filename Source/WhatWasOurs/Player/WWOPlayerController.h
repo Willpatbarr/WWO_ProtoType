@@ -123,6 +123,9 @@ private:
 	// Weapon mod steps (WWOPlayerControllerAutoMods.cpp): draft mods, configs, perks.
 	bool bAutoTestModsOnly = false; // -WWOAutoTestMods
 	bool bAutoTestGunsOnly = false; // -WWOAutoTestGuns: gun model screenshots (in the mods test)
+	bool bAutoTestHiddenOnly = false; // -WWOAutoTestHidden: the hidden aim assist, off then on (in the mods test)
+	TWeakObjectPtr<AActor> AutoHiddenTarget;
+	float AutoHiddenOff = 0.f;
 	int32 AutoGunIdx = 0;
 	int32 AutoGunStage = 0;
 	FVector2D AutoGunKick = FVector2D::ZeroVector; // the hand cannon's kick, put back after the diagonal shot

@@ -34,6 +34,10 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Aim assist") float MouseAssist = 0.f;
 	UPROPERTY(EditAnywhere, Category = "Aim assist") float ShowDebug = 0.f;
+	// Hidden assist: help that only works while a shot's recoil plays out (the weapons' RecoverySteer,
+	// FollowupMagnetism, KickFriction, KickAdhesion). On/off, and markers showing when it acted.
+	UPROPERTY(EditAnywhere, Category = "Aim assist") float HiddenAssist = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Aim assist") float ShowHiddenAssist = 0.f;
 
 	bool UsingController() const;
 	float DeviceScale() const;
@@ -43,11 +47,21 @@ public:
 	bool Magnetize(FHitResult& OutHit) const;
 	float FrictionScale(); // multiplier for stick look speed
 	void UpdateAdhesion();
+	// Hidden assist: the after-shot window (1 while the recoil plays, fading out after), the recovery
+	// steer (called by the recoil as it falls back by StepRad this frame), and when each part last acted.
+	void UpdateHiddenWindow(float DeltaSeconds);
+	float HiddenWindow() const { return Window; }
+	void SteerRecovery(float StepRad); // called for every bit of recoil motion: the kick (instant or timed) and the fall-back
+	void NotifyShot(); // a shot's recoil starts: open the window now
+	double LastSteer = -10.0, LastMagnet = -10.0, LastSticky = -10.0; // world seconds
 
 	FWWOAssistPart FrictionPart; // for the debug view
 
 private:
 	FString AdhesionKey;
+	float Window = 0.f;
+	double LastShot = -10.0; // world seconds; the window stays open at least MinWindow after a shot
+	static constexpr float MinWindow = 0.15f;
 	FVector AdhesionLastDir = FVector::ZeroVector;
 	float RangeFalloff(float DistanceM) const;
 };

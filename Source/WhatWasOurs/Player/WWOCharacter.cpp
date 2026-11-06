@@ -282,6 +282,7 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	const AWWOPlayerController* PC = GetWWOController();
 	const FVector2D LookStick = PC ? PC->GetLookAxis() : FVector2D::ZeroVector;
 
+	AimAssist->UpdateHiddenWindow(DeltaSeconds);
 	UpdateRecoil(DeltaSeconds);
 	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
 	VeilLeft = FMath::Max(VeilLeft - DeltaSeconds, 0.f);
@@ -769,9 +770,11 @@ void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, floa
 {
 	// With a kick time, the view rises over that time, then falls back by Recovery of the
 	// kick. Shooting again before it settles stacks from where you are.
+	AimAssist->NotifyShot(); // hidden assist: the after-shot window opens
 	if (KickTime <= 0.f && Recovery <= 0.f)
 	{
 		ApplyRecoil(PitchRad, YawRad);
+		AimAssist->SteerRecovery(FMath::Sqrt(PitchRad * PitchRad + YawRad * YawRad)); // hides in the instant kick
 		return;
 	}
 	KickLeft += PitchRad;
@@ -803,6 +806,7 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 		KickLeft -= Step;
 		KickYawLeft -= YawStep;
 		ApplyRecoil(Step, YawStep);
+		AimAssist->SteerRecovery(FMath::Sqrt(Step * Step + YawStep * YawStep)); // hides in the kick
 		return;
 	}
 	if (!bRecovering) return;
@@ -820,6 +824,7 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 		RecoveryAge += DeltaSeconds;
 		const float After = TimedLeft(RecoveryAge);
 		SetViewRotation(FMath::Max(Pitch - (Before - After), RecoilRest), YawNow);
+		AimAssist->SteerRecovery(Before - After); // hidden assist: the fall-back bends toward the target
 		if (After <= 0.f) bRecovering = false;
 		return;
 	}
@@ -827,5 +832,6 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 	const float Before = RecoveryLeft;
 	RecoveryLeft *= FMath::Exp(-DeltaSeconds * 3.f / RecoveryTime);
 	SetViewRotation(FMath::Max(Pitch - (Before - RecoveryLeft), RecoilRest), YawNow);
+	AimAssist->SteerRecovery(Before - RecoveryLeft);
 	if (RecoveryLeft <= 0.0002f) bRecovering = false;
 }

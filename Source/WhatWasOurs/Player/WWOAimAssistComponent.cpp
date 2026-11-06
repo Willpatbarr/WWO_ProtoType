@@ -85,9 +85,55 @@ bool UWWOAimAssistComponent::Magnetize(FHitResult& OutHit) const
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const UWWOWeaponData* W = P->Weapon->GetWeaponData();
 	if (!W) return false;
-	const FWWOAssistPart Part = FindPart(W->MagnetismAngle, W->CritMagnetism);
+	// Hidden assist: a follow-up shot (the last one's recoil still playing) gets a wider cone.
+	const float Boost = FMath::Lerp(1.f, FMath::Max(W->FollowupMagnetism, 1.f), Window);
+	FWWOAssistPart Part = FindPart(W->MagnetismAngle * Boost, W->CritMagnetism);
 	if (!Part.IsValid()) return false;
-	return P->Weapon->CastRayTo(Part.Position, OutHit) && OutHit.GetActor() == Part.Target.Get();
+	if (!P->Weapon->CastRayTo(Part.Position, OutHit) || OutHit.GetActor() != Part.Target.Get()) return false;
+	if (Boost > 1.001f && !FindPart(W->MagnetismAngle, W->CritMagnetism).IsValid())
+	{
+		const_cast<UWWOAimAssistComponent*>(this)->LastMagnet = GetWorld()->GetTimeSeconds(); // only the boost caught it
+	}
+	return true;
+}
+
+void UWWOAimAssistComponent::UpdateHiddenWindow(float DeltaSeconds)
+{
+	// Open while the recoil kicks and falls back (at least MinWindow after a shot, for guns whose
+	// recoil is instant), then fades out over 0.12 s.
+	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (HiddenAssist < 0.5f || !P) Window = 0.f;
+	else if (P->IsRecoiling() || GetWorld()->GetTimeSeconds() - LastShot < MinWindow) Window = 1.f;
+	else Window = FMath::Max(Window - DeltaSeconds / 0.12f, 0.f);
+}
+
+void UWWOAimAssistComponent::NotifyShot()
+{
+	LastShot = GetWorld()->GetTimeSeconds();
+	if (HiddenAssist >= 0.5f) Window = 1.f;
+}
+
+void UWWOAimAssistComponent::SteerRecovery(float StepRad)
+{
+	// As the recoil moves the view by StepRad (kicking up or falling back), also bend it toward the
+	// target in the friction cone, by up to RecoverySteer of that step: the camera is already
+	// moving, so this hides in it.
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	const UWWOWeaponData* W = P ? P->Weapon->GetWeaponData() : nullptr;
+	if (!W || Window <= 0.f || W->RecoverySteer <= 0.f || StepRad <= 0.f || P->IsLunging()) return;
+	const FWWOAssistPart Part = FindPart(W->FrictionAngle);
+	if (!Part.IsValid()) return;
+	const FVector Aim = P->AimForward();
+	const FVector To = (Part.Position - P->EyeLocation()).GetSafeNormal();
+	const float YawRad = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(Aim.Rotation().Yaw, To.Rotation().Yaw));
+	const float PitchRad = FMath::Asin(FMath::Clamp(To.Z, -1.f, 1.f)) - FMath::Asin(FMath::Clamp(Aim.Z, -1.f, 1.f));
+	const float Off = FMath::Sqrt(YawRad * YawRad + PitchRad * PitchRad);
+	if (Off < 0.0002f) return;
+	const float Budget = W->RecoverySteer * StepRad * Window;
+	const float T = FMath::Min(Budget / Off, 1.f);
+	const float YawNow = P->Controller ? P->Controller->GetControlRotation().Yaw : P->GetActorRotation().Yaw;
+	P->SetViewRotation(P->GetPitch() + PitchRad * T, YawNow + FMath::RadiansToDegrees(YawRad) * T);
+	if (Budget > 0.0005f) LastSteer = GetWorld()->GetTimeSeconds();
 }
 
 float UWWOAimAssistComponent::FrictionScale()
@@ -97,7 +143,11 @@ float UWWOAimAssistComponent::FrictionScale()
 	FrictionPart = (P->IsLunging() || !W) ? FWWOAssistPart() : FindPart(W->FrictionAngle); // the lunge steers the camera alone
 	if (!FrictionPart.IsValid()) return 1.f;
 	const float Closeness = 1.f - FrictionPart.Angle / FrictionPart.Cone;
-	const float Slow = W->FrictionStrength * Closeness * FMath::Lerp(1.f, W->AdsBoost, P->Weapon->AdsAmount);
+	// Hidden assist: stronger while a shot's recoil plays out.
+	const float Kick = FMath::Lerp(1.f, FMath::Max(W->KickFriction, 1.f), Window);
+	const AWWOPlayerController* PC = P->GetWWOController();
+	if (Kick > 1.001f && PC && PC->GetLookAxis().Size() > 0.1f) LastSticky = GetWorld()->GetTimeSeconds(); // only matters while you turn
+	const float Slow = W->FrictionStrength * Kick * Closeness * FMath::Lerp(1.f, W->AdsBoost, P->Weapon->AdsAmount);
 	return 1.f - FMath::Clamp(Slow, 0.f, 0.9f);
 }
 
@@ -107,7 +157,8 @@ void UWWOAimAssistComponent::UpdateAdhesion()
 	const UWWOWeaponData* W = P->Weapon->GetWeaponData();
 	const AWWOPlayerController* PC = P->GetWWOController();
 	if (!W || !PC) return;
-	const bool bActive = W->Adhesion > 0.f && (PC->GetLookAxis().Size() > 0.1f || PC->GetMoveAxis().Size() > 0.1f) && !P->IsLunging();
+	const float Adhesion = W->Adhesion + FMath::Max(W->KickAdhesion, 0.f) * Window; // hidden assist: more during the recoil
+	const bool bActive = Adhesion > 0.f && (PC->GetLookAxis().Size() > 0.1f || PC->GetMoveAxis().Size() > 0.1f) && !P->IsLunging();
 	const FWWOAssistPart Part = bActive ? FindPart(W->FrictionAngle) : FWWOAssistPart();
 	if (!Part.IsValid())
 	{
@@ -126,7 +177,8 @@ void UWWOAimAssistComponent::UpdateAdhesion()
 	{
 		const float YawChange = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(AdhesionLastDir.Rotation().Yaw, Dir.Rotation().Yaw));
 		const float PitchChange = FMath::Asin(Dir.Z) - FMath::Asin(AdhesionLastDir.Z);
-		const float Pull = W->Adhesion * DeviceScale();
+		const float Pull = Adhesion * DeviceScale();
+		if (W->KickAdhesion > 0.f && Window > 0.f) LastSticky = GetWorld()->GetTimeSeconds();
 		P->ApplyRecoil(PitchChange * Pull, -YawChange * Pull); // ApplyRecoil's yaw is + to the left
 	}
 	AdhesionKey = Key;

@@ -117,6 +117,7 @@ public:
 	void AddRecoil(float PitchRad, float YawRad, float KickTime, float Recovery, float RecoveryTime, float RecoveryCurve = 0.f);
 	void TurnToward(const FVector& Point, float Strength, float DeltaSeconds);
 	void SetViewRotation(float PitchRad, float YawDeg);
+	bool IsRecoiling() const { return KickLeft > 0.f || bRecovering; }
 
 	void StartLunge(AActor* Target);
 	void Launch(const FVector& NewVelocityCm); // Spore Dash: keeps the horizontal speed until landing

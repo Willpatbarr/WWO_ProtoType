@@ -429,6 +429,9 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	AddGlobal(TEXT("Aim Assist"), {
 		Row(AA, "MouseAssist", TEXT("Mouse assist (0 = off)"), 0.f, 1.f, 0.05f),
 		Row(AA, "ShowDebug", TEXT("Show assist cones (0/1)"), 0.f, 1.f, 1.f),
+		Header(TEXT("Hidden assist (only while a shot's recoil plays out; per-weapon amounts in each weapon)")),
+		Row(AA, "HiddenAssist", TEXT("Hidden assist on (0/1)"), 0.f, 1.f, 1.f),
+		Row(AA, "ShowHiddenAssist", TEXT("Show hidden assist markers (0/1)"), 0.f, 1.f, 1.f),
 	});
 
 	// Specific sections: one per item.
@@ -489,6 +492,11 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "Adhesion", TEXT("Adhesion strength"), 0.f, 1.f, 0.05f),
 			Row(W, "AssistRange", TEXT("Assist range (m)"), 5.f, 300.f, 1.f),
 			Row(W, "AdsBoost", TEXT("ADS assist boost"), 1.f, 3.f, 0.05f),
+			Header(TEXT("Hidden assist (while this gun's recoil plays out)")),
+			Row(W, "RecoverySteer", TEXT("Recoil steer (recoil's kick and fall-back bend toward the target; 0 = off)"), 0.f, 3.f, 0.05f),
+			Row(W, "FollowupMagnetism", TEXT("Follow-up shot magnetism (x cone; 1 = off)"), 1.f, 4.f, 0.05f),
+			Row(W, "KickFriction", TEXT("Friction during recoil (x strength; 1 = off)"), 1.f, 4.f, 0.05f),
+			Row(W, "KickAdhesion", TEXT("Adhesion added during recoil (0 = off)"), 0.f, 1.f, 0.05f),
 		};
 		Sections.Add(MoveTemp(S));
 	}
