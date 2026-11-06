@@ -85,7 +85,8 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		Check(L->WeaponMods.Num() == 24, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
 		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
-		Step(1);
+		AutoGunIdx = AutoGunStage = 0;
+		Step(bAutoTestGunsOnly ? 40 : 1);
 		break;
 	}
 	case 1:
@@ -287,6 +288,53 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			Step(3); // fire them, then the tile
 		}
 		break;
+	case 40:
+	{
+		// -WWOAutoTestGuns: each gun at the hip and aimed, and the modded ones with each mod set.
+		// Screenshots 38_gun_<weapon>_<state>.
+		static const FName Ids[] = { "rifle", "handcannon", "shotgun", "sniper" };
+		if (AutoModClock < 0.9f) break;
+		AutoModClock = 0.f;
+		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Ids))
+		{
+			Held[(int32)EWWOAction::Aim] = false;
+			Step(8);
+			break;
+		}
+		const FName Id = Ids[AutoGunIdx];
+		const bool bModded = Id == "rifle" || Id == "handcannon";
+		const FName* PlainSet = Id == "rifle" ? Plain : CannonPlain;
+		const FName* PerkSet = Id == "rifle" ? Perky : CannonPerky;
+		const FString Tag = TEXT("38_gun_") + Id.ToString();
+		auto EquipSet = [&](const FName* Set)
+		{
+			for (int32 i = 0; i < 6; ++i)
+			{
+				if (UWWOModData* Mod = ModById(L, Set[i])) L->EquipMod(Mod->Slot, Mod);
+			}
+		};
+		switch (AutoGunStage++)
+		{
+		case 0: EquipWeaponId(Id); for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr); break;
+		case 1: Shot(*(Tag + TEXT("_hip"))); break;
+		case 2: Held[(int32)EWWOAction::Aim] = true; break;
+		case 3: Shot(*(Tag + TEXT("_ads"))); break;
+		case 4: Held[(int32)EWWOAction::Aim] = false; if (bModded) EquipSet(PlainSet); else AutoGunStage = 99; break;
+		case 5: Shot(*(Tag + TEXT("_plain"))); break;
+		case 6: EquipSet(PerkSet); break;
+		case 7: Shot(*(Tag + TEXT("_perk"))); break;
+		case 8: Held[(int32)EWWOAction::Aim] = true; break;
+		case 9: Shot(*(Tag + TEXT("_perk_ads"))); break;
+		case 10: Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
+		}
+		if (AutoGunStage >= 99)
+		{
+			for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
+			++AutoGunIdx;
+			AutoGunStage = 0;
+		}
+		break;
+	}
 	case 23:
 		if (AutoModClock < 1.f) break;
 		CharacterMenu->AutoTestScroll(-1.f);

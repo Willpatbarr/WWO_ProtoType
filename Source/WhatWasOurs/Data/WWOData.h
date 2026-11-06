@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "WWOTypes.h"
+#include "Dom/JsonObject.h"
 #include "WWOData.generated.h"
 
 UCLASS(Abstract, BlueprintType)
@@ -204,6 +205,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FString PerkText;
 
 	FString Summary() const; // "+25% Range, +15% Side recoil" and the perk on its own line
+
+	// How it looks on the gun: simple shapes at the slot's anchor (Config/WeaponMods.json "parts",
+	// read by UWWOWeaponComponent::BuildModel).
+	TArray<TSharedPtr<FJsonObject>> VisualParts;
 };
 
 // Frame parts give points in the stat groups (see UWWOLoadoutSubsystem::Groups).

@@ -18,6 +18,12 @@
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace
 {
@@ -65,6 +71,50 @@ namespace
 	enum { Box, Cyl, Sphere };
 	const FLinearColor Dark(0.12f, 0.12f, 0.13f), Steel(0.22f, 0.24f, 0.28f), Orange(0.95f, 0.5f, 0.1f), Wood(0.38f, 0.22f, 0.12f),
 		Bronze(0.48f, 0.34f, 0.2f), Gold(0.78f, 0.6f, 0.25f), Olive(0.22f, 0.27f, 0.2f), Flash(1.f, 0.75f, 0.3f), White(0.95f, 0.95f, 0.95f), LensBlue(0.3f, 0.6f, 0.9f);
+
+	// Config/WeaponModels.json: which mesh each weapon uses and where its mod parts attach. Read
+	// on every rebuild, so it can be retuned with a restart and no build.
+	TSharedPtr<FJsonObject> ModelConfig(FName WeaponId)
+	{
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponModels.json")))) return nullptr;
+		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return nullptr;
+		const TSharedPtr<FJsonObject>* Weapons;
+		const TSharedPtr<FJsonObject>* Model;
+		if (Json->TryGetObjectField(TEXT("weapons"), Weapons) && (*Weapons)->TryGetObjectField(WeaponId.ToString(), Model)) return *Model;
+		return nullptr;
+	}
+
+	// A 3-number array field (or one number for all three), else Default.
+	FVector JsonVec(const TSharedPtr<FJsonObject>& O, const TCHAR* Field, const FVector& Default = FVector::ZeroVector)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* A;
+		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() >= 3) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), (*A)[2]->AsNumber());
+		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() == 2) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), 0.0);
+		double N;
+		if (O.IsValid() && O->TryGetNumberField(Field, N)) return FVector(N);
+		return Default;
+	}
+
+	FLinearColor JsonColor(const TSharedPtr<FJsonObject>& O)
+	{
+		FString Name;
+		if (O->TryGetStringField(TEXT("color"), Name))
+		{
+			static const TMap<FString, FLinearColor> Named = {
+				{ TEXT("dark"), FLinearColor(0.12f, 0.12f, 0.13f) }, { TEXT("steel"), FLinearColor(0.22f, 0.24f, 0.28f) },
+				{ TEXT("orange"), FLinearColor(0.95f, 0.5f, 0.1f) }, { TEXT("gold"), FLinearColor(0.78f, 0.6f, 0.25f) },
+				{ TEXT("olive"), FLinearColor(0.22f, 0.27f, 0.2f) }, { TEXT("white"), FLinearColor(0.95f, 0.95f, 0.95f) },
+				{ TEXT("cyan"), FLinearColor(0.2f, 0.8f, 1.f) }, { TEXT("green"), FLinearColor(0.3f, 1.f, 0.4f) },
+				{ TEXT("red"), FLinearColor(1.f, 0.2f, 0.15f) }, { TEXT("yellow"), FLinearColor(1.f, 0.8f, 0.2f) },
+				{ TEXT("purple"), FLinearColor(0.6f, 0.3f, 1.f) },
+			};
+			if (const FLinearColor* C = Named.Find(Name.ToLower())) return *C;
+		}
+		const FVector V = JsonVec(O, TEXT("color"), FVector(0.22, 0.24, 0.28));
+		return FLinearColor(V.X, V.Y, V.Z);
+	}
 
 	// The low-poly weapon models (Godot: tools/build_weapon_models.gd). Origin = the sight point.
 	// Size: box size, or (radius, length) for a cylinder along -z, or (radius) for a sphere.
@@ -200,6 +250,7 @@ void UWWOWeaponComponent::BeginPlay()
 				{
 					ModSignature = Signature;
 					RefreshStats();
+					BuildModel(); // the mods' parts
 					Ammo = MagazineSize();
 					HitStreak = StaticHits = 0;
 					bOverpressure = true;
@@ -262,41 +313,133 @@ void UWWOWeaponComponent::BuildModel()
 		if (Pair.Value) Pair.Value->DestroyComponent();
 	}
 	Parts.Reset();
-	for (const FGunPart& P : ModelParts(Weapon->Id))
+	AdsHiddenParts.Reset();
+	// One part. Pos and Rot are in the model's space: cm, x forward, y right, z up, origin at the sight.
+	auto AddPart = [this](FName Name, UStaticMesh* Mesh, const FVector& Scale, const FVector& Pos, const FRotator& Rot,
+		const FLinearColor* Color, float Glow) -> UStaticMeshComponent*
 	{
 		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(GetOwner());
 		Comp->SetupAttachment(ModelRoot);
 		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Comp->SetCastShadow(false);
 		Comp->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
-		Comp->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
-		FRotator Rot = GRot(Deg(P.RotDeg.X, P.RotDeg.Y, P.RotDeg.Z));
-		switch (P.Kind)
-		{
-		case Box:
-			Comp->SetStaticMesh(WWOFX::Cube());
-			Comp->SetRelativeScale3D(FVector(P.Size.Z, P.Size.X, P.Size.Y));
-			break;
-		case Cyl:
-			Comp->SetStaticMesh(WWOFX::Cylinder());
-			Comp->SetRelativeScale3D(FVector(P.Size.X * 2.f, P.Size.X * 2.f, P.Size.Y));
-			Rot = Rot + FRotator(90.f, 0.f, 0.f); // the engine cylinder stands along z: lay it along the barrel
-			break;
-		default:
-			Comp->SetStaticMesh(WWOFX::Sphere());
-			Comp->SetRelativeScale3D(FVector(P.Size.X * 2.f));
-			break;
-		}
-		Comp->SetRelativeLocationAndRotation(G2U(P.Pos), Rot);
+		Comp->SetStaticMesh(Mesh);
+		if (Color) Comp->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
+		Comp->SetRelativeScale3D(Scale);
+		Comp->SetRelativeLocationAndRotation(Pos, Rot);
 		Comp->RegisterComponent();
-		if (UMaterialInstanceDynamic* Mat = Comp->CreateAndSetMaterialInstanceDynamic(0))
+		if (Color)
 		{
-			Mat->SetVectorParameterValue("Color", P.Color);
-			Mat->SetScalarParameterValue("Glow", P.Glow);
+			if (UMaterialInstanceDynamic* Mat = Comp->CreateAndSetMaterialInstanceDynamic(0))
+			{
+				Mat->SetVectorParameterValue("Color", *Color);
+				Mat->SetScalarParameterValue("Glow", Glow);
+			}
 		}
+		Parts.Add(Name, Comp);
+		return Comp;
+	};
+	// A shape from JSON: "shape" box (size = length, width, height), cyl (radius, length, along x)
+	// or sphere (radius), all in cm; at Anchor + "offset", turned by "rot" (pitch, yaw, roll).
+	auto AddJsonPart = [&](FName Name, const TSharedPtr<FJsonObject>& O, const FVector& Anchor)
+	{
+		FString Shape = TEXT("box");
+		O->TryGetStringField(TEXT("shape"), Shape);
+		const FVector Size = JsonVec(O, TEXT("size"), FVector(2.0));
+		const FVector Rot = JsonVec(O, TEXT("rot"));
+		FRotator R(Rot.X, Rot.Y, Rot.Z);
+		UStaticMesh* Mesh = WWOFX::Cube();
+		FVector Scale = Size / 100.0;
+		if (Shape == TEXT("cyl"))
+		{
+			Mesh = WWOFX::Cylinder(); // stands along z: lay it along x
+			Scale = FVector(Size.X * 2.0, Size.X * 2.0, Size.Y) / 100.0;
+			R = (R.Quaternion() * FRotator(-90.f, 0.f, 0.f).Quaternion()).Rotator();
+		}
+		else if (Shape == TEXT("sphere"))
+		{
+			Mesh = WWOFX::Sphere();
+			Scale = FVector(Size.X * 2.0 / 100.0);
+		}
+		double Glow = 0.0;
+		O->TryGetNumberField(TEXT("glow"), Glow);
+		const FLinearColor Color = JsonColor(O);
+		AddPart(Name, Mesh, Scale, Anchor + JsonVec(O, TEXT("offset")), R, &Color, (float)Glow);
+		bool bHideAds = false;
+		if (O->TryGetBoolField(TEXT("hide_ads"), bHideAds) && bHideAds) AdsHiddenParts.Add(Name);
+	};
+
+	// A mesh model (Config/WeaponModels.json) replaces the box model, keeping its sight dot, muzzle
+	// flash and any parts it lists in "keep". Without one, the Godot box model.
+	const TSharedPtr<FJsonObject> Model = ModelConfig(Weapon->Id);
+	FString MeshPath;
+	UStaticMesh* BodyMesh = Model.IsValid() && Model->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<UStaticMesh>(nullptr, *MeshPath) : nullptr;
+	TSet<FString> Keep = { TEXT("SightDot"), TEXT("MuzzleFlash") };
+	TArray<FString> KeepList;
+	if (BodyMesh && Model->TryGetStringArrayField(TEXT("keep"), KeepList)) Keep.Append(KeepList);
+	for (const FGunPart& P : ModelParts(Weapon->Id))
+	{
+		if (BodyMesh && !Keep.Contains(P.Name)) continue;
+		FRotator Rot = GRot(Deg(P.RotDeg.X, P.RotDeg.Y, P.RotDeg.Z));
+		UStaticMesh* Mesh = WWOFX::Sphere();
+		FVector Scale(P.Size.X * 2.f);
+		if (P.Kind == Box)
+		{
+			Mesh = WWOFX::Cube();
+			Scale = FVector(P.Size.Z, P.Size.X, P.Size.Y);
+		}
+		else if (P.Kind == Cyl)
+		{
+			Mesh = WWOFX::Cylinder();
+			Scale = FVector(P.Size.X * 2.f, P.Size.X * 2.f, P.Size.Y);
+			Rot = Rot + FRotator(90.f, 0.f, 0.f); // the engine cylinder stands along z: lay it along the barrel
+		}
+		FVector Pos = G2U(P.Pos);
+		if (BodyMesh && FName(P.Name) == "MuzzleFlash") Pos = JsonVec(Model, TEXT("offset")) + JsonVec(Model, TEXT("muzzle"), Pos);
+		UStaticMeshComponent* Comp = AddPart(P.Name, Mesh, Scale, Pos, Rot, &P.Color, P.Glow);
 		if (FName(P.Name) == "MuzzleFlash") Comp->SetVisibility(false);
-		Parts.Add(P.Name, Comp);
 		if (FName(P.Name) == "Magazine") MagRest = P.Pos;
+	}
+	TMap<FString, FVector> Anchors;
+	if (BodyMesh)
+	{
+		const FVector Rot = JsonVec(Model, TEXT("rot"));
+		AddPart("Body", BodyMesh, JsonVec(Model, TEXT("scale"), FVector(1.0)), JsonVec(Model, TEXT("offset")), FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
+		const TArray<TSharedPtr<FJsonValue>>* Extras;
+		if (Model->TryGetArrayField(TEXT("parts"), Extras))
+		{
+			for (int32 i = 0; i < Extras->Num(); ++i)
+			{
+				if ((*Extras)[i]->AsObject().IsValid()) AddJsonPart(FName(*FString::Printf(TEXT("Extra%d"), i)), (*Extras)[i]->AsObject(), JsonVec(Model, TEXT("offset")));
+			}
+		}
+		const TSharedPtr<FJsonObject>* AnchorObj;
+		if (Model->TryGetObjectField(TEXT("anchors"), AnchorObj))
+		{
+			for (const auto& Pair : (*AnchorObj)->Values)
+			{
+				const FString Key(Pair.Key);
+				Anchors.Add(Key, JsonVec(Model, TEXT("offset")) + JsonVec(*AnchorObj, *Key)); // anchors move with the mesh
+			}
+		}
+	}
+
+	// The equipped mods' parts, each at its slot's anchor (or the part's own "at").
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	{
+		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+		{
+			const UWWOModData* Mod = L->GetMod(Slot);
+			if (!Mod) continue;
+			for (int32 i = 0; i < Mod->VisualParts.Num(); ++i)
+			{
+				const TSharedPtr<FJsonObject>& O = Mod->VisualParts[i];
+				FString At = Slot.ToString();
+				O->TryGetStringField(TEXT("at"), At);
+				const FVector* Anchor = Anchors.Find(At);
+				AddJsonPart(FName(*FString::Printf(TEXT("Mod_%s_%d"), *Slot.ToString(), i)), O, Anchor ? *Anchor : FVector::ZeroVector);
+			}
+		}
 	}
 }
 
@@ -785,7 +928,9 @@ void UWWOWeaponComponent::UpdateFov()
 	const bool bShowModel = !(Weapon->ScopeOverlay >= 0.5f && AdsAmount > 0.85f);
 	for (const auto& Pair : Parts)
 	{
-		if (Pair.Value) Pair.Value->SetVisibility(bShowModel && (Pair.Key != "MuzzleFlash" || bFlashVisible));
+		// Mod parts that would block the view through the sight (scopes, holo frames) fade out of the way.
+		const bool bAdsHidden = AdsHiddenParts.Contains(Pair.Key) && AdsAmount > 0.6f;
+		if (Pair.Value) Pair.Value->SetVisibility(bShowModel && !bAdsHidden && (Pair.Key != "MuzzleFlash" || bFlashVisible));
 	}
 }
 

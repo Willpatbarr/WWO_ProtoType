@@ -146,6 +146,7 @@ private:
 	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
+	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming
 	UPROPERTY() FWWOFPArm MeleeArm;
 	UPROPERTY() FWWOFPArm ThrowArm;
 	FVector MagRest = FVector::ZeroVector; // Godot space

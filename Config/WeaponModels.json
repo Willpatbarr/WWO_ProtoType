@@ -1,0 +1,80 @@
+{
+  "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game.",
+  "weapons": {
+    "rifle": {
+      "mesh": "/Game/Weapons/Rifle/Mesh/SM_Rifle.SM_Rifle",
+      "scale": 0.75,
+      "rot": [0, -90, 0],
+      "offset": [0, 0, -6.7],
+      "muzzle": [39, 0, 4],
+      "anchors": {
+        "barrel": [39, 0, 4],
+        "magazine": [8, 0, -6],
+        "stock": [-30, 0, 1],
+        "sight": [6, 0, 4.7],
+        "chambering": [14, 2.6, -1],
+        "grip": [22, 0, -1]
+      }
+    },
+    "handcannon": {
+      "mesh": "/Game/Weapons/Pistol/Mesh/SM_Pistol.SM_Pistol",
+      "scale": 1.1,
+      "rot": [0, -90, 0],
+      "offset": [0, 0, -6.4],
+      "muzzle": [13.5, 0.0, 3.4],
+      "anchors": {
+        "barrel": [13.5, 0.0, 3.4],
+        "magazine": [-5.1, 0.0, -11.0],
+        "stock": [-10.2, 0.0, 1.7],
+        "sight": [2, 0, 5.4],
+        "chambering": [4, 2.4, 1],
+        "grip": [6.8, 0.0, -0.8]
+      }
+    },
+    "shotgun": {
+      "mesh": "/Game/Weapons/Shotgun/Mesh/SM_Shotgun.SM_Shotgun",
+      "scale": 1.1,
+      "rot": [0, -90, 0],
+      "offset": [0, 0, -11],
+      "muzzle": [37, 0, 5],
+      "anchors": {
+        "barrel": [37, 0, 5],
+        "magazine": [10, 0, -7],
+        "stock": [-35, 0, 1],
+        "sight": [6, 0, 9],
+        "chambering": [0, 3, 3],
+        "grip": [22, 0, -1]
+      }
+    },
+    "sniper": {
+      "mesh": "/Game/Weapons/Rifle/Mesh/SM_Rifle.SM_Rifle",
+      "scale": 0.85,
+      "rot": [0, -90, 0],
+      "offset": [0, 0, -13],
+      "muzzle": [70, 0, 5],
+      "keep": ["Scope", "ScopeFront", "ScopeRear", "Lens", "MountFront", "MountRear"],
+      "parts": [
+        {
+          "shape": "cyl",
+          "size": [1.4, 26],
+          "offset": [57, 0, 5],
+          "color": "dark"
+        },
+        {
+          "shape": "box",
+          "size": [5, 3.4, 3],
+          "offset": [69, 0, 5],
+          "color": "dark"
+        }
+      ],
+      "anchors": {
+        "barrel": [70, 0, 5],
+        "magazine": [9, 0, -6],
+        "stock": [-35, 0, 2],
+        "sight": [0, 0, 13],
+        "chambering": [0, 2.8, 4],
+        "grip": [25, 0, 0]
+      }
+    }
+  }
+}

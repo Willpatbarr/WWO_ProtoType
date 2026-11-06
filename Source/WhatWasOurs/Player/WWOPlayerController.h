@@ -122,6 +122,9 @@ private:
 	bool UpdateAutoMapTest(class AWWOCharacter* P, float DeltaTime);
 	// Weapon mod steps (WWOPlayerControllerAutoMods.cpp): draft mods, configs, perks.
 	bool bAutoTestModsOnly = false; // -WWOAutoTestMods
+	bool bAutoTestGunsOnly = false; // -WWOAutoTestGuns: gun model screenshots (in the mods test)
+	int32 AutoGunIdx = 0;
+	int32 AutoGunStage = 0;
 	int32 AutoModStep = 0;
 	float AutoModClock = 0.f;
 	int32 AutoModConfig = INDEX_NONE;

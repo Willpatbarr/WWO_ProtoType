@@ -79,7 +79,8 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestGraftsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGrafts"));
 	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
 	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
-	bAutoTestModsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"));
+	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
+	bAutoTestModsOnly = bAutoTestGunsOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"));
 	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly || bAutoTestMapsOnly || bAutoTestModsOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the

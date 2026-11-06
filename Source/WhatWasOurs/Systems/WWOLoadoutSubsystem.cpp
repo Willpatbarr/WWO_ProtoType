@@ -578,6 +578,14 @@ void UWWOLoadoutSubsystem::LoadMods()
 				Mod->Mods.Add(M);
 			}
 		}
+		const TArray<TSharedPtr<FJsonValue>>* Parts;
+		if (O->TryGetArrayField(TEXT("parts"), Parts))
+		{
+			for (const TSharedPtr<FJsonValue>& PartValue : *Parts)
+			{
+				if (PartValue->AsObject().IsValid()) Mod->VisualParts.Add(PartValue->AsObject());
+			}
+		}
 		Mod->Description = Mod->Summary();
 		WeaponMods.Add(Mod);
 	}
