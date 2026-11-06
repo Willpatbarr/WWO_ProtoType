@@ -462,7 +462,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "RecoilRecoverySync", TEXT("Fall-back ends when next shot is ready (0/1)"), 0.f, 1.f, 1.f),
 			Row(W, "RecoilRecoveryCurve", TEXT("Synced fall-back curve (1 = steady, higher = fast then slow)"), 1.f, 5.f, 0.1f),
 			Row(W, "RecoilRecoveryDelay", TEXT("Synced fall-back lands after shot is ready by (s)"), -0.15f, 0.15f, 0.005f),
-			Row(W, "GunKick", TEXT("Gun kick"), 0.f, 5.f, 0.1f),
+			Row(W, "VerticalKick", TEXT("Vertical kick (gun tilts up; 1 = about 3.4 degrees)"), 0.f, 20.f, 0.1f),
+			Row(W, "HorizontalKick", TEXT("Horizontal kick (+ right, - left)"), -5.f, 5.f, 0.1f),
 			Row(W, "MagazineSize", TEXT("Magazine size"), 1.f, 100.f, 1.f),
 			Row(W, "ReloadTime", TEXT("Reload time (s)"), 0.3f, 6.f, 0.05f),
 			Header(TEXT("Rumble")),
@@ -708,7 +709,9 @@ void UWWOSettingsMenu::LoadSaved()
 		const FString SectionKey(*SectionPair.Key);
 		for (const auto& ValuePair : (*Values)->Values)
 		{
-			const FName Id(*ValuePair.Key);
+			FName Id(*ValuePair.Key);
+			// "Gun kick" was split into vertical and horizontal: an old save's value becomes the vertical one.
+			if (Id == "GunKick" && !(*Values)->HasField(TEXT("VerticalKick"))) Id = "VerticalKick";
 			if (const FWWOSettingRow* R = RowFor(SectionKey, Id))
 			{
 				const float V = (float)ValuePair.Value->AsNumber();

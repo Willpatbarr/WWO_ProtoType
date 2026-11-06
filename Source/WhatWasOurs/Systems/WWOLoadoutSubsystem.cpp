@@ -74,6 +74,10 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UWWOLoadoutSubsystem::LoadAllData()
 {
 	LoadType(FPrimaryAssetType("WWOWeapon"), Weapons);
+	for (UWWOWeaponData* W : Weapons)
+	{
+		if (W && W->VerticalKick < 0.f) W->VerticalKick = W->GunKick; // before the kick split
+	}
 	LoadType(FPrimaryAssetType("WWOGrenade"), Grenades);
 	LoadType(FPrimaryAssetType("WWOAbility"), Abilities);
 	LoadType(FPrimaryAssetType("WWOFramePart"), FrameParts);

@@ -125,6 +125,7 @@ private:
 	bool bAutoTestGunsOnly = false; // -WWOAutoTestGuns: gun model screenshots (in the mods test)
 	int32 AutoGunIdx = 0;
 	int32 AutoGunStage = 0;
+	FVector2D AutoGunKick = FVector2D::ZeroVector; // the hand cannon's kick, put back after the diagonal shot
 	int32 AutoModStep = 0;
 	float AutoModClock = 0.f;
 	int32 AutoModConfig = INDEX_NONE;

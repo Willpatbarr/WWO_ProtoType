@@ -1002,8 +1002,9 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 
 	FVector Rot(SwayValue.Y + AirLag * 2.f * Settle, SwayValue.X, BobRoll);
 	Rot += SprintRotation * SprintAmount + FVector(FMath::DegreesToRadians(Weapon->SlideTilt), 0.f, 0.f) * SlideAmount;
-	const float KickNow = Kick * Weapon->GunKick * (1.f - 0.6f * AdsAmount); // aiming tames the jolt
-	Rot.X += 0.06f * KickNow;
+	const float KickNow = Kick * 0.06f * (1.f - 0.6f * AdsAmount); // aiming tames the jolt
+	Rot.X += KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
+	Rot.Y -= KickNow * Weapon->HorizontalKick; // Godot yaw: + turns left, so + kick swings the muzzle right
 	FVector Pos = FMath::Lerp(Weapon->HipPosition, Weapon->AdsPosition, AdsAmount) + Bob + AirOffset;
 	Pos += SprintOffset * SprintAmount + SlideOffset * SlideAmount;
 	// Mantling: hands are busy, so the gun dips out of the way.

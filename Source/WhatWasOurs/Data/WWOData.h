@@ -34,6 +34,11 @@ class WHATWASOURS_API UWWOWeaponData : public UWWOItemData
 
 public:
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override { return FPrimaryAssetId("WWOWeapon", GetFName()); }
+	virtual void PostLoad() override
+	{
+		Super::PostLoad();
+		if (VerticalKick < 0.f) VerticalKick = GunKick; // assets saved before the kick split start from Godot's gun_kick
+	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon") FString Archetype;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon") FVector HipPosition = FVector(0.15, -0.12, -0.4);
@@ -62,7 +67,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float RecoilRecoverySync = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float RecoilRecoveryCurve = 2.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float RecoilRecoveryDelay = 0.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float GunKick = 1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float GunKick = 1.f; // Godot's; seeds VerticalKick
+	// The gun model's jolt per shot (looks only; recoil moves the aim). 1 = about 3.4 degrees of
+	// tilt at the hip; aiming cuts it by 60%. Vertical tips the muzzle up, horizontal swings it
+	// right (+) or left (-), so together they can kick diagonally.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float VerticalKick = -1.f; // -1: take GunKick
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float HorizontalKick = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float MagazineSize = 30.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float ReloadTime = 2.f;
 
