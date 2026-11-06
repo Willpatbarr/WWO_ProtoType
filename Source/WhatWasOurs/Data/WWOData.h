@@ -75,6 +75,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera punch") float PunchTime = 0.12f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float ViewmodelFov = 65.f;
+	// How far (cm) the sight dot sits above where the gun model puts it: the gun and its mod parts
+	// move down by this much, so aiming lines the dot up higher off the gun. Not from Godot.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float SightHeight = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float Sway = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float GunBob = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float SlideTilt = 11.f;

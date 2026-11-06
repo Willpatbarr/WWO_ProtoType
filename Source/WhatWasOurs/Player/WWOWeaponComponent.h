@@ -147,6 +147,8 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming
+	float BuiltSightHeight = 0.f; // the sight height the model was built with
+	FVector ModelShift = FVector::ZeroVector; // from it: every part but the sight dot
 	UPROPERTY() FWWOFPArm MeleeArm;
 	UPROPERTY() FWWOFPArm ThrowArm;
 	FVector MagRest = FVector::ZeroVector; // Godot space

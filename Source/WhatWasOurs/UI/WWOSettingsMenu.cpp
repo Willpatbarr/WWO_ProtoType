@@ -444,6 +444,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "AdsMoveSpeed", TEXT("ADS move speed multiplier"), 0.1f, 1.f, 0.05f),
 			Row(W, "AdsVignette", TEXT("ADS vignette"), 0.f, 1.f, 0.05f),
 			Row(W, "ScopeOverlay", TEXT("Scope overlay (0/1)"), 0.f, 1.f, 1.f),
+			Row(W, "SightHeight", TEXT("Sight dot height above gun (cm)"), -6.f, 6.f, 0.1f),
 			Header(TEXT("Shooting")),
 			Row(W, "SemiAuto", TEXT("Semi-auto (0 = hold to fire)"), 0.f, 1.f, 1.f),
 			Row(W, "FireRate", TEXT("Fire rate (rounds/min)"), 20.f, 1200.f, 5.f),

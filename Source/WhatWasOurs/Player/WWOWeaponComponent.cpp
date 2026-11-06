@@ -441,6 +441,15 @@ void UWWOWeaponComponent::BuildModel()
 			}
 		}
 	}
+
+	// Sight height (Settings slider): everything but the sight dot moves down, so the dot sits
+	// higher off the gun when aiming.
+	BuiltSightHeight = Weapon->SightHeight;
+	ModelShift = FVector(0.f, 0.f, -BuiltSightHeight);
+	for (auto& Pair : Parts)
+	{
+		if (Pair.Key != "SightDot" && Pair.Value) Pair.Value->AddRelativeLocation(ModelShift);
+	}
 }
 
 void UWWOWeaponComponent::BuildArm(FWWOFPArm& Arm, bool bLeft)
@@ -600,6 +609,7 @@ void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 	AdrenalLeft = FMath::Max(AdrenalLeft - DeltaSeconds, 0.f);
 	HammerLeft = FMath::Max(HammerLeft - DeltaSeconds, 0.f);
 	RefreshStats();
+	if (!FMath::IsNearlyEqual(Weapon->SightHeight, BuiltSightHeight)) BuildModel(); // the slider moved
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	if (Loadout && JustPressed((int32)EWWOAction::WeaponNext)) Loadout->CycleWeapon(1);
 	else if (Loadout && JustPressed((int32)EWWOAction::WeaponPrev)) Loadout->CycleWeapon(-1);
@@ -1019,7 +1029,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Rot.Z += ReloadRoll * Tilt;
 	Pos += ReloadLift * Tilt;
 	const float MagOut = WWO::SmoothStep(0.2f, 0.4f, RP) * (1.f - WWO::SmoothStep(0.5f, ReloadSeated, RP));
-	if (UStaticMeshComponent* Mag = Part("Magazine")) Mag->SetRelativeLocation(G2U(MagRest + FVector(0.f, -ReloadMagDrop * MagOut, 0.f)));
+	if (UStaticMeshComponent* Mag = Part("Magazine")) Mag->SetRelativeLocation(G2U(MagRest + FVector(0.f, -ReloadMagDrop * MagOut, 0.f)) + ModelShift);
 	// Melee: the gun drops out of the way while the arm swings.
 	const float MP = bMeleeing ? MeleeProgress : 0.f;
 	const float Drop = WWO::SmoothStep(0.f, 0.12f, MP) * (1.f - WWO::SmoothStep(0.72f, 0.97f, MP));

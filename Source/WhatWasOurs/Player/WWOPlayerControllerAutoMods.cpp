@@ -325,7 +325,12 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 7: Shot(*(Tag + TEXT("_perk"))); break;
 		case 8: Held[(int32)EWWOAction::Aim] = true; break;
 		case 9: Shot(*(Tag + TEXT("_perk_ads"))); break;
-		case 10: Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
+		case 10:
+			// The rifle again with the sight height slider at 3 cm: the gun drops below the dot.
+			if (Id == "rifle") { Gun->GetBaseWeaponData()->SightHeight = 3.f; break; }
+			Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
+		case 11: Shot(*(Tag + TEXT("_perk_ads_height3"))); break;
+		case 12: Gun->GetBaseWeaponData()->SightHeight = 0.f; Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
 		}
 		if (AutoGunStage >= 99)
 		{
