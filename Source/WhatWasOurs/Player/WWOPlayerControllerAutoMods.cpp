@@ -1,8 +1,9 @@
 // Weapon mod steps of the autotest (-WWOAutoTestMods, and the end of -WWOAutoTest): the draft
-// Assault frame mods. Checks that each plain mod changes the rifle's stats by its percentages,
+// rifle and hand cannon mods. Checks that each plain mod changes the rifle's stats by its percentages,
 // that a saved config comes back when applied (and by the quick-swap cycle), fires the perk
 // config at a target and logs the perk counters, then screenshots the Weapons tile and a slot
-// picker. The saved loadout is backed up first and put back at the end.
+// picker. Then the same for the hand cannon (its stats checked against the mod data, its perk
+// set fired, its tile screenshotted). The saved loadout is backed up first and put back at the end.
 // Logs `AutoTest mods: ... ok` or `... FAIL`, with screenshots 37_mods_*.
 
 #include "Player/WWOPlayerController.h"
@@ -49,6 +50,29 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	UWWOWeaponComponent* Gun = P->Weapon;
 	static const FName Plain[] = { "long_barrel", "extended_mag", "heavy_stock", "magnified_sight", "heavy_rounds", "light_grip" };
 	static const FName Perky[] = { "focus_barrel", "scavenger_mag", "brace_stock", "hunters_lens", "static_rounds", "adrenal_grip" };
+	static const FName CannonPlain[] = { "ported_barrel", "speed_loader", "recoil_pad", "peep_sight", "magnum_rounds", "quickdraw_grip" };
+	static const FName CannonPerky[] = { "overpressure_barrel", "final_round_mag", "anchor_stock", "patient_sight", "ricochet_rounds", "hammer_grip" };
+	const bool bCannon = Gun->GetBaseWeaponData() && Gun->GetBaseWeaponData()->Id == "handcannon";
+	auto EquipWeaponId = [L](FName Id)
+	{
+		for (UWWOWeaponData* W : L->Weapons)
+		{
+			if (W->Id == Id) L->EquipWeapon(W);
+		}
+	};
+	// The summed percent of one stat over a set of mods, read from the mod data.
+	auto Sum = [L](const FName* Ids, int32 Count, FName Stat)
+	{
+		float Total = 0.f;
+		for (int32 i = 0; i < Count; ++i)
+		{
+			if (const UWWOModData* Mod = ModById(L, Ids[i]))
+			{
+				for (const FWWOStatModifier& M : Mod->Mods) Total += M.Stat == Stat ? M.Value : 0.f;
+			}
+		}
+		return Total;
+	};
 
 	switch (AutoModStep)
 	{
@@ -58,11 +82,8 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		IFileManager::Get().Delete(*BackupPath());
 		if (IFileManager::Get().FileExists(*SavePath())) IFileManager::Get().Copy(*BackupPath(), *SavePath());
 		P->Health->GodMode = 1.f;
-		Check(L->WeaponMods.Num() == 12, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
-		for (UWWOWeaponData* W : L->Weapons)
-		{
-			if (W->Id == "rifle") L->EquipWeapon(W);
-		}
+		Check(L->WeaponMods.Num() == 24, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
+		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 		Step(1);
 		break;
@@ -148,16 +169,22 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			const FVector Dir = Cast<IWWOTargetable>(Best)->GetAimParts().Last().Position - P->EyeLocation();
 			P->SetViewRotation(FMath::Asin(Dir.GetSafeNormal().Z), Dir.Rotation().Yaw);
 		}
-		Held[(int32)EWWOAction::Fire] = AutoModClock > 0.5f && AutoModClock < 3.5f;
-		if (FMath::IsNearlyEqual(AutoModClock, 2.5f, DeltaTime * 0.6f)) Shot(TEXT("37_mods_perk_firing"));
+		// Semi-auto guns need fresh trigger pulls: tap it about three times a second.
+		{
+			const bool bDown = AutoModClock > 0.5f && AutoModClock < 3.5f && (!bCannon || FMath::Fmod(AutoModClock, 0.32f) < 0.16f);
+			if (bDown && !Held[(int32)EWWOAction::Fire]) JustPressed[(int32)EWWOAction::Fire] = true;
+			Held[(int32)EWWOAction::Fire] = bDown;
+		}
+		if (FMath::IsNearlyEqual(AutoModClock, 2.5f, DeltaTime * 0.6f)) Shot(bCannon ? TEXT("37_mods_cannon_perk_firing") : TEXT("37_mods_perk_firing"));
 		if (AutoModClock >= 3.6f)
 		{
 			Held[(int32)EWWOAction::Fire] = false;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest mods: perk HUD after firing '%s', ammo %d / %d"), *Gun->PerkStatus(), Gun->Ammo, Gun->MagazineSize());
-			Check(!Gun->PerkStatus().IsEmpty(), TEXT("perk status shows on the HUD"));
+			if (bCannon) Check(Gun->Ammo < Gun->MagazineSize() && !Gun->PerkStatus().Contains(TEXT("Overpressure")), TEXT("hand cannon fired and used up Overpressure"));
+			else Check(!Gun->PerkStatus().IsEmpty(), TEXT("perk status shows on the HUD"));
 			if (!CharacterMenu->IsOpen()) ToggleCharacterMenu();
-			CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
-			Step(4);
+			CharacterMenu->AutoTestShow(TEXT("Weapons"), bCannon ? TEXT("mod_magazine:final_round_mag") : FString());
+			Step(bCannon ? 23 : 4);
 		}
 		break;
 	}
@@ -204,6 +231,76 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	case 13:
 		if (AutoModClock < 0.3f) break;
 		CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
+		if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
+		// The hand cannon: a bare frame first.
+		EquipWeaponId("handcannon");
+		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
+		Step(20);
+		break;
+	case 20:
+		if (AutoModClock < 0.5f) break;
+		{
+			Check(bCannon, TEXT("switched to the hand cannon"));
+			Check(L->ModsFor("barrel").Num() == 2 && L->ModsFor("barrel")[0]->Frame == "handcannon", TEXT("the barrel slot lists the hand cannon's two mods"));
+			const UWWOWeaponData* B = Gun->GetBaseWeaponData();
+			AutoModBase = { B->Damage, B->FireRange, B->RecoilUp, B->RecoilSide, B->MagazineSize, B->Zoom };
+			AutoModBaseReload = P->M("reload_time", B->ReloadTime);
+			for (const FName& Id : CannonPlain)
+			{
+				UWWOModData* Mod = ModById(L, Id);
+				Check(Mod != nullptr, Id.ToString() + TEXT(" exists"));
+				if (Mod) L->EquipMod(Mod->Slot, Mod);
+			}
+			Step(21);
+		}
+		break;
+	case 21:
+		if (AutoModClock < 0.3f) break;
+		{
+			const UWWOWeaponData* W = Gun->GetWeaponData();
+			const TArray<float>& B = AutoModBase;
+			const int32 N = UE_ARRAY_COUNT(CannonPlain);
+			auto Expect = [&](float Got, float Base, FName Stat, const TCHAR* Label)
+			{
+				const float Want = Base * (1.f + Sum(CannonPlain, N, Stat));
+				Check(Near(Got, Want), FString::Printf(TEXT("hand cannon %s %.3f -> %.3f (want %.3f)"), Label, Base, Got, Want));
+			};
+			Expect(W->Damage, B[0], "damage", TEXT("damage"));
+			Expect(W->FireRange, B[1], "range", TEXT("range"));
+			Expect(W->RecoilUp, B[2], "recoil_up", TEXT("vertical recoil"));
+			Expect(W->RecoilSide, B[3], "recoil_side", TEXT("side recoil"));
+			Check(Near(W->MagazineSize, FMath::RoundToFloat(B[4] * (1.f + Sum(CannonPlain, N, "magazine_size")))), FString::Printf(TEXT("hand cannon magazine %.0f -> %.0f"), B[4], W->MagazineSize));
+			Check(Near(W->Zoom, 1.f + (B[5] - 1.f) * (1.f + Sum(CannonPlain, N, "zoom"))), FString::Printf(TEXT("hand cannon zoom %.2f -> %.2f"), B[5], W->Zoom));
+			const float Reload = P->M("reload_time", Gun->GetBaseWeaponData()->ReloadTime);
+			Check(Reload < AutoModBaseReload, FString::Printf(TEXT("hand cannon reload time %.2f -> %.2f"), AutoModBaseReload, Reload));
+			Check(L->HasPerk("static") == false, TEXT("the rifle's perks don't carry over"));
+			for (const FName& Id : CannonPerky)
+			{
+				if (UWWOModData* Mod = ModById(L, Id)) L->EquipMod(Mod->Slot, Mod);
+			}
+			bool bAllPerks = true;
+			for (const FName& Perk : { FName("overpressure"), FName("final_round"), FName("anchor"), FName("patience"), FName("ricochet"), FName("hammer") })
+			{
+				bAllPerks &= L->HasPerk(Perk);
+			}
+			Check(bAllPerks, TEXT("all six hand cannon perks equipped"));
+			Step(3); // fire them, then the tile
+		}
+		break;
+	case 23:
+		if (AutoModClock < 1.f) break;
+		CharacterMenu->AutoTestScroll(-1.f);
+		Step(24);
+		break;
+	case 24:
+		if (AutoModClock < 0.5f) break;
+		Shot(TEXT("37_mods_cannon_preview"));
+		Step(25);
+		break;
+	case 25:
+		if (AutoModClock < 0.3f) break;
+		CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
+		EquipWeaponId("rifle");
 		Step(8);
 		break;
 	case 8:

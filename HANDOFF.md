@@ -176,13 +176,14 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Not yet checked hands-on with the DualSense.
 
 ## Weapon mods (draft)
-A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). The rifle is the Assault frame with all six slots open: barrel, magazine, stock, sight, chambering, grip.
-- **Mods:** 12 mods in `Config/WeaponMods.json`, one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.
+A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). The rifle and the hand cannon have all six slots open: barrel, magazine, stock, sight, chambering, grip. A mod's `frame` is the weapon id, so a frame's slots only list its own mods.
+- **Mods:** 24 mods in `Config/WeaponMods.json` (12 per weapon), one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.
 - **Equipping and configs:** `UWWOLoadoutSubsystem`, under "Weapon mods". Mods are kept per frame, and configs are saved in the loadout save. Fixed weapon stats are scaled in `UWWOWeaponComponent::RefreshStats`, which rebuilds a copy of the weapon asset each frame, so `GetWeaponData()` returns the modded copy and Settings sliders still edit the asset. Reload, aim-in, swap and ready times go through `M()`, where `Apply` adds `ModPercent`.
 - **Perks:** in `UWWOWeaponComponent::RefreshStats`, `OnShotResult` and `PerkStatus`.
   - focus, brace and hunter: stat changes while they're active
   - scavenger and adrenal: trigger on kills
   - static: `AWWOChainLightning::SpawnFrom`
+  - Hand cannon: overpressure (first shot after a reload +50%), final_round (last round x2) and patience (aimed 0.6 s: +0.6 crit) scale the shot in `Shoot`; anchor (aimed and still: -50% recoil) and hammer (+25% fire rate 3 s after a kill) in `RefreshStats`; ricochet (a crit bounces once for 60%) uses `SpawnFrom`.
   - The HUD shows perk counters above the weapon name.
 - **Menu:** Character, then Weapons. The tile takes the full width and hides the character preview for now.
   - **Stat bars:** `UWWOStatBars` paints them. Every bar reads as "longer is better", the halfway tick is the frame with no mods, and a full bar is twice that.
@@ -190,4 +191,4 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
   - **Preview:** hovering a mod in the popup shows on the bars what it would add (green) or remove (red). Clicking it equips it.
   - **Configs:** listed under the slots, with save new, apply, overwrite and delete. Hover is polled in `NativeTick` (`UpdateModHover`).
 - **In game:** D-pad Down or B applies the next saved config (`EWWOAction::NextConfig`).
-- **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It backs up and restores `Saved/SaveGames/Loadout.sav`.
+- **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It covers the rifle, then the hand cannon (stats checked against the mod data, perk set fired). It backs up and restores `Saved/SaveGames/Loadout.sav`.

@@ -1,5 +1,5 @@
 {
-  "_comment": "Draft weapon mods for the Assault frame (the rifle). Stats are percent changes as fractions (0.25 = +25%). Stat names: range, recoil_side, recoil_up, magazine_size, reload_time, ads_move_speed, sway, zoom, ads_time, damage, fire_rate, crit_multiplier, swap_time, ready_time. Perks: focus, scavenger, brace, hunter, static, adrenal. Edit and restart the game to retune.",
+  "_comment": "Draft weapon mods for the rifle and hand cannon frames. Stats are percent changes as fractions (0.25 = +25%). Stat names: range, recoil_side, recoil_up, magazine_size, reload_time, ads_move_speed, sway, zoom, ads_time, damage, fire_rate, crit_multiplier, swap_time, ready_time. Perks: focus, scavenger, brace, hunter, static, adrenal (rifle); overpressure, final_round, anchor, patience, ricochet, hammer (hand cannon). Edit and restart the game to retune.",
   "mods": [
     { "id": "long_barrel", "name": "Long Barrel", "frame": "rifle", "slot": "barrel", "rarity": 2,
       "stats": { "range": 0.25, "recoil_side": 0.15 } },
@@ -29,6 +29,36 @@
     { "id": "light_grip", "name": "Light Grip", "frame": "rifle", "slot": "grip", "rarity": 2,
       "stats": { "swap_time": -0.25, "ready_time": -0.25, "sway": 0.10 } },
     { "id": "adrenal_grip", "name": "Adrenal Grip", "frame": "rifle", "slot": "grip", "rarity": 4,
-      "stats": { "swap_time": 0.10 }, "perk": "adrenal", "perk_text": "Adrenal: a kill makes reloads 40% faster for 4 s" }
+      "stats": { "swap_time": 0.10 }, "perk": "adrenal", "perk_text": "Adrenal: a kill makes reloads 40% faster for 4 s" },
+
+    { "id": "ported_barrel", "name": "Ported Barrel", "frame": "handcannon", "slot": "barrel", "rarity": 2,
+      "stats": { "recoil_up": -0.25, "range": -0.10 } },
+    { "id": "overpressure_barrel", "name": "Overpressure Barrel", "frame": "handcannon", "slot": "barrel", "rarity": 4,
+      "stats": { "range": -0.10 }, "perk": "overpressure", "perk_text": "Overpressure: the first shot after a reload deals +50% damage" },
+
+    { "id": "speed_loader", "name": "Speed Loader", "frame": "handcannon", "slot": "magazine", "rarity": 2,
+      "stats": { "reload_time": -0.25, "magazine_size": -0.25 } },
+    { "id": "final_round_mag", "name": "Final Round Mag", "frame": "handcannon", "slot": "magazine", "rarity": 4,
+      "stats": { "magazine_size": -0.15 }, "perk": "final_round", "perk_text": "Final Round: the last round in the magazine deals double damage" },
+
+    { "id": "recoil_pad", "name": "Recoil Pad", "frame": "handcannon", "slot": "stock", "rarity": 2,
+      "stats": { "recoil_up": -0.20, "ads_time": 0.10 } },
+    { "id": "anchor_stock", "name": "Anchor Stock", "frame": "handcannon", "slot": "stock", "rarity": 4,
+      "stats": { "sway": 0.10 }, "perk": "anchor", "perk_text": "Anchor: -50% recoil while aiming and standing still" },
+
+    { "id": "peep_sight", "name": "Peep Sight", "frame": "handcannon", "slot": "sight", "rarity": 2,
+      "stats": { "ads_time": -0.25, "zoom": -0.20 } },
+    { "id": "patient_sight", "name": "Patient Sight", "frame": "handcannon", "slot": "sight", "rarity": 4,
+      "stats": { "ads_time": 0.10 }, "perk": "patience", "perk_text": "Patience: hold your aim for 0.6 s and the next shot gets +0.6 crit multiplier" },
+
+    { "id": "magnum_rounds", "name": "Magnum Rounds", "frame": "handcannon", "slot": "chambering", "rarity": 2,
+      "stats": { "damage": 0.15, "recoil_up": 0.20 } },
+    { "id": "ricochet_rounds", "name": "Ricochet Rounds", "frame": "handcannon", "slot": "chambering", "rarity": 4,
+      "stats": { "damage": -0.05 }, "perk": "ricochet", "perk_text": "Ricochet: a crit bounces to the nearest enemy within 8 m for 60% damage" },
+
+    { "id": "quickdraw_grip", "name": "Quickdraw Grip", "frame": "handcannon", "slot": "grip", "rarity": 2,
+      "stats": { "swap_time": -0.30, "ready_time": -0.30, "recoil_side": 0.20 } },
+    { "id": "hammer_grip", "name": "Hammer Grip", "frame": "handcannon", "slot": "grip", "rarity": 4,
+      "stats": { "swap_time": 0.10 }, "perk": "hammer", "perk_text": "Hammer: a kill gives +25% fire rate for 3 s" }
   ]
 }

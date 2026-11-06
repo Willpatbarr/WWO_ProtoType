@@ -138,8 +138,12 @@ private:
 	int32 HitStreak = 0;  // Focus: hits in a row
 	int32 StaticHits = 0; // Static: hits toward the next arc
 	float AdrenalLeft = 0.f; // Adrenal: seconds of faster reloads left
+	bool bOverpressure = true; // Overpressure: the next shot is the first since a reload
+	float AimHeld = 0.f;       // Patience: seconds fully aimed in
+	float HammerLeft = 0.f;    // Hammer: seconds of faster fire left
 	void RefreshStats();
-	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills);
+	bool IsAnchored() const;
+	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	UPROPERTY() FWWOFPArm MeleeArm;

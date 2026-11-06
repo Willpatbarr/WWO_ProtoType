@@ -202,6 +202,7 @@ void UWWOWeaponComponent::BeginPlay()
 					RefreshStats();
 					Ammo = MagazineSize();
 					HitStreak = StaticHits = 0;
+					bOverpressure = true;
 				}
 			}
 			UpdateArmColor();
@@ -234,6 +235,8 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	BaseWeapon = NewWeapon;
 	Weapon = DuplicateObject<UWWOWeaponData>(NewWeapon, this);
 	HitStreak = StaticHits = 0;
+	bOverpressure = true;
+	AimHeld = 0.f;
 	ModSignature.Reset();
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
@@ -452,6 +455,7 @@ void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 {
 	if (!Weapon) return;
 	AdrenalLeft = FMath::Max(AdrenalLeft - DeltaSeconds, 0.f);
+	HammerLeft = FMath::Max(HammerLeft - DeltaSeconds, 0.f);
 	RefreshStats();
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	if (Loadout && JustPressed((int32)EWWOAction::WeaponNext)) Loadout->CycleWeapon(1);
@@ -631,7 +635,11 @@ void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 	if (!bReloading) return;
 	const float Adrenal = AdrenalLeft > 0.f ? 1.4f : 1.f; // Adrenal: reloads 40% faster after a kill
 	ReloadProgress += DeltaSeconds * Adrenal / FMath::Max(M("reload_time", Weapon->ReloadTime), 0.05f);
-	if (ReloadProgress >= ReloadSeated && Ammo < MagazineSize()) Ammo = MagazineSize(); // the new magazine is in
+	if (ReloadProgress >= ReloadSeated && Ammo < MagazineSize())
+	{
+		Ammo = MagazineSize(); // the new magazine is in
+		bOverpressure = true;
+	}
 	if (ReloadProgress >= 1.f) CancelReload();
 }
 
@@ -640,6 +648,7 @@ void UWWOWeaponComponent::UpdateAds(float DeltaSeconds)
 	const float Target = IsAiming() ? 1.f : 0.f;
 	AdsProgress = WWO::MoveToward(AdsProgress, Target, DeltaSeconds / FMath::Max(M("ads_time", Weapon->AdsTime), 0.01f));
 	AdsAmount = WWO::SmoothStep(0.f, 1.f, AdsProgress);
+	AimHeld = AdsProgress >= 1.f ? AimHeld + DeltaSeconds : 0.f; // Patience
 }
 
 bool UWWOWeaponComponent::WantsToFire() const
@@ -699,6 +708,14 @@ void UWWOWeaponComponent::Shoot()
 	const FVector Aim = WWO::RandomInCone(P->AimForward(), FMath::DegreesToRadians(Weapon->HipSpread) * (1.f - AdsAmount));
 	struct FTotal { float Damage = 0.f; bool bCritical = false; FVector Point; };
 	TMap<AActor*, FTotal> Totals; // pellets add up into one hit per target
+	// Perks that power up just this shot.
+	float ShotScale = 1.f, CritBonus = 0.f;
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	{
+		if (L->HasPerk("overpressure") && bOverpressure) ShotScale *= 1.5f;
+		if (L->HasPerk("final_round") && Ammo == 1) ShotScale *= 2.f; // Ammo drops after the shot
+		if (L->HasPerk("patience") && AimHeld >= 0.6f) CritBonus = 0.6f;
+	}
 	for (int32 i = 0; i < PelletCount; ++i)
 	{
 		const FVector Dir = PelletCount > 1 ? WWO::RandomInCone(Aim, FMath::DegreesToRadians(Weapon->PelletSpread)) : Aim;
@@ -720,7 +737,7 @@ void UWWOWeaponComponent::Shoot()
 		const bool bCritical = Target->IsCriticalComponent(Hit.GetComponent());
 		FTotal& Entry = Totals.FindOrAdd(Hit.GetActor());
 		if (Entry.Damage == 0.f) Entry.Point = Hit.ImpactPoint;
-		Entry.Damage += Weapon->Damage * (bCritical ? Weapon->CritMultiplier : 1.f);
+		Entry.Damage += Weapon->Damage * ShotScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
 		Entry.bCritical |= bCritical;
 	}
 	bool bAnyCritical = false, bAnyKilled = false;
@@ -737,7 +754,7 @@ void UWWOWeaponComponent::Shoot()
 			if (!FirstHit) FirstHit = Pair.Key;
 		}
 	}
-	OnShotResult(FirstHit, Totals.Num(), Kills);
+	OnShotResult(FirstHit, Totals.Num(), Kills, bAnyCritical);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
@@ -1008,12 +1025,34 @@ void UWWOWeaponComponent::RefreshStats()
 		Weapon->RecoilSide *= 0.6f;
 	}
 	if (L->HasPerk("hunter")) Weapon->CritMultiplier += 0.3f * AdsAmount;
+	if (L->HasPerk("anchor") && IsAnchored())
+	{
+		Weapon->RecoilUp *= 0.5f;
+		Weapon->RecoilSide *= 0.5f;
+	}
+	if (L->HasPerk("hammer") && HammerLeft > 0.f) Weapon->FireRate *= 1.25f;
 }
 
-void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills)
+bool UWWOWeaponComponent::IsAnchored() const
+{
+	// Anchor: aimed in and (nearly) standing still.
+	const AWWOCharacter* Pl = GetPlayer();
+	return Pl && AdsAmount > 0.5f && Pl->GetVelocity().Size2D() < 0.3f * WWO::M;
+}
+
+void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical)
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L) return;
+	bOverpressure = false; // any shot uses it up, hit or miss
+	AimHeld = 0.f;         // Patience starts over
+	if (Kills > 0 && L->HasPerk("hammer")) HammerLeft = 3.f;
+	if (bCritical && FirstHit && L->HasPerk("ricochet"))
+	{
+		// One bounce from the target that was hit, for 60% of the gun's damage.
+		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(1.f, 0.62f, 0.2f),
+			Weapon->Damage * 0.6f, 8.f, 1.f, 1, 0.04f);
+	}
 	// Focus: a shot that hits nothing ends the streak.
 	HitStreak = HitCount > 0 ? HitStreak + 1 : 0;
 	if (Kills > 0 && L->HasPerk("scavenger"))
@@ -1045,5 +1084,10 @@ FString UWWOWeaponComponent::PerkStatus() const
 	const AWWOCharacter* Pl = GetPlayer();
 	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding)) Active.Add(TEXT("Braced"));
 	if (L->HasPerk("hunter") && AdsAmount > 0.5f) Active.Add(TEXT("Hunter"));
+	if (L->HasPerk("overpressure") && bOverpressure) Active.Add(TEXT("Overpressure READY"));
+	if (L->HasPerk("final_round") && Ammo == 1) Active.Add(TEXT("Final Round"));
+	if (L->HasPerk("anchor") && IsAnchored()) Active.Add(TEXT("Anchored"));
+	if (L->HasPerk("patience") && AdsAmount > 0.5f) Active.Add(AimHeld >= 0.6f ? FString(TEXT("Patience READY")) : FString(TEXT("Patience")));
+	if (L->HasPerk("hammer") && HammerLeft > 0.f) Active.Add(FString::Printf(TEXT("Hammer %.1fs"), HammerLeft));
 	return FString::Join(Active, TEXT("  ·  "));
 }

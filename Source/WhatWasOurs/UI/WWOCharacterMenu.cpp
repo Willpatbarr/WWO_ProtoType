@@ -661,7 +661,7 @@ void UWWOCharacterMenu::BuildModRows()
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
 
-	AddRowLabel(TEXT("Assault frame: stats and mod slots (hover a slot for its mods)"));
+	AddRowLabel(L->GetWeapon()->DisplayName + TEXT(" frame: stats and mod slots (hover a slot for its mods)"));
 	ModRowsStart = Content->GetChildAt(Content->GetChildrenCount() - 1);
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
 
