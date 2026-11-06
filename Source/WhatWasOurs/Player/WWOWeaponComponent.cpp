@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOAimAssistComponent.h"
@@ -955,6 +956,14 @@ void UWWOWeaponComponent::UpdateReticleTarget()
 		if (Target && !Target->IsDead()) ReticleTarget = Hit.GetActor();
 	}
 	bTargetUnderReticle = ReticleTarget.IsValid();
+	// The faint tint over the enemy under the reticle (moves with it, off when nothing's there).
+	AActor* Now = P->TargetHighlight > 0.f ? ReticleTarget.Get() : nullptr;
+	if (Now != Highlighted.Get())
+	{
+		if (UWWOBodyComponent* Old = Highlighted.IsValid() ? Highlighted->FindComponentByClass<UWWOBodyComponent>() : nullptr) Old->SetHighlight(0.f);
+		Highlighted = Now;
+	}
+	if (UWWOBodyComponent* Body = Now ? Now->FindComponentByClass<UWWOBodyComponent>() : nullptr) Body->SetHighlight(P->TargetHighlight);
 	if (UStaticMeshComponent* Dot = Part("SightDot"))
 	{
 		if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(Dot->GetMaterial(0)))

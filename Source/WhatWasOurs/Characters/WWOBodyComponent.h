@@ -88,6 +88,9 @@ public:
 	// stays as the invisible animation driver the model copies its pose from. None: the mannequin.
 	void SetModel(FName Key);
 	USkeletalMeshComponent* GetModel() const { return Model; }
+	// A faint tint over the visible body (the model, else the mannequin): the enemy under the
+	// reticle. 0 takes it off.
+	void SetHighlight(float Alpha);
 
 	UAnimSequence* FindAnim(FName Anim) const;
 	static bool IsLooping(FName Anim);
@@ -101,6 +104,7 @@ private:
 	FDelegateHandle LoadoutHandle;
 	bool bSetUp = false;
 	UPROPERTY() TObjectPtr<USkeletalMeshComponent> Model; // the character model, if any
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> HighlightMat; // M_WWO_Highlight, made on first use
 	FName ActiveModel;
 	bool bFollowsLoadout = false;
 	bool bModelGrafts = false;  // keep the flora grafts on the model

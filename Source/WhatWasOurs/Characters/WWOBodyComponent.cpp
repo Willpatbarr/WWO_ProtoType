@@ -169,6 +169,25 @@ void UWWOBodyComponent::SetModel(FName Key)
 	UpdateModelExtras();
 }
 
+void UWWOBodyComponent::SetHighlight(float Alpha)
+{
+	USkeletalMeshComponent* Mesh = Model ? Model.Get() : GetMesh();
+	if (!Mesh) return;
+	if (Alpha <= 0.f)
+	{
+		if (Mesh->GetOverlayMaterial()) Mesh->SetOverlayMaterial(nullptr);
+		return;
+	}
+	if (!HighlightMat)
+	{
+		UMaterialInterface* Base = WWOFX::Material(TEXT("M_WWO_Highlight"));
+		if (!Base) return;
+		HighlightMat = UMaterialInstanceDynamic::Create(Base, this);
+	}
+	HighlightMat->SetScalarParameterValue("Alpha", Alpha);
+	if (Mesh->GetOverlayMaterial() != HighlightMat) Mesh->SetOverlayMaterial(HighlightMat);
+}
+
 void UWWOBodyComponent::UpdateModelExtras()
 {
 	// With a model the mannequin only drives the animation (it keeps ticking while hidden).

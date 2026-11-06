@@ -230,6 +230,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			FVector2D At;
 			const FVector World = T.Start + FVector(0, T.Jitter, 60.f * FMath::Min(T.Age / FWWOFloatingText::RiseTime, 1.f));
 			if (!ToScreen(World, At)) continue;
+			// Off to the side of the hit (left or right by its jitter) so the number doesn't cover the target.
+			if (!T.Follow.IsValid()) At.X += (T.Jitter >= 0.f ? 1.f : -1.f) * Pl->DamageNumberOffset;
 			const float FontPx = T.bCritical ? 48.f : 36.f;
 			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, 8.f * PxPerFontPx, 0.8f, 0.5f);
 		}
@@ -309,27 +311,42 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			Y += 17.f;
 		}
 	}
-	// Health bar over the target under the reticle (and the Tank's shield above it).
-	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Gun->ReticleTarget.Get()))
+	// Health bars (and the Tank's shield above): the target under the reticle, and every other
+	// visible enemy whose middle is within HealthBarRadius of the reticle on screen.
+	auto HealthBar = [&](const IWWOTargetable* Target)
 	{
 		FVector2D Top;
-		if (ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top))
+		if (!ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top)) return;
+		const FVector2D Bar(110, 10);
+		FVector2D Pos = Top - FVector2D(Bar.X * 0.5f, Bar.Y);
+		const float Fraction = FMath::Clamp(Target->GetHealth() / FMath::Max(Target->GetMaxHealth(), 1.f), 0.f, 1.f);
+		P.Box(Pos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
+		P.Box(Pos, FVector2D(Bar.X * Fraction, Bar.Y), FLinearColor(0.9f, 0.2f, 0.15f));
+		FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
+		if (Target->GetMaxShield() > 0.f)
 		{
-			const FVector2D Bar(110, 10);
-			FVector2D Pos = Top - FVector2D(Bar.X * 0.5f, Bar.Y);
-			const float Fraction = FMath::Clamp(Target->GetHealth() / FMath::Max(Target->GetMaxHealth(), 1.f), 0.f, 1.f);
-			P.Box(Pos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-			P.Box(Pos, FVector2D(Bar.X * Fraction, Bar.Y), FLinearColor(0.9f, 0.2f, 0.15f));
-			FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
-			if (Target->GetMaxShield() > 0.f)
-			{
-				const FVector2D ShieldPos = Pos - FVector2D(0, Bar.Y + 4);
-				P.Box(ShieldPos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-				P.Box(ShieldPos, FVector2D(Bar.X * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), Bar.Y), ShieldColor);
-				if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
-				Pos = ShieldPos;
-			}
-			P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
+			const FVector2D ShieldPos = Pos - FVector2D(0, Bar.Y + 4);
+			P.Box(ShieldPos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
+			P.Box(ShieldPos, FVector2D(Bar.X * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), Bar.Y), ShieldColor);
+			if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
+			Pos = ShieldPos;
+		}
+		P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
+	};
+	const AActor* Under = Gun->ReticleTarget.Get();
+	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Under)) HealthBar(Target);
+	if (Pl->HealthBarRadius > 0.f && !Pl->Ult->bActive)
+	{
+		for (AActor* Actor : WS->LivingTargets())
+		{
+			const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
+			if (!Target || Actor == Under || Target->IsDead()) continue;
+			const FVector Middle = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.5f);
+			FVector2D At;
+			if (!ToScreen(Middle, At) || FVector2D::Distance(At, AimAt) > Pl->HealthBarRadius) continue;
+			FHitResult Hit;
+			if (!Gun->CastRayTo(Middle, Hit) || Hit.GetActor() != Actor) continue; // in sight only
+			HealthBar(Target);
 		}
 	}
 

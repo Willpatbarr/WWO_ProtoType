@@ -9,6 +9,7 @@
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
+#include "Characters/WWOBodyComponent.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOAimAssistComponent.h"
 #include "UI/WWOCharacterMenu.h"
@@ -425,7 +426,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 				UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: on is %s (%.2f vs %.2f deg)"), Off < AutoHiddenOff ? TEXT("closer ok") : TEXT("not closer FAIL"), Off, AutoHiddenOff);
 				P->AimAssist->ShowHiddenAssist = 0.f;
 				bUsingController = false;
-				Step(8);
+				Step(63);
 			}
 		}
 		break;
@@ -434,6 +435,38 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		if (AutoModClock < 1.f) break; // let the target recover between runs
 		Step(62);
 		break;
+	case 63:
+	{
+		// Readability: aimed straight at the target's chest (its tint and health bar, and the bars of
+		// enemies near the reticle), then a short burst (damage numbers off to the side).
+		if (AutoModClock <= DeltaTime * 1.5f)
+		{
+			// The nearest enemy with a body (the tint goes on bodies), 6 m away.
+			AActor* Best = nullptr;
+			float BestD = 1e9f;
+			for (AActor* A : UWWOWorldSubsystem::Get(this)->LivingTargets())
+			{
+				const float D = FVector::Dist(A->GetActorLocation(), P->GetActorLocation());
+				if (D < BestD && A->FindComponentByClass<UWWOBodyComponent>()) { BestD = D; Best = A; }
+			}
+			AutoHiddenTarget = Best;
+			if (Best) PlaceForAutoTest(P, Best, 6.f, 0.f);
+		}
+		const IWWOTargetable* Target = Cast<IWWOTargetable>(AutoHiddenTarget.Get());
+		if (!Target) { Step(8); break; }
+		const FVector Chest = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.6f);
+		const FVector Dir = (Chest - P->EyeLocation()).GetSafeNormal();
+		if (AutoModClock < 0.6f) P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
+		if (FMath::IsNearlyEqual(AutoModClock, 0.7f, DeltaTime * 0.6f)) Shot(TEXT("40_readability_hover"));
+		Held[(int32)EWWOAction::Fire] = AutoModClock > 0.9f && AutoModClock < 1.15f;
+		if (FMath::IsNearlyEqual(AutoModClock, 1.3f, DeltaTime * 0.6f)) Shot(TEXT("40_readability_numbers"));
+		if (AutoModClock >= 1.6f)
+		{
+			Held[(int32)EWWOAction::Fire] = false;
+			Step(8);
+		}
+		break;
+	}
 	case 23:
 		if (AutoModClock < 1.f) break;
 		CharacterMenu->AutoTestScroll(-1.f);

@@ -56,6 +56,12 @@ public:
 	// at the hip and aimed in (the camera looks up by the matching angle; the aim doesn't move). The
 	// gun lines its sight up there when aimed and the scope centers on it. Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float ReticleDrop = 0.06f;
+	// Enemy readability (HUD settings): the tint over the enemy under the reticle (0 = off), how near
+	// the reticle (HUD px at 1600 x 900) an enemy's health bar shows, and how far to the side of the
+	// hit damage numbers appear (alternating left and right) so they don't cover the target.
+	UPROPERTY(EditAnywhere, Category = "HUD") float TargetHighlight = 0.12f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float HealthBarRadius = 140.f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float DamageNumberOffset = 55.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Walk") float SprintSpeed = 10.f;

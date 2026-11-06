@@ -147,6 +147,7 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming
+	TWeakObjectPtr<AActor> Highlighted; // the enemy tinted for being under the reticle
 	float BuiltSightHeight = 0.f; // the sight height the model was built with
 	FVector ModelShift = FVector::ZeroVector; // from it: every part but the sight dot
 	UPROPERTY() FWWOFPArm MeleeArm;

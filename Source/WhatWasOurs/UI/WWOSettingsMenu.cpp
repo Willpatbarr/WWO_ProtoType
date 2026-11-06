@@ -210,6 +210,12 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(P, "SprintStride", TEXT("Sprint stride length (m)"), 0.5f, 6.f, 0.1f),
 		Row(P, "LandingDip", TEXT("Landing dip"), 0.f, 3.f, 0.1f),
 	});
+	AddGlobal(TEXT("HUD"), {
+		Header(TEXT("Enemy readability")),
+		Row(P, "TargetHighlight", TEXT("Tint on the enemy under the reticle (0 = off)"), 0.f, 0.6f, 0.01f),
+		Row(P, "HealthBarRadius", TEXT("Show health bars of enemies this near the reticle (px; 0 = only the one under it)"), 0.f, 500.f, 5.f),
+		Row(P, "DamageNumberOffset", TEXT("Damage numbers this far to the side of the hit (px)"), 0.f, 200.f, 5.f),
+	});
 	AddGlobal(TEXT("Jump"), {
 		Row(P, "JumpHeight1", TEXT("Jump 1 height (m)"), 0.2f, 5.f, 0.1f),
 		Row(P, "JumpHeight2", TEXT("Jump 2 height (m)"), 0.f, 5.f, 0.1f),

@@ -182,6 +182,13 @@ Every header with sliders under it is a collapsible group (`UWWOSettingsMenu::Bu
 - **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height), at the hip and aimed in. The camera looks up by the matching angle (`ReticleAngleForFov`, recomputed for the zoomed FOV so the point keeps its place on screen) while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle; the HUD draws the reticle, hit marker and assist cones there. The gun, drawn with its own FOV, tips down to point at it, and aimed in its sight point (the model's origin) moves down onto it; the sniper's scope overlay is drawn shifted down onto it with the strip above filled black.
 - **Latency:** `r.GTSyncType=1` and `r.OneFrameThreadLag=0` (DefaultEngine.ini) stop the game from running up to three frames ahead of the screen (the GPU is near its 16.7 ms budget at 60 Hz, so frames queued); mouse smoothing is off (DefaultInput.ini). Cost: the arena perf test went from 55.3 to 53.3 fps average. Test shots now log their game, render and GPU times.
 
+## Enemy readability
+Settings, HUD (`AWWOCharacter` properties):
+- **Hover tint** (`TargetHighlight`, 0.12): the enemy under the reticle gets `M_WWO_Highlight` (made by `Tools/create_highlight_material.py`: unlit translucent red, a bit stronger at the outline) as its body mesh's overlay material (`UWWOBodyComponent::SetHighlight`, driven from `UWWOWeaponComponent::UpdateReticleTarget`).
+- **Health bars near the reticle** (`HealthBarRadius`, 140 HUD px): besides the target under the reticle, every enemy in sight whose middle is within that distance of the reticle on screen shows its bar.
+- **Damage numbers to the side** (`DamageNumberOffset`, 55 HUD px): each number is pushed left or right of the hit (by its random jitter) so it doesn't cover the target.
+- `-WWOAutoTestHidden` ends with `40_readability_hover` and `40_readability_numbers`.
+
 ## Hidden aim assist (after-shot)
 Extra controller assist that only works while a shot's recoil plays out, so it hides in motion the gun already makes (`UWWOAimAssistComponent`, toggles in Settings, Aim Assist; amounts per weapon under its "Hidden assist" header).
 - **Window:** opens on every shot (`NotifyShot` from `AddRecoil`), stays open while the recoil kicks or falls back and at least 0.15 s (for instant-recoil guns), then fades over 0.12 s. Works only with a target in the friction cone, scaled like the rest of the assist (none on mouse while Mouse assist is 0).
