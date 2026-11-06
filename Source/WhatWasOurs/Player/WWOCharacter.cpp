@@ -150,16 +150,21 @@ FVector AWWOCharacter::AimForward() const
 	return (Camera->GetComponentQuat() * Down).GetForwardVector();
 }
 
-float AWWOCharacter::ReticleDropAngle() const
+float AWWOCharacter::ReticleAngleForFov(float HorizontalFovDeg) const
 {
 	// A point Drop of the screen height below center is atan(2 * Drop * tan(vertical half FOV))
 	// below the view axis; the FOV is horizontal, so the vertical one comes from the aspect.
-	const float Drop = ReticleDrop * (1.f - (Weapon ? Weapon->AdsAmount : 0.f));
-	if (bUlting || Drop <= 0.f) return 0.f;
+	if (bUlting || ReticleDrop <= 0.f) return 0.f;
 	FVector2D Viewport(16.f, 9.f);
 	if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(Viewport);
-	const float TanHalfV = FMath::Tan(FMath::DegreesToRadians(Camera->FieldOfView) * 0.5f) * Viewport.Y / FMath::Max(Viewport.X, 1.f);
-	return FMath::Atan(2.f * Drop * TanHalfV);
+	const float TanHalfV = FMath::Tan(FMath::DegreesToRadians(HorizontalFovDeg) * 0.5f) * Viewport.Y / FMath::Max(Viewport.X, 1.f);
+	return FMath::Atan(2.f * ReticleDrop * TanHalfV);
+}
+
+float AWWOCharacter::ReticleDropAngle() const
+{
+	// For the world camera's FOV, so the reticle keeps its place on screen as ADS zooms in.
+	return ReticleAngleForFov(Camera->FieldOfView);
 }
 
 // --- Looking --------------------------------------------------------------------------------

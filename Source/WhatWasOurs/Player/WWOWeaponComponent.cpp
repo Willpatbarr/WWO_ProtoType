@@ -1005,8 +1005,12 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	const float KickNow = Kick * 0.06f * (1.f - 0.6f * AdsAmount); // aiming tames the jolt
 	Rot.X += KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
 	Rot.Y -= KickNow * Weapon->HorizontalKick; // Godot yaw: + turns left, so + kick swings the muzzle right
-	Rot.X -= P->GetReticleDropAngle(); // the camera looks up for the low reticle; the gun keeps pointing at it
+	// The low reticle: the gun (drawn with its own FOV) points at it, and aimed in, its sight point
+	// (the model's origin) moves down onto it.
+	const float GunDrop = P->ReticleAngleForFov(Weapon->ViewmodelFov);
+	Rot.X -= GunDrop;
 	FVector Pos = FMath::Lerp(Weapon->HipPosition, Weapon->AdsPosition, AdsAmount) + Bob + AirOffset;
+	Pos.Y -= -Pos.Z * FMath::Tan(GunDrop) * AdsAmount; // Godot: z is forward (negative), y up
 	Pos += SprintOffset * SprintAmount + SlideOffset * SlideAmount;
 	// Mantling: hands are busy, so the gun dips out of the way.
 	MantlePose = WWO::MoveToward(MantlePose, P->IsMantling() ? 1.f : 0.f, 8.f * DeltaSeconds);

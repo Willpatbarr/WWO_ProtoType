@@ -108,13 +108,14 @@ namespace
 			FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
 				ESlateDrawEffect::None, WWO::Lin(Color));
 		}
-		void Material(UMaterialInstanceDynamic* Mat) const
+		void Material(UMaterialInstanceDynamic* Mat, FVector2D Offset = FVector2D::ZeroVector) const
 		{
 			if (!Mat) return;
 			FSlateBrush Brush;
 			Brush.SetResourceObject(Mat);
 			Brush.ImageSize = FVector2D(Size * S);
-			FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(), &Brush, ESlateDrawEffect::None, FLinearColor::White);
+			FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(Size * S), FSlateLayoutTransform(FVector2f(Offset * S))), &Brush,
+				ESlateDrawEffect::None, FLinearColor::White);
 		}
 	};
 
@@ -193,6 +194,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Pl);
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(Pl);
 	const float Aimed = Gun->AdsAmount;
+	const float DropPx = Pl->Ult->bActive ? 0.f : Size.Y * Pl->ReticleDrop; // the low reticle (none in the ult's third person)
+	const FVector2D AimAt = Center + FVector2D(0.f, DropPx);
 	auto ToScreen = [PC, S](const FVector& World, FVector2D& Out2D) -> bool
 	{
 		FVector2D Screen;
@@ -211,7 +214,10 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	{
 		ScopeMat->SetScalarParameterValue("Strength", WWO::SmoothStep(0.8f, 1.f, Aimed));
 		ScopeMat->SetScalarParameterValue("Aspect", Size.X / Size.Y);
-		P.Material(ScopeMat);
+		// Centered on the low reticle: drawn shifted down, with the strip it leaves at the top black
+		// like the rest of the scope's outside.
+		P.Material(ScopeMat, FVector2D(0.f, DropPx));
+		if (DropPx > 0.f) P.Box(FVector2D::ZeroVector, FVector2D(Size.X, DropPx + 1.f), FLinearColor(0, 0, 0, WWO::SmoothStep(0.8f, 1.f, Aimed)));
 	}
 
 	// Floating damage numbers and words: Godot's fixed-size Label3D (font 36, crits 48, pixel
@@ -237,8 +243,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Text(Ally->StatusText(), At, 15.f, C, 0.5f);
 	}
 
-	// Where shots go: ReticleDrop below center at the hip (Destiny-style), centered when aimed in.
-	const FVector2D AimAt = Center + FVector2D(0.f, Size.Y * Pl->ReticleDrop * (1.f - Aimed));
+	// Where shots go: ReticleDrop below center (Destiny-style), hip and aimed.
 	// Reticle: fades out early as you aim in, red over a target. None in third person.
 	FLinearColor Ret = Gun->bTargetUnderReticle ? ReticleOnTarget : ReticleColor;
 	Ret.A *= FMath::Clamp(1.f - Aimed * 2.5f, 0.f, 1.f);

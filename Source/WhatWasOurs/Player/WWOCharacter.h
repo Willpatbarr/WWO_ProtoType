@@ -52,9 +52,9 @@ public:
 
 	// --- Tunables (Settings menu) ---
 	UPROPERTY(EditAnywhere, Category = "Camera") float MouseSensitivity = 2.f; // x0.001 radians per pixel
-	// Destiny-style low reticle: at the hip, where shots go sits this fraction of the screen height
-	// below center (the camera looks up by the matching angle; the aim doesn't move). Fades to
-	// centered while aiming down sights, so sights and scopes stay centered. Not from Godot.
+	// Destiny-style low reticle: where shots go sits this fraction of the screen height below center,
+	// at the hip and aimed in (the camera looks up by the matching angle; the aim doesn't move). The
+	// gun lines its sight up there when aimed and the scope centers on it. Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float ReticleDrop = 0.06f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
@@ -108,6 +108,9 @@ public:
 	FVector AimForward() const; // where shots go: the reticle, ReticleDrop below the camera's center
 	// The angle (radians) the camera currently looks above the aim for ReticleDrop.
 	float GetReticleDropAngle() const { return AppliedReticleDrop; }
+	// The angle (radians) below the view axis of the reticle's point on screen, for a horizontal FOV
+	// (the world camera's, or the gun's first-person one).
+	float ReticleAngleForFov(float HorizontalFovDeg) const;
 
 	void Look(FVector2D AmountRad); // x = right, y = up; scaled by ADS
 	void ApplyRecoil(float PitchRad, float YawRad); // kicks the view directly

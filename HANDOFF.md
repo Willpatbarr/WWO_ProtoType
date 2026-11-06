@@ -176,7 +176,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Not yet checked hands-on with the DualSense.
 
 ## Reticle and input latency
-- **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height). At the hip the camera looks up by the matching angle while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle below center; the HUD draws the reticle, hit marker and assist cones there and the gun tips down to keep pointing at it. It fades to centered as you aim in, so sights and scopes stay centered.
+- **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height), at the hip and aimed in. The camera looks up by the matching angle (`ReticleAngleForFov`, recomputed for the zoomed FOV so the point keeps its place on screen) while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle; the HUD draws the reticle, hit marker and assist cones there. The gun, drawn with its own FOV, tips down to point at it, and aimed in its sight point (the model's origin) moves down onto it; the sniper's scope overlay is drawn shifted down onto it with the strip above filled black.
 - **Latency:** `r.GTSyncType=1` and `r.OneFrameThreadLag=0` (DefaultEngine.ini) stop the game from running up to three frames ahead of the screen (the GPU is near its 16.7 ms budget at 60 Hz, so frames queued); mouse smoothing is off (DefaultInput.ini). Cost: the arena perf test went from 55.3 to 53.3 fps average. Test shots now log their game, render and GPU times.
 
 ## Character models (prototype)
