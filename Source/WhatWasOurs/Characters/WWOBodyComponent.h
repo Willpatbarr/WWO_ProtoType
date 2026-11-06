@@ -43,6 +43,9 @@ public:
 	float ModelScale = 1.f;
 	bool bShadowOnly = false; // the player's own body: only its shadow shows in first person
 	TWeakObjectPtr<USkeletalMeshComponent> MeshOverride; // the preview uses its own mesh
+	// A character model (Config/CharacterModels.json) to show instead of the mannequin: set before
+	// BeginPlay (the enemies), or picked from the loadout's flora by FollowLoadout.
+	FName ModelKey;
 
 	// Region colors (head, arms, core, legs; Godot's REGIONS order). Until set, every region is BodyColor.
 	static constexpr int32 NumRegions = 4;
@@ -81,6 +84,11 @@ public:
 	// A box pinned to a bone at a world point (measured now), e.g. Tank armor plates.
 	UStaticMeshComponent* AttachBox(FName Bone, const FVector& WorldCenter, const FVector& SizeM, const FLinearColor& Color, float Glow = 0.f);
 
+	// Shows a character model (a key in Config/CharacterModels.json) instead of the mannequin, which
+	// stays as the invisible animation driver the model copies its pose from. None: the mannequin.
+	void SetModel(FName Key);
+	USkeletalMeshComponent* GetModel() const { return Model; }
+
 	UAnimSequence* FindAnim(FName Anim) const;
 	static bool IsLooping(FName Anim);
 
@@ -92,6 +100,14 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UPrimitiveComponent>> Pinned; // AttachBox's (kept)
 	FDelegateHandle LoadoutHandle;
 	bool bSetUp = false;
+	UPROPERTY() TObjectPtr<USkeletalMeshComponent> Model; // the character model, if any
+	FName ActiveModel;
+	bool bFollowsLoadout = false;
+	bool bModelGrafts = false;  // keep the flora grafts on the model
+	bool bModelPinned = false;  // keep AttachBox's plain boxes on the model (glowing ones always stay)
+	TSet<TObjectPtr<UPrimitiveComponent>> GlowingPinned;
+	void UpdateModelExtras(); // shows or hides the mannequin, grafts and boxes for the model
+	void ApplyShadowOnly(UPrimitiveComponent* C) const;
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);

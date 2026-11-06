@@ -103,6 +103,12 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 			Body->BodyColor = Pose.Body;
 			Body->JointColor = Pose.Joint;
 			Body->ModelScale = Pose.Scale;
+			// The character model each pose belongs to (Config/CharacterModels.json): the enemy's, or
+			// one flora model per player pose so all three show.
+			const FString PoseName(Pose.Name);
+			static const FName PlayerModels[] = { "voltvine", "ironbark", "veilspore" };
+			Body->ModelKey = PoseName.StartsWith(TEXT("soldier")) || PoseName.Contains(TEXT("death")) ? FName("soldier")
+				: PoseName.StartsWith(TEXT("swarm")) ? FName("swarm") : PoseName.StartsWith(TEXT("tank")) ? FName("tank") : PlayerModels[i % 3];
 			Body->RegisterComponent(); // begins play: Manny, the anim instance, Idle
 			if (FCString::Strcmp(Pose.Name, TEXT("slide")) == 0)
 			{

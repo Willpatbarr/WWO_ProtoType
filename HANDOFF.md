@@ -175,6 +175,13 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.
 
+## Character models (prototype)
+Placeholder models from Fab (all free): VoltVine = Paragon Wraith, IronBark = Paragon Murdock, VeilSpore = Sci-Fi Mercenary "Grave Mercer" (cape and cloth hidden), Soldier = Robot scout R21, Swarm = Paragon Minions (Dusk melee), Tank = Paragon Steel. The links are in the LaminarFlow doc "Model Assets (for now)". The packs are about 11 GB and are not in git (`.gitignore`): on a fresh checkout add each to your Fab library and "Add to Project" (the Mercenary and the robot need "Show all projects" and version 5.4), then run `Tools/build_retargeters.py`. Paragon content may not use the PARAGON name to advertise the game.
+- **How it works:** every body keeps the mannequin as an invisible animation driver, so all clips, layers, the hunch, hitboxes and grafts work as before. `UWWOBodyComponent::SetModel` adds the model as a second skeletal mesh whose `UWWOModelAnimInstance` copies the mannequin's pose through `FAnimNode_RetargetPoseFromMesh` and `RTG_Manny_<key>` (`/Game/WWO/Retarget`).
+- **Config:** `Config/CharacterModels.json` (mesh, scale, hidden material slots, whether grafts or plain AttachBox boxes stay). Enemies set `Body->ModelKey`; the player and the menu preview use their flora's model. Allies stay on the mannequin. With a model the flora grafts and the Tank's armor boxes hide; its glowing weak spot stays.
+- **Tools/build_retargeters.py** turns on the skeletal-mesh usage flags the models' materials need (the Mercenary ships without them and renders grey), then builds `IK_<key>` rigs (auto-generated chains) and `RTG_Manny_<key>` retargeters (auto-mapped and auto-aligned). Rerun it after adding a model.
+- **Not done:** the hit flash and region/frame-part colors only reach the mannequin, so models don't flash or recolor yet. The first-person arms are still the mannequin.
+
 ## Weapon mods (draft)
 A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). The rifle and the hand cannon have all six slots open: barrel, magazine, stock, sight, chambering, grip. A mod's `frame` is the weapon id, so a frame's slots only list its own mods.
 - **Mods:** 24 mods in `Config/WeaponMods.json` (12 per weapon), one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.

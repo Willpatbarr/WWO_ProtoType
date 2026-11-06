@@ -92,6 +92,8 @@ void UWWOBodyComponent::RebuildGrafts()
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	USkeletalMeshComponent* Mesh = GetMesh();
 	if (!Loadout || !Mesh) return;
+	// A body following the loadout shows its flora's character model.
+	if (bFollowsLoadout && Loadout->GetFlora()) SetModel(Loadout->GetFlora()->Id);
 
 	// show_frame_parts: each region takes the color of the frame part equipped in that slot.
 	static const FName Slots[NumRegions] = { "head", "arms", "core", "legs" };

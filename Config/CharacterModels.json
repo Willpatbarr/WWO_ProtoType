@@ -1,0 +1,11 @@
+{
+  "_comment": "Character models (prototype). Each body keeps the mannequin as an invisible animation driver; the model listed here copies its pose through an IK Retargeter (Tools/build_retargeters.py builds IK_<key> and RTG_Manny_<key> in /Game/WWO/Retarget; rerun it after adding a model). Keys: the flora ids for the player, allies and the character preview, and soldier / swarm / tank for the enemies. scale: the model's size against the mannequin it follows (1 = as authored). hide_slots: material slots to hide (the Paragon heroes' own guns, VeilSpore's cape and cloth proxy). grafts: keep the procedural flora grafts on top (off: the model is the flora's look). Packs come from Fab (see HANDOFF) and are not in git. Edit and restart the game; no build needed unless you add a model (then rerun the script).",
+  "models": {
+    "voltvine": { "mesh": "/Game/ParagonWraith/Characters/Heroes/Wraith/Meshes/Wraith.Wraith", "scale": 0.93, "hide_slots": ["M03_weapon"] },
+    "ironbark": { "mesh": "/Game/ParagonMurdock/Characters/Heroes/Murdock/Meshes/Murdock.Murdock", "scale": 0.95, "hide_slots": ["M04_Weapons"] },
+    "veilspore": { "mesh": "/Game/Grave_Mercer/Skeletal_Mesh/SK_Grave_Mercer.SK_Grave_Mercer", "scale": 0.95, "hide_slots": ["Grave_Mercer_Cape", "proxy_cloth"] },
+    "soldier": { "mesh": "/Game/Robot_scout_R_21/Mesh/SK_Robot_scout_R21.SK_Robot_scout_R21", "scale": 1.0 },
+    "swarm": { "mesh": "/Game/ParagonMinions/Characters/Minions/Dusk_Minions/Meshes/Minion_Lane_Melee_Dusk.Minion_Lane_Melee_Dusk", "scale": 1.0 },
+    "tank": { "mesh": "/Game/ParagonSteel/Characters/Heroes/Steel/Meshes/Steel.Steel", "scale": 0.55 }
+  }
+}

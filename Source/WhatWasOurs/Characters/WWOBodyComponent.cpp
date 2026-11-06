@@ -1,4 +1,5 @@
 #include "Characters/WWOBodyComponent.h"
+#include "WhatWasOurs.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -10,6 +11,14 @@
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Characters/WWOModelAnimInstance.h"
+#include "Retargeter/IKRetargeter.h"
+#include "Rendering/SkeletalMeshRenderData.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace
 {
@@ -18,6 +27,19 @@ namespace
 	const TCHAR* BodyMaterials[] = { TEXT("/Game/WWO/Materials/MI_WWO_Body_01.MI_WWO_Body_01"), TEXT("/Game/WWO/Materials/MI_WWO_Body_02.MI_WWO_Body_02") };
 	const FName RegionTints[] = { "Head Tint", "Arms Tint", "Core Tint", "Legs Tint" };
 	const FName Looping[] = { "Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Spell_Simple_Idle", "Slide", "Pistol_Aim_Neutral" };
+
+	// One entry of Config/CharacterModels.json (read each time a model is set: retune with a restart).
+	TSharedPtr<FJsonObject> ModelConfig(FName Key)
+	{
+		FString Text;
+		if (Key.IsNone() || !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))) return nullptr;
+		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return nullptr;
+		const TSharedPtr<FJsonObject>* Models;
+		const TSharedPtr<FJsonObject>* Model;
+		if (Json->TryGetObjectField(TEXT("models"), Models) && (*Models)->TryGetObjectField(Key.ToString(), Model)) return *Model;
+		return nullptr;
+	}
 }
 
 UWWOBodyComponent::UWWOBodyComponent()
@@ -80,6 +102,96 @@ void UWWOBodyComponent::BeginPlay()
 	bSetUp = true;
 	ApplyColors();
 	ForcePose("Idle"); // Godot: force_pose("Idle") before measuring hitboxes and gear, then play("Idle")
+	if (!ModelKey.IsNone()) SetModel(ModelKey);
+}
+
+// --- Character models ----------------------------------------------------------------------------
+
+void UWWOBodyComponent::SetModel(FName Key)
+{
+	USkeletalMeshComponent* Driver = GetMesh();
+	UE_LOG(LogWWO, Verbose, TEXT("Body %s: model '%s' (driver %s)"), *GetOwner()->GetName(), *Key.ToString(), Driver ? TEXT("yes") : TEXT("none"));
+	if (!Driver || (Key == ActiveModel && (Model || Key.IsNone()))) return;
+	if (Model) Model->DestroyComponent();
+	Model = nullptr;
+	ActiveModel = Key;
+	const TSharedPtr<FJsonObject> Config = ModelConfig(Key);
+	FString MeshPath;
+	USkeletalMesh* Asset = Config.IsValid() && Config->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<USkeletalMesh>(nullptr, *MeshPath) : nullptr;
+	const FString K = Key.ToString();
+	UIKRetargeter* Retargeter = Asset ? LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *K, *K)) : nullptr;
+	if (!Asset || !Retargeter)
+	{
+		if (!Key.IsNone()) UE_LOG(LogWWO, Warning, TEXT("Character model '%s': no mesh or retargeter (Config/CharacterModels.json, Tools/build_retargeters.py)"), *K);
+		UpdateModelExtras();
+		return;
+	}
+	double Scale = 1.0;
+	Config->TryGetNumberField(TEXT("scale"), Scale);
+	bModelGrafts = false;
+	bModelPinned = false;
+	Config->TryGetBoolField(TEXT("grafts"), bModelGrafts);
+	Config->TryGetBoolField(TEXT("pinned"), bModelPinned);
+
+	Model = NewObject<USkeletalMeshComponent>(GetOwner());
+	Model->SetupAttachment(Driver);
+	Model->SetSkeletalMeshAsset(Asset);
+	Model->SetRelativeScale3D(FVector(Scale));
+	Model->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Model->LightingChannels = Driver->LightingChannels; // the menu preview has its own lights
+	Model->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	Model->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Model->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());
+	Model->AddTickPrerequisiteComponent(Driver); // the mannequin poses first, then the model copies it
+	TArray<FString> HideSlots;
+	if (Config->TryGetStringArrayField(TEXT("hide_slots"), HideSlots) && HideSlots.Num() > 0) Model->bDisableClothSimulation = true;
+	Model->RegisterComponent();
+	GetOwner()->AddInstanceComponent(Model);
+	if (UWWOModelAnimInstance* Anim = Cast<UWWOModelAnimInstance>(Model->GetAnimInstance())) Anim->Configure(Retargeter, Driver);
+	// Hidden material slots (VeilSpore's cape): every section using them, in every LOD.
+	if (const FSkeletalMeshRenderData* Render = Asset->GetResourceForRendering())
+	{
+		for (const FString& SlotName : HideSlots)
+		{
+			const int32 SlotIndex = Model->GetMaterialIndex(FName(*SlotName));
+			if (SlotIndex == INDEX_NONE) continue;
+			for (int32 Lod = 0; Lod < Render->LODRenderData.Num(); ++Lod)
+			{
+				const TArray<FSkelMeshRenderSection>& Sections = Render->LODRenderData[Lod].RenderSections;
+				for (int32 s = 0; s < Sections.Num(); ++s)
+				{
+					if (Sections[s].MaterialIndex == SlotIndex) Model->ShowMaterialSection(SlotIndex, s, false, Lod);
+				}
+			}
+		}
+	}
+	ApplyShadowOnly(Model);
+	UpdateModelExtras();
+}
+
+void UWWOBodyComponent::UpdateModelExtras()
+{
+	// With a model the mannequin only drives the animation (it keeps ticking while hidden).
+	if (USkeletalMeshComponent* Driver = GetMesh()) Driver->SetVisibility(Model == nullptr, false);
+	for (UPrimitiveComponent* C : Grafts)
+	{
+		if (C) C->SetVisibility(!Model || bModelGrafts);
+	}
+	for (UPrimitiveComponent* C : Pinned)
+	{
+		if (C) C->SetVisibility(!Model || bModelPinned || GlowingPinned.Contains(C));
+	}
+}
+
+void UWWOBodyComponent::ApplyShadowOnly(UPrimitiveComponent* C) const
+{
+	if (!C) return;
+	C->SetOwnerNoSee(bShadowOnly);
+	if (USkeletalMeshComponent* S = Cast<USkeletalMeshComponent>(C))
+	{
+		S->FirstPersonPrimitiveType = bShadowOnly ? EFirstPersonPrimitiveType::WorldSpaceRepresentation : EFirstPersonPrimitiveType::None;
+	}
+	C->MarkRenderStateDirty();
 }
 
 void UWWOBodyComponent::EndPlay(const EEndPlayReason::Type Reason)
@@ -209,6 +321,7 @@ void UWWOBodyComponent::FollowLoadout(bool bShadow)
 		Loadout->OnChanged.Remove(LoadoutHandle);
 		LoadoutHandle = Loadout->OnChanged.AddWeakLambda(this, [this]() { RebuildGrafts(); });
 	}
+	bFollowsLoadout = true;
 	RebuildGrafts();
 }
 
@@ -221,6 +334,7 @@ void UWWOBodyComponent::SetShadowOnly(bool bOn)
 		Mesh->FirstPersonPrimitiveType = bOn ? EFirstPersonPrimitiveType::WorldSpaceRepresentation : EFirstPersonPrimitiveType::None;
 		Mesh->MarkRenderStateDirty();
 	}
+	ApplyShadowOnly(Model);
 	for (const TArray<TObjectPtr<UPrimitiveComponent>>* List : { &Grafts, &Pinned })
 	{
 		for (UPrimitiveComponent* C : *List)
@@ -280,6 +394,7 @@ void UWWOBodyComponent::Pin(UPrimitiveComponent* C, FName Bone, const FTransform
 		C->bCastHiddenShadow = true;
 	}
 	(bTrack ? Grafts : Pinned).Add(C);
+	if (Model && bTrack && !bModelGrafts) C->SetVisibility(false); // the model is the flora's look
 }
 
 UStaticMeshComponent* UWWOBodyComponent::AddShape(FName Bone, const FVector& World, UStaticMesh* MeshAsset, const FVector& ScaleM,
@@ -301,6 +416,10 @@ UStaticMeshComponent* UWWOBodyComponent::AddShape(FName Bone, const FVector& Wor
 
 UStaticMeshComponent* UWWOBodyComponent::AttachBox(FName Bone, const FVector& WorldCenter, const FVector& SizeM, const FLinearColor& Color, float Glow)
 {
-	// Godot attach_box: not one of the flora parts, so the loadout's rebuilds keep it.
-	return AddShape(Bone, WorldCenter, WWOFX::Cube(), SizeM, Color, Glow, false);
+	// Godot attach_box: not one of the flora parts, so the loadout's rebuilds keep it. A glowing box
+	// (the Tank's weak spot) stays on a character model; plain ones hide (the model has its own armor).
+	UStaticMeshComponent* Box = AddShape(Bone, WorldCenter, WWOFX::Cube(), SizeM, Color, Glow, false);
+	if (Box && Glow > 0.f) GlowingPinned.Add(Box);
+	UpdateModelExtras();
+	return Box;
 }

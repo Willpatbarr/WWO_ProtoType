@@ -36,6 +36,7 @@ AWWOSoldier::AWWOSoldier(const FObjectInitializer& ObjectInitializer) : Super(Ob
 	BodyHitbox->SetRelativeLocation(FVector(0, 0, -15.f)); // 1.5 m tall from the feet
 	Body->BodyColor = FLinearColor(0.55f, 0.15f, 0.13f);
 	Body->JointColor = FLinearColor(0.16f, 0.16f, 0.18f);
+	Body->ModelKey = "soldier"; // Config/CharacterModels.json
 }
 
 UWWOEnemyData* AWWOSoldier::Data() const { return D(); }
@@ -282,6 +283,7 @@ AWWOSwarm::AWWOSwarm(const FObjectInitializer& ObjectInitializer) : Super(Object
 	BodyHitbox->SetRelativeLocation(FVector(0, 0, -14.f));
 	Body->BodyColor = FLinearColor(0.62f, 0.68f, 0.2f);
 	Body->JointColor = FLinearColor(0.2f, 0.15f, 0.1f);
+	Body->ModelKey = "swarm";
 	Tags.Add("Swarm");
 }
 
@@ -423,6 +425,7 @@ AWWOTank::AWWOTank(const FObjectInitializer& ObjectInitializer) : Super(ObjectIn
 	BodyHitbox->SetRelativeLocation(FVector(0, 0, -10.f));
 	Body->BodyColor = FLinearColor(0.3f, 0.33f, 0.22f);
 	Body->JointColor = FLinearColor(0.12f, 0.12f, 0.14f);
+	Body->ModelKey = "tank";
 }
 
 UWWOEnemyData* AWWOTank::Data() const { return D(); }

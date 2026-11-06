@@ -7,3 +7,11 @@ Saved/
 *.xcworkspace
 *.xcodeproj
 .DS_Store
+
+# Fab character packs (large, re-downloadable from Fab; see HANDOFF)
+Content/ParagonMinions/
+Content/ParagonMurdock/
+Content/ParagonSteel/
+Content/ParagonWraith/
+Content/Grave_Mercer/
+Content/Robot_scout_R_21/
