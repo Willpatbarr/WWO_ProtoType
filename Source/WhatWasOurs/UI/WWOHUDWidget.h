@@ -33,6 +33,10 @@ private:
 	bool bHitCritical = false;
 	bool bHitKilled = false;
 	float DamageFlash = 0.f;
+	// Frame rate readout (top left): averaged over a quarter second of real time.
+	float FpsShown = 0.f;
+	float FpsClock = 0.f;
+	int32 FpsFrames = 0;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> VignetteMat;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> ScopeMat;
 

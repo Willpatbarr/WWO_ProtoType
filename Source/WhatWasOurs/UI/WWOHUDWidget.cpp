@@ -25,6 +25,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 
+
+static TAutoConsoleVariable<int32> CVarWWOShowFPS(TEXT("wwo.ShowFPS"), 1, TEXT("Show the frame rate in the top left of the HUD (1 = on, 0 = off)."));
+
 namespace
 {
 	const FLinearColor ReticleColor(1, 1, 1, 0.9f);
@@ -156,6 +159,14 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (P && BoundPlayer.Get() != P) Bind(P);
 	HitTime -= GetWorld() ? GetWorld()->GetDeltaSeconds() : InDeltaTime; // game time, like Godot's _process (slows in a hit-stop)
 	DamageFlash = WWO::MoveToward(DamageFlash, 0.f, 1.2f * InDeltaTime);
+	FpsClock += FApp::GetDeltaTime(); // real time, so hit-stops and pauses don't skew it
+	++FpsFrames;
+	if (FpsClock >= 0.25f)
+	{
+		FpsShown = FpsFrames / FpsClock;
+		FpsClock = 0.f;
+		FpsFrames = 0;
+	}
 	if (!VignetteMat)
 	{
 		if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_Vignette"))) VignetteMat = UMaterialInstanceDynamic::Create(M, this);
@@ -431,6 +442,14 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		FLinearColor C;
 		const FString Line = Mode->StatusText(C);
 		P.Text(Line, FVector2D(Center.X, 24.f), 28.f, C, 0.5f, 8.f, 0.85f);
+	}
+
+	// Frame rate (top left), big: green at 60+, yellow at 30+, red below. wwo.ShowFPS 0 hides it.
+	if (CVarWWOShowFPS.GetValueOnGameThread() && FpsShown > 0.f)
+	{
+		const FLinearColor C = FpsShown >= 59.f ? FLinearColor(0.45f, 1.f, 0.45f) : FpsShown >= 30.f ? FLinearColor(1.f, 0.85f, 0.3f) : FLinearColor(1.f, 0.35f, 0.3f);
+		P.Text(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(FpsShown)), FVector2D(20.f, 14.f), 56.f, C, 0.f, 10.f, 0.85f);
+		P.Text(FString::Printf(TEXT("%.1f ms"), 1000.f / FpsShown), FVector2D(22.f, 84.f), 26.f, FLinearColor(1.f, 1.f, 1.f, 0.85f), 0.f, 6.f, 0.85f);
 	}
 	return Result + 3;
 }
