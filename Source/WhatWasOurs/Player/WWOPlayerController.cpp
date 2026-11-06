@@ -1,4 +1,6 @@
 #include "Player/WWOPlayerController.h"
+#include "RHI.h"
+#include "RenderCore.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
@@ -493,7 +495,9 @@ void AWWOPlayerController::Shot(const TCHAR* Name)
 {
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString(Name) + TEXT(".png");
 	FScreenshotRequest::RequestScreenshot(Path, true, false);
-	UE_LOG(LogWWO, Display, TEXT("AutoTest shot %s"), *Path);
+	// With the frame's timings, to see what costs what (menus open, effects...).
+	UE_LOG(LogWWO, Display, TEXT("AutoTest shot %s (frame %.1f ms, game %.1f, render %.1f, gpu %.1f)"), *Path, FApp::GetDeltaTime() * 1000.0,
+		FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));
 }
 
 void AWWOPlayerController::UpdateAutoTest(float DeltaTime)

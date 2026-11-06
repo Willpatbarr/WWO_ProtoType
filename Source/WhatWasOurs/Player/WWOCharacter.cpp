@@ -12,6 +12,8 @@
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
 #include "Camera/CameraComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
@@ -142,7 +144,22 @@ FVector AWWOCharacter::EyeLocation() const
 
 FVector AWWOCharacter::AimForward() const
 {
-	return Camera->GetForwardVector();
+	// The camera looks up by the reticle drop; the aim is that much below its center.
+	if (AppliedReticleDrop <= 0.f || bUlting) return Camera->GetForwardVector();
+	const FQuat Down = FRotator(-FMath::RadiansToDegrees(AppliedReticleDrop), 0.f, 0.f).Quaternion();
+	return (Camera->GetComponentQuat() * Down).GetForwardVector();
+}
+
+float AWWOCharacter::ReticleDropAngle() const
+{
+	// A point Drop of the screen height below center is atan(2 * Drop * tan(vertical half FOV))
+	// below the view axis; the FOV is horizontal, so the vertical one comes from the aspect.
+	const float Drop = ReticleDrop * (1.f - (Weapon ? Weapon->AdsAmount : 0.f));
+	if (bUlting || Drop <= 0.f) return 0.f;
+	FVector2D Viewport(16.f, 9.f);
+	if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(Viewport);
+	const float TanHalfV = FMath::Tan(FMath::DegreesToRadians(Camera->FieldOfView) * 0.5f) * Viewport.Y / FMath::Max(Viewport.X, 1.f);
+	return FMath::Atan(2.f * Drop * TanHalfV);
 }
 
 // --- Looking --------------------------------------------------------------------------------
@@ -174,7 +191,7 @@ void AWWOCharacter::ApplyRecoil(float PitchRad, float YawRad)
 	if (!bUlting)
 	{
 		const FRotator CameraRotation = Camera->GetRelativeRotation();
-		Camera->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Pitch), CameraRotation.Yaw, CameraRotation.Roll));
+		Camera->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Pitch + AppliedReticleDrop), CameraRotation.Yaw, CameraRotation.Roll));
 	}
 }
 
@@ -557,7 +574,8 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 	{
 		Camera->SetRelativeLocation(FVector(0.f, FMath::Cos(BobTime * 0.5f) * Side * WWO::M,
 			CameraBaseZ + (LandOffset + FMath::Abs(FMath::Sin(BobTime)) * Up) * WWO::M));
-		Camera->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Pitch), 0.f, Weapon->CameraRoll()));
+		AppliedReticleDrop = ReticleDropAngle();
+		Camera->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Pitch + AppliedReticleDrop), 0.f, Weapon->CameraRoll()));
 	}
 }
 

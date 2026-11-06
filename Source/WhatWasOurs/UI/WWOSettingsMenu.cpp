@@ -200,6 +200,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	});
 	AddGlobal(TEXT("Camera"), {
 		Row(G, "HipFov", TEXT("Field of view (horizontal)"), 55.f, 120.f, 1.f),
+		Row(P, "ReticleDrop", TEXT("Reticle below center (fraction of screen height; centers when aimed)"), 0.f, 0.2f, 0.005f),
 		Row(P, "MouseSensitivity", TEXT("Mouse sensitivity"), 0.1f, 10.f, 0.1f),
 		Row(P, "StickSensitivity", TEXT("Stick sensitivity"), 0.5f, 10.f, 0.1f),
 		Row(G, "RumbleScale", TEXT("Controller rumble strength (0 = off)"), 0.f, 2.f, 0.05f),

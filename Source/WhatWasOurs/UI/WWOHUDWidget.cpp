@@ -237,6 +237,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Text(Ally->StatusText(), At, 15.f, C, 0.5f);
 	}
 
+	// Where shots go: ReticleDrop below center at the hip (Destiny-style), centered when aimed in.
+	const FVector2D AimAt = Center + FVector2D(0.f, Size.Y * Pl->ReticleDrop * (1.f - Aimed));
 	// Reticle: fades out early as you aim in, red over a target. None in third person.
 	FLinearColor Ret = Gun->bTargetUnderReticle ? ReticleOnTarget : ReticleColor;
 	Ret.A *= FMath::Clamp(1.f - Aimed * 2.5f, 0.f, 1.f);
@@ -245,9 +247,9 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	{
 		for (const FVector2D Dir : { FVector2D(0, -1), FVector2D(0, 1), FVector2D(-1, 0), FVector2D(1, 0) })
 		{
-			P.Line(Center + Dir * 7.f, Center + Dir * 16.f, Ret, 2.f);
+			P.Line(AimAt + Dir * 7.f, AimAt + Dir * 16.f, Ret, 2.f);
 		}
-		P.Dot(Center, 1.5f, Ret);
+		P.Dot(AimAt, 1.5f, Ret);
 	}
 	// Hit marker: four diagonal ticks; bigger and yellow for crits, red for kills.
 	if (HitTime > 0.f)
@@ -259,7 +261,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		for (const FVector2D Dir : { FVector2D(1, 1), FVector2D(1, -1), FVector2D(-1, 1), FVector2D(-1, -1) })
 		{
 			const FVector2D D = Dir.GetSafeNormal();
-			P.Line(Center + D * 9.f * MSize, Center + D * 19.f * MSize, C, Width);
+			P.Line(AimAt + D * 9.f * MSize, AimAt + D * 19.f * MSize, C, Width);
 		}
 	}
 	// Aim assist debug cones.
@@ -271,13 +273,13 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		{
 			return Size.X * 0.5f * FMath::Tan(FMath::DegreesToRadians(AngleDeg) * (bScaled ? Assist->ConeScale() : 1.f)) / FMath::Tan(HalfFov);
 		};
-		P.Circle(Center, ConePx(W->MagnetismAngle, true), FLinearColor(0.3f, 0.9f, 1.f, 0.8f), 1.5f);
-		P.Circle(Center, ConePx(W->FrictionAngle, true), FLinearColor(1.f, 0.85f, 0.2f, 0.8f), 1.5f);
-		P.Circle(Center, ConePx(Gun->LungeAngle, false), FLinearColor(1.f, 0.3f, 0.3f, 0.7f), 1.5f, 64);
+		P.Circle(AimAt, ConePx(W->MagnetismAngle, true), FLinearColor(0.3f, 0.9f, 1.f, 0.8f), 1.5f);
+		P.Circle(AimAt, ConePx(W->FrictionAngle, true), FLinearColor(1.f, 0.85f, 0.2f, 0.8f), 1.5f);
+		P.Circle(AimAt, ConePx(Gun->LungeAngle, false), FLinearColor(1.f, 0.3f, 0.3f, 0.7f), 1.5f, 64);
 		FVector2D At;
 		if (Assist->FrictionPart.IsValid() && ToScreen(Assist->FrictionPart.Position, At)) P.Circle(At, 6.f, FLinearColor(1.f, 0.85f, 0.2f, 0.9f), 2.f, 16);
 		P.Text(FString::Printf(TEXT("Aim assist: %s (strength %d%%)  range %.0f m"), Assist->UsingController() ? TEXT("controller") : TEXT("mouse"),
-			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), Center + FVector2D(0, 120.f - 17.f), 18.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline at +120, no outline
+			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), AimAt + FVector2D(0, 120.f - 17.f), 18.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline at +120, no outline
 	}
 	// Health bar over the target under the reticle (and the Tank's shield above it).
 	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Gun->ReticleTarget.Get()))

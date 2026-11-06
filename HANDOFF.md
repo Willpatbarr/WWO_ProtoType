@@ -175,6 +175,10 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.
 
+## Reticle and input latency
+- **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height). At the hip the camera looks up by the matching angle while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle below center; the HUD draws the reticle, hit marker and assist cones there and the gun tips down to keep pointing at it. It fades to centered as you aim in, so sights and scopes stay centered.
+- **Latency:** `r.GTSyncType=1` and `r.OneFrameThreadLag=0` (DefaultEngine.ini) stop the game from running up to three frames ahead of the screen (the GPU is near its 16.7 ms budget at 60 Hz, so frames queued); mouse smoothing is off (DefaultInput.ini). Cost: the arena perf test went from 55.3 to 53.3 fps average. Test shots now log their game, render and GPU times.
+
 ## Character models (prototype)
 Placeholder models from Fab (all free): VoltVine = Paragon Wraith, IronBark = Paragon Murdock, VeilSpore = Paragon Kallari (her trailing cloth tentacles and daggers hidden), Soldier = Robot scout R21, Swarm = Paragon Minions (Dusk melee), Tank = Paragon Steel. The links are in the LaminarFlow doc "Model Assets (for now)". The packs are about 11 GB and are not in git (`.gitignore`): on a fresh checkout add each to your Fab library and "Add to Project" (the robot needs "Show all projects" and version 5.4), then run `Tools/build_retargeters.py`. Paragon content may not use the PARAGON name to advertise the game.
 - **How it works:** every body keeps the mannequin as an invisible animation driver, so all clips, layers, the hunch, hitboxes and grafts work as before. `UWWOBodyComponent::SetModel` adds the model as a second skeletal mesh whose `UWWOModelAnimInstance` copies the mannequin's pose through `FAnimNode_RetargetPoseFromMesh` and `RTG_Manny_<key>` (`/Game/WWO/Retarget`).
