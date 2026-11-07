@@ -15,6 +15,7 @@
 #include "Game/WWOGameMode.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "World/WWOTarget.h"
+#include "Characters/WWOBodyComponent.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Net/WWONetSubsystem.h"
 #include "UI/WWOSettingsMenu.h"
@@ -147,9 +148,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		const AWWOCharacter* Joiner = bHost ? Other : P;
 		if (Joiner)
 		{
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: t=%.0f %s joiner at %s speed %.2f crouched %d sliding %d on floor %d"), FMath::FloorToFloat(T),
+			// Body clips: the host picks the joiner's (it replicates to the others); the joiner's own picks
+			// its own locally, and the host's arrives from the host.
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: t=%.0f %s joiner at %s speed %.2f crouched %d sliding %d on floor %d, joiner clip %s, other clip %s"), FMath::FloorToFloat(T),
 				bHost ? TEXT("host's copy:") : TEXT("own:"), *Joiner->GetActorLocation().ToCompactString(),
-				FVector2D(Joiner->GetVelocity()).Size() / WWO::M, Joiner->bIsCrouched, Joiner->bSliding, Joiner->IsOnFloor());
+				FVector2D(Joiner->GetVelocity()).Size() / WWO::M, Joiner->bIsCrouched, Joiner->bSliding, Joiner->IsOnFloor(),
+				*Joiner->Body->CurrentAnim().ToString(), Other ? *Other->Body->CurrentAnim().ToString() : TEXT("-"));
 		}
 	}
 
@@ -289,16 +293,29 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (Step == TEXT("mantle") && !AutoNetCrate.IsZero())
 	{
 		const FVector To = AutoNetCrate - P->GetActorLocation();
-		if (!bAutoNetMantleJumped)
+		// Steer at the stack the whole way (until up on it), pushing forward; jump once its face is
+		// within 60 cm at chest height (what the mantle itself looks for).
+		const float HalfHeight = P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		const float FeetZ = P->GetActorLocation().Z - HalfHeight;
+		if (FeetZ < AutoNetCrateBox.Max.Z - 20.f && !P->IsMantling())
 		{
 			P->SetViewRotation(0.f, To.Rotation().Yaw);
 			MoveValue = FVector2D(0.f, 1.f);
-			// Jump right at the stack's face (15 cm off), then keep pushing into it: the wall must be at chest height as you rise.
-			const FVector Feet = P->GetActorLocation();
-			const FBox Flat(FVector(AutoNetCrateBox.Min.X, AutoNetCrateBox.Min.Y, Feet.Z), FVector(AutoNetCrateBox.Max.X, AutoNetCrateBox.Max.Y, Feet.Z));
-			if (FMath::Sqrt(Flat.ComputeSquaredDistanceToPoint(Feet)) < P->GetCapsuleComponent()->GetScaledCapsuleRadius() + 15.f) { Press(EWWOAction::Jump); bAutoNetMantleJumped = true; }
 		}
-		else Release(EWWOAction::Jump);
+		if (!bAutoNetMantleJumped && P->IsOnFloor())
+		{
+			const FVector Chest(P->GetActorLocation().X, P->GetActorLocation().Y, FeetZ + 120.f);
+			FHitResult Wall;
+			FCollisionQueryParams WallParams(SCENE_QUERY_STAT(WWOAutoTestNet), false, P);
+			const FVector Ahead = FVector(To.X, To.Y, 0.f).GetSafeNormal();
+			if (World->LineTraceSingleByChannel(Wall, Chest, Chest + Ahead * (P->GetCapsuleComponent()->GetScaledCapsuleRadius() + 60.f), ECC_Visibility, WallParams))
+			{
+				Press(EWWOAction::Jump);
+				bAutoNetMantleJumped = true;
+				UE_LOG(LogWWO, Display, TEXT("AutoTest net: mantle jump, the stack's face %.0f cm ahead"), Wall.Distance);
+			}
+		}
+		else if (bAutoNetMantleJumped) Release(EWWOAction::Jump);
 		bAutoNetSawMantle |= P->IsMantling();
 		if (Crossed(23.f))
 		{

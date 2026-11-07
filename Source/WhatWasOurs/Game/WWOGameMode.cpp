@@ -136,7 +136,7 @@ APawn* AWWOGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, 
 	SpawnParams.Instigator = GetInstigator();
 	SpawnParams.ObjectFlags |= RF_Transient;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	return World->SpawnActor<APawn>(PawnClass, Spot, Rotation, SpawnParams);
+	return World->SpawnActor<APawn>(PawnClass, Spot - Lift, Rotation, SpawnParams); // on the ground, not falling the lift
 }
 
 void AWWOGameMode::Restart()
