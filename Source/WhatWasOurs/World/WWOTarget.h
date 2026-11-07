@@ -3,6 +3,8 @@
 // A shootable dummy (Godot: target.gd). The head box is the crit spot. Flashes when hit and
 // pops a damage number. Can strafe side to side to test tracking and aim assist. At zero
 // health it shrinks away until revived (Settings -> Targets, or the auto respawn timer).
+// Online the host owns it: its health, death and strafing replicate. A joiner's hit flashes it and
+// shows the number there, but only the host's damage counts (phase 2 sends hits to the host).
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -23,6 +25,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(EditAnywhere, Category = "Target") float StrafeDistance = 0.f; // meters of side-to-side travel
 	UPROPERTY(EditAnywhere, Category = "Target") float StrafeSpeed = 3.f;    // top speed, m/s
@@ -47,8 +50,12 @@ private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> HeadMat;
 	FVector Start;
 	float Time = 0.f;
-	float Health = 200.f, MaxHealth = 200.f;
-	bool bDead = false;
+	UPROPERTY(Replicated) float Health = 200.f;
+	UPROPERTY(Replicated) float MaxHealth = 200.f;
+	UPROPERTY(ReplicatedUsing = OnRep_Dead) bool bDead = false;
+	UFUNCTION() void OnRep_Dead();
+	void StartDeath();
+	void ShowAlive();
 	float BodyFlash = 0.f, HeadFlash = 0.f;
 	float DeathAge = -1.f;
 	float RespawnLeft = -1.f;

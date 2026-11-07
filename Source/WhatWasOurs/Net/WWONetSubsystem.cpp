@@ -9,6 +9,11 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "Engine/Engine.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
 
 namespace
 {
@@ -21,6 +26,72 @@ UWWONetSubsystem* UWWONetSubsystem::Get(const UObject* WorldContext)
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
 	return GI ? GI->GetSubsystem<UWWONetSubsystem>() : nullptr;
+}
+
+void UWWONetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	if (GEngine)
+	{
+		NetFailureHandle = GEngine->OnNetworkFailure().AddUObject(this, &UWWONetSubsystem::OnNetworkFailure);
+		TravelFailureHandle = GEngine->OnTravelFailure().AddUObject(this, &UWWONetSubsystem::OnTravelFailure);
+	}
+}
+
+void UWWONetSubsystem::Deinitialize()
+{
+	if (GEngine)
+	{
+		GEngine->OnNetworkFailure().Remove(NetFailureHandle);
+		GEngine->OnTravelFailure().Remove(TravelFailureHandle);
+	}
+	Super::Deinitialize();
+}
+
+void UWWONetSubsystem::OnNetworkFailure(UWorld* World, UNetDriver* Driver, ENetworkFailure::Type Type, const FString& Error)
+{
+	// The host left or the connection dropped: the engine takes you back to the start map alone.
+	Status = FString::Printf(TEXT("Lost the connection (%s)"), ENetworkFailure::ToString(Type));
+	UE_LOG(LogWWO, Warning, TEXT("Net: network failure %s: %s"), ENetworkFailure::ToString(Type), *Error);
+}
+
+void UWWONetSubsystem::OnTravelFailure(UWorld* World, ETravelFailure::Type Type, const FString& Error)
+{
+	Status = FString::Printf(TEXT("Couldn't join (%s)"), ETravelFailure::ToString(Type));
+	UE_LOG(LogWWO, Warning, TEXT("Net: travel failure %s: %s"), ETravelFailure::ToString(Type), *Error);
+}
+
+FString UWWONetSubsystem::LocalAddress()
+{
+	ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+	if (!Sockets) return FString();
+	bool bCanBind = false;
+	const TSharedRef<FInternetAddr> Addr = Sockets->GetLocalHostAddr(*GLog, bCanBind);
+	return Addr->IsValid() ? Addr->ToString(false) : FString();
+}
+
+FString UWWONetSubsystem::DescribeStatus(const UObject* WorldContext) const
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!World) return Status;
+	const AGameStateBase* GS = World->GetGameState();
+	const int32 Players = GS ? GS->PlayerArray.Num() : 1;
+	FString Line;
+	switch (World->GetNetMode())
+	{
+	case NM_ListenServer:
+		Line = FString::Printf(TEXT("Hosting a LAN game: %d of %d players. Others join at %s"), Players, MaxPlayers, *LocalAddress());
+		break;
+	case NM_Client:
+		Line = FString::Printf(TEXT("In a LAN game: %d players"), Players);
+		if (Status.StartsWith(TEXT("Only the host"))) Line += TEXT(". ") + Status;
+		break;
+	default:
+		Line = TEXT("Playing alone");
+		if (!Status.IsEmpty()) Line += TEXT(". ") + Status;
+		break;
+	}
+	return Line;
 }
 
 IOnlineSessionPtr UWWONetSubsystem::Sessions() const
@@ -84,7 +155,7 @@ void UWWONetSubsystem::OnCreated(FName Name, bool bOk)
 {
 	if (const IOnlineSessionPtr S = Sessions()) S->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
 	UE_LOG(LogWWO, Display, TEXT("Net: LAN session %s, hosting %s"), bOk ? TEXT("created") : TEXT("failed"), *PendingMap.ToString());
-	Status = TEXT("Hosting a LAN game");
+	Status = FString();
 	const FName Map = PendingMap;
 	PendingMap = NAME_None;
 	UGameplayStatics::OpenLevel(GetWorld(), Map, true, TEXT("listen")); // the same map, now accepting players

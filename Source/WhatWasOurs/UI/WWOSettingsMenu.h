@@ -52,6 +52,7 @@ struct FWWOSettingRow
 	TFunction<float()> Get;
 	TFunction<void(float)> Set;
 	TFunction<FString(float)> Show;
+	TFunction<FString()> LiveHeader; // a header whose text is redrawn each frame while the menu is open
 };
 
 struct FWWOMenuButton
@@ -102,6 +103,7 @@ public:
 	void Back();
 	void CycleGlobalTab(int32 Step);
 	int32 GetGlobalTab() const { return GlobalTab; }
+	bool ShowGlobalTab(const FString& Title); // selects the Global tab with that title (false: none)
 	// What's on screen, for the autotest: the open item of the browser that's showing ("" = its list).
 	FString OpenItemKey() const;
 	float GlobalScrollOffset() const; // the Global tab's scroll position
@@ -137,6 +139,8 @@ private:
 	TMap<FString, TMap<FName, float>> Defaults;
 	struct FLiveSlider { TWeakObjectPtr<USlider> Slider; TWeakObjectPtr<UTextBlock> Value; TWeakObjectPtr<UProgressBar> Fill; FString Key; int32 Row; };
 	TArray<FLiveSlider> Live;
+	struct FLiveText { TWeakObjectPtr<UTextBlock> Text; TFunction<FString()> Get; };
+	TArray<FLiveText> LiveTexts;
 	TArray<FWWOBrowser> Browsers;
 	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers;
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> GlobalSwitcher;

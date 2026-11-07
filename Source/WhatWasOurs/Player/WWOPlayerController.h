@@ -146,6 +146,8 @@ private:
 	bool bAutoNetSawOther = false, bAutoNetMantleJumped = false, bAutoNetSawMantle = false;
 	FVector AutoNetCrate = FVector::ZeroVector;
 	FBox AutoNetCrateBox = FBox(ForceInit);
+	int32 AutoNetDamageEvents = 0; // joiner: OnDamaged fired from the host's replicated health
+	bool bAutoNetBound = false;
 	void UpdateAutoNetTest(float DeltaTime);
 	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
 	bool bPerfTest = false;

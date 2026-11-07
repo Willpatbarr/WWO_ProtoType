@@ -13,6 +13,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "Engine/EngineBaseTypes.h"
 #include "WWONetSubsystem.generated.h"
 
 class FOnlineSessionSearch;
@@ -33,9 +34,15 @@ public:
 	void JoinAddress(const FString& Address);
 	void Leave();
 
-	// What it's doing, for the menu ("Hosting", "Searching...", "No LAN games found"...).
+	// What it's doing, for the menu ("Searching...", "No LAN games found", "Lost the connection"...).
 	FString Status;
 	bool IsOnline(const UObject* WorldContext) const;
+	// The menu's status line: hosting / joined / alone, players in the match, this Mac's address, and Status.
+	FString DescribeStatus(const UObject* WorldContext) const;
+	static FString LocalAddress(); // this Mac's LAN address, for others to join by
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
 
 	// The command line's -WWOHost / -WWOJoin, done once per run when the first local player starts.
 	void HandleCommandLine(const UObject* WorldContext);
@@ -45,6 +52,9 @@ private:
 	TSharedPtr<FOnlineSessionSearch> Search;
 	FDelegateHandle CreateHandle, DestroyHandle, FindHandle, JoinHandle;
 	bool bCommandLineDone = false;
+	FDelegateHandle NetFailureHandle, TravelFailureHandle;
+	void OnNetworkFailure(UWorld* World, class UNetDriver* Driver, ENetworkFailure::Type Type, const FString& Error);
+	void OnTravelFailure(UWorld* World, ETravelFailure::Type Type, const FString& Error);
 
 	IOnlineSessionPtr Sessions() const;
 	void CreateSession();

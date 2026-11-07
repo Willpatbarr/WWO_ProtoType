@@ -33,6 +33,8 @@
 #include "Components/WrapBoxSlot.h"
 #include "Styling/CoreStyle.h"
 #include "UI/WWOMenuCursor.h"
+#include "Net/WWONetSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformTime.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
@@ -402,6 +404,20 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		MapButton(TEXT("Large arena (two levels)"), TEXT("L_ArenaLarge")),
 		MapButton(TEXT("Test range (gray box)"), TEXT("L_TestRange")),
 	});
+	// LAN play (UWWONetSubsystem). Hosting reopens this map for others to join; joining loads the host's.
+	auto Net = [WeakWorld]() { return WeakWorld.IsValid() ? UWWONetSubsystem::Get(WeakWorld.Get()) : nullptr; };
+	FWWOSettingRow NetStatus;
+	NetStatus.Header = TEXT("Status");
+	NetStatus.LiveHeader = [WeakWorld, Net]() { UWWONetSubsystem* N = Net(); return N && WeakWorld.IsValid() ? N->DescribeStatus(WeakWorld.Get()) : FString(); };
+	AddGlobal(TEXT("Multiplayer"), {
+		Header(TEXT("LAN play: one player hosts, others on the same network join (up to 6)")),
+		NetStatus,
+	}, {
+		{ TEXT("Host a LAN game (this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get()))); } },
+		{ TEXT("Find and join a LAN game"), [Net] { if (UWWONetSubsystem* N = Net()) N->FindAndJoin(); } },
+		{ TEXT("Join a game on this Mac (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
+		{ TEXT("Leave (play alone)"), [Net] { if (UWWONetSubsystem* N = Net()) N->Leave(); } },
+	});
 	TWeakObjectPtr<AWWOGameMode> WeakMode = Mode;
 	AddGlobal(TEXT("Waves"), {
 		Header(TEXT("Arena waves (changes to 'on' and the wave list apply on Restart run)")),
@@ -412,7 +428,12 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(Mode, "SizeScale", TEXT("Wave size"), 0.25f, 4.f, 0.05f, Times()),
 		Row(Mode, "SpawnStagger", TEXT("Time between spawns (s)"), 0.f, 3.f, 0.05f),
 	}, {
-		{ TEXT("Restart run"), [WeakMode] { if (WeakMode.IsValid()) WeakMode->Restart(); } },
+		{ TEXT("Restart run"), [WeakMode, WeakWorld]
+			{
+				// In someone else's game there's no game mode here: LoadMap says only the host can.
+				if (WeakMode.IsValid()) WeakMode->Restart();
+				else if (WeakWorld.IsValid()) AWWOGameMode::LoadMap(WeakWorld.Get(), FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get())));
+			} },
 		{ TEXT("Skip wave (kill all)"), [WeakMode] { if (WeakMode.IsValid()) WeakMode->SkipWave(); } },
 	});
 	UWWOAllyData* AL = L->AllyData;
@@ -760,6 +781,11 @@ void UWWOSettingsMenu::Build()
 void UWWOSettingsMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (bOpen)
+	{
+		LiveTexts.RemoveAll([](const FLiveText& L) { return !L.Text.IsValid(); });
+		for (const FLiveText& L : LiveTexts) L.Text->SetText(FText::FromString(L.Get()));
+	}
 	if (SaveRevertAt > 0.0 && FPlatformTime::Seconds() >= SaveRevertAt)
 	{
 		SaveRevertAt = 0.0;
@@ -837,6 +863,14 @@ UWidget* UWWOSettingsMenu::MakeTabs(const TArray<FString>& Titles, UWidgetSwitch
 		Bar->AddChild(B);
 	}
 	return Bar;
+}
+
+bool UWWOSettingsMenu::ShowGlobalTab(const FString& Title)
+{
+	const int32 Index = GlobalKeys.IndexOfByKey(TEXT("global/") + Title);
+	if (Index == INDEX_NONE) return false;
+	SelectGlobalTab(Index);
+	return true;
 }
 
 void UWWOSettingsMenu::SelectGlobalTab(int32 Index)
@@ -976,6 +1010,14 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 			continue;
 		}
 		const bool bHasRows = S->Rows.IsValidIndex(i + 1) && S->Rows[i + 1].Header.IsEmpty();
+		if (R.LiveHeader)
+		{
+			UTextBlock* Text = MakeText(R.LiveHeader(), 20.f, FLinearColor(1, 1, 1, 0.9f), true);
+			LiveTexts.Add({ Text, R.LiveHeader });
+			Add(Text, Count == 0, false);
+			Group = nullptr;
+			continue;
+		}
 		if (!bHasRows)
 		{
 			Add(MakeText(R.Header, 18.f, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);

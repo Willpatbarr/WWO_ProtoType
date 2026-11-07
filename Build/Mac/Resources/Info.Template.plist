@@ -11,5 +11,7 @@
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>What Was Ours finds and joins games on your local network.</string>
 </dict>
 </plist>

@@ -26,6 +26,11 @@ public:
 	AWWOGameMode();
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	// Every map has one Player Start. Online, each player arriving takes the first free spot in
+	// rings around it (the engine's own pick gives up when the start is taken and there's no room
+	// right beside it, and the player never spawns).
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
+	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
 
 	UPROPERTY(EditAnywhere, Category = "Waves") float Enabled = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Waves") float WavesToWin = 8.f;
@@ -37,9 +42,11 @@ public:
 	EWWOWaveState State = EWWOWaveState::Idle;
 	int32 Wave = 0;
 
-	void Restart();
+	void Restart(); // the same map again (online: the host takes everyone along)
 	void SkipWave(); // test helper: kill everything in the current wave
 	void JumpToWave(int32 Number); // test helper: clear this wave and start wave Number now
+	// Alone: opens the map. Hosting: moves everyone to it (ServerTravel, still a LAN game).
+	// In someone else's game: only the host changes maps, so it just says so.
 	static void LoadMap(UObject* WorldContext, FName Level);
 	FString StatusText(FLinearColor& OutColor) const;
 

@@ -6,12 +6,15 @@
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyTypes.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Net/WWONetSubsystem.h"
 #include "WhatWasOurs.h"
 #include "Components/CapsuleComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "NavigationSystem.h"
 #include "Misc/CommandLine.h"
 #include "Engine/TargetPoint.h"
+#include "GameFramework/PlayerStart.h"
+#include "Engine/PlayerStartPIE.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -88,14 +91,77 @@ void AWWOGameMode::Begin()
 	Countdown(StartDelay);
 }
 
+AActor* AWWOGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	// The editor's "Play from Here" start first, else the map's; taken or not (SpawnDefaultPawnFor finds room).
+	APlayerStart* Found = nullptr;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		if (It->IsA<APlayerStartPIE>()) return *It;
+		if (!Found) Found = *It;
+	}
+	return Found ? Found : Super::ChoosePlayerStart_Implementation(Player);
+}
+
+APawn* AWWOGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot)
+{
+	UClass* PawnClass = GetDefaultPawnClassForController(NewPlayer);
+	const APawn* Fit = PawnClass ? PawnClass->GetDefaultObject<APawn>() : nullptr;
+	if (!StartSpot || !Fit) return Super::SpawnDefaultPawnFor_Implementation(NewPlayer, StartSpot);
+	UWorld* World = GetWorld();
+	const FRotator Rotation(0.f, StartSpot->GetActorRotation().Yaw, 0.f);
+	// Tested 20 cm up: a capsule at the start's own height can just touch the floor and count as blocked.
+	const FVector Lift(0.f, 0.f, 20.f);
+	FVector Spot = StartSpot->GetActorLocation() + Lift;
+	// The start itself, then rings of 8 spots 1.5, 3 and 4.5 m out (with a clear line from the start,
+	// so nobody lands behind a wall).
+	bool bFound = !World->EncroachingBlockingGeometry(Fit, Spot, Rotation);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOPlayerSpawn), false);
+	for (int32 Ring = 1; Ring <= 3 && !bFound; ++Ring)
+	{
+		for (int32 i = 0; i < 8 && !bFound; ++i)
+		{
+			const FVector Try = Spot + FRotator(0.f, Rotation.Yaw + i * 45.f, 0.f).Vector() * Ring * 150.f;
+			FHitResult Hit;
+			// Walls only (by object type): a channel trace would also stop at whoever stands on the start.
+			if (World->LineTraceSingleByObjectType(Hit, Spot, Try, FCollisionObjectQueryParams(ECC_WorldStatic), Params)) continue;
+			if (World->EncroachingBlockingGeometry(Fit, Try, Rotation)) continue;
+			Spot = Try;
+			bFound = true;
+			UE_LOG(LogWWO, Display, TEXT("%s spawns %.1f m from the Player Start"), *GetNameSafe(NewPlayer), Ring * 1.5f);
+		}
+	}
+	if (!bFound) UE_LOG(LogWWO, Warning, TEXT("No free spot near the Player Start for %s; spawning on it"), *GetNameSafe(NewPlayer));
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Instigator = GetInstigator();
+	SpawnParams.ObjectFlags |= RF_Transient;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	return World->SpawnActor<APawn>(PawnClass, Spot, Rotation, SpawnParams);
+}
+
 void AWWOGameMode::Restart()
 {
-	UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
+	LoadMap(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
 }
 
 void AWWOGameMode::LoadMap(UObject* WorldContext, FName Level)
 {
-	UGameplayStatics::OpenLevel(WorldContext, Level);
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!World) return;
+	switch (World->GetNetMode())
+	{
+	case NM_ListenServer:
+		UE_LOG(LogWWO, Display, TEXT("Net: host moving everyone to %s"), *Level.ToString());
+		World->ServerTravel(Level.ToString() + TEXT("?listen"));
+		break;
+	case NM_Client:
+		if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(World)) Net->Status = TEXT("Only the host can restart or change maps");
+		UE_LOG(LogWWO, Display, TEXT("Net: only the host changes maps (asked for %s)"), *Level.ToString());
+		break;
+	default:
+		UGameplayStatics::OpenLevel(World, Level);
+		break;
+	}
 }
 
 void AWWOGameMode::SkipWave()

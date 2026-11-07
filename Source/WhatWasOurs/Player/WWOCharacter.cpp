@@ -153,14 +153,15 @@ float AWWOCharacter::M(FName Stat, float Base) const
 
 bool AWWOCharacter::Pressed(EWWOAction Action) const
 {
+	// With a menu open (online, where menus don't pause) your buttons work the menu, not your character.
 	const AWWOPlayerController* PC = GetWWOController();
-	return PC && PC->IsHeld(Action);
+	return PC && !PC->IsMenuOpen() && PC->IsHeld(Action);
 }
 
 bool AWWOCharacter::JustPressed(EWWOAction Action) const
 {
 	const AWWOPlayerController* PC = GetWWOController();
-	return PC && PC->WasJustPressed(Action);
+	return PC && !PC->IsMenuOpen() && PC->WasJustPressed(Action);
 }
 
 FVector2D AWWOCharacter::MoveInput() const

@@ -4,14 +4,20 @@
 // (single and double) and runs at a crate to mantle, logging the host's corrections in each step
 // (`AutoTest net: <step> ...`, each one in detail as `NetCorrection ...`). Both log the joiner's position every second (compare the two logs),
 // and take screenshots of the other player (50_net_host_N every 3 s, 50_net_client_N at the stops).
-// The joiner quits at the end; the host quits once the joiner has left.
+// Then the host restarts the run (online that's a ServerTravel): both should arrive on the fresh map
+// together (`AutoTest net: round 2 ...`). The joiner then quits; the host quits once the joiner has left.
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOHealthComponent.h"
 #include "Game/WWOGameState.h"
+#include "Game/WWOGameMode.h"
+#include "Enemies/WWOEnemyProjectile.h"
+#include "World/WWOTarget.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Net/WWONetSubsystem.h"
+#include "UI/WWOSettingsMenu.h"
 #include "WWOTypes.h"
 #include "WhatWasOurs.h"
 #include "Components/CapsuleComponent.h"
@@ -32,6 +38,11 @@ namespace
 	constexpr float SettleSeconds = 4.f; // after both are in: the joiner's world loads, bodies get their models
 	constexpr float WaitLimit = 180.f;   // give up waiting for the other player
 	constexpr float HostLimit = 120.f;   // the host quits by then even if the joiner never left
+	constexpr float RestartAt = 28.f;    // the host restarts the run (the joiner is done at 26.5)
+	// Which round this process is in: 0 = the moves, 1 = after the host's restart. The controller
+	// (and its test state) is new after a map change; this isn't.
+	int32 GAutoNetRound = 0;
+	TWeakObjectPtr<APlayerController> GAutoNetRound1; // the controller that finished round 1 (round 2 runs on the next one)
 }
 
 void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
@@ -68,7 +79,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			return;
 		}
 		AutoNetClock = -SettleSeconds; // counts up to 0, then the steps start
-		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s sees %d players (net mode %d)"), bHost ? TEXT("host") : TEXT("joiner"), Players.Num(), (int32)Mode);
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s%s sees %d players on %s (net mode %d)"), GAutoNetRound > 0 ? TEXT("round 2: after the restart, ") : TEXT(""),
+			bHost ? TEXT("host") : TEXT("joiner"), Players.Num(), *World->GetMapName(), (int32)Mode);
 		bAutoNetSawOther = true;
 	}
 	const float Before = AutoNetClock;
@@ -76,6 +88,52 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
 	auto Crossed = [Before, T](float At) { return Before < At && T >= At; };
+	if (bHost && GAutoNetRound1.Get() == this) return; // restarting: this controller's world is on its way out
+	if (GAutoNetRound > 0 && GAutoNetRound1.Get() != this)
+	{
+		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: round 2 done, joiner leaving")); FPlatformMisc::RequestExit(false); }
+		if (bHost && bAutoNetSawOther && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left after the restart")); FPlatformMisc::RequestExit(false); }
+		return;
+	}
+
+	// Health and dummies are the host's: it hurts the joiner and the first dummy; the joiner checks
+	// what arrived (its health, the damage feedback, the dummy's health).
+	if (!bHost && !bAutoNetBound)
+	{
+		bAutoNetBound = true;
+		P->Health->OnDamaged.AddWeakLambda(this, [this](float) { ++AutoNetDamageEvents; });
+	}
+	TArray<AWWOTarget*> Dummies;
+	for (TActorIterator<AWWOTarget> It(World); It; ++It) Dummies.Add(*It);
+	if (bHost && Crossed(1.0f) && Other)
+	{
+		Other->Health->GodMode = 0.f;
+		Other->Health->TakeDamage(30.f);
+		Other->Health->GodMode = 1.f;
+		if (Dummies.Num() > 0) Dummies[0]->TakeHit(50.f, false, Dummies[0]->GetActorLocation());
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: host hit the joiner for 30 (now health %.0f shield %.0f) and %d dummies' first for 50 (now %.0f)"),
+			Other->Health->Health, Other->Health->Shield, Dummies.Num(), Dummies.Num() > 0 ? Dummies[0]->GetHealth() : 0.f);
+	}
+	if (!bHost && Crossed(2.5f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner health %.0f shield %.0f, damage events %d; %d dummies, first at health %.0f"),
+			P->Health->Health, P->Health->Shield, AutoNetDamageEvents, Dummies.Num(), Dummies.Num() > 0 ? Dummies[0]->GetHealth() : 0.f);
+	}
+
+	// Both: the Settings menu's Multiplayer tab (status line), and online menus don't pause the match.
+	if (Crossed(2.0f))
+	{
+		ToggleSettingsMenu();
+		const bool bTab = SettingsMenu && SettingsMenu->ShowGlobalTab(TEXT("Multiplayer"));
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s opened Settings, Multiplayer tab %d"), bHost ? TEXT("host") : TEXT("joiner"), bTab);
+	}
+	if (Crossed(2.5f))
+	{
+		const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: menu open %d, game paused %d, status \"%s\""), IsMenuOpen(), IsPaused(), Net ? *Net->DescribeStatus(this) : TEXT("-"));
+		Shot(bHost ? TEXT("51_net_menu_host") : TEXT("51_net_menu_client"));
+	}
+	if (Crossed(2.8f) && IsMenuOpen()) CloseMenus();
 
 	auto LookAt = [P](const AActor* A)
 	{
@@ -103,6 +161,14 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			AutoNetNextShot = T + 3.f;
 			LookAt(Other);
 			Shot(*FString::Printf(TEXT("50_net_host_%02d"), AutoNetShots++));
+		}
+		if (Crossed(RestartAt) && Other)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host restarting the run with %d players"), Players.Num());
+			GAutoNetRound = 1;
+			GAutoNetRound1 = this;
+			if (AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>()) GM->Restart();
+			return;
 		}
 		if (bAutoNetSawOther && !Other)
 		{
@@ -202,7 +268,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		else if (Step == TEXT("end"))
 		{
 			MoveValue = FVector2D::ZeroVector;
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner done, %d corrections in all, saw mantle %d"), AutoNetTotalCorrections, bAutoNetSawMantle);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner done, %d corrections in all, saw mantle %d, saw %d enemy shots from the host"),
+				AutoNetTotalCorrections, bAutoNetSawMantle, AWWOEnemyProjectile::SeenRemote);
 		}
 	}
 	const FString Step = AutoNetStep >= 0 ? NetSteps[AutoNetStep].Name : TEXT("");
@@ -249,5 +316,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	}
 	if (Crossed(5.8f)) Shot(*FString::Printf(TEXT("50_net_client_%02d"), AutoNetShots++)); // mid-sprint, HUD and all
 
-	if (T > NetSteps[NumNetSteps - 1].At + 1.5f) FPlatformMisc::RequestExit(false);
+	// Done: wait for the host's restart (it carries this joiner along to the fresh map).
+	if (Crossed(NetSteps[NumNetSteps - 1].At + 1.5f))
+	{
+		GAutoNetRound = 1;
+		GAutoNetRound1 = this;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner waiting for the host's restart"));
+	}
+	if (T > RestartAt + 30.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host's restart never arrived")); FPlatformMisc::RequestExit(false); }
 }

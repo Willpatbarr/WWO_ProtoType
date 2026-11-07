@@ -19,7 +19,7 @@ public class WhatWasOurs : ModuleRules
 			"Core", "CoreUObject", "Engine", "RHI", "RenderCore", "InputCore", "EnhancedInput",
 			"UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem",
 			"Json", "JsonUtilities", "ApplicationCore", "ProceduralMeshComponent", "IKRig",
-			"NetCore", "OnlineSubsystem", "OnlineSubsystemUtils"
+			"NetCore", "OnlineSubsystem", "OnlineSubsystemUtils", "Sockets"
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);

@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Net/UnrealNetwork.h"
 
 namespace
 {
@@ -45,6 +46,22 @@ AWWOTarget::AWWOTarget()
 		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
 	Tags.Add("Target");
+	bReplicates = true;
+	SetReplicateMovement(true); // strafing runs on the host
+}
+
+void AWWOTarget::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOTarget, Health);
+	DOREPLIFETIME(AWWOTarget, MaxHealth);
+	DOREPLIFETIME(AWWOTarget, bDead);
+}
+
+void AWWOTarget::OnRep_Dead()
+{
+	if (bDead) StartDeath();
+	else ShowAlive();
 }
 
 void AWWOTarget::BeginPlay()
@@ -85,28 +102,37 @@ bool AWWOTarget::TakeHit(float Damage, bool bCritical, const FVector& Point, FLi
 	if (bCritical) HeadFlash = 1.f;
 	else BodyFlash = 1.f;
 	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
+	if (!HasAuthority()) return false; // a joiner's hit: looks only, the host owns the health
 	Health -= Damage;
 	if (Health > 0.f) return false;
 	bDead = true;
 	Health = 0.f;
-	SetCollision(false);
-	DeathAge = 0.f;
+	StartDeath();
 	const float Respawn = UWWOWorldSubsystem::Get(this)->RespawnTime;
 	RespawnLeft = Respawn > 0.f ? Respawn : -1.f;
 	return true;
 }
 
+void AWWOTarget::StartDeath()
+{
+	SetCollision(false);
+	DeathAge = 0.f;
+}
+
 void AWWOTarget::Revive(float NewMaxHealth)
 {
+	if (!HasAuthority()) return; // the host revives it; that replicates
 	MaxHealth = NewMaxHealth;
 	Health = MaxHealth;
-	if (bDead)
-	{
-		bDead = false;
-		SetCollision(true);
-	}
-	DeathAge = -1.f;
+	bDead = false;
 	RespawnLeft = -1.f;
+	ShowAlive();
+}
+
+void AWWOTarget::ShowAlive()
+{
+	SetCollision(true);
+	DeathAge = -1.f;
 	SetActorHiddenInGame(false);
 	BodyMesh->SetRelativeScale3D(FVector(0.5f, 0.8f, 1.4f));
 	HeadMesh->SetRelativeScale3D(FVector(0.32f));
@@ -121,7 +147,7 @@ void AWWOTarget::SetCollision(bool bOn)
 void AWWOTarget::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (StrafeDistance > 0.f && !bDead)
+	if (StrafeDistance > 0.f && !bDead && HasAuthority())
 	{
 		const float Half = StrafeDistance * 0.5f;
 		Time += DeltaSeconds;
@@ -139,7 +165,7 @@ void AWWOTarget::Tick(float DeltaSeconds)
 		HeadMesh->SetRelativeScale3D(FVector(0.32f) * S);
 		if (T >= 1.f) SetActorHiddenInGame(true);
 	}
-	if (RespawnLeft > 0.f && (RespawnLeft -= DeltaSeconds) <= 0.f && bDead) Revive(MaxHealth);
+	if (HasAuthority() && RespawnLeft > 0.f && (RespawnLeft -= DeltaSeconds) <= 0.f && bDead) Revive(MaxHealth);
 	BodyFlash = WWO::MoveToward(BodyFlash, 0.f, 6.f * DeltaSeconds);
 	HeadFlash = WWO::MoveToward(HeadFlash, 0.f, 6.f * DeltaSeconds);
 	if (BodyMat) BodyMat->SetVectorParameterValue("Color", FMath::Lerp(BodyColor, FLinearColor::White, BodyFlash));

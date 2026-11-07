@@ -456,7 +456,9 @@ void AWWOPlayerController::OnMenuClosed()
 
 void AWWOPlayerController::SetMenuMode(bool bOpen)
 {
-	SetPause(bOpen);
+	// Alone, a menu pauses the game. Online the match keeps running (the host's pause would freeze
+	// everyone); your character just ignores your input while a menu is open (AWWOCharacter::Pressed).
+	if (GetNetMode() == NM_Standalone || !bOpen) SetPause(bOpen);
 	bShowMouseCursor = bOpen;
 	if (bOpen)
 	{

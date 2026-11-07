@@ -11,13 +11,51 @@
 #include "Components/PointLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
 
 int32 AWWOEnemyProjectile::PlayerHits = 0;
+int32 AWWOEnemyProjectile::SeenRemote = 0;
 
 AWWOEnemyProjectile::AWWOEnemyProjectile()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+	// Sent once at spawn (velocity and looks are fixed); each machine then flies its own copy.
+	bReplicates = true;
+	SetReplicateMovement(false);
+	bAlwaysRelevant = true;
+}
+
+void AWWOEnemyProjectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, Velocity, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, Life, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, Gravity, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, SplashRadius, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, Color, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOEnemyProjectile, Size, COND_InitialOnly);
+}
+
+void AWWOEnemyProjectile::BeginPlay()
+{
+	Super::BeginPlay();
+	if (HasAuthority()) return;
+	// A joiner's copy: the replicated values are in by now (they arrive with the spawn).
+	++SeenRemote;
+	Life += 1.f; // the host's copy decides when it ends; this one only outlives it a little
+	Build();
+}
+
+void AWWOEnemyProjectile::EndPlay(const EEndPlayReason::Type Reason)
+{
+	// A joiner's copy going because the host's hit something or ran out: show the hit here.
+	if (!HasAuthority() && Reason == EEndPlayReason::Destroyed && GetWorld())
+	{
+		if (SplashRadius > 0.f) SplashLooks(GetActorLocation());
+		else AWWOFXActor::Pop(GetWorld(), GetActorLocation(), Color, Size * 2.5f, 0.2f);
+	}
+	Super::EndPlay(Reason);
 }
 
 AWWOEnemyProjectile* AWWOEnemyProjectile::Fire(UWorld* World, const FVector& From, const FVector& VelocityCm, float InDamage, float InLife,
@@ -61,9 +99,12 @@ void AWWOEnemyProjectile::Build()
 void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	const bool bHost = HasAuthority();
+	if (!bHost && bStopped) return;
 	Life -= DeltaSeconds;
 	if (Life <= 0.f)
 	{
+		if (!bHost) { bStopped = true; return; } // the host's copy ends it
 		if (SplashRadius > 0.f) Splash(GetActorLocation());
 		Destroy();
 		return;
@@ -90,6 +131,13 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	if (!bHit)
 	{
 		SetActorLocation(To);
+		return;
+	}
+	if (!bHost)
+	{
+		// Looks only: stop where it hit; the host decides what it did, and EndPlay pops it.
+		SetActorLocation(Hit.ImpactPoint);
+		bStopped = true;
 		return;
 	}
 	if (SplashRadius > 0.f)
@@ -126,7 +174,13 @@ void AWWOEnemyProjectile::Splash(const FVector& Point)
 		const float D = FVector::Dist(Point, Mate->GetActorLocation());
 		if (D <= R + 50.f) Mate->TakeAllyDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
 	}
+	SplashLooks(Point);
+}
+
+void AWWOEnemyProjectile::SplashLooks(const FVector& Point)
+{
 	// The blast: a sphere that pops out to the splash size and fades.
+	const float R = SplashRadius * WWO::M;
 	if (AWWOFXActor* FX = AWWOFXActor::Spawn(GetWorld(), Point, 0.4f))
 	{
 		UStaticMeshComponent* Ball = WWOFX::AddSoftSphere(FX, FX->GetRootComponent(), Color, 0.5f, 0.6f, false);
