@@ -136,6 +136,10 @@ public:
 	bool CastRayTo(const FVector& To, FHitResult& OutHit) const;
 	AWWOCharacter* GetPlayer() const;
 
+	// Melee, for the host checking a joiner's punch (see AWWOCharacter::ServerMeleeHit).
+	float MeleeSwingTime() const { return M("melee_time", MeleeTime); }
+	void MeleeKnockBack(AActor* Target, bool bKilled) const; // shove it away from the player (host only online)
+
 private:
 	UPROPERTY() TObjectPtr<UWWOWeaponData> BaseWeapon; // the asset
 	UPROPERTY() TObjectPtr<UWWOWeaponData> Weapon;     // its modded copy

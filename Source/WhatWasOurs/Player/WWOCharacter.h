@@ -231,6 +231,13 @@ public:
 	static int32 NetShotsTaken, NetHitsApplied, NetHitsRejected;
 	static int32 NetShotsSeen; // shots from someone else shown on this machine
 
+	// Online melee: a joiner's swing (so the host's copy of its body punches, which everyone else
+	// sees) and, if it landed, what it hit. The host checks the hit, applies it and the knockback.
+	UFUNCTION(Server, Reliable) void ServerMeleeSwing();
+	UFUNCTION(Server, Reliable) void ServerMeleeHit(AActor* Target, float Damage, FVector_NetQuantize Origin, FVector_NetQuantize Point);
+	void PlaySwingOnBody(); // the punch on the full body (others see it online)
+	static int32 NetMeleeSwings, NetMeleeApplied, NetMeleeRejected; // the host's tally of joiners' melee
+
 	AWWOPlayerController* GetWWOController() const;
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
@@ -238,6 +245,9 @@ private:
 	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
 	double ShotBudgetTime = 0.0; // when it was last refilled
 	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const class UWWOWeaponData* Gun, FString& Why) const;
+	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
+	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight
+	double LastMeleeHitTime = -100.0; // host: when this player's last melee hit was applied
 	float AppliedReticleDrop = 0.f; // radians, set with the camera each frame
 	float ReticleDropAngle() const; // what ReticleDrop needs now (FOV, aiming)
 

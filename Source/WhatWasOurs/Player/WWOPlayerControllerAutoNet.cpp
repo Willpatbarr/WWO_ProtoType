@@ -4,6 +4,7 @@
 // (single and double) and runs at a crate to mantle, logging the host's corrections in each step
 // (`AutoTest net: <step> ...`, each one in detail as `NetCorrection ...`). Both log the joiner's position every second (compare the two logs),
 // and take screenshots of the other player (50_net_host_N every 3 s, 50_net_client_N at the stops).
+// Both then shoot the nearest dummy, and the joiner punches one (the host checks its hits; forged ones are refused).
 // Then the host restarts the run (online that's a ServerTravel): both should arrive on the fresh map
 // together (`AutoTest net: round 2 ...`). The joiner then quits; the host quits once the joiner has left.
 
@@ -35,14 +36,17 @@ namespace
 	const FNetStep NetSteps[] = {
 		{ 0.f, TEXT("idle") }, { 3.f, TEXT("walk") }, { 5.f, TEXT("sprint") }, { 6.5f, TEXT("slide") },
 		{ 8.f, TEXT("stop") }, { 12.f, TEXT("crouch_walk") }, { 15.f, TEXT("jump") }, { 19.f, TEXT("mantle") },
-		{ 22.f, TEXT("shoot") }, { 25.5f, TEXT("end") },
+		{ 22.f, TEXT("shoot") }, { 25.5f, TEXT("melee") }, { 31.5f, TEXT("end") },
 	};
 	constexpr int32 NumNetSteps = UE_ARRAY_COUNT(NetSteps);
 	constexpr float SettleSeconds = 4.f; // after both are in: the joiner's world loads, bodies get their models
 	constexpr float WaitLimit = 180.f;   // give up waiting for the other player
 	constexpr float HostLimit = 120.f;   // the host quits by then even if the joiner never left
-	constexpr float RestartAt = 28.f;    // the host restarts the run (the joiner is done at 27)
+	constexpr float RestartAt = 34.f;   // the host restarts the run (the joiner is done at 33)
 	constexpr float ShootFrom = 22.f, ShootTo = 25.f; // both shoot their nearest dummy (the host checks the joiner's hits)
+	constexpr float MeleeFrom = 25.5f;                // the joiner walks up to the nearest dummy and punches it
+	const float MeleePunches[] = { 28.f, 29.f, 30.f };
+	constexpr float MeleeForge = 28.5f, MeleeReport = 31.1f; // forged between the first punches, while the dummy still stands
 	// Which round this process is in: 0 = the moves, 1 = after the host's restart. The controller
 	// (and its test state) is new after a map change; this isn't.
 	int32 GAutoNetRound = 0;
@@ -207,6 +211,67 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		}
 	}
 
+	// Melee (25.5 to 31.5 s): the joiner walks up to the nearest living dummy and punches it three times,
+	// with a forged punch (far too much damage) and two real ones at once (the second is too soon) after the first.
+	if (!bHost && T >= MeleeFrom && T < MeleeReport)
+	{
+		AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetMeleeTarget.Get());
+		if (!AutoNetMeleeTarget.IsValid() && Crossed(MeleeFrom))
+		{
+			// The nearest of those you see most of (a punch needs a clear line to the part it hits).
+			float BestD = 1e9f;
+			int32 BestSeen = 0;
+			for (AWWOTarget* D : Dummies)
+			{
+				if (D->IsDead()) continue;
+				const float Dist = FVector::Dist(D->GetActorLocation(), P->GetActorLocation());
+				FCollisionQueryParams SightParams(SCENE_QUERY_STAT(WWOAutoTestNet), false, P);
+				SightParams.AddIgnoredActor(D);
+				int32 Seen = 0;
+				for (const FWWOAimPart& Part : D->GetAimParts())
+				{
+					FHitResult Sight;
+					if (!World->LineTraceSingleByChannel(Sight, P->EyeLocation(), Part.Position, ECC_Visibility, SightParams)) ++Seen;
+				}
+				if (Seen > BestSeen || (Seen == BestSeen && Seen > 0 && Dist < BestD)) { BestSeen = Seen; BestD = Dist; Dummy = D; }
+			}
+			AutoNetMeleeTarget = Dummy;
+			AutoNetMeleeHealth = Dummy ? Dummy->GetHealth() : 0.f;
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: punching %s %.1f m away (health %.0f)"), *GetNameSafe(Dummy), BestD / WWO::M, AutoNetMeleeHealth);
+		}
+		if (Dummy)
+		{
+			const FVector Aim = Dummy->GetAimParts().Last().Position;
+			const FVector Dir = (Aim - P->EyeLocation()).GetSafeNormal();
+			if (!P->Weapon->bMeleeing) P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
+			const float Flat = FVector2D(Dummy->GetActorLocation() - P->GetActorLocation()).Size() / WWO::M;
+			MoveValue = Flat > 1.8f && T < MeleePunches[0] + 2.5f ? FVector2D(0.f, 1.f) : FVector2D::ZeroVector;
+			for (const float At : MeleePunches) if (Crossed(At)) JustPressed[(int32)EWWOAction::Melee] = true;
+			if (Crossed(MeleeForge))
+			{
+				P->ServerMeleeHit(Dummy, 99999.f, P->EyeLocation(), Aim);
+				P->ServerMeleeHit(Dummy, 40.f, P->EyeLocation(), Aim);
+				P->ServerMeleeHit(Dummy, 40.f, P->EyeLocation(), Aim);
+				UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a forged 99999 punch and two 40s at once from %.1f m (the host should take one 40)"),
+					FVector::Dist(Aim, P->EyeLocation()) / WWO::M);
+			}
+		}
+	}
+	if (Crossed(MeleeReport))
+	{
+		if (bHost)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d"),
+				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected);
+		}
+		else
+		{
+			const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetMeleeTarget.Get());
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner punched %s: its health %.0f -> %.0f (host's), dead %d"),
+				*GetNameSafe(Dummy), AutoNetMeleeHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0);
+		}
+	}
+
 	auto LookAt = [P](const AActor* A)
 	{
 		const FVector Dir = A->GetActorLocation() + FVector(0.f, 0.f, 40.f) - P->EyeLocation();
@@ -340,7 +405,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			bAutoNetMantleJumped = false;
 			bAutoNetSawMantle = false;
 		}
-		else if (Step == TEXT("shoot")) { MoveValue = FVector2D::ZeroVector; }
+		else if (Step == TEXT("shoot") || Step == TEXT("melee")) { MoveValue = FVector2D::ZeroVector; }
 		else if (Step == TEXT("end"))
 		{
 			MoveValue = FVector2D::ZeroVector;

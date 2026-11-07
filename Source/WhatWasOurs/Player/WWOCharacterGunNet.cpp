@@ -1,12 +1,15 @@
-// Online gunfire (see FWWOGunShot in WWOCharacter.h).
+// Online gunfire and melee (see FWWOGunShot in WWOCharacter.h).
 // A joiner shows its shot at once and sends the host what it hit. The host checks each hit before
 // applying it: the target is alive, the point is on it, nothing solid is in the way from the shooter's
 // eye, it's within the gun's range, the gun could have fired that often and done that much damage.
+// Melee works the same way, one hit per swing (ServerMeleeHit).
 // No rewinding of targets to the shot's moment yet: on a LAN the delay is a few milliseconds and the
 // point check allows for it. Then everyone else sees the shot (MulticastGunShot).
 
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOWeaponComponent.h"
+#include "Characters/WWOBodyComponent.h"
 #include "Data/WWOData.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -19,6 +22,9 @@ int32 AWWOCharacter::NetShotsTaken = 0;
 int32 AWWOCharacter::NetHitsApplied = 0;
 int32 AWWOCharacter::NetHitsRejected = 0;
 int32 AWWOCharacter::NetShotsSeen = 0;
+int32 AWWOCharacter::NetMeleeSwings = 0;
+int32 AWWOCharacter::NetMeleeApplied = 0;
+int32 AWWOCharacter::NetMeleeRejected = 0;
 
 namespace
 {
@@ -27,6 +33,9 @@ namespace
 	constexpr float BurstShots = 3.f;    // shots that may arrive bunched together
 	constexpr float RateSlack = 1.35f;   // fire rate allowance over the gun's own (mods, Hammer)
 	constexpr float DamageSlack = 2.6f;  // damage allowance over the gun's own (mods, perks: Overpressure, Final Round, Patience)
+	constexpr float MeleeDamageSlack = 10.f; // over the base punch: Thornfist (2.5x) x veiled (3x) x melee traits
+	constexpr float MeleeReachSlack = 1.5f;  // m over the reach (the lunge's own 0.5 m, plus movement since)
+	constexpr float MeleeRateSlack = 0.5f;   // hits may come this fraction of a swing apart
 }
 
 void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
@@ -86,17 +95,21 @@ bool AWWOCharacter::CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, 
 	if (FVector::Dist(Shot.Origin, EyeLocation()) > OriginSlack) { Why = TEXT("shot from somewhere else"); return false; }
 	const float Range = FVector::Dist(Shot.Origin, FVector(Hit.Point));
 	if (Range > (Gun->FireRange + 2.f) * WWO::M) { Why = FString::Printf(TEXT("out of range (%.0f m)"), Range / WWO::M); return false; }
+	return CheckReach(Hit.Target, Shot.Origin, Hit.Point, Why);
+}
 
+bool AWWOCharacter::CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const
+{
 	// On the target: inside its bounds, give or take its movement since.
-	const FBox Bounds = Hit.Target->GetComponentsBoundingBox(true).ExpandBy(PointSlack);
-	if (!Bounds.IsInside(Hit.Point)) { Why = TEXT("point not on the target"); return false; }
+	const FBox Bounds = Target->GetComponentsBoundingBox(true).ExpandBy(PointSlack);
+	if (!Bounds.IsInside(Point)) { Why = TEXT("point not on the target"); return false; }
 
 	// Nothing solid between the shooter's eye and the point (the target itself doesn't count).
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWONetShotCheck), false, this);
-	Params.AddIgnoredActor(Hit.Target);
+	Params.AddIgnoredActor(Target);
 	FHitResult Block;
-	const FVector To = FVector(Hit.Point) - (FVector(Hit.Point) - Shot.Origin).GetSafeNormal() * 10.f; // stop just short of the surface
-	if (GetWorld()->LineTraceSingleByChannel(Block, Shot.Origin, To, ECC_Visibility, Params))
+	const FVector To = Point - (Point - Origin).GetSafeNormal() * 10.f; // stop just short of the surface
+	if (FVector::DistSquared(Origin, Point) > 100.f && GetWorld()->LineTraceSingleByChannel(Block, Origin, To, ECC_Visibility, Params))
 	{
 		Why = FString::Printf(TEXT("blocked by %s"), *GetNameSafe(Block.GetActor()));
 		return false;
@@ -117,4 +130,52 @@ void AWWOCharacter::MulticastGunShot_Implementation(FVector_NetQuantize From, co
 		AWWOFXActor::Tracer(GetWorld(), Muzzle, End, FLinearColor(1.f, 0.85f, 0.55f), 1.5f, 0.06f);
 		AWWOFXActor::ImpactMark(GetWorld(), End);
 	}
+}
+
+// --- Melee ---------------------------------------------------------------------------------------
+
+void AWWOCharacter::PlaySwingOnBody()
+{
+	Body->PlayUpperShot("Melee_Hook", 0.05f, 0.2f);
+}
+
+void AWWOCharacter::ServerMeleeSwing_Implementation()
+{
+	if (Health->bDead) return;
+	++NetMeleeSwings;
+	PlaySwingOnBody(); // replicates to everyone but the joiner (it plays its own)
+}
+
+void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, FVector_NetQuantize Origin, FVector_NetQuantize Point)
+{
+	FString Why;
+	if (!CheckMeleeHit(Target, Damage, Origin, Point, Why))
+	{
+		++NetMeleeRejected;
+		UE_LOG(LogWWO, Display, TEXT("NetMelee hit rejected from %s on %s: %s"), *GetName(), *GetNameSafe(Target), *Why);
+		return;
+	}
+	++NetMeleeApplied;
+	LastMeleeHitTime = GetWorld()->GetTimeSeconds();
+	const bool bKilled = Cast<IWWOTargetable>(Target)->TakeHit(Damage, false, Point);
+	Weapon->MeleeKnockBack(Target, bKilled);
+}
+
+bool AWWOCharacter::CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why)
+{
+	if (Health->bDead) { Why = TEXT("puncher is dead"); return false; }
+	IWWOTargetable* T = Cast<IWWOTargetable>(Target);
+	if (!IsValid(Target) || !T) { Why = TEXT("not a target"); return false; }
+	if (T->IsDead()) { Why = TEXT("already dead"); return false; }
+
+	const float MaxDamage = Weapon->MeleeDamage * MeleeDamageSlack;
+	if (Damage <= 0.f || Damage > MaxDamage) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Damage, MaxDamage); return false; }
+
+	const double Since = GetWorld()->GetTimeSeconds() - LastMeleeHitTime;
+	if (Since < Weapon->MeleeSwingTime() * MeleeRateSlack) { Why = FString::Printf(TEXT("%.2f s after the last hit"), Since); return false; }
+
+	if (FVector::Dist(Origin, EyeLocation()) > OriginSlack) { Why = TEXT("punch from somewhere else"); return false; }
+	const float Range = FVector::Dist(Origin, Point) / WWO::M;
+	if (Range > Weapon->MeleeReach + MeleeReachSlack) { Why = FString::Printf(TEXT("out of reach (%.1f m)"), Range); return false; }
+	return CheckReach(Target, Origin, Point, Why);
 }

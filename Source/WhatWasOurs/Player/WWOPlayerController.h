@@ -148,6 +148,8 @@ private:
 	FBox AutoNetCrateBox = FBox(ForceInit);
 	int32 AutoNetDamageEvents = 0;
 	TWeakObjectPtr<AActor> AutoNetShootTarget; // the dummy this side shoots at
+	TWeakObjectPtr<AActor> AutoNetMeleeTarget; // joiner: the dummy it punches
+	float AutoNetMeleeHealth = 0.f;
 	float AutoNetShootHealth = 0.f;
 	int32 AutoNetShotPulls = 0; // joiner: OnDamaged fired from the host's replicated health
 	bool bAutoNetBound = false;

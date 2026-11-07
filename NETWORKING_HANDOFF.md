@@ -121,8 +121,22 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   On a joiner, `TakeHit` on an enemy or dummy only flashes and shows the number; health is the host's.
   Tested (`-WWOAutoTestNet` shoot step, aimed): 6 joiner shots taken, 5 hits applied, a forged 99999-damage
   hit rejected, the dummy's health drops on both sides, the joiner sees the host's shots.
-- **Not yet:** melee, grenades and abilities from a joiner still only happen on its own screen (phase 3 kit,
-  but melee belongs here); kill credit back to the shooter (perks, ult charge use the predicted kill);
+- **Melee: done** (`ServerMeleeSwing` / `ServerMeleeHit` in `Player/WWOCharacterGunNet.cpp`,
+  `UWWOWeaponComponent::UpdateMelee` / `MeleeStrike`). A joiner's punch shows at once on its screen (lunge,
+  flash, number, hit-stop, predicted kill) and the swing goes to the host, whose copy of its body plays
+  `Melee_Hook` on the upper body (replicated, so everyone else sees the punch; the host's own punches too).
+  The hit goes to the host, which checks it (`CheckMeleeHit`): puncher and target alive, damage at most 10x the
+  base punch (Thornfist 2.5x, veiled 3x, traits; abilities aren't known on the host yet), at least half a swing
+  since the last applied hit, eye within 1.5 m, point within reach + 1.5 m, on the target and in sight (shared
+  `CheckReach` with gunfire). The host then applies the damage and the knockback (a joiner no longer shoves
+  enemies itself: their movement is the host's). Thornfist's discharge and Static Charge's chain lightning still
+  run only on the puncher's screen (phase 3 kit).
+  Tested (`-WWOAutoTestNet` melee step: the joiner walks to the dummy it sees best and punches it three times):
+  3 swings and 3 hits taken, the dummy 200 -> 0 on both sides, a forged 99999 punch and a second punch in the
+  same instant refused, 0 corrections. One earlier run had 3 tiny (2 cm, vertical) corrections just after
+  lunges: the host takes the joiner's position at the lunge's end (`MoveClientAuth`) and then thinks it's
+  falling for a moment. Harmless; goes away when phase 3 simulates the lunge on the host.
+- **Not yet:** grenades and abilities from a joiner still only happen on its own screen (phase 3 kit); kill credit back to the shooter (perks, ult charge use the predicted kill);
   each player's own gun and mods on the host (it validates against base stats); downed / revive.
 
 ## Phase 2 notes (from the design discussion)

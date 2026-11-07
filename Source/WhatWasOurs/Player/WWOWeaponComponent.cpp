@@ -657,6 +657,10 @@ void UWWOWeaponComponent::UpdateMelee(float DeltaSeconds)
 		P->bSprinting = false;
 		AActor* Target = FindLungeTarget();
 		MeleeTarget = Target;
+		// Online, the punch shows on your full body for everyone else (the host's copy replicates it).
+		const ENetMode Mode = GetNetMode();
+		if (Mode == NM_Client) P->ServerMeleeSwing();
+		if (Mode != NM_Standalone) P->PlaySwingOnBody();
 		if (Target && P->EntrenchLeft <= 0.f) P->StartLunge(Target); // rooted by Entrench: punch in place
 	}
 	if (!bMeleeing) return;
@@ -749,7 +753,17 @@ void UWWOWeaponComponent::MeleeStrike()
 	if (!Best) return;
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Best);
 	const float Boosted = M("melee_damage", MeleeDamage) * P->Abilities->MeleeMultiplier() * P->VeilMeleeMultiplier();
-	const bool bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
+	bool bKilled;
+	if (GetNetMode() == NM_Client)
+	{
+		// A joiner shows the hit now (flash, number) and predicts the kill from the health the host
+		// last sent; the host applies it and the knockback.
+		const float Before = Target->GetHealth() + Target->GetShield();
+		Target->TakeHit(Boosted, false, BestPoint);
+		bKilled = Before > 0.f && Before - Boosted <= 0.f;
+		P->ServerMeleeHit(Best, Boosted, Origin, BestPoint);
+	}
+	else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	OnHitConfirmed.Broadcast(false, bKilled);
 	P->Abilities->OnMeleeLanded(); // Melee Guard
 	Kick = 1.f;
@@ -779,13 +793,17 @@ void UWWOWeaponComponent::MeleeImpact(AActor* TargetActor, bool bKilled, const F
 	P->AddRecoil(FMath::DegreesToRadians(MeleeJolt * Boost), 0.f, 0.02f, 1.f, 0.12f); // the view snaps up and settles
 	StartPunch(MeleePunchFov * Boost, MeleePunchRoll * Boost, MeleePunchTime);
 	Rumble(MeleeRumbleWeak * Boost, MeleeRumbleStrong * Boost, MeleeRumbleTime * Boost);
-	if (IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor))
-	{
-		FVector Away = TargetActor->GetActorLocation() - P->GetActorLocation();
-		Away.Z = 0.f;
-		Target->KnockBack(Away.GetSafeNormal() * MeleeKnockback * (bKilled ? MeleeKillKnockback : 1.f) * WWO::M);
-	}
+	if (GetNetMode() != NM_Client) MeleeKnockBack(TargetActor, bKilled); // a joiner's is the host's (it moves the target)
 	if (AWWOPlayerController* PC = P->GetWWOController()) PC->Hitstop(MeleeHitstop * Boost);
+}
+
+void UWWOWeaponComponent::MeleeKnockBack(AActor* TargetActor, bool bKilled) const
+{
+	IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor);
+	if (!Target) return;
+	FVector Away = TargetActor->GetActorLocation() - GetPlayer()->GetActorLocation();
+	Away.Z = 0.f;
+	Target->KnockBack(Away.GetSafeNormal() * MeleeKnockback * (bKilled ? MeleeKillKnockback : 1.f) * WWO::M);
 }
 
 // --- Reload, ADS, firing -----------------------------------------------------------------------
