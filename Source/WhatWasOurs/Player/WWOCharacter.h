@@ -12,6 +12,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "WWOTypes.h"
+#include "Engine/NetSerialization.h"
 #include "WWOCharacter.generated.h"
 
 class UCameraComponent;
@@ -65,6 +66,29 @@ struct FWWOMoveState
 	FVector SlideDir = FVector::ForwardVector, MantleFrom = FVector::ZeroVector, MantleTo = FVector::ZeroVector;
 	void Serialize(FArchive& Ar);
 	FString ToString() const; // for logs
+};
+
+// Online gunfire. A joiner's shot is shown on its own screen at once (impacts, flash, number, hit
+// marker), and sent to the host as what it hit; the host checks each hit (see ServerGunShot) and
+// applies the damage. Everyone else sees the shot's impacts (MulticastGunShot).
+USTRUCT()
+struct FWWOGunHit
+{
+	GENERATED_BODY()
+	UPROPERTY() TObjectPtr<AActor> Target;
+	UPROPERTY() float Damage = 0.f;       // all of this shot's pellets on that target
+	UPROPERTY() bool bCritical = false;
+	UPROPERTY() FVector_NetQuantize Point; // where it was hit
+};
+
+USTRUCT()
+struct FWWOGunShot
+{
+	GENERATED_BODY()
+	UPROPERTY() FName WeaponId;
+	UPROPERTY() FVector_NetQuantize Origin;       // the shooter's eye
+	UPROPERTY() TArray<FWWOGunHit> Hits;          // one per target hit
+	UPROPERTY() TArray<FVector_NetQuantize> Ends; // every pellet's impact (walls too), for the looks
 };
 
 UCLASS()
@@ -200,10 +224,20 @@ public:
 	UFUNCTION() void OnRep_NetFlora();
 	UFUNCTION(Server, Reliable) void ServerSetFlora(FName Flora);
 
+	// Online gunfire (see FWWOGunShot).
+	UFUNCTION(Server, Reliable) void ServerGunShot(const FWWOGunShot& Shot);
+	UFUNCTION(NetMulticast, Unreliable) void MulticastGunShot(FVector_NetQuantize From, const TArray<FVector_NetQuantize>& Ends);
+	// The host's tally of joiners' shots, for -WWOAutoTestNet.
+	static int32 NetShotsTaken, NetHitsApplied, NetHitsRejected;
+	static int32 NetShotsSeen; // shots from someone else shown on this machine
+
 	AWWOPlayerController* GetWWOController() const;
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:
+	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
+	double ShotBudgetTime = 0.0; // when it was last refilled
+	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const class UWWOWeaponData* Gun, FString& Why) const;
 	float AppliedReticleDrop = 0.f; // radians, set with the camera each frame
 	float ReticleDropAngle() const; // what ReticleDrop needs now (FOV, aiming)
 

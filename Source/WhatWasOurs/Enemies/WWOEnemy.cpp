@@ -158,6 +158,13 @@ bool AWWOEnemy::IsCriticalComponent(const UPrimitiveComponent* Component) const
 bool AWWOEnemy::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
 	if (bDead) return false;
+	if (!HasAuthority())
+	{
+		// A joiner's hit: the flash and number now; the host decides the damage (it replicates).
+		Flash = 1.f;
+		UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
+		return false;
+	}
 	bAlerted = true; // getting shot from out of sight range still wakes it up
 	Flash = 1.f;
 	const float Through = Absorb(Damage, bCritical, Point); // shields take their share first

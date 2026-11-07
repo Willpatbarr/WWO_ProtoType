@@ -109,6 +109,22 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   joiner flies its own copy for looks, which pops or splashes where it is when the host's copy goes.
   Damage stays on the host. The test counts about 70 host shots arriving per run.
 
+## Phase 2: combat (in progress)
+- **Gunfire: done** (`Player/WWOCharacterGunNet.cpp`, `UWWOWeaponComponent::Shoot`). A joiner's shot shows at
+  once on its screen (impacts, flash, damage number, hit marker; a kill is predicted from the health the host
+  last sent) and goes to the host as `FWWOGunShot` (gun id, eye, one `FWWOGunHit` per target, every impact).
+  The host checks each hit before applying it (`CheckGunHit`): target alive, point within its bounds + 75 cm,
+  shot origin within 1.5 m of the host's copy, in range, nothing blocking from the eye (Visibility), damage at
+  most the gun's base x pellets x (crit + 0.6) x 2.6 (mods and perks aren't known on the host yet), fire rate
+  within 1.35x the gun's with up to 3 shots bunched. No target rewind yet (fine on a LAN). The host's own shots
+  apply directly. Everyone else sees each shot (`MulticastGunShot`: tracers and impact marks from the shooter).
+  On a joiner, `TakeHit` on an enemy or dummy only flashes and shows the number; health is the host's.
+  Tested (`-WWOAutoTestNet` shoot step, aimed): 6 joiner shots taken, 5 hits applied, a forged 99999-damage
+  hit rejected, the dummy's health drops on both sides, the joiner sees the host's shots.
+- **Not yet:** melee, grenades and abilities from a joiner still only happen on its own screen (phase 3 kit,
+  but melee belongs here); kill credit back to the shooter (perks, ult charge use the predicted kill);
+  each player's own gun and mods on the host (it validates against base stats); downed / revive.
+
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);
   host rewinds target positions to that time, validates fire rate / ammo / line of sight, applies

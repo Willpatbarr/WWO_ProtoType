@@ -16,6 +16,8 @@
 #include "Enemies/WWOEnemyProjectile.h"
 #include "World/WWOTarget.h"
 #include "Characters/WWOBodyComponent.h"
+#include "Player/WWOWeaponComponent.h"
+#include "Data/WWOData.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Net/WWONetSubsystem.h"
 #include "UI/WWOSettingsMenu.h"
@@ -33,13 +35,14 @@ namespace
 	const FNetStep NetSteps[] = {
 		{ 0.f, TEXT("idle") }, { 3.f, TEXT("walk") }, { 5.f, TEXT("sprint") }, { 6.5f, TEXT("slide") },
 		{ 8.f, TEXT("stop") }, { 12.f, TEXT("crouch_walk") }, { 15.f, TEXT("jump") }, { 19.f, TEXT("mantle") },
-		{ 25.f, TEXT("end") },
+		{ 22.f, TEXT("shoot") }, { 25.5f, TEXT("end") },
 	};
 	constexpr int32 NumNetSteps = UE_ARRAY_COUNT(NetSteps);
 	constexpr float SettleSeconds = 4.f; // after both are in: the joiner's world loads, bodies get their models
 	constexpr float WaitLimit = 180.f;   // give up waiting for the other player
 	constexpr float HostLimit = 120.f;   // the host quits by then even if the joiner never left
-	constexpr float RestartAt = 28.f;    // the host restarts the run (the joiner is done at 26.5)
+	constexpr float RestartAt = 28.f;    // the host restarts the run (the joiner is done at 27)
+	constexpr float ShootFrom = 22.f, ShootTo = 25.f; // both shoot their nearest dummy (the host checks the joiner's hits)
 	// Which round this process is in: 0 = the moves, 1 = after the host's restart. The controller
 	// (and its test state) is new after a map change; this isn't.
 	int32 GAutoNetRound = 0;
@@ -136,6 +139,74 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	}
 	if (Crossed(2.8f) && IsMenuOpen()) CloseMenus();
 
+	// Shooting (22 to 25 s): each side picks the nearest dummy it can see and fires at its head.
+	auto ShootDummy = [this, P, World, &Dummies, Crossed, T]()
+	{
+		AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetShootTarget.Get());
+		if (!Dummy || Dummy->IsDead())
+		{
+			float BestD = 1e9f;
+			Dummy = nullptr;
+			for (AWWOTarget* D : Dummies)
+			{
+				if (D->IsDead()) continue;
+				FHitResult Sight;
+				FCollisionQueryParams SightParams(SCENE_QUERY_STAT(WWOAutoTestNet), false, P);
+				SightParams.AddIgnoredActor(D);
+				if (World->LineTraceSingleByChannel(Sight, P->EyeLocation(), D->GetAimParts()[0].Position, ECC_Visibility, SightParams)) continue;
+				const float Dist = FVector::Dist(D->GetActorLocation(), P->GetActorLocation());
+				if (Dist < BestD) { BestD = Dist; Dummy = D; }
+			}
+			if (Dummy && !AutoNetShootTarget.IsValid())
+			{
+				AutoNetShootHealth = Dummy->GetHealth();
+				UE_LOG(LogWWO, Display, TEXT("AutoTest net: shooting %s %.1f m away (health %.0f)"), *Dummy->GetName(), BestD / WWO::M, AutoNetShootHealth);
+			}
+			AutoNetShootTarget = Dummy;
+		}
+		if (!Dummy) return;
+		const FVector Dir = (Dummy->GetAimParts()[0].Position - P->EyeLocation()).GetSafeNormal();
+		P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
+		const int32 Pull = FMath::FloorToInt((T - ShootFrom - 0.4f) / 0.5f) + 1; // the hand cannon is semi-auto: a fresh pull each shot
+		Held[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		JustPressed[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		if (Pull > AutoNetShotPulls) AutoNetShotPulls = Pull;
+	};
+	if (T >= ShootFrom && T < ShootTo)
+	{
+		Held[(int32)EWWOAction::Aim] = true; // aimed in: no hip spread at this range
+		if (T >= ShootFrom + 0.4f) ShootDummy(); // once the sights are up
+	}
+	if (Crossed(ShootTo))
+	{
+		Held[(int32)EWWOAction::Fire] = false;
+		Held[(int32)EWWOAction::Aim] = false;
+		// A forged shot the host must refuse: far more damage than the gun can do.
+		if (!bHost && AutoNetShootTarget.IsValid())
+		{
+			FWWOGunShot Fake;
+			Fake.WeaponId = P->Weapon->GetWeaponData() ? P->Weapon->GetWeaponData()->Id : NAME_None;
+			Fake.Origin = P->EyeLocation();
+			Fake.Hits.Add({ AutoNetShootTarget.Get(), 99999.f, true, AutoNetShootTarget->GetActorLocation() });
+			P->ServerGunShot(Fake);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a forged 99999-damage hit (the host should reject it)"));
+		}
+	}
+	if (Crossed(ShootTo + 0.6f))
+	{
+		const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetShootTarget.Get());
+		if (bHost)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host fired %d times at %s; joiner shots taken %d, hits applied %d, rejected %d"), AutoNetShotPulls,
+				*GetNameSafe(Dummy), AWWOCharacter::NetShotsTaken, AWWOCharacter::NetHitsApplied, AWWOCharacter::NetHitsRejected);
+		}
+		else
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner fired %d times at %s: its health %.0f -> %.0f (host's), dead %d; saw %d host shots"), AutoNetShotPulls,
+				*GetNameSafe(Dummy), AutoNetShootHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, AWWOCharacter::NetShotsSeen);
+		}
+	}
+
 	auto LookAt = [P](const AActor* A)
 	{
 		const FVector Dir = A->GetActorLocation() + FVector(0.f, 0.f, 40.f) - P->EyeLocation();
@@ -160,7 +231,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (bHost)
 	{
 		// Look at the joiner every 3 s and screenshot it.
-		if (Other && T >= AutoNetNextShot)
+		if (Other && T >= AutoNetNextShot && (T < ShootFrom - 0.5f || T > ShootTo + 0.5f))
 		{
 			AutoNetNextShot = T + 3.f;
 			LookAt(Other);
@@ -269,6 +340,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			bAutoNetMantleJumped = false;
 			bAutoNetSawMantle = false;
 		}
+		else if (Step == TEXT("shoot")) { MoveValue = FVector2D::ZeroVector; }
 		else if (Step == TEXT("end"))
 		{
 			MoveValue = FVector2D::ZeroVector;
@@ -317,7 +389,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		}
 		else if (bAutoNetMantleJumped) Release(EWWOAction::Jump);
 		bAutoNetSawMantle |= P->IsMantling();
-		if (Crossed(23.f))
+		if (Crossed(21.8f))
 		{
 			MoveValue = FVector2D::ZeroVector;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: mantle run ended %.0f cm from the stack's middle (top %.0f cm), feet %.0f cm up, jumped %d"), FVector2D(To).Size(), AutoNetCrateBox.Max.Z,

@@ -871,6 +871,7 @@ void UWWOWeaponComponent::Shoot()
 	const FVector Aim = WWO::RandomInCone(P->AimForward(), FMath::DegreesToRadians(Weapon->HipSpread) * (1.f - AdsAmount));
 	struct FTotal { float Damage = 0.f; bool bCritical = false; FVector Point; };
 	TMap<AActor*, FTotal> Totals; // pellets add up into one hit per target
+	TArray<FVector_NetQuantize> Ends; // every pellet's impact, for the other players' screens
 	// Perks that power up just this shot.
 	float ShotScale = 1.f, CritBonus = 0.f;
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
@@ -895,6 +896,7 @@ void UWWOWeaponComponent::Shoot()
 		}
 		if (!bHit) continue;
 		AWWOFXActor::ImpactMark(GetWorld(), Hit.ImpactPoint);
+		Ends.Add(Hit.ImpactPoint);
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Hit.GetActor());
 		if (!Target || Target->IsDead()) continue;
 		const bool bCritical = Target->IsCriticalComponent(Hit.GetComponent());
@@ -906,17 +908,34 @@ void UWWOWeaponComponent::Shoot()
 	bool bAnyCritical = false, bAnyKilled = false;
 	int32 Kills = 0;
 	AActor* FirstHit = nullptr;
+	// Online, a joiner's hits are shown here at once (TakeHit only flashes and numbers on a joiner)
+	// and sent to the host, which checks and applies them; a kill is predicted from the health the
+	// host last sent. The host's own shot applies directly. Either way the others see it.
+	const ENetMode Mode = GetWorld()->GetNetMode();
+	const bool bJoiner = Mode == NM_Client;
+	FWWOGunShot NetShot;
+	NetShot.WeaponId = Weapon->Id;
+	NetShot.Origin = P->EyeLocation();
+	NetShot.Ends = Ends;
 	for (const auto& Pair : Totals)
 	{
 		if (IWWOTargetable* Target = Cast<IWWOTargetable>(Pair.Key))
 		{
-			const bool bKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point);
+			const float Before = Target->GetHealth() + Target->GetShield();
+			bool bKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point);
+			if (bJoiner)
+			{
+				bKilled = Before > 0.f && Before - Pair.Value.Damage <= 0.f;
+				NetShot.Hits.Add({ Pair.Key, Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point });
+			}
 			bAnyKilled |= bKilled;
 			Kills += bKilled ? 1 : 0;
 			bAnyCritical |= Pair.Value.bCritical;
 			if (!FirstHit) FirstHit = Pair.Key;
 		}
 	}
+	if (bJoiner) P->ServerGunShot(NetShot);
+	else if (Mode == NM_ListenServer) P->MulticastGunShot(NetShot.Origin, NetShot.Ends);
 	OnShotResult(FirstHit, Totals.Num(), Kills, bAnyCritical);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
