@@ -389,6 +389,7 @@ void AWWOCharacter::CaptureMoveInput()
 	if (bLunging || ClientAuthLeft > 0.f) In.Held |= MoveClientAuth;
 	In.SpeedScale = Abilities->SpeedMultiplier() * Weapon->MoveMultiplier() * SlowMultiplier();
 	In.ExtraJumps = (uint8)FMath::Clamp(Abilities->ExtraJumps(), 0, 255);
+	if (GetNetMode() == NM_Client) In.Quantize();
 	MoveIn = In;
 }
 
@@ -472,6 +473,18 @@ void FWWOMoveInput::Serialize(FArchive& Ar)
 	Ar << X << Y << Held << Pressed << Scale << ExtraJumps;
 	Move = FVector2D(X / 127.f, Y / 127.f);
 	SpeedScale = Scale / 100.f;
+}
+
+void FWWOMoveInput::Quantize()
+{
+	Move = FVector2D(FMath::RoundToInt(FMath::Clamp(Move.X, -1.f, 1.f) * 127.f) / 127.f, FMath::RoundToInt(FMath::Clamp(Move.Y, -1.f, 1.f) * 127.f) / 127.f);
+	SpeedScale = FMath::Clamp(FMath::RoundToInt(SpeedScale * 100.f), 0, 65535) / 100.f;
+}
+
+FString FWWOMoveState::ToString() const
+{
+	return FString::Printf(TEXT("sprint %d crouch %d slide %d toggled %d queued %d held %d landsprint %d mantle %d jumps %d takeoff %.2f slidespeed %.2f air %.2f landed %.2f"),
+		bSprinting, bCrouching, bSliding, bCrouchToggled, bSlideQueued, bCrouchWasHeld, bLandedSprinting, bMantling, JumpsUsed, TakeoffSpeed, SlideSpeedNow, AirTime, SinceLanded);
 }
 
 TArray<float> AWWOCharacter::LocalMoveStats() const

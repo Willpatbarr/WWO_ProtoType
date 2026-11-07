@@ -55,20 +55,32 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   host runs their `UpdateModel` so their body replicates.
 
 ## Not done / next steps for phase 1
-1. **Two-instance test (not run yet).** Planned `-WWOAutoTestNet` (was about to write it in
-   `Player/WWOPlayerControllerAutoNet.cpp`, dispatched from `AWWOPlayerController::Tick` like
-   `bPerfTest`): the joiner walks / sprints / slides / jumps (drive `MoveValue` and `Held` /
-   `JustPressed` like other autotests), both sides screenshot the other player every few seconds
-   (`50_net_host_N`, `50_net_client_N`), log positions, and the joiner logs how many corrections it
-   got (add a static counter in `UWWOCharacterMovement::ClientHandleMoveResponse`). Run:
-   - host: `UnrealEditor <uproject> /Game/WWO/Maps/L_Arena -game -windowed -ResX=960 -ResY=540 -WWOHost -WWOAutoTestNet -abslog=<scratch>/host.log`
-   - client: same with `-WWOJoin=127.0.0.1 -WWOAutoTestNet -abslog=<scratch>/client.log`
-   Memory: 16 GB Mac; two editor `-game` instances may be tight. Fall back to two copies of the
-   packaged app (much lighter) or Will's second computer. Always `pkill -f "WhatWasOurs.uproject.*-game"`
-   (and the packaged app) before building.
-2. **Expected issues to check:** correction counts while walking, sprinting, sliding, jumping,
-   mantling (should be ~0 on localhost); crouch (CMC's own `bWantsToCrouch` flag vs `bCrouching`);
-   the remote body's animation and model; HUD on the joiner (wave line from game state); the
+1. **Two-instance test: done** (`-WWOAutoTestNet`, `Player/WWOPlayerControllerAutoNet.cpp`). Run the host with
+   `-WWOHost -WWOAutoTestNet`, the joiner 45 s later with `-WWOJoin=127.0.0.1 -WWOAutoTestNet` (both
+   `-game -windowed -ResX=960 -ResY=540`, separate `-abslog`). Two editor instances fit in 16 GB. The joiner idles, walks,
+   sprints, slides, stops, crouch walks, jumps (ground + air) and runs at a crate stack, logging each step's
+   corrections (`AutoTest net: step ...`) and each correction in detail (`NetCorrection ...`: host vs. your position,
+   velocity and movement-rule state for that same move). The host logs forced updates (`NetForcedUpdate`).
+   Both log the joiner's position every second and screenshot each other (`50_net_host_N`, `50_net_client_N`).
+   Before each run, close leftover `CrashReportClient` windows: a crashed host's reporter keeps port 7777
+   open, and the next host silently listens on 7778.
+   **Result: 0 corrections in every step** after three fixes:
+   - Merged moves: Unreal merges same-input moves by rewinding position and velocity only, so the
+     movement rules' state (slide speed, air time, timers) ran twice on the joiner. `FWWOSavedMove`
+     now saves that state at the move's start (`SetInitialPosition`) and puts it back in `CombineWith`.
+   - Forced updates: after 0.25 s without moves from a player (any joiner stall) the host moved them itself
+     and threw away their real moves for as long as the stall lasted. `MAXCLIENTUPDATEINTERVAL=2.0` in
+     `DefaultGame.ini` (revisit for PvP: it's Unreal's lag-switch guard).
+   - Input rounding: `FWWOMoveInput::Quantize` rounds the stick and speed scale on the joiner to what the host receives.
+   Still to check: **mantling online** (the test's crate run hasn't triggered one yet; an accidental mantle in
+   an earlier run ended earlier on the host than on the joiner), moving into another player or enemies
+   (positions there differ between machines), sliding along walls (two small corrections in one run).
+   The renderer crash (`(OldPacked & DeletingBit) == 0` in Metal `BindUniformBuffer`, base pass) hits single
+   player too; it crashed the first two-instance run and is unrelated to networking.
+2. **Expected issues to check:** checked by the test above: corrections while walking, sprinting,
+   sliding, crouching and jumping (0); crouch matches on the host's copy; the remote body's model shows
+   (screenshots); the joiner's HUD shows the host's wave line. Still open: mantling; the remote body's
+   animation (check the screenshots by eye, or log the clip); the
    player controller's per-frame code on the host for remote controllers (BeginPlay skips widgets;
    check nothing in `Tick` assumes a HUD); `AWWOGameMode::Restart` / `LoadMap` use OpenLevel, which
    online should be a `ServerTravel` (with `?listen`).

@@ -1,0 +1,253 @@
+// -WWOAutoTestNet: a two-machine (or two-copy) check of online play. Run it on the host
+// (-WWOHost -WWOAutoTestNet) and on the joiner (-WWOJoin=<ip> -WWOAutoTestNet).
+// Once both players are in, the joiner walks, sprints, slides, stops, crouch walks, jumps
+// (single and double) and runs at a crate to mantle, logging the host's corrections in each step
+// (`AutoTest net: <step> ...`, each one in detail as `NetCorrection ...`). Both log the joiner's position every second (compare the two logs),
+// and take screenshots of the other player (50_net_host_N every 3 s, 50_net_client_N at the stops).
+// The joiner quits at the end; the host quits once the joiner has left.
+
+#include "Player/WWOPlayerController.h"
+#include "Player/WWOCharacter.h"
+#include "Player/WWOCharacterMovement.h"
+#include "Player/WWOHealthComponent.h"
+#include "Game/WWOGameState.h"
+#include "Systems/WWOWorldSubsystem.h"
+#include "WWOTypes.h"
+#include "WhatWasOurs.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+
+namespace
+{
+	// The joiner's steps: start time (seconds after both players are in) and name.
+	struct FNetStep { float At; const TCHAR* Name; };
+	const FNetStep NetSteps[] = {
+		{ 0.f, TEXT("idle") }, { 3.f, TEXT("walk") }, { 5.f, TEXT("sprint") }, { 6.5f, TEXT("slide") },
+		{ 8.f, TEXT("stop") }, { 12.f, TEXT("crouch_walk") }, { 15.f, TEXT("jump") }, { 19.f, TEXT("mantle") },
+		{ 25.f, TEXT("end") },
+	};
+	constexpr int32 NumNetSteps = UE_ARRAY_COUNT(NetSteps);
+	constexpr float SettleSeconds = 4.f; // after both are in: the joiner's world loads, bodies get their models
+	constexpr float WaitLimit = 180.f;   // give up waiting for the other player
+	constexpr float HostLimit = 120.f;   // the host quits by then even if the joiner never left
+}
+
+void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	AWWOCharacter* P = GetWWOCharacter();
+	const ENetMode Mode = World->GetNetMode();
+	const bool bHost = Mode == NM_ListenServer;
+	AutoNetWait += DeltaTime;
+
+	// Before the host reopens the map as a listen server, or before the joiner arrives: wait.
+	if (Mode == NM_Standalone || !P)
+	{
+		if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL never went online")); FPlatformMisc::RequestExit(false); }
+		return;
+	}
+	TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(this)->GetPlayers();
+	AWWOCharacter* Other = nullptr;
+	for (AWWOCharacter* C : Players) if (C != P) { Other = C; break; }
+
+	// Nobody dies during the test (the host owns health; the joiner's copy is harmless).
+	for (AWWOCharacter* C : Players)
+	{
+		C->Health->GodMode = 1.f;
+		if (bHost && C->Health->bDead) C->Health->Respawn();
+	}
+
+	UWWOCharacterMovement::bLogNetCorrections = true;
+	if (!bAutoNetSawOther)
+	{
+		if (!Other)
+		{
+			if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL no other player after %.0f s"), AutoNetWait); FPlatformMisc::RequestExit(false); }
+			return;
+		}
+		AutoNetClock = -SettleSeconds; // counts up to 0, then the steps start
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s sees %d players (net mode %d)"), bHost ? TEXT("host") : TEXT("joiner"), Players.Num(), (int32)Mode);
+		bAutoNetSawOther = true;
+	}
+	const float Before = AutoNetClock;
+	AutoNetClock += DeltaTime;
+	if (AutoNetClock < 0.f) return;
+	const float T = AutoNetClock;
+	auto Crossed = [Before, T](float At) { return Before < At && T >= At; };
+
+	auto LookAt = [P](const AActor* A)
+	{
+		const FVector Dir = A->GetActorLocation() + FVector(0.f, 0.f, 40.f) - P->EyeLocation();
+		P->SetViewRotation(FMath::Asin(Dir.GetSafeNormal().Z), Dir.Rotation().Yaw);
+	};
+
+	// Once a second: where the joiner is, from each side (the host logs its copy of the joiner).
+	if (Crossed(FMath::FloorToFloat(T)) || Before < 0.f)
+	{
+		const AWWOCharacter* Joiner = bHost ? Other : P;
+		if (Joiner)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: t=%.0f %s joiner at %s speed %.2f crouched %d sliding %d on floor %d"), FMath::FloorToFloat(T),
+				bHost ? TEXT("host's copy:") : TEXT("own:"), *Joiner->GetActorLocation().ToCompactString(),
+				FVector2D(Joiner->GetVelocity()).Size() / WWO::M, Joiner->bIsCrouched, Joiner->bSliding, Joiner->IsOnFloor());
+		}
+	}
+
+	if (bHost)
+	{
+		// Look at the joiner every 3 s and screenshot it.
+		if (Other && T >= AutoNetNextShot)
+		{
+			AutoNetNextShot = T + 3.f;
+			LookAt(Other);
+			Shot(*FString::Printf(TEXT("50_net_host_%02d"), AutoNetShots++));
+		}
+		if (bAutoNetSawOther && !Other)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left at %.1f s"), T);
+			FPlatformMisc::RequestExit(false);
+		}
+		else if (T > HostLimit)
+		{
+			UE_LOG(LogWWO, Warning, TEXT("AutoTest net: host gave up at %.0f s (the joiner never left)"), T);
+			FPlatformMisc::RequestExit(false);
+		}
+		return;
+	}
+
+	// --- The joiner's moves --------------------------------------------------------------------
+	auto FaceOpen = [this, P]()
+	{
+		// The longest clear line, swept body-wide on the Pawn channel so walls, crates, the other
+		// player and enemies all count (the Visibility channel misses players' capsules).
+		float BestYaw = P->GetActorRotation().Yaw, BestLen = 0.f;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAutoTestNet), false, P);
+		// (a little narrower than the body, so the other player standing beside you at spawn doesn't block every way)
+		const FCollisionShape Body = FCollisionShape::MakeSphere(P->GetCapsuleComponent()->GetScaledCapsuleRadius() - 5.f);
+		for (int32 i = 0; i < 24; ++i)
+		{
+			const float Yaw = i * 15.f;
+			const FVector From = P->GetActorLocation();
+			const FVector To = From + FRotator(0.f, Yaw, 0.f).Vector() * 4000.f;
+			FHitResult Hit;
+			const float Len = GetWorld()->SweepSingleByChannel(Hit, From, To, FQuat::Identity, ECC_Pawn, Body, Params) ? Hit.Distance : 4000.f;
+			if (Len > BestLen) { BestLen = Len; BestYaw = Yaw; }
+		}
+		P->SetViewRotation(0.f, BestYaw);
+		return BestLen / WWO::M;
+	};
+	auto Press = [this](EWWOAction A) { JustPressed[(int32)A] = true; Held[(int32)A] = true; };
+	auto Release = [this](EWWOAction A) { Held[(int32)A] = false; };
+
+	// End of the step that was running: its corrections.
+	auto EndStep = [this, P]()
+	{
+		if (AutoNetStep < 0) return;
+		const int32 N = UWWOCharacterMovement::NetCorrections;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: step %s corrections %d (error max %.1f cm, avg %.1f cm)"), NetSteps[AutoNetStep].Name, N,
+			UWWOCharacterMovement::NetCorrectionErrorMax, N > 0 ? UWWOCharacterMovement::NetCorrectionErrorSum / N : 0.f);
+		AutoNetTotalCorrections += N;
+	};
+
+	while (AutoNetStep + 1 < NumNetSteps && T >= NetSteps[AutoNetStep + 1].At)
+	{
+		EndStep();
+		++AutoNetStep;
+		UWWOCharacterMovement::ResetNetCorrections();
+		const FString Step = NetSteps[AutoNetStep].Name;
+		if (Step == TEXT("idle"))
+		{
+			const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner HUD wave line \"%s\", other player %s, flora %s"), GS ? *GS->StatusLine : TEXT("(no game state)"),
+				Other ? *Other->GetActorLocation().ToCompactString() : TEXT("none"), Other ? *Other->NetFlora.ToString() : TEXT("-"));
+		}
+		else if (Step == TEXT("walk"))
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: clear run %.1f m"), FaceOpen());
+			MoveValue = FVector2D(0.f, 1.f);
+		}
+		else if (Step == TEXT("sprint")) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: clear run %.1f m"), FaceOpen()); Press(EWWOAction::Sprint); }
+		else if (Step == TEXT("slide")) { Press(EWWOAction::Crouch); }
+		else if (Step == TEXT("stop")) { MoveValue = FVector2D::ZeroVector; }
+		else if (Step == TEXT("crouch_walk")) { FaceOpen(); Press(EWWOAction::Crouch); MoveValue = FVector2D(0.f, 1.f); }
+		else if (Step == TEXT("jump")) { Press(EWWOAction::Crouch); FaceOpen(); } // stand back up, then run and jump
+		else if (Step == TEXT("mantle"))
+		{
+			// Run at the nearest crate stack tall enough to mantle (a wall at chest height, 1.2 m) and jump at it.
+			MoveValue = FVector2D::ZeroVector;
+			float BestD = 1e9f;
+			AutoNetCrate = FVector::ZeroVector;
+			AutoNetCrateBox = FBox(ForceInit);
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				// The bottom crate of a stack (its top crate isn't tagged): the stack's top 1.4 to 2.5 m up.
+				if (!It->Tags.Contains(FName("Cover"))) continue;
+				FBox Box = It->GetComponentsBoundingBox();
+				FBox Stack = Box;
+				for (TActorIterator<AStaticMeshActor> Up(World); Up; ++Up)
+				{
+					const FBox B = Up->GetComponentsBoundingBox();
+					if (*Up != *It && B.Min.Z > Box.Max.Z - 20.f && B.Min.Z < Box.Max.Z + 20.f && FVector2D(B.GetCenter() - Box.GetCenter()).Size() < 40.f) Stack += B;
+				}
+				if (Stack.Max.Z < 140.f || Stack.Max.Z > 250.f) continue;
+				const float D = FVector::Dist(It->GetActorLocation(), P->GetActorLocation());
+				if (D < BestD) { BestD = D; AutoNetCrate = It->GetActorLocation(); AutoNetCrateBox = Stack; }
+			}
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: mantle crate %s, %.1f m away"), AutoNetCrate.IsZero() ? TEXT("none") : *AutoNetCrate.ToCompactString(), BestD / WWO::M);
+			bAutoNetMantleJumped = false;
+			bAutoNetSawMantle = false;
+		}
+		else if (Step == TEXT("end"))
+		{
+			MoveValue = FVector2D::ZeroVector;
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner done, %d corrections in all, saw mantle %d"), AutoNetTotalCorrections, bAutoNetSawMantle);
+		}
+	}
+	const FString Step = AutoNetStep >= 0 ? NetSteps[AutoNetStep].Name : TEXT("");
+
+	// Inside the steps.
+	if (Step == TEXT("slide") && Crossed(6.6f)) Release(EWWOAction::Crouch);
+	if (Step == TEXT("crouch_walk") && Crossed(12.1f)) Release(EWWOAction::Crouch);
+	if (Step == TEXT("jump"))
+	{
+		if (Crossed(15.1f)) { Release(EWWOAction::Crouch); MoveValue = FVector2D(0.f, 1.f); }
+		if (Crossed(15.6f)) Press(EWWOAction::Jump);
+		if (Crossed(15.7f) || Crossed(17.2f)) Release(EWWOAction::Jump);
+		if (Crossed(17.f) || Crossed(17.3f)) Press(EWWOAction::Jump); // ground jump, then the air jump
+		if (Crossed(17.4f)) Release(EWWOAction::Jump);
+		if (Crossed(18.6f)) MoveValue = FVector2D::ZeroVector;
+	}
+	if (Step == TEXT("mantle") && !AutoNetCrate.IsZero())
+	{
+		const FVector To = AutoNetCrate - P->GetActorLocation();
+		if (!bAutoNetMantleJumped)
+		{
+			P->SetViewRotation(0.f, To.Rotation().Yaw);
+			MoveValue = FVector2D(0.f, 1.f);
+			// Jump right at the stack's face (15 cm off), then keep pushing into it: the wall must be at chest height as you rise.
+			const FVector Feet = P->GetActorLocation();
+			const FBox Flat(FVector(AutoNetCrateBox.Min.X, AutoNetCrateBox.Min.Y, Feet.Z), FVector(AutoNetCrateBox.Max.X, AutoNetCrateBox.Max.Y, Feet.Z));
+			if (FMath::Sqrt(Flat.ComputeSquaredDistanceToPoint(Feet)) < P->GetCapsuleComponent()->GetScaledCapsuleRadius() + 15.f) { Press(EWWOAction::Jump); bAutoNetMantleJumped = true; }
+		}
+		else Release(EWWOAction::Jump);
+		bAutoNetSawMantle |= P->IsMantling();
+		if (Crossed(23.f))
+		{
+			MoveValue = FVector2D::ZeroVector;
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: mantle run ended %.0f cm from the stack's middle (top %.0f cm), feet %.0f cm up, jumped %d"), FVector2D(To).Size(), AutoNetCrateBox.Max.Z,
+				P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight(), bAutoNetMantleJumped);
+		}
+	}
+
+	// Screenshots of the host, at the still moments (turning would bend the runs).
+	const float ShotTimes[] = { 1.5f, 11.f, 24.f };
+	for (float At : ShotTimes)
+	{
+		if (Other && Crossed(At)) { LookAt(Other); Shot(*FString::Printf(TEXT("50_net_client_%02d"), AutoNetShots++)); }
+	}
+	if (Crossed(5.8f)) Shot(*FString::Printf(TEXT("50_net_client_%02d"), AutoNetShots++)); // mid-sprint, HUD and all
+
+	if (T > NetSteps[NumNetSteps - 1].At + 1.5f) FPlatformMisc::RequestExit(false);
+}

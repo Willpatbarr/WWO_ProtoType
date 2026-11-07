@@ -1,5 +1,6 @@
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOCharacter.h"
+#include "WhatWasOurs.h"
 
 UWWOCharacterMovement::UWWOCharacterMovement()
 {
@@ -49,6 +50,24 @@ void FWWOSavedMove::PrepMoveFor(ACharacter* C)
 {
 	Super::PrepMoveFor(C);
 	if (AWWOCharacter* W = Cast<AWWOCharacter>(C)) W->MoveIn = Input; // a replay runs on the input it had
+}
+
+void FWWOSavedMove::SetInitialPosition(ACharacter* C)
+{
+	Super::SetInitialPosition(C);
+	if (const AWWOCharacter* W = Cast<AWWOCharacter>(C)) StartState = W->GetMoveState();
+}
+
+void FWWOSavedMove::CombineWith(const FSavedMove_Character* OldMove, ACharacter* C, APlayerController* PC, const FVector& OldStartLocation)
+{
+	Super::CombineWith(OldMove, C, PC, OldStartLocation);
+	if (AWWOCharacter* W = Cast<AWWOCharacter>(C)) W->SetMoveState(static_cast<const FWWOSavedMove*>(OldMove)->StartState);
+}
+
+void FWWOSavedMove::PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode)
+{
+	Super::PostUpdate(C, PostUpdateMode);
+	if (const AWWOCharacter* W = Cast<AWWOCharacter>(C)) EndState = W->GetMoveState();
 }
 
 bool FWWOSavedMove::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
@@ -120,14 +139,53 @@ void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTim
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
 
+int32 UWWOCharacterMovement::NetCorrections = 0;
+float UWWOCharacterMovement::NetCorrectionErrorMax = 0.f;
+float UWWOCharacterMovement::NetCorrectionErrorSum = 0.f;
+bool UWWOCharacterMovement::bLogNetCorrections = false;
+
 void UWWOCharacterMovement::ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& Response)
 {
 	// A correction: put the movement rules back where the host had them before replaying.
 	if (Response.IsCorrection())
 	{
+		++NetCorrections;
+		// Compare with where this machine was after the same move (not now: newer moves have run since).
+		const FClientAdjustment& Adjust = Response.ClientAdjustment;
+		const FNetworkPredictionData_Client_Character* Data = GetPredictionData_Client_Character();
+		const FWWOSavedMove* Same = nullptr;
+		for (const FSavedMovePtr& M : Data->SavedMoves)
+		{
+			if (M->TimeStamp == Adjust.TimeStamp) { Same = static_cast<const FWWOSavedMove*>(M.Get()); break; }
+		}
+		if (Same && !Adjust.bBaseRelativePosition)
+		{
+			const float Error = FVector::Dist(Adjust.NewLoc, Same->SavedLocation);
+			NetCorrectionErrorMax = FMath::Max(NetCorrectionErrorMax, Error);
+			NetCorrectionErrorSum += Error;
+		}
+		if (bLogNetCorrections)
+		{
+			const FWWOMoveState& Host = static_cast<const FWWOMoveResponse&>(Response).State;
+			if (Same)
+			{
+				UE_LOG(LogWWO, Display, TEXT("NetCorrection t=%.3f off %s cm | host vel %s mode %d ground %d | mine vel %s | input move %s held %d pressed %d scale %.2f | moves pending %d"),
+					Adjust.TimeStamp, *(Adjust.NewLoc - Same->SavedLocation).ToCompactString(), *Adjust.NewVel.ToCompactString(), Adjust.MovementMode, Adjust.bAckGoodMove,
+					*Same->SavedVelocity.ToCompactString(), *Same->Input.Move.ToString(), Same->Input.Held, Same->Input.Pressed, Same->Input.SpeedScale, Data->SavedMoves.Num());
+				UE_LOG(LogWWO, Display, TEXT("NetCorrection   host: %s"), *Host.ToString());
+				UE_LOG(LogWWO, Display, TEXT("NetCorrection   mine: %s"), *Same->EndState.ToString());
+			}
+			else UE_LOG(LogWWO, Display, TEXT("NetCorrection t=%.3f: no saved move with that time (%d pending)"), Adjust.TimeStamp, Data->SavedMoves.Num());
+		}
 		if (AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner)) Owner->SetMoveState(static_cast<const FWWOMoveResponse&>(Response).State);
 	}
 	Super::ClientHandleMoveResponse(Response);
+}
+
+bool UWWOCharacterMovement::ForcePositionUpdate(float DeltaTime)
+{
+	UE_LOG(LogWWO, Display, TEXT("NetForcedUpdate: %s, no moves for %.2f s"), *GetNameSafe(CharacterOwner), DeltaTime);
+	return Super::ForcePositionUpdate(DeltaTime);
 }
 
 void UWWOCharacterMovement::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

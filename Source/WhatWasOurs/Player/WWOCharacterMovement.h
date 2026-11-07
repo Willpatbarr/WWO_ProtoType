@@ -34,6 +34,14 @@ public:
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, class FNetworkPredictionData_Client_Character& ClientData) override;
 	virtual void PrepMoveFor(ACharacter* C) override;
 	virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override;
+	virtual void PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode) override;
+	// Merging two moves rewinds the character to the older move's start and runs both as one.
+	// Unreal rewinds position and velocity; this rewinds the movement rules' state too, or the
+	// older move's part of it (slide speed, air time, timers) would run twice on your machine.
+	virtual void SetInitialPosition(ACharacter* C) override;
+	virtual void CombineWith(const FSavedMove_Character* OldMove, ACharacter* C, APlayerController* PC, const FVector& OldStartLocation) override;
+	FWWOMoveState StartState; // the movement rules' state before this move
+	FWWOMoveState EndState;   // and after it (for correction logs)
 };
 
 class FWWOPredictionData : public FNetworkPredictionData_Client_Character
@@ -92,6 +100,17 @@ public:
 	virtual class FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel) override;
 	virtual void ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& MoveResponse) override;
+	// The host moving a player itself after no moves from them for a while (see
+	// MAXCLIENTUPDATEINTERVAL in DefaultGame.ini). Logged: it throws away that player's next moves.
+	virtual bool ForcePositionUpdate(float DeltaTime) override;
+
+	// Corrections this machine got from the host since the last reset (for -WWOAutoTestNet).
+	// Error: how far the host's position was from yours after the same move, in cm (world-space corrections only).
+	static int32 NetCorrections;
+	static float NetCorrectionErrorMax;
+	static float NetCorrectionErrorSum;
+	static bool bLogNetCorrections; // log each one: the host's position, speed and rules' state against yours
+	static void ResetNetCorrections() { NetCorrections = 0; NetCorrectionErrorMax = NetCorrectionErrorSum = 0.f; }
 
 private:
 	FWWOMoveDataContainer MoveDataContainer;

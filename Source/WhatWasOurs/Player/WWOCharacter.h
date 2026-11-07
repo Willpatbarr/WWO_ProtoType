@@ -52,6 +52,7 @@ struct FWWOMoveInput
 		return Move.Equals(O.Move, 0.01f) && Held == O.Held && Pressed == O.Pressed && FMath::IsNearlyEqual(SpeedScale, O.SpeedScale, 0.01f) && ExtraJumps == O.ExtraJumps;
 	}
 	void Serialize(FArchive& Ar);
+	void Quantize(); // round to what Serialize sends, so your machine simulates the same input as the host
 };
 
 // The movement rules' own state, sent back with a correction so a replay starts from the host's.
@@ -63,6 +64,7 @@ struct FWWOMoveState
 	float TakeoffSpeed = 0.f, SlideSpeedNow = 0.f, LaunchTime = 0.f, AirTime = 0.f, SinceLanded = 99.f, MantleT = 0.f;
 	FVector SlideDir = FVector::ForwardVector, MantleFrom = FVector::ZeroVector, MantleTo = FVector::ZeroVector;
 	void Serialize(FArchive& Ar);
+	FString ToString() const; // for logs
 };
 
 UCLASS()

@@ -135,6 +135,18 @@ private:
 	TArray<float> AutoModBase;
 	float AutoModBaseReload = 0.f, AutoModBaseSwap = 0.f;
 	bool UpdateAutoModTest(class AWWOCharacter* P, float DeltaTime);
+	// -WWOAutoTestNet (WWOPlayerControllerAutoNet.cpp): online play, run on the host and the joiner.
+	bool bAutoTestNet = false;
+	float AutoNetWait = 0.f;   // seconds since start
+	float AutoNetClock = 0.f; // seconds since both players were in and settled (negative while settling)
+	float AutoNetNextShot = 0.f;
+	int32 AutoNetShots = 0;
+	int32 AutoNetStep = -1;
+	int32 AutoNetTotalCorrections = 0;
+	bool bAutoNetSawOther = false, bAutoNetMantleJumped = false, bAutoNetSawMantle = false;
+	FVector AutoNetCrate = FVector::ZeroVector;
+	FBox AutoNetCrateBox = FBox(ForceInit);
+	void UpdateAutoNetTest(float DeltaTime);
 	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
 	bool bPerfTest = false;
 	bool bPerfProfiled = false;
