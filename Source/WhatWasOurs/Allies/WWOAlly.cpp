@@ -16,6 +16,9 @@
 AWWOAlly::AWWOAlly(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UWWOEnemyMovement>(ACharacter::CharacterMovementComponentName))
 {
+	// Online: the host runs the AI; everyone else gets the position and animation.
+	bReplicates = true;
+	SetReplicatingMovement(true);
 	PrimaryActorTick.bCanEverTick = true;
 	bUseControllerRotationYaw = false;
 	AIControllerClass = AAIController::StaticClass();
@@ -139,6 +142,12 @@ FString AWWOAlly::StatusText() const
 void AWWOAlly::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (!HasAuthority())
+	{
+		// Online, not the host: it moves and animates as the host's copy does; the gun stays in its hand.
+		Gun->SetWorldLocationAndRotation(GetMesh()->GetSocketLocation("hand_r"), FRotator(0.f, GetActorRotation().Yaw, 0.f));
+		return;
+	}
 	UWWOEnemyMovement* Move = Cast<UWWOEnemyMovement>(GetCharacterMovement());
 	const UWWOAllyData* Data = D();
 	if (bDown)

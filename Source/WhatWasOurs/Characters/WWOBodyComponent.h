@@ -28,6 +28,29 @@ class UMaterialInstanceDynamic;
 class UAnimSequence;
 class UWWOBodyAnimInstance;
 
+// Online: the host's animation commands for a body, replicated so every other machine plays the
+// same (enemies' and allies' AI and other players' movement only run on the host). Quantized:
+// speeds and weights to 1/50.
+USTRUCT()
+struct FWWOBodyNet
+{
+	GENERATED_BODY()
+	UPROPERTY() FName Anim;
+	UPROPERTY() uint8 Speed = 50;
+	UPROPERTY() FName Queued;
+	UPROPERTY() FName Upper;
+	UPROPERTY() uint8 UpperWeight = 0;
+	UPROPERTY() FName MixA;
+	UPROPERTY() FName MixB;
+	UPROPERTY() uint8 MixAlpha = 0;
+	UPROPERTY() uint8 MixSpeedB = 50;
+	UPROPERTY() int8 HunchSpine = 0;
+	UPROPERTY() int8 HunchHead = 0;
+	UPROPERTY() FName Shot;
+	UPROPERTY() uint8 ShotSerial = 0;
+	UPROPERTY() uint8 ClearSerial = 0;
+};
+
 UCLASS(ClassGroup = (WWO))
 class WHATWASOURS_API UWWOBodyComponent : public UActorComponent
 {
@@ -36,6 +59,7 @@ class WHATWASOURS_API UWWOBodyComponent : public UActorComponent
 public:
 	UWWOBodyComponent();
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 	FLinearColor BodyColor = FLinearColor(0.55f, 0.15f, 0.13f);
@@ -104,6 +128,12 @@ private:
 	FDelegateHandle LoadoutHandle;
 	bool bSetUp = false;
 	UPROPERTY() TObjectPtr<USkeletalMeshComponent> Model; // the character model, if any
+	// Online: the host's commands (see FWWOBodyNet). Not sent to the player who owns this body (a
+	// player's own machine animates their body itself).
+	UPROPERTY(ReplicatedUsing = OnRep_Net) FWWOBodyNet Net;
+	FWWOBodyNet Applied; // what this machine has played of Net
+	UFUNCTION() void OnRep_Net();
+	bool Replicating() const; // the host, online: record commands into Net
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> HighlightMat; // M_WWO_Highlight, made on first use
 	FName ActiveModel;
 	bool bFollowsLoadout = false;

@@ -252,7 +252,8 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		if (AutoMenuClock > 0.5f)
 		{
 			InjectAxis(EKeys::Gamepad_RightY, 0.f);
-			Check(Settings->GetGlobalTab() == 4 && Settings->GlobalScrollOffset() > 100.f,
+			// (Which tab index Melee is moves as tabs are added; clicking it by name above is the check.)
+			Check(Settings->GlobalScrollOffset() > 100.f,
 				FString::Printf(TEXT("right stick scrolls the Melee tab (tab %d, offset %.0f)"), Settings->GetGlobalTab(), Settings->GlobalScrollOffset()));
 			Shot(TEXT("27_menu_settings_scrolled"));
 			Next();

@@ -25,6 +25,46 @@ class UWWOBodyComponent;
 class AWWOPlayerController;
 class UWWOLoadoutSubsystem;
 
+// Online movement (see AWWOCharacter::SimulateMove). The input the movement simulation runs on:
+// captured from your controller each frame, sent to the host with each move, and replayed by your
+// own machine after a correction, so the host and you run exactly the same movement rules.
+enum EWWOMoveBit : uint8
+{
+	MoveJump = 1 << 0,
+	MoveSprint = 1 << 1,
+	MoveCrouch = 1 << 2,
+	MoveFire = 1 << 3,
+	MoveAim = 1 << 4,
+	MoveFrozen = 1 << 5,     // the ult or Entrench: no moving
+	MoveClientAuth = 1 << 6, // a move the host can't simulate yet (melee lunge, Spore Dash): it takes your position
+};
+
+struct FWWOMoveInput
+{
+	FVector2D Move = FVector2D::ZeroVector; // stick: x = right, y = forward
+	uint8 Held = 0;                         // EWWOMoveBit
+	uint8 Pressed = 0;                      // went down this frame
+	float SpeedScale = 1.f;                 // abilities x aiming x slow
+	uint8 ExtraJumps = 0;                   // from abilities
+
+	bool operator==(const FWWOMoveInput& O) const
+	{
+		return Move.Equals(O.Move, 0.01f) && Held == O.Held && Pressed == O.Pressed && FMath::IsNearlyEqual(SpeedScale, O.SpeedScale, 0.01f) && ExtraJumps == O.ExtraJumps;
+	}
+	void Serialize(FArchive& Ar);
+};
+
+// The movement rules' own state, sent back with a correction so a replay starts from the host's.
+struct FWWOMoveState
+{
+	bool bSprinting = false, bCrouching = false, bSliding = false, bCrouchToggled = false, bSlideQueued = false;
+	bool bCrouchWasHeld = false, bLandedSprinting = false, bMantling = false;
+	uint8 JumpsUsed = 0;
+	float TakeoffSpeed = 0.f, SlideSpeedNow = 0.f, LaunchTime = 0.f, AirTime = 0.f, SinceLanded = 99.f, MantleT = 0.f;
+	FVector SlideDir = FVector::ForwardVector, MantleFrom = FVector::ZeroVector, MantleTo = FVector::ZeroVector;
+	void Serialize(FArchive& Ar);
+};
+
 UCLASS()
 class WHATWASOURS_API AWWOCharacter : public ACharacter
 {
@@ -35,6 +75,8 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void NotifyControllerChanged() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void Landed(const FHitResult& Hit) override;
 	virtual void BaseChange() override;
 	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
@@ -134,9 +176,27 @@ public:
 
 	float M(FName Stat, float Base) const; // a stat after frame part and trait modifiers
 
-	// Health and this frame's movement rules (sets WishVelocity); the movement component calls
-	// it just before it moves.
+	// This frame's local work before moving (health, looking, recoil, capturing the move input); the
+	// movement component calls it just before it moves, on the machine that controls you.
 	void PrepareMovement(float DeltaSeconds);
+
+	// --- Online movement ---
+	// The movement rules for one move (sets WishVelocity), from MoveIn only. The movement component
+	// runs it for every move: yours as you play, the host's copy of you as your moves arrive, and
+	// your replays after a correction.
+	FWWOMoveInput MoveIn;
+	void SimulateMove(float DeltaSeconds);
+	FWWOMoveState GetMoveState() const;
+	void SetMoveState(const FWWOMoveState& State);
+	// Your movement values (after loadout modifiers and your Settings sliders), sent to the host once
+	// and whenever they change, so it simulates you with them.
+	UFUNCTION(Server, Reliable) void ServerSetMoveStats(const TArray<float>& Values);
+	float ClientAuthLeft = 0.f; // seconds the host takes your position (after a Spore Dash launch)
+
+	// Online: your flora, so everyone else sees your character model (Config/CharacterModels.json).
+	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;
+	UFUNCTION() void OnRep_NetFlora();
+	UFUNCTION(Server, Reliable) void ServerSetFlora(FName Flora);
 
 	AWWOPlayerController* GetWWOController() const;
 	UWWOLoadoutSubsystem* GetLoadout() const;
@@ -167,6 +227,13 @@ private:
 	float LandKick = 0.f;
 	float LastFallSpeed = 0.f; // m/s
 	uint64 PreparedFrame = 0; // GFrameCounter of the last PrepareMovement
+	bool bNetStats = false;   // the host's copy of someone else: the movement values are theirs, already modified
+	bool bLocalVisuals = false; // set up as your own character (first-person gun, shadow-only body)
+	void SetupVisuals(bool bLocal);
+	TArray<float> SentMoveStats;
+	float MoveStatsCheck = 0.f;
+	TArray<float> LocalMoveStats() const;
+	void CaptureMoveInput();
 
 	// Recoil (radians)
 	float KickLeft = 0.f, KickYawLeft = 0.f, KickRate = 0.f;

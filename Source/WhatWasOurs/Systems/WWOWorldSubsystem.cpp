@@ -1,4 +1,5 @@
 #include "Systems/WWOWorldSubsystem.h"
+#include "EngineUtils.h"
 #include "Enemies/WWOEnemy.h"
 #include "Allies/WWOAlly.h"
 #include "Flora/WWOSporeFog.h"
@@ -98,6 +99,13 @@ TArray<AWWOAlly*> UWWOWorldSubsystem::AllTeammates() const
 AWWOCharacter* UWWOWorldSubsystem::GetPlayer() const
 {
 	return Cast<AWWOCharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
+}
+
+TArray<AWWOCharacter*> UWWOWorldSubsystem::GetPlayers() const
+{
+	TArray<AWWOCharacter*> Out;
+	for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It) Out.Add(*It);
+	return Out;
 }
 
 void UWWOWorldSubsystem::ResetTargets()

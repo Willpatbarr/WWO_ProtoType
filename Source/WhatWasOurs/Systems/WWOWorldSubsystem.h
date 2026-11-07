@@ -60,7 +60,8 @@ public:
 	TArray<AWWOAlly*> LivingTeammates() const;
 	TArray<AWWOAlly*> AllTeammates() const;
 	const TArray<TWeakObjectPtr<AWWOSporeFog>>& Fogs() const { return SporeFogs; }
-	AWWOCharacter* GetPlayer() const;
+	AWWOCharacter* GetPlayer() const; // the player on this machine
+	TArray<AWWOCharacter*> GetPlayers() const; // every player in the match (online: all of them)
 
 	// Bring every target back at full health; enemies reset to their spawn. Teammates too.
 	void ResetTargets();

@@ -1,4 +1,5 @@
 #include "Characters/WWOBodyComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "WhatWasOurs.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -45,6 +46,44 @@ namespace
 UWWOBodyComponent::UWWOBodyComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true); // online: the host's animation commands (FWWOBodyNet)
+}
+
+void UWWOBodyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(UWWOBodyComponent, Net, COND_SkipOwner);
+}
+
+bool UWWOBodyComponent::Replicating() const
+{
+	const AActor* Owner = GetOwner();
+	return Owner && Owner->HasAuthority() && Owner->GetNetMode() != NM_Standalone && Owner->GetIsReplicated();
+}
+
+namespace
+{
+	uint8 Q50(float V) { return (uint8)FMath::Clamp(FMath::RoundToInt(V * 50.f), 0, 255); } // 0 to 5.1 in 1/50
+	float D50(uint8 V) { return V / 50.f; }
+}
+
+void UWWOBodyComponent::OnRep_Net()
+{
+	// Play what the host played, once per change.
+	UWWOBodyAnimInstance* A = GetAnimInstance();
+	if (!A) return;
+	if (Net.ClearSerial != Applied.ClearSerial) A->ClearLayers();
+	if (Net.Anim != Applied.Anim || Net.Speed != Applied.Speed) A->Play(FindAnim(Net.Anim), IsLooping(Net.Anim), D50(Net.Speed), 0.2f);
+	if (Net.Queued != Applied.Queued && !Net.Queued.IsNone()) A->Queue(FindAnim(Net.Queued), IsLooping(Net.Queued));
+	if (Net.Upper != Applied.Upper || Net.UpperWeight != Applied.UpperWeight) A->SetUpperBody(FindAnim(Net.Upper), D50(Net.UpperWeight));
+	if (Net.MixA != Applied.MixA || Net.MixB != Applied.MixB || Net.MixAlpha != Applied.MixAlpha || Net.MixSpeedB != Applied.MixSpeedB)
+	{
+		if (!Net.MixA.IsNone()) A->SetMix(FindAnim(Net.MixA), FindAnim(Net.MixB), D50(Net.MixAlpha), D50(Net.MixSpeedB));
+	}
+	A->HunchSpine = Net.HunchSpine;
+	A->HunchHead = Net.HunchHead;
+	if (Net.ShotSerial != Applied.ShotSerial) A->PlayUpperShot(FindAnim(Net.Shot), 0.05f, 0.2f);
+	Applied = Net;
 }
 
 bool UWWOBodyComponent::IsLooping(FName Anim)
@@ -255,11 +294,18 @@ void UWWOBodyComponent::SetTints(const FLinearColor& Toward, float Amount)
 void UWWOBodyComponent::Play(FName Anim, float Speed, float Blend)
 {
 	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->Play(FindAnim(Anim), IsLooping(Anim), Speed, Blend);
+	if (Replicating())
+	{
+		if (Net.Anim != Anim) Net.Queued = NAME_None;
+		Net.Anim = Anim;
+		Net.Speed = Q50(Speed);
+	}
 }
 
 void UWWOBodyComponent::Queue(FName Anim)
 {
 	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->Queue(FindAnim(Anim), IsLooping(Anim));
+	if (Replicating()) Net.Queued = Anim;
 }
 
 FName UWWOBodyComponent::CurrentAnim() const
@@ -306,21 +352,45 @@ void UWWOBodyComponent::ForcePose(FName Anim, float At)
 void UWWOBodyComponent::SetUpperBody(FName Anim, float Weight)
 {
 	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->SetUpperBody(FindAnim(Anim), Weight);
+	if (Replicating())
+	{
+		Net.Upper = Anim;
+		Net.UpperWeight = Q50(Weight);
+	}
 }
 
 void UWWOBodyComponent::PlayUpperShot(FName Anim, float FadeIn, float FadeOut)
 {
 	if (UWWOBodyAnimInstance* A = GetAnimInstance()) A->PlayUpperShot(FindAnim(Anim), FadeIn, FadeOut);
+	if (Replicating())
+	{
+		Net.Shot = Anim;
+		++Net.ShotSerial;
+	}
 }
 
 void UWWOBodyComponent::SetMix(FName A, FName B, float Alpha, float SpeedB)
 {
 	if (UWWOBodyAnimInstance* I = GetAnimInstance()) I->SetMix(FindAnim(A), FindAnim(B), Alpha, SpeedB);
+	if (Replicating())
+	{
+		Net.MixA = A;
+		Net.MixB = B;
+		Net.MixAlpha = Q50(Alpha);
+		Net.MixSpeedB = Q50(SpeedB);
+	}
 }
 
 void UWWOBodyComponent::ClearLayers()
 {
 	if (UWWOBodyAnimInstance* I = GetAnimInstance()) I->ClearLayers();
+	if (Replicating())
+	{
+		Net.Upper = NAME_None;
+		Net.UpperWeight = 0;
+		Net.MixA = Net.MixB = NAME_None;
+		++Net.ClearSerial;
+	}
 }
 
 void UWWOBodyComponent::SetHunch(float SpineDegrees, float HeadDegrees)
@@ -329,6 +399,11 @@ void UWWOBodyComponent::SetHunch(float SpineDegrees, float HeadDegrees)
 	{
 		A->HunchSpine = SpineDegrees;
 		A->HunchHead = HeadDegrees;
+	}
+	if (Replicating())
+	{
+		Net.HunchSpine = (int8)FMath::Clamp(FMath::RoundToInt(SpineDegrees), -127, 127);
+		Net.HunchHead = (int8)FMath::Clamp(FMath::RoundToInt(HeadDegrees), -127, 127);
 	}
 }
 

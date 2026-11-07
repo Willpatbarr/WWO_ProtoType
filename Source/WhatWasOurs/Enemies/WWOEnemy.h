@@ -55,6 +55,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// IWWOTargetable
 	virtual TArray<FWWOAimPart> GetAimParts() const override;
@@ -116,9 +117,9 @@ protected:
 	FCollisionQueryParams IgnoreEnemies() const;
 
 	TWeakObjectPtr<AActor> TargetActor; // the player or the closest teammate
-	float Health = 100.f;
-	float MaxHealth = 100.f;
-	bool bDead = false;
+	UPROPERTY(Replicated) float Health = 100.f;
+	UPROPERTY(Replicated) float MaxHealth = 100.f;
+	UPROPERTY(Replicated) bool bDead = false;
 	float ModelScale = 1.f;
 
 private:

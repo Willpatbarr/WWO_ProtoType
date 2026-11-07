@@ -715,8 +715,9 @@ bool UWWOSettingsMenu::SaveDefaults()
 
 void UWWOSettingsMenu::LoadSaved()
 {
+	// Your saved values, or in a fresh packaged build the ones it shipped with (Config/ShippedSettings.json).
 	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *SavePath())) return;
+	if (!FFileHelper::LoadFileToString(Text, *SavePath()) && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json")))) return;
 	TSharedPtr<FJsonObject> Root;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return;
 	for (const auto& SectionPair : Root->Values)

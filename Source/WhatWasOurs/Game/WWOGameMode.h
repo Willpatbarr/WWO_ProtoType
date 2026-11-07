@@ -48,7 +48,7 @@ private:
 	float RestartLeft = -1.f;
 	TArray<FName> Queue;
 	TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
-	bool bBoundToPlayer = false;
+	TSet<TWeakObjectPtr<class AWWOCharacter>> BoundPlayers; // players whose death the waves listen for
 	bool bStarted = false;
 
 	// -WWOWaveTest: plays every wave with god mode on, cuts each fight short after a while

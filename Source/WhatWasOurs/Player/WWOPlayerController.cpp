@@ -1,4 +1,5 @@
 #include "Player/WWOPlayerController.h"
+#include "Net/WWONetSubsystem.h"
 #include "RHI.h"
 #include "RenderCore.h"
 #include "Player/WWOCharacter.h"
@@ -75,6 +76,7 @@ void AWWOPlayerController::BeginPlay()
 	CharacterMenu->SetVisibility(ESlateVisibility::Collapsed);
 
 	SetMenuMode(false);
+	if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(this)) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
 	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
 	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
 	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));

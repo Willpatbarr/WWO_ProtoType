@@ -26,14 +26,116 @@ UWWOCharacterMovement::UWWOCharacterMovement()
 	// switches between ascent, apex hang and descent as often as it does there (a 30 fps frame
 	// that crossed the apex-hang speed would otherwise rise with full gravity, cutting cm off a jump).
 	MaxSimulationTimeStep = 1.f / 60.f;
+	// Online: moves carry the input, corrections carry the movement rules' state.
+	SetNetworkMoveDataContainer(MoveDataContainer);
+	SetMoveResponseDataContainer(MoveResponse);
+}
+
+// --- Online movement ----------------------------------------------------------------------------
+
+void FWWOSavedMove::Clear()
+{
+	Super::Clear();
+	Input = FWWOMoveInput();
+}
+
+void FWWOSavedMove::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData)
+{
+	Super::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
+	if (const AWWOCharacter* W = Cast<AWWOCharacter>(C)) Input = W->MoveIn;
+}
+
+void FWWOSavedMove::PrepMoveFor(ACharacter* C)
+{
+	Super::PrepMoveFor(C);
+	if (AWWOCharacter* W = Cast<AWWOCharacter>(C)) W->MoveIn = Input; // a replay runs on the input it had
+}
+
+bool FWWOSavedMove::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
+{
+	// Never merge a move with a button press in it (the press would happen once, not twice), or
+	// two moves with different input.
+	const FWWOSavedMove* Next = static_cast<const FWWOSavedMove*>(NewMove.Get());
+	if (Input.Pressed != 0 || Next->Input.Pressed != 0 || !(Input == Next->Input)) return false;
+	return Super::CanCombineWith(NewMove, InCharacter, MaxDelta);
+}
+
+FNetworkPredictionData_Client* UWWOCharacterMovement::GetPredictionData_Client() const
+{
+	if (!ClientPredictionData)
+	{
+		UWWOCharacterMovement* Self = const_cast<UWWOCharacterMovement*>(this);
+		Self->ClientPredictionData = new FWWOPredictionData(*this);
+	}
+	return ClientPredictionData;
+}
+
+void FWWOMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& ClientMove, ENetworkMoveType MoveType)
+{
+	FCharacterNetworkMoveData::ClientFillNetworkMoveData(ClientMove, MoveType);
+	Input = static_cast<const FWWOSavedMove&>(ClientMove).Input;
+}
+
+bool FWWOMoveData::Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap, ENetworkMoveType MoveType)
+{
+	FCharacterNetworkMoveData::Serialize(CharacterMovement, Ar, PackageMap, MoveType);
+	Input.Serialize(Ar);
+	return !Ar.IsError();
+}
+
+void FWWOMoveResponse::ServerFillResponseData(const UCharacterMovementComponent& CharacterMovement, const FClientAdjustment& PendingAdjustment)
+{
+	FCharacterMoveResponseDataContainer::ServerFillResponseData(CharacterMovement, PendingAdjustment);
+	if (const AWWOCharacter* W = Cast<AWWOCharacter>(CharacterMovement.GetCharacterOwner())) State = W->GetMoveState();
+}
+
+bool FWWOMoveResponse::Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap)
+{
+	if (!FCharacterMoveResponseDataContainer::Serialize(CharacterMovement, Ar, PackageMap)) return false;
+	if (IsCorrection()) State.Serialize(Ar);
+	return !Ar.IsError();
+}
+
+void UWWOCharacterMovement::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	// The movement rules for this move, wherever it runs (see the header).
+	// Not for other players' characters on your machine: they follow the host's replicated position.
+	AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);
+	if (Owner && Owner->GetLocalRole() != ROLE_SimulatedProxy) Owner->SimulateMove(DeltaSeconds);
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+}
+
+void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel)
+{
+	// The host, running a move that arrived from its player: their input first.
+	AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);
+	if (Owner && GetCurrentNetworkMoveData())
+	{
+		Owner->MoveIn = static_cast<const FWWOMoveData*>(GetCurrentNetworkMoveData())->Input;
+		// A move it can't simulate yet (lunge, Spore Dash): take the player's position for it.
+		const bool bClientAuth = (Owner->MoveIn.Held & MoveClientAuth) != 0;
+		bIgnoreClientMovementErrorChecksAndCorrection = bClientAuth;
+		bServerAcceptClientAuthoritativePosition = bClientAuth;
+	}
+	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
+}
+
+void UWWOCharacterMovement::ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& Response)
+{
+	// A correction: put the movement rules back where the host had them before replaying.
+	if (Response.IsCorrection())
+	{
+		if (AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner)) Owner->SetMoveState(static_cast<const FWWOMoveResponse&>(Response).State);
+	}
+	Super::ClientHandleMoveResponse(Response);
 }
 
 void UWWOCharacterMovement::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
-	if (AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner))
-	{
-		Owner->PrepareMovement(DeltaTime);
-	}
+	// On the machine that controls this character: this frame's local work and move input first.
+	// (The host's copy of someone else moves only as their moves arrive.)
+	AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);
+	if (Owner && Owner->IsLocallyControlled()) Owner->PrepareMovement(DeltaTime);
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 

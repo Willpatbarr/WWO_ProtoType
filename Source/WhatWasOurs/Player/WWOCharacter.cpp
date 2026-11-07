@@ -1,4 +1,6 @@
 #include "Player/WWOCharacter.h"
+#include "Data/WWOData.h"
+#include "Net/UnrealNetwork.h"
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -88,7 +90,48 @@ void AWWOCharacter::BeginPlay()
 	Super::BeginPlay();
 	if (Controller) Pitch = FMath::DegreesToRadians(Controller->GetControlRotation().Pitch);
 	Pitch = FMath::Clamp(FRotator::NormalizeAxis(FMath::RadiansToDegrees(Pitch)), -89.f, 89.f) * UE_PI / 180.f;
-	Body->FollowLoadout(true);
+	// Someone else's until a controller on this machine takes it (NotifyControllerChanged).
+	SetupVisuals(IsLocallyControlled());
+}
+
+void AWWOCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+	if (IsLocallyControlled() != bLocalVisuals) SetupVisuals(IsLocallyControlled());
+}
+
+void AWWOCharacter::SetupVisuals(bool bLocal)
+{
+	// Yours: the first-person gun and arms, and only your body's shadow (with your flora's grafts and
+	// frame part colors). Someone else's (online): their whole body on their flora's model, no gun.
+	bLocalVisuals = bLocal;
+	Weapon->SetFirstPersonHidden(!bLocal);
+	if (bLocal)
+	{
+		Body->FollowLoadout(true);
+	}
+	else
+	{
+		Body->SetShadowOnly(false);
+		if (!NetFlora.IsNone()) Body->SetModel(NetFlora);
+	}
+}
+
+void AWWOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOCharacter, NetFlora);
+}
+
+void AWWOCharacter::OnRep_NetFlora()
+{
+	if (!bLocalVisuals && !NetFlora.IsNone()) Body->SetModel(NetFlora);
+}
+
+void AWWOCharacter::ServerSetFlora_Implementation(FName Flora)
+{
+	NetFlora = Flora;
+	OnRep_NetFlora(); // the host shows it too
 }
 
 AWWOPlayerController* AWWOCharacter::GetWWOController() const
@@ -103,6 +146,7 @@ UWWOLoadoutSubsystem* AWWOCharacter::GetLoadout() const
 
 float AWWOCharacter::M(FName Stat, float Base) const
 {
+	if (bNetStats) return Base; // the host's copy of someone else: their values came already modified
 	const UWWOLoadoutSubsystem* Loadout = GetLoadout();
 	return Loadout ? Loadout->Apply(Stat, Base) : Base;
 }
@@ -223,9 +267,28 @@ void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 	if (Health->bDead)
 	{
 		WishVelocity = FVector::ZeroVector;
+		MoveIn = FWWOMoveInput();
 		return; // no moving
 	}
 	TickMovement(DeltaSeconds);
+	// Online: keep the host's copy of your movement values and your flora current.
+	if (GetNetMode() != NM_Standalone && (MoveStatsCheck -= DeltaSeconds) <= 0.f)
+	{
+		MoveStatsCheck = 0.5f;
+		const TArray<float> Stats = LocalMoveStats();
+		if (!HasAuthority() && Stats != SentMoveStats)
+		{
+			SentMoveStats = Stats;
+			ServerSetMoveStats(Stats);
+		}
+		const UWWOLoadoutSubsystem* Loadout = GetLoadout();
+		const FName Flora = Loadout && Loadout->GetFlora() ? Loadout->GetFlora()->Id : NAME_None;
+		if (Flora != NetFlora)
+		{
+			if (HasAuthority()) NetFlora = Flora; // the host's own: replicates from here
+			else ServerSetFlora(Flora);
+		}
+	}
 }
 
 void AWWOCharacter::Tick(float DeltaSeconds)
@@ -233,6 +296,13 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	// The movement component has already run PrepareMovement and moved (it ticks first);
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
+	if (!IsLocallyControlled())
+	{
+		// Someone else's character: the host runs their health; everyone shows their body.
+		if (HasAuthority()) Health->UpdateHealth(DeltaSeconds);
+		if (HasAuthority()) UpdateModel(); // the host's copy moves by their inputs; the body replicates to the rest
+		return;
+	}
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
 	if (Health->bDead) return; // no shooting or throwing
 	if (!bUlting && EntrenchLeft <= 0.f) UpdateModel(); // frozen or rooted: the ult drives the body
@@ -278,6 +348,8 @@ void AWWOCharacter::UpdateModel()
 
 void AWWOCharacter::TickMovement(float DeltaSeconds)
 {
+	// The local part of a frame (only on the machine that controls you): status timers, recoil,
+	// looking, then this frame's move input. The movement rules run in SimulateMove.
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	const AWWOPlayerController* PC = GetWWOController();
 	const FVector2D LookStick = PC ? PC->GetLookAxis() : FVector2D::ZeroVector;
@@ -287,28 +359,57 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
 	VeilLeft = FMath::Max(VeilLeft - DeltaSeconds, 0.f);
 	EntrenchLeft = FMath::Max(EntrenchLeft - DeltaSeconds, 0.f);
+	ClientAuthLeft = FMath::Max(ClientAuthLeft - DeltaSeconds, 0.f);
 
 	if ((bUlting || EntrenchLeft > 0.f) && bLunging)
 	{
 		bLunging = false; // a lunge can't move while you're frozen or rooted; drop it so the punch lands
 		Move->SetMovementMode(MOVE_Falling);
 	}
-	if (bUlting || EntrenchLeft > 0.f)
+	// Frozen for the ult; rooted while entrenched you can still look (and shoot).
+	if (!bUlting) Look(LookStick * StickSensitivity * DeltaSeconds * AimAssist->FrictionScale()); // friction: slower near targets
+	CaptureMoveInput();
+}
+
+void AWWOCharacter::CaptureMoveInput()
+{
+	FWWOMoveInput In;
+	In.Move = MoveInput();
+	auto Bit = [&](EWWOAction Action, uint8 Flag)
 	{
-		// Frozen for the ult, rooted while entrenched (you can still look and shoot).
-		if (EntrenchLeft > 0.f && !bUlting)
-		{
-			Look(LookStick * StickSensitivity * DeltaSeconds * AimAssist->FrictionScale());
-			bSprinting = false;
-			bSliding = false;
-		}
+		if (Pressed(Action)) In.Held |= Flag;
+		if (JustPressed(Action)) In.Pressed |= Flag;
+	};
+	Bit(EWWOAction::Jump, MoveJump);
+	Bit(EWWOAction::Sprint, MoveSprint);
+	Bit(EWWOAction::Crouch, MoveCrouch);
+	Bit(EWWOAction::Fire, MoveFire);
+	if (Weapon->IsAiming()) In.Held |= MoveAim;
+	if (bUlting || EntrenchLeft > 0.f) In.Held |= MoveFrozen;
+	if (bLunging || ClientAuthLeft > 0.f) In.Held |= MoveClientAuth;
+	In.SpeedScale = Abilities->SpeedMultiplier() * Weapon->MoveMultiplier() * SlowMultiplier();
+	In.ExtraJumps = (uint8)FMath::Clamp(Abilities->ExtraJumps(), 0, 255);
+	MoveIn = In;
+}
+
+void AWWOCharacter::SimulateMove(float DeltaSeconds)
+{
+	// The movement rules for one move, from MoveIn only (see FWWOMoveInput).
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (Health->bDead)
+	{
+		WishVelocity = FVector::ZeroVector;
+		return;
+	}
+	if (MoveIn.Held & MoveFrozen)
+	{
+		bSprinting = false;
+		bSliding = false;
 		UpdateAir(DeltaSeconds);
 		WishVelocity = FVector::ZeroVector;
 		return;
 	}
-	Look(LookStick * StickSensitivity * DeltaSeconds * AimAssist->FrictionScale()); // friction: slower near targets
-
-	const FVector2D Input = MoveInput();
+	const FVector2D Input = MoveIn.Move;
 	const FVector WishDir = WishDirection(Input);
 
 	if (bMantling || TryMantle(Input))
@@ -329,16 +430,80 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	if (!IsOnFloor()) LastFallSpeed = -Move->Velocity.Z / WWO::M;
 }
 
+FWWOMoveState AWWOCharacter::GetMoveState() const
+{
+	FWWOMoveState S;
+	S.bSprinting = bSprinting; S.bCrouching = bCrouching; S.bSliding = bSliding; S.bCrouchToggled = bCrouchToggled;
+	S.bSlideQueued = bSlideQueued; S.bCrouchWasHeld = bCrouchWasHeld; S.bLandedSprinting = bLandedSprinting; S.bMantling = bMantling;
+	S.JumpsUsed = (uint8)FMath::Clamp(JumpsUsed, 0, 255);
+	S.TakeoffSpeed = TakeoffSpeed; S.SlideSpeedNow = SlideSpeedNow; S.LaunchTime = LaunchTime; S.AirTime = AirTime;
+	S.SinceLanded = SinceLanded; S.MantleT = MantleT;
+	S.SlideDir = SlideDir; S.MantleFrom = MantleFrom; S.MantleTo = MantleTo;
+	return S;
+}
+
+void AWWOCharacter::SetMoveState(const FWWOMoveState& S)
+{
+	bSprinting = S.bSprinting; bCrouching = S.bCrouching; bSliding = S.bSliding; bCrouchToggled = S.bCrouchToggled;
+	bSlideQueued = S.bSlideQueued; bCrouchWasHeld = S.bCrouchWasHeld; bLandedSprinting = S.bLandedSprinting; bMantling = S.bMantling;
+	JumpsUsed = S.JumpsUsed;
+	TakeoffSpeed = S.TakeoffSpeed; SlideSpeedNow = S.SlideSpeedNow; LaunchTime = S.LaunchTime; AirTime = S.AirTime;
+	SinceLanded = S.SinceLanded; MantleT = S.MantleT;
+	SlideDir = S.SlideDir; MantleFrom = S.MantleFrom; MantleTo = S.MantleTo;
+}
+
+void FWWOMoveState::Serialize(FArchive& Ar)
+{
+	uint8 Bits = (bSprinting ? 1 : 0) | (bCrouching ? 2 : 0) | (bSliding ? 4 : 0) | (bCrouchToggled ? 8 : 0)
+		| (bSlideQueued ? 16 : 0) | (bCrouchWasHeld ? 32 : 0) | (bLandedSprinting ? 64 : 0) | (bMantling ? 128 : 0);
+	Ar << Bits;
+	bSprinting = Bits & 1; bCrouching = Bits & 2; bSliding = Bits & 4; bCrouchToggled = Bits & 8;
+	bSlideQueued = Bits & 16; bCrouchWasHeld = Bits & 32; bLandedSprinting = Bits & 64; bMantling = Bits & 128;
+	Ar << JumpsUsed << TakeoffSpeed << SlideSpeedNow << LaunchTime << AirTime << SinceLanded << MantleT;
+	Ar << SlideDir << MantleFrom << MantleTo;
+}
+
+void FWWOMoveInput::Serialize(FArchive& Ar)
+{
+	// The stick to 1/127, the speed scale to 1/100.
+	int8 X = (int8)FMath::RoundToInt(FMath::Clamp(Move.X, -1.f, 1.f) * 127.f);
+	int8 Y = (int8)FMath::RoundToInt(FMath::Clamp(Move.Y, -1.f, 1.f) * 127.f);
+	uint16 Scale = (uint16)FMath::Clamp(FMath::RoundToInt(SpeedScale * 100.f), 0, 65535);
+	Ar << X << Y << Held << Pressed << Scale << ExtraJumps;
+	Move = FVector2D(X / 127.f, Y / 127.f);
+	SpeedScale = Scale / 100.f;
+}
+
+TArray<float> AWWOCharacter::LocalMoveStats() const
+{
+	// The order ServerSetMoveStats reads them in.
+	return {
+		M("walk_speed", WalkSpeed), M("sprint_speed", SprintSpeed), M("crouch_speed", CrouchSpeed), M("slide_speed", SlideSpeed),
+		M("slide_distance", SlideDistance), M("jump_height", JumpHeight1), M("jump_height", JumpHeight2), M("air_control", AirControl),
+		AscentGravity, DescentGravity, ApexHang, CoyoteTime, MantleReach, MantleTime,
+	};
+}
+
+void AWWOCharacter::ServerSetMoveStats_Implementation(const TArray<float>& V)
+{
+	if (V.Num() < 14) return;
+	WalkSpeed = V[0]; SprintSpeed = V[1]; CrouchSpeed = V[2]; SlideSpeed = V[3];
+	SlideDistance = V[4]; JumpHeight1 = V[5]; JumpHeight2 = V[6]; AirControl = V[7];
+	AscentGravity = V[8]; DescentGravity = V[9]; ApexHang = V[10]; CoyoteTime = V[11]; MantleReach = V[12]; MantleTime = V[13];
+	bNetStats = true; // M() now returns these as they are
+}
+
 void AWWOCharacter::UpdateSprint(const FVector2D& Input)
 {
 	// Press once to sprint; it stays on until you stop moving or crouch. Aiming and firing
 	// stop a sprint and block starting one. Sprinting from a crouch stands you up.
-	if (JustPressed(EWWOAction::Sprint) && !bSliding && !Weapon->IsAiming() && !Pressed(EWWOAction::Fire))
+	const bool bAiming = MoveIn.Held & MoveAim, bFiring = MoveIn.Held & MoveFire;
+	if ((MoveIn.Pressed & MoveSprint) && !bSliding && !bAiming && !bFiring)
 	{
 		bSprinting = true;
 		bCrouchToggled = false;
 	}
-	if (Input.Size() < 0.1f || Weapon->IsAiming() || Pressed(EWWOAction::Fire))
+	if (Input.Size() < 0.1f || bAiming || bFiring)
 	{
 		bSprinting = false;
 	}
@@ -351,7 +516,7 @@ bool AWWOCharacter::HasSprintMomentum() const
 
 void AWWOCharacter::UpdateCrouchAndSlide(const FVector& WishDir, float DeltaSeconds)
 {
-	const bool bCrouchHeld = Pressed(EWWOAction::Crouch);
+	const bool bCrouchHeld = MoveIn.Held & MoveCrouch;
 	const bool bCrouchStarted = bCrouchHeld && !bCrouchWasHeld;
 	bCrouchWasHeld = bCrouchHeld;
 
@@ -408,6 +573,7 @@ void AWWOCharacter::Launch(const FVector& NewVelocityCm)
 	Move->SetMovementMode(MOVE_Falling);
 	TakeoffSpeed = FVector2D(NewVelocityCm.X, NewVelocityCm.Y).Size() / WWO::M;
 	LaunchTime = 0.15f;
+	ClientAuthLeft = 1.5f; // online: the host can't simulate the launch yet, so it takes your position
 	bSliding = false;
 	bSprinting = false;
 }
@@ -451,7 +617,7 @@ float AWWOCharacter::LaunchSpeed(float Height) const
 
 void AWWOCharacter::HandleJump(const FVector& WishDir)
 {
-	if (!JustPressed(EWWOAction::Jump) || JumpsUsed >= MaxJumps + Abilities->ExtraJumps()) return;
+	if (!(MoveIn.Pressed & MoveJump) || JumpsUsed >= MaxJumps + MoveIn.ExtraJumps) return;
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	const float Height = M("jump_height", JumpsUsed == 0 ? JumpHeight1 : JumpHeight2);
 	Move->Velocity.Z = LaunchSpeed(Height) * WWO::M;
@@ -487,7 +653,7 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float
 	float Speed = M("walk_speed", WalkSpeed);
 	if (bIsCrouched || bCrouching) Speed = M("crouch_speed", CrouchSpeed);
 	else if (bSprinting) Speed = M("sprint_speed", SprintSpeed);
-	Speed *= Abilities->SpeedMultiplier() * Weapon->MoveMultiplier() * SlowMultiplier();
+	Speed *= MoveIn.SpeedScale; // abilities x aiming x slow, from the move input
 	if (!bOnFloor || LaunchTime > 0.f)
 	{
 		// In the air you keep your momentum and can only steer it gradually.
@@ -533,7 +699,7 @@ void AWWOCharacter::Land(float FallSpeed)
 	bLandedSprinting = bSprinting || TakeoffSpeed > M("walk_speed", WalkSpeed) * 1.05f;
 	if (bSlideQueued)
 	{
-		StartSlide(WishDirection(MoveInput()));
+		StartSlide(WishDirection(MoveIn.Move));
 	}
 	LandKick = -FMath::Clamp(FallSpeed * LandingDipPerSpeed, 0.f, LandingDipMax) * LandingDip;
 }

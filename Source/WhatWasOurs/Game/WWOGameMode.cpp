@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOHealthComponent.h"
@@ -49,6 +50,7 @@ AWWOGameMode::AWWOGameMode()
 	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = AWWOCharacter::StaticClass();
 	PlayerControllerClass = AWWOPlayerController::StaticClass();
+	GameStateClass = AWWOGameState::StaticClass(); // carries the wave line to every player
 }
 
 void AWWOGameMode::StartPlay()
@@ -127,15 +129,20 @@ void AWWOGameMode::Countdown(float Seconds)
 void AWWOGameMode::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (!bBoundToPlayer)
+	// Every player's death counts (online, players join later and respawn as new characters).
+	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())
 	{
-		if (AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer())
-		{
-			P->Health->OnDied.AddUObject(this, &AWWOGameMode::OnPlayerDied);
-			bBoundToPlayer = true;
-		}
+		if (BoundPlayers.Contains(P)) continue;
+		P->Health->OnDied.AddUObject(this, &AWWOGameMode::OnPlayerDied);
+		BoundPlayers.Add(P);
 	}
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
+	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
+	{
+		FLinearColor Color;
+		GS->StatusLine = StatusText(Color);
+		GS->StatusColor = Color;
+	}
 	if (RestartLeft > 0.f && (RestartLeft -= DeltaSeconds) <= 0.f)
 	{
 		Restart();
@@ -198,7 +205,9 @@ void AWWOGameMode::WaveCleared()
 void AWWOGameMode::OnPlayerDied()
 {
 	if (State == EWWOWaveState::Idle || State == EWWOWaveState::Won || State == EWWOWaveState::Lost) return;
-	if (UWWOWorldSubsystem::Get(this)->LivingTeammates().Num() == 0)
+	bool bAnyoneUp = UWWOWorldSubsystem::Get(this)->LivingTeammates().Num() > 0;
+	for (const AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers()) bAnyoneUp |= !P->Health->bDead;
+	if (!bAnyoneUp)
 	{
 		State = EWWOWaveState::Lost; // nobody left standing
 		RestartLeft = 4.f;
@@ -211,10 +220,14 @@ AActor* AWWOGameMode::PickPoint(FName Kind) const
 	const TArray<AActor*> All = SpawnPoints();
 	TArray<AActor*> Points = All.FilterByPredicate([Kind](const AActor* P) { return P->Tags.Num() <= 1 || P->ActorHasTag(Kind); });
 	if (Points.Num() == 0) Points = All;
-	const AWWOCharacter* Player = UWWOWorldSubsystem::Get(this)->GetPlayer();
-	const TArray<AActor*> Far = Points.FilterByPredicate([Player](const AActor* P)
+	const TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(this)->GetPlayers();
+	const TArray<AActor*> Far = Points.FilterByPredicate([&Players](const AActor* P)
 	{
-		return !Player || FVector::Dist(P->GetActorLocation(), Player->GetActorLocation()) >= MinSpawnDistance;
+		for (const AWWOCharacter* Player : Players)
+		{
+			if (FVector::Dist(P->GetActorLocation(), Player->GetActorLocation()) < MinSpawnDistance) return false; // away from everyone
+		}
+		return true;
 	});
 	if (Far.Num() > 0) Points = Far;
 	return Points.Num() > 0 ? Points[FMath::RandRange(0, Points.Num() - 1)] : nullptr;

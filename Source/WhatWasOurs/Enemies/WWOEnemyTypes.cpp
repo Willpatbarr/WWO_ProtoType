@@ -585,7 +585,7 @@ void AWWOTank::Slam()
 		To.Z = 0.f;
 		return To.Size() <= T->SlamRadius * WWO::M && Height <= 250.f;
 	};
-	if (AWWOCharacter* P = WS->GetPlayer())
+	for (AWWOCharacter* P : WS->GetPlayers()) // every player, online
 	{
 		if (InRange(P))
 		{

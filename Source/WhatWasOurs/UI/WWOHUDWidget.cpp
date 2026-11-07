@@ -1,4 +1,5 @@
 #include "UI/WWOHUDWidget.h"
+#include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -489,12 +490,10 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		}
 	}
 
-	// The wave line (top center).
-	if (const AWWOGameMode* Mode = Pl->GetWorld()->GetAuthGameMode<AWWOGameMode>())
+	// The wave line (top center), from the host's game state (the game mode only exists there).
+	if (const AWWOGameState* GS = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
-		FLinearColor C;
-		const FString Line = Mode->StatusText(C);
-		P.Text(Line, FVector2D(Center.X, 24.f), 28.f, C, 0.5f, 8.f, 0.85f);
+		if (!GS->StatusLine.IsEmpty()) P.Text(GS->StatusLine, FVector2D(Center.X, 24.f), 28.f, GS->StatusColor, 0.5f, 8.f, 0.85f);
 	}
 
 	// Frame rate (top left), big: green at 60+, yellow at 30+, red below. wwo.ShowFPS 0 hides it.

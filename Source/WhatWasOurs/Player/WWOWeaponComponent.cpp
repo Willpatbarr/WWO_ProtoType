@@ -275,6 +275,15 @@ UStaticMeshComponent* UWWOWeaponComponent::Part(FName Name) const
 	return Found ? Found->Get() : nullptr;
 }
 
+void UWWOWeaponComponent::SetFirstPersonHidden(bool bHidden)
+{
+	if (ModelRoot) ModelRoot->SetVisibility(!bHidden, true);
+	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
+	{
+		if (Arm->Root) Arm->Root->SetVisibility(!bHidden, true);
+	}
+}
+
 int32 UWWOWeaponComponent::MagazineSize() const
 {
 	return Weapon ? FMath::Max(1, (int32)Weapon->MagazineSize) : 1;

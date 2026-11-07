@@ -77,7 +77,7 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params);
 	// The player's capsule (Unreal's Pawn profile) ignores Visibility traces, but in Godot the
 	// shot's ray hits the player's body, so test it too and keep whichever comes first.
-	if (AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer())
+	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers()) // every player, online
 	{
 		FHitResult PlayerHit;
 		if (P->GetCapsuleComponent()->LineTraceComponent(PlayerHit, From, To, FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyShot), false))
@@ -113,7 +113,7 @@ void AWWOEnemyProjectile::Splash(const FVector& Point)
 {
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
 	const float R = SplashRadius * WWO::M;
-	if (AWWOCharacter* P = WS->GetPlayer())
+	for (AWWOCharacter* P : WS->GetPlayers())
 	{
 		const float D = FVector::Dist(Point, P->GetActorLocation());
 		if (D <= R + 50.f) // +0.5 m: the player's body, not just its center

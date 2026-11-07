@@ -53,7 +53,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 		for (const AActor* Point : SpawnPoints())
 		{
 			const UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), Point->GetActorLocation(), P->GetActorLocation());
-			UE_LOG(LogWWO, Display, TEXT("WaveTest nav: %s -> player: %s, %d points, length %.1f m%s"), *Point->GetActorLabel(),
+			UE_LOG(LogWWO, Display, TEXT("WaveTest nav: %s -> player: %s, %d points, length %.1f m%s"), *Point->GetName(),
 				NavPath && NavPath->IsValid() ? TEXT("ok") : TEXT("NO PATH"), NavPath ? NavPath->PathPoints.Num() : 0,
 				NavPath && NavPath->IsValid() ? NavPath->GetPathLength() / WWO::M : 0.f, NavPath && NavPath->IsPartial() ? TEXT(" PARTIAL") : TEXT(""));
 		}
@@ -207,7 +207,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 				++WaveTestStuck;
 				UE_LOG(LogWWO, Warning, TEXT("WaveTest STUCK: %s (%s) at %s wants %.1f m/s toward %s, moved %.0f cm in the last %.2f s, %s in the way; %s"),
 					*C->GetName(), *What, *Pos.ToCompactString(), Wish.Size2D() / WWO::M, *Wish.GetSafeNormal2D().ToCompactString(), Moved, Step,
-					Wall.GetActor() ? *Wall.GetActor()->GetActorLabel() : TEXT("nothing"), E ? *E->PathDebug() : TEXT(""));
+					Wall.GetActor() ? *Wall.GetActor()->GetName() : TEXT("nothing"), E ? *E->PathDebug() : TEXT(""));
 			}
 		}
 		// Stuck in the air (on someone's head, or wedged on a ledge).

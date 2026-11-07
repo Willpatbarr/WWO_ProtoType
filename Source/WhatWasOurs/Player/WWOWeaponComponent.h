@@ -129,6 +129,8 @@ public:
 	void StartPunch(float FovDegrees, float RollDegrees, float Seconds);
 	void Rumble(float Weak, float Strong, float Seconds);
 	int32 MagazineSize() const;
+	// Someone else's character (online): no first-person gun or arms (they're drawn for its owner).
+	void SetFirstPersonHidden(bool bHidden);
 
 	// A line from the eyes (ignores the player). Returns true on a hit.
 	bool CastRayTo(const FVector& To, FHitResult& OutHit) const;

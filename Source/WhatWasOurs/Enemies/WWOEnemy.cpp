@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemy.h"
+#include "Net/UnrealNetwork.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
@@ -88,6 +89,17 @@ AWWOEnemy::AWWOEnemy(const FObjectInitializer& ObjectInitializer)
 	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
 	Tags.Add("Enemy");
+	// Online: the host runs the AI; everyone else gets the position, health and animation.
+	bReplicates = true;
+	SetReplicatingMovement(true);
+}
+
+void AWWOEnemy::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOEnemy, Health);
+	DOREPLIFETIME(AWWOEnemy, MaxHealth);
+	DOREPLIFETIME(AWWOEnemy, bDead);
 }
 
 UWWOEnemyMovement* AWWOEnemy::EnemyMovement() const
@@ -247,6 +259,13 @@ bool AWWOEnemy::TargetIsInvisible() const
 void AWWOEnemy::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (!HasAuthority())
+	{
+		// Online, not the host: it moves and animates as the host's copy does; only the hit flash fades here.
+		Flash = WWO::MoveToward(Flash, 0.f, 6.f * DeltaSeconds);
+		Body->SetFlash(Flash);
+		return;
+	}
 	UWWOEnemyMovement* Move = EnemyMovement();
 	if (bDead)
 	{
@@ -320,16 +339,27 @@ FVector AWWOEnemy::Unstick(const FVector& Wish, float DeltaSeconds)
 
 void AWWOEnemy::Retarget(float DeltaSeconds)
 {
-	// Enemies go after whoever's closest: you or an AI teammate.
+	// Enemies go after whoever's closest: a player (any of them, online) or an AI teammate.
 	RetargetLeft -= DeltaSeconds;
 	const AWWOAlly* CurrentAlly = Cast<AWWOAlly>(TargetActor.Get());
-	if (TargetActor.IsValid() && RetargetLeft > 0.f && !(CurrentAlly && CurrentAlly->IsDown())) return;
+	const AWWOCharacter* CurrentPlayer = Cast<AWWOCharacter>(TargetActor.Get());
+	const bool bTargetDown = (CurrentAlly && CurrentAlly->IsDown()) || (CurrentPlayer && CurrentPlayer->Health->bDead);
+	if (TargetActor.IsValid() && RetargetLeft > 0.f && !bTargetDown) return;
 	RetargetLeft = 0.5f;
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
-	AWWOCharacter* Player = WS->GetPlayer();
-	AActor* Best = Player;
-	float BestDistance = Player ? FVector::Dist(GetActorLocation(), Player->GetActorLocation()) : TNumericLimits<float>::Max();
-	if (Player && Player->IsInvisible()) BestDistance = TNumericLimits<float>::Max(); // veiled: teammates are fair game, you aren't
+	AActor* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (AWWOCharacter* Player : WS->GetPlayers())
+	{
+		if (Player->IsInvisible() || Player->Health->bDead) continue; // veiled: teammates are fair game, you aren't
+		const float D = FVector::Dist(GetActorLocation(), Player->GetActorLocation());
+		if (D < BestDistance)
+		{
+			Best = Player;
+			BestDistance = D;
+		}
+	}
+	if (!Best) Best = WS->GetPlayer(); // everyone down or veiled: keep facing someone
 	for (AWWOAlly* Mate : WS->LivingTeammates())
 	{
 		const float D = FVector::Dist(GetActorLocation(), Mate->GetActorLocation());
