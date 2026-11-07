@@ -5,7 +5,7 @@ host-authoritative (listen server) with client prediction, not client trust. Sec
 packaged Mac build (Windows later). Read HANDOFF.md first for project conventions.
 
 ## Phases (agreed with Will)
-1. **Foundation (in progress):** packaged Mac build; Host / Join with LAN discovery; host runs waves
+1. **Foundation (nearly done):** packaged Mac build; Host / Join with LAN discovery; host runs waves
    and enemies; predicted player movement; seeing the other player's model and animations.
 2. **Combat:** predicted shots validated by the host (lag compensation, fire rate, ammo, line of
    sight), damage, health, downed / respawn, shared wave progress, enemy projectiles visible to all.
@@ -77,26 +77,42 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
    (positions there differ between machines), sliding along walls (two small corrections in one run).
    The renderer crash (`(OldPacked & DeletingBit) == 0` in Metal `BindUniformBuffer`, base pass) hits single
    player too; it crashed the first two-instance run and is unrelated to networking.
-2. **Expected issues to check:** checked by the test above: corrections while walking, sprinting,
-   sliding, crouching and jumping (0); crouch matches on the host's copy; the remote body's model shows
-   (screenshots); the joiner's HUD shows the host's wave line. Still open: mantling; the remote body's
-   animation (check the screenshots by eye, or log the clip); the
-   player controller's per-frame code on the host for remote controllers (BeginPlay skips widgets;
-   check nothing in `Tick` assumes a HUD); `AWWOGameMode::Restart` / `LoadMap` use OpenLevel, which
-   online should be a `ServerTravel` (with `?listen`).
-3. **Packaged build networking on macOS:** the packaged app runs App-Sandboxed (data in
-   `~/Library/Containers/com.YourCompany.WhatWasOurs/...`) and `Build/Mac/Resources` has
-   `Sandbox.NoNet.entitlements`. Make sure the packaged app gets network client/server entitlements
-   (or disable the sandbox for development builds) or hosting / joining will silently fail.
-   Also set a real bundle identifier. LAN discovery uses UDP broadcast (port 14001): the macOS
-   firewall may prompt on first host.
-4. Host / Join / Leave buttons in the menu, with the subsystem's `Status` line.
-5. Re-package and hand Will the app; update HANDOFF.md with a Networking section (fold this file in).
+2. **Checked by the test (all pass):** the joiner's HUD shows the host's wave line; the remote body's
+   model and clips (each second the host's copy of the joiner plays the same clip the joiner plays:
+   Jog_Fwd, Sprint, Slide, Crouch_Fwd, Jump, Idle); the host's per-frame code with a remote controller
+   (no HUD needed); the Settings menu online (no pause; your character ignores buttons while it's open).
+3. **Packaged build on macOS: done.** Development builds already used `Sandbox.Server.entitlements` (network
+   client + server); Shipping now does too (`DefaultEngine.ini`, `XcodeProjectSettings`). Bundle ID
+   `com.williambarr.WhatWasOurs` (saved data moves to that sandbox container, so the first run starts from
+   the shipped settings). `NSLocalNetworkUsageDescription` in `Info.Template.plist`: macOS asks before LAN
+   search. The macOS firewall may also ask on first host.
+4. **Menu: done.** Settings, Global, **Multiplayer**: Host a LAN game (this map), Find and join a LAN game,
+   Join a game on this Mac (testing), Leave, and a live status line (hosting / in a game / alone, players,
+   this Mac's address for others; lost connections and failed joins show there). `FWWOSettingRow::LiveHeader`.
+5. **Online restarts and map changes: done.** `AWWOGameMode::LoadMap` / `Restart`: alone `OpenLevel`; hosting
+   `ServerTravel(map?listen)` (joiners follow); a joiner is told only the host can.
+6. **Spawning: fixed.** One Player Start per map: the engine's pick failed when the host stood on it with no
+   room beside it (the joiner never spawned). `AWWOGameMode::SpawnDefaultPawnFor` puts each player on the first
+   free spot in rings 1.5 / 3 / 4.5 m around it.
+7. **Still open for phase 1:** mantling online (the kit crate stacks have no clean chest-height face, so the
+   test can't trigger one; try it by hand, or add a mantle block to the test range); two machines over
+   real Wi-Fi/Ethernet (LAN search, firewall, local network prompt); hand Will the packaged app; fold this
+   file into HANDOFF.md once phase 1 is closed.
+
+## Phase 2 groundwork (done)
+- **Player health** (`UWWOHealthComponent`): host-owned, `Health` / `Shield` / `bDead` replicated. Damage, regen,
+  death and respawn run on the host only; a joiner replays the effects (`OnDamaged` on a drop, death and
+  respawn on `bDead`). Tested: the host hits the joiner for 30, the joiner sees shield 70 and one damage event.
+- **Target dummies** (`AWWOTarget`): replicated health, death and strafing (host only). A joiner's hit
+  flashes and shows a number locally but changes nothing until phase 2 sends hits to the host.
+- **Enemy projectiles** (`AWWOEnemyProjectile`): replicated once at spawn (velocity, gravity, look); each
+  joiner flies its own copy for looks, which pops or splashes where it is when the host's copy goes.
+  Damage stays on the host. The test counts about 70 host shots arriving per run.
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);
   host rewinds target positions to that time, validates fire rate / ammo / line of sight, applies
   damage, multicasts hits (damage numbers, flash). Hidden aim assist stays client-side input help.
-- Player health / slow / veil / entrench should be host state replicated to the owner (the owner's
-  `SpeedScale` must agree with the host's, or corrections loop).
-- Target dummies on the test range are placed, non-replicated actors: make them replicate.
+- Slow / veil / entrench should be host state replicated to the owner (the owner's `SpeedScale` must agree
+  with the host's, or corrections loop). Health already is.
+- Other effects (`AWWOFXActor`: grenade blasts, ability visuals) still exist only where they're made.
