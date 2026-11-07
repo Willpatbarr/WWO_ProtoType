@@ -58,6 +58,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Camera") float HipFov = 100.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float RumbleScale = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float PunchScale = 1.f;
+	// How big every gun's model is when aimed down sights, against its hip size (1 = the same). It
+	// scales around the sight point, so the sight stays on the reticle. Not from Godot.
+	UPROPERTY(EditAnywhere, Category = "Camera") float AdsGunScale = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeTime = 0.45f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeReach = 2.5f;

@@ -1052,6 +1052,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Rot += MeleeGunDropRotation * Drop;
 
 	SetRelativeLocationAndRotation(G2U(Pos), GRot(Rot));
+	ModelRoot->SetRelativeScale3D(FVector(FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount))); // the model's origin is its sight point
 
 	// The punching arm.
 	const float MeleeT = bMeleeing ? MeleeAnimTime(MeleeProgress) : 0.f;
