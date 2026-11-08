@@ -13,6 +13,7 @@
 #include "GameFramework/Character.h"
 #include "WWOTypes.h"
 #include "Engine/NetSerialization.h"
+#include "Systems/WWOLoadoutSubsystem.h"
 #include "WWOCharacter.generated.h"
 
 class UCameraComponent;
@@ -227,6 +228,11 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;
 	UFUNCTION() void OnRep_NetFlora();
 	UFUNCTION(Server, Reliable) void ServerSetFlora(FName Flora);
+	// Online: a joiner's loadout, kept on the host (UWWOLoadoutSubsystem::Get finds it for anything
+	// this character owns). Null for your own character and everyone's on a joiner.
+	UPROPERTY() TObjectPtr<UWWOLoadoutSubsystem> NetLoadout;
+	UFUNCTION(Server, Reliable) void ServerSetLoadout(const FWWONetLoadout& Loadout);
+	FWWONetLoadout SentLoadout;
 	// Online: you're holding Revive next to a downed teammate (the host runs the revive).
 	UFUNCTION(Server, Reliable) void ServerSetRevive(bool bHolding);
 

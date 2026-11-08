@@ -2,6 +2,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOAbilityComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -55,6 +56,7 @@ void UWWOHealthComponent::OnRep_Dead()
 	{
 		// Respawned on the host (it moved you to the start; face the way the start faces), or
 		// revived where you fell (keep looking where you were).
+		SetBodyBlocks(true);
 		P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 		if (P->IsLocallyControlled() && !bRevived) P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
 		P->ClearStatusEffects();
@@ -123,6 +125,7 @@ void UWWOHealthComponent::DieLocally()
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	P->GetCharacterMovement()->StopMovementImmediately();
 	P->GetCharacterMovement()->DisableMovement(); // no moving, shooting or throwing
+	SetBodyBlocks(false);
 	OnDied.Broadcast();
 }
 
@@ -133,6 +136,7 @@ void UWWOHealthComponent::Respawn()
 	bDead = false;
 	bRevived = false;
 	BeingRevived = 0.f;
+	SetBodyBlocks(true);
 	P->TeleportTo(Spawn.GetLocation(), Spawn.Rotator());
 	P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
 	P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
@@ -215,10 +219,19 @@ void UWWOHealthComponent::Revive()
 	bDead = false;
 	bRevived = true;
 	BeingRevived = 0.f;
+	SetBodyBlocks(true);
 	P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 	P->ClearStatusEffects();
 	Health = FMath::Max(MaxHealth() * ReviveHealth, 1.f);
 	Shield = 0.f;
 	SinceDamage = 0.f; // regen waits its usual delay
 	OnRespawned.Broadcast();
+}
+
+void UWWOHealthComponent::SetBodyBlocks(bool bBlocks)
+{
+	if (const ACharacter* C = Cast<ACharacter>(GetOwner()))
+	{
+		C->GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, bBlocks ? ECR_Block : ECR_Ignore);
+	}
 }

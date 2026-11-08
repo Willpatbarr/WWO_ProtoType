@@ -1,5 +1,7 @@
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "WhatWasOurs.h"
+#include "Player/WWOCharacter.h"
+#include "Components/ActorComponent.h"
 #include "Engine/AssetManager.h"
 #include "Algo/StableSort.h"
 #include "Engine/GameInstance.h"
@@ -38,8 +40,29 @@ namespace
 	}
 }
 
+namespace
+{
+	// The character a context belongs to: itself, the owner of a component, or the owner (or
+	// instigator) of an actor it spawned, a few levels up.
+	const AWWOCharacter* OwningCharacter(const UObject* Context)
+	{
+		for (int32 i = 0; i < 5 && Context; ++i)
+		{
+			if (const AWWOCharacter* C = Cast<AWWOCharacter>(Context)) return C;
+			if (const UActorComponent* Comp = Cast<UActorComponent>(Context)) Context = Comp->GetOwner();
+			else if (const AActor* A = Cast<AActor>(Context)) Context = A->GetOwner() ? static_cast<const UObject*>(A->GetOwner()) : A->GetInstigator();
+			else return nullptr;
+		}
+		return nullptr;
+	}
+}
+
 UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::Get(const UObject* WorldContext)
 {
+	if (const AWWOCharacter* C = OwningCharacter(WorldContext))
+	{
+		if (C->NetLoadout) return C->NetLoadout; // a joiner's, on the host
+	}
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
 	return GI ? GI->GetSubsystem<UWWOLoadoutSubsystem>() : nullptr;
@@ -313,6 +336,7 @@ void UWWOLoadoutSubsystem::Changed()
 
 void UWWOLoadoutSubsystem::Save() const
 {
+	if (bCopy) return; // a joiner's copy: their own machine saves theirs
 	UWWOLoadoutSave* Data = Cast<UWWOLoadoutSave>(UGameplayStatics::CreateSaveGameObject(UWWOLoadoutSave::StaticClass()));
 	Data->Flora = Flora ? Flora->Id : NAME_None;
 	Data->Weapon = Weapon ? Weapon->Id : NAME_None;
@@ -368,6 +392,77 @@ void UWWOLoadoutSubsystem::ApplySave(const UWWOLoadoutSave* Data)
 		UWWOAbilityData* A = FindById(Abilities, Data->Abilities[Slot]);
 		if (A && !EquippedAbilities.Contains(A)) EquippedAbilities[Slot] = A;
 	}
+}
+
+// --- Online --------------------------------------------------------------------------------------
+
+FWWONetLoadout UWWOLoadoutSubsystem::ToNet() const
+{
+	FWWONetLoadout Net;
+	Net.Flora = Flora ? Flora->Id : NAME_None;
+	Net.Weapon = Weapon ? Weapon->Id : NAME_None;
+	Net.Grenade = Grenade ? Grenade->Id : NAME_None;
+	for (const UWWOAbilityData* A : EquippedAbilities) Net.Abilities.Add(A ? A->Id : NAME_None);
+	for (const UWWOTraitData* T : EquippedTraitList) Net.Traits.Add(T->Id);
+	for (const auto& Pair : EquippedFrame)
+	{
+		Net.FrameSlots.Add(Pair.Key);
+		Net.FrameParts.Add(Pair.Value ? Pair.Value->Id : NAME_None);
+	}
+	if (Weapon)
+	{
+		for (const auto& Pair : ModIds(Weapon->Id))
+		{
+			Net.ModKeys.Add(FName(Weapon->Id.ToString() + TEXT(":") + Pair.Key.ToString()));
+			Net.ModIds.Add(Pair.Value);
+		}
+	}
+	return Net;
+}
+
+UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::NewCopy(const UWWOLoadoutSubsystem* Source)
+{
+	if (!Source) return nullptr;
+	UWWOLoadoutSubsystem* Copy = NewObject<UWWOLoadoutSubsystem>(Source->GetOuter()); // not registered: GetSubsystem still finds this machine's
+	Copy->bCopy = true;
+	Copy->PointValue = Source->PointValue;
+	Copy->Weapons = Source->Weapons;
+	Copy->Grenades = Source->Grenades;
+	Copy->Abilities = Source->Abilities;
+	Copy->FrameParts = Source->FrameParts;
+	Copy->Floras = Source->Floras;
+	Copy->Traits = Source->Traits;
+	Copy->WeaponMods = Source->WeaponMods;
+	Copy->SoldierData = Source->SoldierData;
+	Copy->SwarmData = Source->SwarmData;
+	Copy->TankData = Source->TankData;
+	Copy->AllyData = Source->AllyData;
+	Copy->EquippedAbilities.SetNum(AbilitySlots);
+	return Copy;
+}
+
+void UWWOLoadoutSubsystem::ApplyNet(const FWWONetLoadout& Net)
+{
+	// Exactly what the joiner has (nothing filled in for them).
+	Flora = nullptr;
+	Weapon = nullptr;
+	Grenade = nullptr;
+	EquippedAbilities.Reset();
+	EquippedAbilities.SetNum(AbilitySlots);
+	EquippedTraitList.Reset();
+	EquippedFrame.Reset();
+	EquippedMods.Reset();
+	UWWOLoadoutSave* Data = NewObject<UWWOLoadoutSave>();
+	Data->Flora = Net.Flora;
+	Data->Weapon = Net.Weapon;
+	Data->Grenade = Net.Grenade;
+	Data->Abilities = Net.Abilities;
+	Data->Traits = Net.Traits;
+	for (int32 i = 0; i < FMath::Min(Net.FrameSlots.Num(), Net.FrameParts.Num()); ++i) Data->Frame.Add(Net.FrameSlots[i], Net.FrameParts[i]);
+	for (int32 i = 0; i < FMath::Min(Net.ModKeys.Num(), Net.ModIds.Num()); ++i) Data->WeaponMods.Add(Net.ModKeys[i], Net.ModIds[i]);
+	ApplySave(Data);
+	FitFlora(); // a grenade, ability or trait from another flora doesn't count
+	OnChanged.Broadcast();
 }
 
 void UWWOLoadoutSubsystem::LoadDefaultLoadout()

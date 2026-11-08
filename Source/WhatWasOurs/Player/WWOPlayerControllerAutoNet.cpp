@@ -127,6 +127,21 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			P->Health->Health, P->Health->Shield, AutoNetDamageEvents, Dummies.Num(), Dummies.Num() > 0 ? Dummies[0]->GetHealth() : 0.f);
 	}
 
+	// The joiner's loadout reaches the host (its copy answers for anything the joiner owns).
+	if (Crossed(3.0f))
+	{
+		auto Describe = [](const UWWOLoadoutSubsystem* L)
+		{
+			if (!L) return FString(TEXT("none"));
+			const FWWONetLoadout N = L->ToNet();
+			return FString::Printf(TEXT("flora %s grenade %s abilities %s traits %d frame %d weapon %s mods %d%s"), *N.Flora.ToString(), *N.Grenade.ToString(),
+				*FString::JoinBy(N.Abilities, TEXT("+"), [](const FName& X) { return X.ToString(); }), N.Traits.Num(), N.FrameParts.Num(), *N.Weapon.ToString(),
+				N.ModIds.Num(), L->IsCopy() ? TEXT(" (host's copy)") : TEXT(""));
+		};
+		if (bHost && Other) UE_LOG(LogWWO, Display, TEXT("AutoTest net: host sees the joiner's loadout: %s; its own: %s"), *Describe(UWWOLoadoutSubsystem::Get(Other->Weapon)), *Describe(UWWOLoadoutSubsystem::Get(P)));
+		if (!bHost) UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner's own loadout: %s"), *Describe(UWWOLoadoutSubsystem::Get(P)));
+	}
+
 	// Both: the Settings menu's Multiplayer tab (status line), and online menus don't pause the match.
 	if (Crossed(2.0f))
 	{

@@ -26,6 +26,31 @@ struct FWWOModConfig
 	UPROPERTY() TMap<FName, FName> Mods; // slot -> mod id
 };
 
+// A player's loadout as ids, for the host (online: a joiner sends it, the host keeps a copy of the
+// loadout system for that player; see UWWOLoadoutSubsystem::Get). Maps are parallel arrays.
+USTRUCT()
+struct FWWONetLoadout
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FName Flora;
+	UPROPERTY() FName Weapon;
+	UPROPERTY() FName Grenade;
+	UPROPERTY() TArray<FName> Abilities;
+	UPROPERTY() TArray<FName> Traits;
+	UPROPERTY() TArray<FName> FrameSlots;
+	UPROPERTY() TArray<FName> FrameParts;
+	UPROPERTY() TArray<FName> ModKeys; // "weapon:slot", the equipped weapon's
+	UPROPERTY() TArray<FName> ModIds;
+
+	bool operator==(const FWWONetLoadout& O) const
+	{
+		return Flora == O.Flora && Weapon == O.Weapon && Grenade == O.Grenade && Abilities == O.Abilities && Traits == O.Traits
+			&& FrameSlots == O.FrameSlots && FrameParts == O.FrameParts && ModKeys == O.ModKeys && ModIds == O.ModIds;
+	}
+	bool operator!=(const FWWONetLoadout& O) const { return !(*this == O); }
+};
+
 UCLASS()
 class WHATWASOURS_API UWWOLoadoutSave : public USaveGame
 {
@@ -51,7 +76,15 @@ public:
 	static constexpr int32 TraitSlots = 4; // placeholder until decided
 	static constexpr int32 AbilitySlots = 2;
 
+	// This machine's loadout; or, on the host, a joiner's copy when the context is that joiner's
+	// character or something it owns (its components, its grenades and what they leave behind).
 	static UWWOLoadoutSubsystem* Get(const UObject* WorldContext);
+
+	// Online (see FWWONetLoadout).
+	FWWONetLoadout ToNet() const;
+	static UWWOLoadoutSubsystem* NewCopy(const UWWOLoadoutSubsystem* Source); // all the data, nothing equipped, never saved
+	void ApplyNet(const FWWONetLoadout& Net);
+	bool IsCopy() const { return bCopy; }
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
@@ -143,6 +176,7 @@ private:
 	TArray<FWWOModConfig> Configs;
 	int32 ActiveConfig = INDEX_NONE; // the last one applied (this session)
 
+	bool bCopy = false; // a joiner's loadout on the host
 	void LoadMods();
 	TMap<FName, FName> ModIds(FName WeaponId) const;
 	void SetModIds(FName WeaponId, const TMap<FName, FName>& Ids);

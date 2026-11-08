@@ -71,6 +71,7 @@ private:
 	void Die();
 	void DieLocally();     // the effects of dying (no moving), on whichever machine
 	void UpdateRevive(float DeltaSeconds); // host: this player reviving someone
+	void SetBodyBlocks(bool bBlocks);      // down: other players walk through you (on every machine, so moves agree)
 	UFUNCTION() void OnRep_Health();
 	UFUNCTION() void OnRep_Dead();
 	bool IsHost() const;

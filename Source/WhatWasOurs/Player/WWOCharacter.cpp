@@ -1,4 +1,5 @@
 #include "Player/WWOCharacter.h"
+#include "WhatWasOurs.h"
 #include "Data/WWOData.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/WWOCharacterMovement.h"
@@ -132,6 +133,15 @@ void AWWOCharacter::ServerSetFlora_Implementation(FName Flora)
 {
 	NetFlora = Flora;
 	OnRep_NetFlora(); // the host shows it too
+}
+
+void AWWOCharacter::ServerSetLoadout_Implementation(const FWWONetLoadout& Loadout)
+{
+	if (!NetLoadout) NetLoadout = UWWOLoadoutSubsystem::NewCopy(UWWOLoadoutSubsystem::Get(GetWorld()));
+	if (NetLoadout) NetLoadout->ApplyNet(Loadout);
+	UE_LOG(LogWWO, Display, TEXT("Net: %s's loadout: flora %s, grenade %s, abilities %s, %d traits, weapon %s with %d mods"), *GetName(),
+		*Loadout.Flora.ToString(), *Loadout.Grenade.ToString(), *FString::JoinBy(Loadout.Abilities, TEXT("+"), [](const FName& N) { return N.ToString(); }),
+		Loadout.Traits.Num(), *Loadout.Weapon.ToString(), Loadout.ModIds.Num());
 }
 
 void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
@@ -300,6 +310,15 @@ void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 			ServerSetMoveStats(Stats);
 		}
 		const UWWOLoadoutSubsystem* Loadout = GetLoadout();
+		if (Loadout && !HasAuthority())
+		{
+			const FWWONetLoadout Net = Loadout->ToNet();
+			if (Net != SentLoadout)
+			{
+				SentLoadout = Net;
+				ServerSetLoadout(Net);
+			}
+		}
 		const FName Flora = Loadout && Loadout->GetFlora() ? Loadout->GetFlora()->Id : NAME_None;
 		if (Flora != NetFlora)
 		{

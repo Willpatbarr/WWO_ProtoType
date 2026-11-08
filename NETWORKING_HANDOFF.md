@@ -170,6 +170,22 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
 - **Not yet:** grenades and abilities from a joiner still only happen on its own screen (phase 3 kit); taking
   damage doesn't interrupt a revive (only letting go or stepping away does).
 
+**Phase 2 on two Macs (2026-11-07):** the whole test passed host Mac mini / joiner MacBook Air (LAN search, gun checks
+with the joiner's own mods, melee, kill credit, revive, everyone-down restart). Two things seen there: corrections
+while running into a downed player (fixed: a downed body no longer blocks players, `SetBodyBlocks`, on every
+machine), and one 8.5 m correction right after jumping off a crate stack into a melee lunge that fixed itself
+within the move (positions matched a second later); likely the lunge's `MoveClientAuth` shortcut, to go when
+phase 3 simulates the lunge on the host.
+
+## Phase 3: kit (in progress)
+- **Each player's loadout on the host: done** (`FWWONetLoadout`, `UWWOLoadoutSubsystem::ToNet / NewCopy / ApplyNet`,
+  `AWWOCharacter::NetLoadout`, `ServerSetLoadout`). A joiner sends its loadout as ids whenever it changes (checked
+  every 0.5 s with the move stats); the host keeps an unregistered, never-saved copy of the loadout system for that
+  player. `UWWOLoadoutSubsystem::Get(Context)` returns it when the context is that character, one of its components,
+  or an actor it owns or instigated (a few levels up), so traits, abilities, grenade data and frame parts answer
+  for the right player without changing call sites. Spawned kit must set its Owner (or Instigator) for this.
+  Tested: the host's copy matches the joiner's own loadout; single-player full test passes.
+
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);
   host rewinds target positions to that time, validates fire rate / ammo / line of sight, applies
