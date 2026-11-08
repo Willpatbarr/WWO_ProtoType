@@ -10,6 +10,7 @@
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
+#include "Systems/WWOLoadoutSubsystem.h"
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOHealthComponent.h"
 #include "Game/WWOGameState.h"
@@ -191,7 +192,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			Fake.Origin = P->EyeLocation();
 			Fake.Hits.Add({ AutoNetShootTarget.Get(), 99999.f, true, AutoNetShootTarget->GetActorLocation() });
 			P->ServerGunShot(Fake);
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a forged 99999-damage hit (the host should reject it)"));
+			// And one claiming a mod that doesn't fit this gun.
+			Fake.Hits[0].Damage = 10.f;
+			Fake.Mods = { "no_such_mod" };
+			P->ServerGunShot(Fake);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a forged 99999-damage hit and a shot with a made-up mod (the host should reject both); mods on its gun %d"),
+				UWWOLoadoutSubsystem::Get(this) ? UWWOLoadoutSubsystem::Get(this)->ModPercent("damage") != 0.f : -1);
 		}
 	}
 	if (Crossed(ShootTo + 0.6f))
@@ -259,14 +265,14 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	{
 		if (bHost)
 		{
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d"),
-				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d; kills credited to the joiner %d"),
+				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected, AWWOCharacter::NetKillsCredited);
 		}
 		else
 		{
 			const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetMeleeTarget.Get());
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner punched %s: its health %.0f -> %.0f (host's), dead %d"),
-				*GetNameSafe(Dummy), AutoNetMeleeHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner punched %s: its health %.0f -> %.0f (host's), dead %d; kills the host confirmed %d"),
+				*GetNameSafe(Dummy), AutoNetMeleeHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, AWWOCharacter::NetKillsCredited);
 		}
 	}
 

@@ -935,6 +935,13 @@ void UWWOWeaponComponent::Shoot()
 	const bool bJoiner = Mode == NM_Client;
 	FWWOGunShot NetShot;
 	NetShot.WeaponId = Weapon->Id;
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	{
+		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+		{
+			if (const UWWOModData* Mod = L->GetMod(Slot)) NetShot.Mods.Add(Mod->Id);
+		}
+	}
 	NetShot.Origin = P->EyeLocation();
 	NetShot.Ends = Ends;
 	for (const auto& Pair : Totals)
@@ -956,7 +963,9 @@ void UWWOWeaponComponent::Shoot()
 	}
 	if (bJoiner) P->ServerGunShot(NetShot);
 	else if (Mode == NM_ListenServer) P->MulticastGunShot(NetShot.Origin, NetShot.Ends);
-	OnShotResult(FirstHit, Totals.Num(), Kills, bAnyCritical);
+	// A joiner's kill perks wait for the host's word (OnKillsConfirmed); its kill marker doesn't.
+	bLastShotPredictedKill = bAnyKilled;
+	OnShotResult(FirstHit, Totals.Num(), bJoiner ? 0 : Kills, bAnyCritical);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
@@ -1265,7 +1274,6 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 	if (!L) return;
 	bOverpressure = false; // any shot uses it up, hit or miss
 	AimHeld = 0.f;         // Patience starts over
-	if (Kills > 0 && L->HasPerk("hammer")) HammerLeft = 3.f;
 	if (bCritical && FirstHit && L->HasPerk("ricochet"))
 	{
 		// One bounce from the target that was hit, for 60% of the gun's damage.
@@ -1274,11 +1282,7 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 	}
 	// Focus: a shot that hits nothing ends the streak.
 	HitStreak = HitCount > 0 ? HitStreak + 1 : 0;
-	if (Kills > 0 && L->HasPerk("scavenger"))
-	{
-		Ammo = FMath::Min(Ammo + FMath::Max(1, FMath::RoundToInt(MagazineSize() * 0.2f)) * Kills, MagazineSize());
-	}
-	if (Kills > 0 && L->HasPerk("adrenal")) AdrenalLeft = 4.f;
+	ApplyKillPerks(Kills);
 	if (HitCount > 0 && L->HasPerk("static"))
 	{
 		StaticHits += 1;
@@ -1289,6 +1293,29 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 			AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(0.45f, 0.75f, 1.f),
 				Weapon->Damage * 2.f, 6.f, 0.85f, 2, 0.07f);
 		}
+	}
+}
+
+void UWWOWeaponComponent::ApplyKillPerks(int32 Kills)
+{
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	if (!L || Kills <= 0) return;
+	if (L->HasPerk("hammer")) HammerLeft = 3.f;
+	if (L->HasPerk("scavenger"))
+	{
+		Ammo = FMath::Min(Ammo + FMath::Max(1, FMath::RoundToInt(MagazineSize() * 0.2f)) * Kills, MagazineSize());
+	}
+	if (L->HasPerk("adrenal")) AdrenalLeft = 4.f;
+}
+
+void UWWOWeaponComponent::OnKillsConfirmed(int32 Kills, bool bMelee)
+{
+	if (Kills <= 0) return;
+	if (!bMelee)
+	{
+		ApplyKillPerks(Kills);
+		if (!bLastShotPredictedKill) OnHitConfirmed.Broadcast(false, true); // a kill this machine didn't see coming
+		bLastShotPredictedKill = false;
 	}
 }
 

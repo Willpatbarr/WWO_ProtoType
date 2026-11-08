@@ -136,6 +136,9 @@ public:
 	bool CastRayTo(const FVector& To, FHitResult& OutHit) const;
 	AWWOCharacter* GetPlayer() const;
 
+	// Kills the host confirmed (online, a joiner's kill perks wait for these; see ClientKillCredit).
+	void OnKillsConfirmed(int32 Kills, bool bMelee);
+
 	// Melee, for the host checking a joiner's punch (see AWWOCharacter::ServerMeleeHit).
 	float MeleeSwingTime() const { return M("melee_time", MeleeTime); }
 	void MeleeKnockBack(AActor* Target, bool bKilled) const; // shove it away from the player (host only online)
@@ -153,6 +156,8 @@ private:
 	void RefreshStats();
 	bool IsAnchored() const;
 	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
+	void ApplyKillPerks(int32 Kills); // Hammer, Scavenger, Adrenal
+	bool bLastShotPredictedKill = false; // joiner: the kill marker already showed for the last shot
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming

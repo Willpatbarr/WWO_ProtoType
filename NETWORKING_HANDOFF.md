@@ -158,9 +158,17 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   Tested (`-WWOAutoTestNet` revive step): the host goes down (no timer), the joiner sprints over and holds
   Revive, the bar fills on the joiner, the host is back up where it fell; then the host downs both and the
   lost round restarts the run (round 2 follows).
-- **Not yet:** grenades and abilities from a joiner still only happen on its own screen (phase 3 kit); kill credit back to the shooter (perks, ult charge use the predicted kill);
-  each player's own gun and mods on the host (it validates against base stats); taking damage doesn't interrupt
-  a revive yet (only letting go or stepping away does).
+- **Kill credit: done.** The host counts what a joiner's shot or punch killed and tells it (`ClientKillCredit`); a
+  joiner's kill perks (Hammer, Scavenger, Adrenal: `ApplyKillPerks`) wait for that instead of its own guess. The
+  kill marker still shows at once from the guess, and also shows when the host confirms a kill it didn't guess.
+  Ult and ability charge come from time, not kills, so nothing else needed it. Tested: 3 kills credited, 3 received.
+- **Each player's own gun and mods: done.** Each `FWWOGunShot` names its mods; the host rebuilds that setup's
+  limits from the shared mod data (`GunLimits`: modded damage, fire rate, range, crit; Overpressure, Final Round,
+  Focus, Hunter, Patience, Hammer at their best; x1.1) and refuses mods that don't fit the gun or share a slot.
+  The joiner's Settings sliders for gun stats aren't known to the host (the host's tuning counts online).
+  Tested: damage cap 121 for the hand cannon (was 372 with the old flat allowance), a made-up mod refused.
+- **Not yet:** grenades and abilities from a joiner still only happen on its own screen (phase 3 kit); taking
+  damage doesn't interrupt a revive (only letting go or stepping away does).
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);

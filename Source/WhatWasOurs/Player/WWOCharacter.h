@@ -86,10 +86,14 @@ struct FWWOGunShot
 {
 	GENERATED_BODY()
 	UPROPERTY() FName WeaponId;
+	UPROPERTY() TArray<FName> Mods;               // the mods on it (the host checks the shot against this setup)
 	UPROPERTY() FVector_NetQuantize Origin;       // the shooter's eye
 	UPROPERTY() TArray<FWWOGunHit> Hits;          // one per target hit
 	UPROPERTY() TArray<FVector_NetQuantize> Ends; // every pellet's impact (walls too), for the looks
 };
+
+// The most a gun setup can do, for the host checking a joiner's shot (WWOCharacterGunNet.cpp).
+struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; }; // per hit, shots per s, cm
 
 UCLASS()
 class WHATWASOURS_API AWWOCharacter : public ACharacter
@@ -240,13 +244,17 @@ public:
 	void PlaySwingOnBody(); // the punch on the full body (others see it online)
 	static int32 NetMeleeSwings, NetMeleeApplied, NetMeleeRejected; // the host's tally of joiners' melee
 
+	// The host's word on what a joiner's shot or punch killed (kill perks, the kill marker).
+	UFUNCTION(Client, Reliable) void ClientKillCredit(int32 Kills, bool bMelee);
+	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
+
 	AWWOPlayerController* GetWWOController() const;
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:
 	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
 	double ShotBudgetTime = 0.0; // when it was last refilled
-	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const class UWWOWeaponData* Gun, FString& Why) const;
+	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const struct FWWOGunLimits& Limits, FString& Why) const;
 	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
 	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight
 	double LastMeleeHitTime = -100.0; // host: when this player's last melee hit was applied
