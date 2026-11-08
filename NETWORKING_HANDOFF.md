@@ -228,6 +228,35 @@ phase 3 simulates the lunge on the host.
   the pop when it breaks), so joiners see it and guess kills through it. Shield Share refills other players'
   shields too, not just allies'.
 
+## Phase 4: PvP (in progress)
+Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (no downed state, no reviving),
+**no friendly fire**, and a **kill target and a time limit**, either of which can be off (whichever comes first).
+- **Done** (`Game/WWOPlayerState`, `AWWOGameMode` PvP parts, `AWWOGameState::bPvP / TeamScores`):
+  hosting with `?pvp` (Settings, Multiplayer: "Host a PvP game"; command line `-WWOHostPvP`; restarts and map
+  changes keep it; the LAN session takes 12). No waves or enemies. Players join the smaller team (`PostLogin`,
+  `BalanceTeam`); "Switch team (PvP)" in the menu (`ServerSwitchTeam`). Score line: "BLUE 3 – 1 ORANGE · first to
+  50 · 7:42"; at the kill target or when time runs out (most kills; a tie is a draw) "BLUE WINS ..." and a
+  restart 6 s later. Settings, PvP: kill target (50), time limit (10 min), respawn delay (3 s); host's values count.
+  Players are targets in PvP (`AWWOCharacter` is an `IWWOTargetable`): body and head hitboxes (`BodyHitbox`,
+  `HeadHitbox` on the camera, head = crit), on only in PvP (`UpdateHitboxes`; the movement capsule then stops taking
+  shots). `UWWOWorldSubsystem::CanHurt(Attacker, Victim)` (players only in PvP, only the other team, never yourself)
+  is checked where a hit lands (shots on both machines, the host's gun and melee checks, grenade bounces, chain
+  lightning); `LivingTargets(For)` adds the other team's players for aim assist, melee, grenades, pools, mines,
+  spikes and the HUD's health bars. Kill credit: `FWWODamageBy` marks who is dealing damage while a hit is applied
+  (gunfire, melee, grenades, pools, chain lightning); a player's `TakeHit` stores it (`LastAttacker`) and the game
+  mode scores the death (`OnPvPDeath`). PvP respawns go to the spawn spot (enemy spawn points and player starts)
+  farthest from the other team (`PvPSpawnFor`).
+  Tested (`-WWOAutoTestPvP`, host also `-WWOKillTarget=3`): different teams; the joiner shoots the host dead (kill
+  to ORANGE, host respawns); on the same team its shots don't hurt (270 -> 270); the host's kills end the match at 3
+  ("BLUE WINS 3 – 1" on both), the restart stays PvP. Co-op network test and single-player test still pass.
+- **Not yet:** the Air with the PvP build (the newly signed build needs a one-time "Open Anyway" on each Mac);
+  team colors on other players' bodies; a 12-player stress test (bots, or several copies); PvP hardening of the
+  trusted move values (move stats, `SpeedScale`, `ExtraJumps`: the host could compute them from its loadout copy).
+- Builds are now signed with this Mac's Apple Development identity when there is one (`Tools/package_mac.sh`), so
+  macOS keeps the Local Network permission across builds. The first signed build asks once on each Mac
+  ("differs from previously opened versions": Open Anyway). Reading a signed sandboxed app's container from
+  another app (the test scripts' log copy) may need the Mac's approval too.
+
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);
   host rewinds target positions to that time, validates fire rate / ammo / line of sight, applies

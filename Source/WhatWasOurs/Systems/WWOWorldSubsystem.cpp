@@ -7,6 +7,9 @@
 #include "World/WWOTarget.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Game/WWOGameState.h"
+#include "Game/WWOPlayerState.h"
+#include "Player/WWOHealthComponent.h"
 
 UWWOWorldSubsystem* UWWOWorldSubsystem::Get(const UObject* WorldContext)
 {
@@ -54,7 +57,7 @@ TArray<AActor*> UWWOWorldSubsystem::AllTargets() const
 	return Out;
 }
 
-TArray<AActor*> UWWOWorldSubsystem::LivingTargets() const
+TArray<AActor*> UWWOWorldSubsystem::LivingTargets(const UObject* For) const
 {
 	TArray<AActor*> Out;
 	for (const TWeakObjectPtr<AActor>& T : Targets)
@@ -62,7 +65,64 @@ TArray<AActor*> UWWOWorldSubsystem::LivingTargets() const
 		const IWWOTargetable* Target = Cast<IWWOTargetable>(T.Get());
 		if (Target && !Target->IsDead()) Out.Add(T.Get());
 	}
+	if (For && IsPvP(this))
+	{
+		for (AWWOCharacter* P : GetPlayers())
+		{
+			if (!P->Health->bDead && CanHurt(For, P)) Out.Add(P);
+		}
+	}
 	return Out;
+}
+
+TWeakObjectPtr<AActor> UWWOWorldSubsystem::CurrentAttacker;
+
+FWWODamageBy::FWWODamageBy(const UObject* Attacker)
+{
+	Previous = UWWOWorldSubsystem::CurrentAttacker;
+	AWWOCharacter* P = UWWOWorldSubsystem::PlayerOf(Attacker);
+	UWWOWorldSubsystem::CurrentAttacker = P ? static_cast<AActor*>(P) : const_cast<AActor*>(Cast<AActor>(Attacker));
+}
+
+FWWODamageBy::~FWWODamageBy()
+{
+	UWWOWorldSubsystem::CurrentAttacker = Previous;
+}
+
+bool UWWOWorldSubsystem::IsPvP(const UObject* WorldContext)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const AWWOGameState* GS = World ? World->GetGameState<AWWOGameState>() : nullptr;
+	return GS && GS->bPvP;
+}
+
+int32 UWWOWorldSubsystem::TeamOf(const AActor* Player)
+{
+	const APawn* Pawn = Cast<APawn>(Player);
+	const AWWOPlayerState* PS = Pawn ? Pawn->GetPlayerState<AWWOPlayerState>() : nullptr;
+	return PS ? PS->Team : -1;
+}
+
+bool UWWOWorldSubsystem::CanHurt(const UObject* Attacker, const AActor* Victim)
+{
+	if (!Cast<AWWOCharacter>(Victim)) return true; // enemies, dummies
+	if (!IsPvP(Victim)) return false;              // co-op: players never hurt each other
+	const AWWOCharacter* By = PlayerOf(Attacker);
+	if (!By || By == Victim) return false;
+	const int32 A = TeamOf(By), B = TeamOf(Victim);
+	return A >= 0 && B >= 0 && A != B;
+}
+
+AWWOCharacter* UWWOWorldSubsystem::PlayerOf(const UObject* Context)
+{
+	for (int32 i = 0; i < 5 && Context; ++i)
+	{
+		if (const AWWOCharacter* C = Cast<AWWOCharacter>(Context)) return const_cast<AWWOCharacter*>(C);
+		if (const UActorComponent* Comp = Cast<UActorComponent>(Context)) Context = Comp->GetOwner();
+		else if (const AActor* A = Cast<AActor>(Context)) Context = A->GetOwner() ? static_cast<const UObject*>(A->GetOwner()) : A->GetInstigator();
+		else return nullptr;
+	}
+	return nullptr;
 }
 
 TArray<AWWOEnemy*> UWWOWorldSubsystem::LivingEnemies() const

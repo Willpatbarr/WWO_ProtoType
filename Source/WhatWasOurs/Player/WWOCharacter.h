@@ -14,6 +14,7 @@
 #include "WWOTypes.h"
 #include "Engine/NetSerialization.h"
 #include "Systems/WWOLoadoutSubsystem.h"
+#include "Systems/WWOTargetable.h"
 #include "WWOCharacter.generated.h"
 
 class UCameraComponent;
@@ -100,13 +101,31 @@ struct FWWOGunShot
 // The most a gun setup can do, for the host checking a joiner's shot (WWOCharacterGunNet.cpp).
 struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; }; // per hit, shots per s, cm
 
+// A player. In PvP also a target for the other team (IWWOTargetable): shots hit its body and head
+// hitboxes (on only in PvP), damage goes to its health on the host.
 UCLASS()
-class WHATWASOURS_API AWWOCharacter : public ACharacter
+class WHATWASOURS_API AWWOCharacter : public ACharacter, public IWWOTargetable
 {
 	GENERATED_BODY()
 
 public:
 	AWWOCharacter(const FObjectInitializer& ObjectInitializer);
+
+	// IWWOTargetable (PvP)
+	virtual TArray<FWWOAimPart> GetAimParts() const override;
+	virtual bool IsCriticalComponent(const UPrimitiveComponent* Component) const override;
+	virtual bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0)) override;
+	virtual bool IsDead() const override;
+	virtual float GetHealth() const override;
+	virtual float GetMaxHealth() const override;
+	virtual float GetShield() const override;
+	virtual float GetMaxShield() const override;
+	virtual float GetBodyHeight() const override { return 200.f; }
+	virtual FVector FeetLocation() const override;
+	UPROPERTY() TObjectPtr<class UCapsuleComponent> BodyHitbox;
+	UPROPERTY() TObjectPtr<class USphereComponent> HeadHitbox;
+	void UpdateHitboxes(); // on only in PvP (co-op traces pass through players as before)
+	bool bHitboxesOn = false;
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

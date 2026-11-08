@@ -17,6 +17,7 @@
 #include "Flora/WWOFloraEffects.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
 #include "WhatWasOurs.h"
 #include "Engine/World.h"
@@ -105,6 +106,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	ShotBudget -= 1.f;
 	++NetShotsTaken;
 	int32 Kills = 0;
+	FWWODamageBy By(this); // PvP kill credit
 	AActor* FirstHit = nullptr;
 	AActor* FirstCrit = nullptr;
 
@@ -145,6 +147,7 @@ bool AWWOCharacter::CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, 
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Hit.Target);
 	if (!IsValid(Hit.Target) || !Target) { Why = TEXT("not a target"); return false; }
 	if (Target->IsDead()) { Why = TEXT("already dead"); return false; }
+	if (!UWWOWorldSubsystem::CanHurt(this, Hit.Target)) { Why = TEXT("can't hurt it (teammate)"); return false; }
 	if (Hit.Damage <= 0.f || Hit.Damage > Limits.Damage) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Hit.Damage, Limits.Damage); return false; }
 	if (FVector::Dist(Shot.Origin, EyeLocation()) > OriginSlack) { Why = TEXT("shot from somewhere else"); return false; }
 	const float Range = FVector::Dist(Shot.Origin, FVector(Hit.Point));
@@ -211,6 +214,7 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 	}
 	++NetMeleeApplied;
 	LastMeleeHitTime = GetWorld()->GetTimeSeconds();
+	FWWODamageBy By(this);
 	const bool bKilled = Cast<IWWOTargetable>(Target)->TakeHit(Damage, false, Point);
 	Weapon->MeleeKnockBack(Target, bKilled);
 	Weapon->MeleeKitEffects(Target, Point); // Melee Guard, Thornfist's discharge, Static Charge's chain
@@ -244,6 +248,7 @@ bool AWWOCharacter::CheckMeleeHit(AActor* Target, float Damage, const FVector& O
 	IWWOTargetable* T = Cast<IWWOTargetable>(Target);
 	if (!IsValid(Target) || !T) { Why = TEXT("not a target"); return false; }
 	if (T->IsDead()) { Why = TEXT("already dead"); return false; }
+	if (!UWWOWorldSubsystem::CanHurt(this, Target)) { Why = TEXT("can't hurt it (teammate)"); return false; }
 
 	const float MaxDamage = Weapon->MeleeDamage * MeleeDamageSlack;
 	if (Damage <= 0.f || Damage > MaxDamage) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Damage, MaxDamage); return false; }

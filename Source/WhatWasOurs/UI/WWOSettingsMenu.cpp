@@ -418,11 +418,19 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		NetStatus,
 	}, {
 		{ TEXT("Host a LAN game (this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get()))); } },
+		{ TEXT("Host a PvP game (team deathmatch, this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get())), true); } },
+		{ TEXT("Switch team (PvP)"), [WeakWorld] { if (WeakWorld.IsValid()) if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakWorld->GetFirstPlayerController())) PC->ServerSwitchTeam(); } },
 		{ TEXT("Find and join a LAN game"), [Net] { if (UWWONetSubsystem* N = Net()) N->FindAndJoin(); } },
 		{ TEXT("Join a game on this Mac (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
 		{ TEXT("Leave (play alone)"), [Net] { if (UWWONetSubsystem* N = Net()) N->Leave(); } },
 	});
 	TWeakObjectPtr<AWWOGameMode> WeakMode = Mode;
+	AddGlobal(TEXT("PvP"), {
+		Header(TEXT("Team deathmatch (the host's settings count; 0 turns a limit off)")),
+		Row(Mode, "KillTarget", TEXT("Team kills to win"), 0.f, 200.f, 1.f),
+		Row(Mode, "TimeLimit", TEXT("Time limit (minutes)"), 0.f, 60.f, 1.f),
+		Row(Mode, "PvPRespawnTime", TEXT("Respawn delay (s)"), 0.5f, 15.f, 0.5f),
+	});
 	AddGlobal(TEXT("Waves"), {
 		Header(TEXT("Arena waves (changes to 'on' and the wave list apply on Restart run)")),
 		Row(Mode, "Enabled", TEXT("Waves on (0/1; 0 = sandbox)"), 0.f, 1.f, 1.f),

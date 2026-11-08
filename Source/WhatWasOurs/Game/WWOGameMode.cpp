@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "Game/WWOPlayerState.h"
 #include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
@@ -54,6 +55,56 @@ AWWOGameMode::AWWOGameMode()
 	DefaultPawnClass = AWWOCharacter::StaticClass();
 	PlayerControllerClass = AWWOPlayerController::StaticClass();
 	GameStateClass = AWWOGameState::StaticClass(); // carries the wave line to every player
+	PlayerStateClass = AWWOPlayerState::StaticClass(); // team and score
+}
+
+int32 AWWOGameMode::PvPKills = 0;
+int32 AWWOGameMode::PvPMatchesEnded = 0;
+
+void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Super::InitGame(MapName, Options, ErrorMessage);
+	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
+	FString Value;
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = FCString::Atof(*Value); // tests
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
+	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
+		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
+}
+
+AWWOGameState* AWWOGameMode::WGS() const
+{
+	return GetGameState<AWWOGameState>();
+}
+
+void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	if (bPvP)
+	{
+		BalanceTeam(NewPlayer);
+		TeamGiven.Add(NewPlayer->GetPlayerState<AWWOPlayerState>());
+	}
+}
+
+void AWWOGameMode::BalanceTeam(AController* Player)
+{
+	AWWOPlayerState* Mine = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
+	if (!Mine || !GameState) return;
+	int32 Count[2] = { 0, 0 };
+	for (APlayerState* Other : GameState->PlayerArray)
+	{
+		const AWWOPlayerState* PS = Cast<AWWOPlayerState>(Other);
+		if (PS && PS != Mine && PS->Team >= 0 && PS->Team <= 1) ++Count[PS->Team];
+	}
+	SetTeam(Mine, Count[1] < Count[0] ? 1 : 0);
+}
+
+void AWWOGameMode::SetTeam(AWWOPlayerState* PS, int32 Team)
+{
+	if (!PS) return;
+	PS->Team = FMath::Clamp(Team, 0, 1);
+	UE_LOG(LogWWO, Display, TEXT("PvP: %s is on %s"), *PS->GetPlayerName(), *AWWOPlayerState::TeamName(PS->Team));
 }
 
 void AWWOGameMode::StartPlay()
@@ -81,6 +132,20 @@ TArray<AActor*> AWWOGameMode::SpawnPoints() const
 void AWWOGameMode::Begin()
 {
 	bStarted = true;
+	if (bPvP)
+	{
+		// Team deathmatch: no waves, no enemies.
+		for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It) It->Destroy();
+		if (AWWOGameState* GS = WGS())
+		{
+			GS->bPvP = true;
+			GS->TeamScores = { 0, 0 };
+		}
+		MatchLeft = TimeLimit * 60.f;
+		Winner = -1;
+		State = EWWOWaveState::Match;
+		return;
+	}
 	if (Enabled < 0.5f || SpawnPoints().Num() == 0)
 	{
 		State = EWWOWaveState::Idle;
@@ -148,11 +213,13 @@ void AWWOGameMode::LoadMap(UObject* WorldContext, FName Level)
 {
 	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	if (!World) return;
+	const AWWOGameMode* Mode = World->GetAuthGameMode<AWWOGameMode>();
+	const bool bStayPvP = Mode && Mode->bPvP; // a PvP match stays PvP across restarts and map changes
 	switch (World->GetNetMode())
 	{
 	case NM_ListenServer:
-		UE_LOG(LogWWO, Display, TEXT("Net: host moving everyone to %s"), *Level.ToString());
-		World->ServerTravel(Level.ToString() + TEXT("?listen"));
+		UE_LOG(LogWWO, Display, TEXT("Net: host moving everyone to %s%s"), *Level.ToString(), bStayPvP ? TEXT(" (PvP)") : TEXT(""));
+		World->ServerTravel(Level.ToString() + TEXT("?listen") + (bStayPvP ? TEXT("?pvp") : TEXT("")));
 		break;
 	case NM_Client:
 		if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(World)) Net->Status = TEXT("Only the host can restart or change maps");
@@ -203,6 +270,7 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 		BoundPlayers.Add(P);
 	}
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
+	if (bPvP) UpdateMatch(DeltaSeconds);
 	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
 	{
 		FLinearColor Color;
@@ -270,6 +338,7 @@ void AWWOGameMode::WaveCleared()
 
 void AWWOGameMode::OnPlayerDied()
 {
+	if (bPvP) return; // PvP deaths are scored per player (OnPvPDeath)
 	if (State == EWWOWaveState::Idle || State == EWWOWaveState::Won || State == EWWOWaveState::Lost) return;
 	// Alone, a living ally keeps the run going (you respawn). Online, downed players stay down
 	// until revived, and only players can revive: everyone down loses.
@@ -351,8 +420,26 @@ FString AWWOGameMode::StatusText(FLinearColor& OutColor) const
 {
 	const int32 Total = FMath::RoundToInt(WavesToWin);
 	OutColor = FLinearColor::White;
+	const AWWOGameState* GS = GetGameState<AWWOGameState>();
+	const int32 Blue = GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : 0;
+	const int32 Orange = GS && GS->TeamScores.Num() > 1 ? GS->TeamScores[1] : 0;
 	switch (State)
 	{
+	case EWWOWaveState::Match:
+	{
+		FString Line = FString::Printf(TEXT("BLUE %d  –  %d ORANGE"), Blue, Orange);
+		if (KillTarget >= 1.f) Line += FString::Printf(TEXT("   ·   first to %d"), FMath::RoundToInt(KillTarget));
+		if (TimeLimit > 0.f)
+		{
+			const int32 Secs = FMath::CeilToInt(FMath::Max(MatchLeft, 0.f));
+			Line += FString::Printf(TEXT("   ·   %d:%02d"), Secs / 60, Secs % 60);
+		}
+		return Line;
+	}
+	case EWWOWaveState::MatchOver:
+		OutColor = Winner < 0 ? FLinearColor(0.9f, 0.9f, 0.9f) : AWWOPlayerState::TeamColor(Winner);
+		return Winner < 0 ? FString::Printf(TEXT("DRAW  %d – %d   ·   restarting"), Blue, Orange)
+			: FString::Printf(TEXT("%s WINS  %d – %d   ·   restarting"), *AWWOPlayerState::TeamName(Winner), Blue, Orange);
 	case EWWOWaveState::Countdown:
 		return Wave > 0 ? FString::Printf(TEXT("Wave %d of %d in %d"), Wave + 1, Total, FMath::CeilToInt(Timer))
 			: FString::Printf(TEXT("Get ready: wave 1 of %d in %d"), Total, FMath::CeilToInt(Timer));
@@ -368,4 +455,95 @@ FString AWWOGameMode::StatusText(FLinearColor& OutColor) const
 	default:
 		return FString();
 	}
+}
+
+// --- PvP ---------------------------------------------------------------------------------------
+
+void AWWOGameMode::UpdateMatch(float DeltaSeconds)
+{
+	// Score every player's deaths (they bind once, like the waves' OnPlayerDied).
+	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())
+	{
+		if (PvPBound.Contains(P)) continue;
+		PvPBound.Add(P);
+		TWeakObjectPtr<AWWOCharacter> Weak = P;
+		P->Health->OnDied.AddWeakLambda(this, [this, Weak] { if (Weak.IsValid()) OnPvPDeath(Weak.Get()); });
+		// A player who joined before PostLogin gave them a team (the host's own at start).
+		if (AWWOPlayerState* PS = P->GetPlayerState<AWWOPlayerState>(); PS && P->GetController() && !TeamGiven.Contains(PS))
+		{
+			TeamGiven.Add(PS);
+			BalanceTeam(P->GetController());
+		}
+	}
+	if (State != EWWOWaveState::Match) return;
+	if (TimeLimit > 0.f && (MatchLeft -= DeltaSeconds) <= 0.f)
+	{
+		const AWWOGameState* GS = WGS();
+		const int32 Blue = GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : 0;
+		const int32 Orange = GS && GS->TeamScores.Num() > 1 ? GS->TeamScores[1] : 0;
+		EndMatch(Blue == Orange ? -1 : (Blue > Orange ? 0 : 1)); // time: the most kills
+	}
+}
+
+void AWWOGameMode::OnPvPDeath(AWWOCharacter* Victim)
+{
+	if (State != EWWOWaveState::Match || !Victim) return;
+	AWWOPlayerState* VictimPS = Victim->GetPlayerState<AWWOPlayerState>();
+	if (VictimPS) ++VictimPS->Deaths;
+	AWWOCharacter* Killer = Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get());
+	AWWOPlayerState* KillerPS = Killer ? Killer->GetPlayerState<AWWOPlayerState>() : nullptr;
+	if (!KillerPS || !UWWOWorldSubsystem::CanHurt(Killer, Victim))
+	{
+		UE_LOG(LogWWO, Display, TEXT("PvP: %s died (no kill credit)"), *GetNameSafe(Victim));
+		return; // a fall or anything that isn't the other team: nobody scores
+	}
+	++KillerPS->Kills;
+	++PvPKills;
+	AWWOGameState* GS = WGS();
+	if (GS)
+	{
+		if (GS->TeamScores.Num() < 2) GS->TeamScores.SetNum(2);
+		++GS->TeamScores[KillerPS->Team];
+	}
+	UE_LOG(LogWWO, Display, TEXT("PvP: %s (%s) killed %s; %s %d"), *KillerPS->GetPlayerName(), *AWWOPlayerState::TeamName(KillerPS->Team),
+		VictimPS ? *VictimPS->GetPlayerName() : *Victim->GetName(), *AWWOPlayerState::TeamName(KillerPS->Team), GS ? GS->TeamScores[KillerPS->Team] : 0);
+	if (GS && KillTarget >= 1.f && GS->TeamScores[KillerPS->Team] >= FMath::RoundToInt(KillTarget)) EndMatch(KillerPS->Team);
+}
+
+void AWWOGameMode::EndMatch(int32 WinningTeam)
+{
+	State = EWWOWaveState::MatchOver;
+	Winner = WinningTeam;
+	++PvPMatchesEnded;
+	RestartLeft = 6.f;
+	UE_LOG(LogWWO, Display, TEXT("PvP: match over, %s"), WinningTeam < 0 ? TEXT("a draw") : *(AWWOPlayerState::TeamName(WinningTeam) + TEXT(" wins")));
+}
+
+FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
+{
+	// The spawn spot (enemy spawn points and player starts) farthest from the nearest living
+	// player of the other team.
+	TArray<FTransform> Spots;
+	for (AActor* Point : SpawnPoints()) Spots.Add(FTransform(Point->GetActorRotation(), Point->GetActorLocation() + FVector(0, 0, 100.f)));
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It) Spots.Add(It->GetActorTransform());
+	if (Spots.Num() == 0) return Player ? Player->GetActorTransform() : FTransform::Identity;
+	TArray<const AWWOCharacter*> Others;
+	for (const AWWOCharacter* Other : UWWOWorldSubsystem::Get(this)->GetPlayers())
+	{
+		if (Other != Player && !Other->Health->bDead && UWWOWorldSubsystem::CanHurt(Player, Other)) Others.Add(Other);
+	}
+	int32 Best = FMath::RandRange(0, Spots.Num() - 1);
+	float BestDistance = -1.f;
+	for (int32 i = 0; i < Spots.Num() && Others.Num() > 0; ++i)
+	{
+		float Nearest = TNumericLimits<float>::Max();
+		for (const AWWOCharacter* Other : Others) Nearest = FMath::Min(Nearest, FVector::Dist(Other->GetActorLocation(), Spots[i].GetLocation()));
+		if (Nearest > BestDistance) { BestDistance = Nearest; Best = i; }
+	}
+	// Facing the middle of the map.
+	FTransform Spot = Spots[Best];
+	FVector ToMiddle = -Spot.GetLocation();
+	ToMiddle.Z = 0.f;
+	if (!ToMiddle.IsNearlyZero()) Spot.SetRotation(ToMiddle.Rotation().Quaternion());
+	return Spot;
 }

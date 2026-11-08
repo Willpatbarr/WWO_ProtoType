@@ -22,4 +22,15 @@ fi
 mkdir -p "$OUT"
 rm -rf "$OUT/WhatWasOurs.app" "$OUT/Mac"
 ditto "$PROJECT_DIR/Saved/StagedBuilds/Mac/WhatWasOurs.app" "$OUT/WhatWasOurs.app"
+# Sign with this Mac's Apple Development identity when there is one (WWO_SIGN_ID picks another).
+# An ad-hoc signature changes every build, and macOS then asks for Local Network access again on
+# every Mac the new build runs on; a stable identity keeps the permission across builds.
+SIGN_ID="${WWO_SIGN_ID:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development/ {print $2; exit}')}"
+if [ -n "$SIGN_ID" ]; then
+  ENTS="$(mktemp -t wwo_ents).plist"
+  codesign -d --entitlements :- "$OUT/WhatWasOurs.app" > "$ENTS" 2>/dev/null
+  codesign --force --deep --timestamp=none --entitlements "$ENTS" --sign "$SIGN_ID" "$OUT/WhatWasOurs.app"
+  rm -f "$ENTS"
+  echo "Signed with $SIGN_ID"
+fi
 echo "Packaged to $OUT/WhatWasOurs.app"

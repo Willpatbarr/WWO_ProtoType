@@ -34,6 +34,15 @@ struct FWWOFloatingText
 	float Alpha() const { return 1.f - FMath::Clamp((Age - FadeDelay) / FadeTime, 0.f, 1.f); }
 };
 
+// While one of these lives, hits are credited to Attacker (see UWWOWorldSubsystem::CurrentAttacker).
+struct WHATWASOURS_API FWWODamageBy
+{
+	explicit FWWODamageBy(const UObject* Attacker);
+	~FWWODamageBy();
+private:
+	TWeakObjectPtr<AActor> Previous;
+};
+
 UCLASS()
 class WHATWASOURS_API UWWOWorldSubsystem : public UTickableWorldSubsystem
 {
@@ -53,8 +62,9 @@ public:
 	void RegisterFog(AWWOSporeFog* Fog);
 	void UnregisterFog(AWWOSporeFog* Fog);
 
-	// Living targets (dummies and enemies that aren't dead).
-	TArray<AActor*> LivingTargets() const;
+	// Living targets (dummies and enemies that aren't dead). In PvP, with For (a player, or anything
+	// a player owns: their gun, grenade, pool...), the other team's living players too.
+	TArray<AActor*> LivingTargets(const UObject* For = nullptr) const;
 	TArray<AActor*> AllTargets() const;
 	TArray<AWWOEnemy*> LivingEnemies() const;
 	TArray<AWWOAlly*> LivingTeammates() const;
@@ -62,6 +72,19 @@ public:
 	const TArray<TWeakObjectPtr<AWWOSporeFog>>& Fogs() const { return SporeFogs; }
 	AWWOCharacter* GetPlayer() const; // the player on this machine
 	TArray<AWWOCharacter*> GetPlayers() const; // every player in the match (online: all of them)
+
+	// PvP (team deathmatch).
+	static bool IsPvP(const UObject* WorldContext);
+	static int32 TeamOf(const AActor* Player); // -1: not a player (or no team yet)
+	// Can Attacker (a player or anything they own) hurt Victim? Enemies and dummies always; players
+	// only in PvP, and only the other team's (no friendly fire, never yourself).
+	static bool CanHurt(const UObject* Attacker, const AActor* Victim);
+	// The player a context belongs to: itself, a component's owner, or an actor's owner (or
+	// instigator), a few levels up (a grenade's thrower, a pool's...).
+	static AWWOCharacter* PlayerOf(const UObject* Context);
+	// Who is dealing the damage being applied right now (host): set around a hit so a player's
+	// TakeHit knows who to credit (FWWODamageBy).
+	static TWeakObjectPtr<AActor> CurrentAttacker;
 
 	// Bring every target back at full health; enemies reset to their spawn. Teammates too.
 	void ResetTargets();

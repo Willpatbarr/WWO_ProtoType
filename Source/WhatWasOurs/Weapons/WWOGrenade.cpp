@@ -234,7 +234,7 @@ void AWWOGrenade::Seek(float DeltaSeconds)
 	float BestDistance = Spec.Data->SeekRadius * WWO::M;
 	float BestRadius = 0.f;
 	FVector BestPos;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		const FWWOAimPart Body = Cast<IWWOTargetable>(Actor)->GetAimParts().Last();
 		const float Distance = FVector::Dist(GetActorLocation(), Body.Position);
@@ -298,6 +298,7 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 			Other ? *Other->GetName() : TEXT("-"), FVector::Dist(GetActorLocation(), ReleasedAt) / WWO::M, Age, ImpactVelocity.Size() / WWO::M, Movement->Velocity.Size() / WWO::M);
 	}
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Other);
+	if (Target && !UWWOWorldSubsystem::CanHurt(this, Other)) Target = nullptr; // a teammate: just something to bounce off
 	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike && Target && !Target->IsDead())
 	{
 		SpikeHit(Other);
@@ -378,7 +379,7 @@ void AWWOGrenade::UpdateMine(float DeltaSeconds)
 	const float Blink = 0.5f + 0.5f * FMath::Sin(GetWorld()->GetTimeSeconds() * 15.f);
 	if (Light) Light->SetIntensity(2.f * Blink * 1500.f); // armed: blinks
 	if (Halo) WWOFX::MID(Halo)->SetScalarParameterValue("Alpha", 0.25f + 0.6f * Blink);
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		if (FVector::Dist(Cast<IWWOTargetable>(Actor)->FeetLocation(), GetActorLocation()) <= (Spec.Data->TriggerRadius + 0.5f) * WWO::M)
 		{
@@ -400,6 +401,7 @@ void AWWOGrenade::SpikeHit(AActor* TargetActor)
 {
 	// Direct contact: a hit, then poison.
 	bSpent = true;
+	FWWODamageBy By(this); // the thrower's (PvP kill credit)
 	const FVector Point = GetActorLocation();
 	IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor);
 	const bool bKilled = Target->TakeHit(Spec.Damage, false, Point);
@@ -435,9 +437,10 @@ void AWWOGrenade::Explode()
 	Blast(Center);
 	int32 HitCount = 0;
 	float DealtTotal = 0.f;
+	FWWODamageBy By(this);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOBlast), false, this);
 	if (Thrower.IsValid()) Params.AddIgnoredActor(Thrower.Get());
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 		// Closest part of the target to the blast.

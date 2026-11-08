@@ -1,4 +1,6 @@
 #include "Player/WWOCharacter.h"
+#include "Systems/WWOWorldSubsystem.h"
+#include "Components/SphereComponent.h"
 #include "Flora/WWOFloraEffects.h"
 #include "WhatWasOurs.h"
 #include "Data/WWOData.h"
@@ -52,12 +54,29 @@ AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(CapsuleRadius, StandHalfHeight);
+	// PvP hitboxes (shots only; off until a PvP match, see UpdateHitboxes).
+	BodyHitbox = CreateDefaultSubobject<UCapsuleComponent>(TEXT("BodyHitbox"));
+	BodyHitbox->SetupAttachment(GetCapsuleComponent());
+	BodyHitbox->InitCapsuleSize(35.f, 80.f);
+	BodyHitbox->SetRelativeLocation(FVector(0, 0, -15.f));
+	HeadHitbox = CreateDefaultSubobject<USphereComponent>(TEXT("HeadHitbox"));
+	HeadHitbox->InitSphereRadius(16.f);
+	for (UPrimitiveComponent* Hitbox : { (UPrimitiveComponent*)BodyHitbox, (UPrimitiveComponent*)HeadHitbox })
+	{
+		Hitbox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Hitbox->SetCollisionObjectType(ECC_Pawn);
+		Hitbox->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Hitbox->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		Hitbox->SetCanEverAffectNavigation(false);
+		Hitbox->SetGenerateOverlapEvents(false);
+	}
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
+	HeadHitbox->SetupAttachment(Camera); // the head goes where the eyes go (crouching, sliding)
 	Camera->SetRelativeLocation(FVector(0, 0, StandCameraZ));
 	Camera->bUsePawnControlRotation = false; // pitch and roll are set directly (see UpdateCamera)
 	Camera->bEnableFirstPersonFieldOfView = true;
@@ -266,6 +285,57 @@ FVector AWWOCharacter::EyeLocation() const
 	return Camera->GetComponentLocation();
 }
 
+// --- PvP target --------------------------------------------------------------------------------
+
+void AWWOCharacter::UpdateHitboxes()
+{
+	const bool bOn = UWWOWorldSubsystem::IsPvP(this) && !Health->bDead;
+	if (bOn != bHitboxesOn)
+	{
+		bHitboxesOn = bOn;
+		const ECollisionEnabled::Type Mode = bOn ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision;
+		BodyHitbox->SetCollisionEnabled(Mode);
+		HeadHitbox->SetCollisionEnabled(Mode);
+		// The movement capsule stops taking shots, so the hitboxes (and the head) get them.
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, bOn ? ECR_Ignore : ECR_Block);
+	}
+	if (bOn) BodyHitbox->SetCapsuleHalfHeight(FMath::Max(GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - 20.f, 35.f));
+}
+
+TArray<FWWOAimPart> AWWOCharacter::GetAimParts() const
+{
+	TArray<FWWOAimPart> Parts;
+	Parts.Add({ HeadHitbox->GetComponentLocation(), HeadHitbox->GetUnscaledSphereRadius(), true });
+	Parts.Add({ BodyHitbox->GetComponentLocation(), BodyHitbox->GetUnscaledCapsuleRadius(), false });
+	return Parts;
+}
+
+bool AWWOCharacter::IsCriticalComponent(const UPrimitiveComponent* Component) const
+{
+	return Component == HeadHitbox;
+}
+
+bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
+{
+	if (Health->bDead) return false;
+	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
+	if (!HasAuthority()) return false; // a joiner's hit: the number now; the host applies it (health replicates)
+	Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker;
+	Health->TakeDamage(Damage);
+	return Health->bDead;
+}
+
+bool AWWOCharacter::IsDead() const { return Health->bDead; }
+float AWWOCharacter::GetHealth() const { return Health->Health; }
+float AWWOCharacter::GetMaxHealth() const { return Health->MaxHealth(); }
+float AWWOCharacter::GetShield() const { return Health->Shield; }
+float AWWOCharacter::GetMaxShield() const { return Health->MaxShield(); }
+
+FVector AWWOCharacter::FeetLocation() const
+{
+	return GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+}
+
 FVector AWWOCharacter::AimForward() const
 {
 	// The camera looks up by the reticle drop; the aim is that much below its center.
@@ -383,6 +453,7 @@ void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 void AWWOCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateHitboxes(); // PvP hitboxes on or off, on every machine
 	// The movement component has already run PrepareMovement and moved (it ticks first);
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
 	if (!IsLocallyControlled())

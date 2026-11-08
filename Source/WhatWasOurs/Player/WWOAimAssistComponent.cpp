@@ -54,7 +54,7 @@ FWWOAssistPart UWWOAimAssistComponent::FindPart(float BaseAngleDeg, float CritSc
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const FVector Origin = P->EyeLocation();
 	const FVector Forward = P->AimForward();
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 		for (const FWWOAimPart& Part : Target->GetAimParts()) // head first, so heads win ties

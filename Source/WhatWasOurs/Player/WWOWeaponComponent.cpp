@@ -691,7 +691,7 @@ AActor* UWWOWeaponComponent::FindLungeTarget() const
 	const FVector Forward = P->AimForward();
 	AActor* Best = nullptr;
 	float BestScore = TNumericLimits<float>::Max();
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 		for (const FWWOAimPart& Part : Target->GetAimParts())
@@ -724,7 +724,7 @@ void UWWOWeaponComponent::MeleeStrike()
 	FVector BestPoint = FVector::ZeroVector;
 	float BestDistance = TNumericLimits<float>::Max();
 	const IWWOTargetable* Locked = Cast<IWWOTargetable>(MeleeTarget.Get());
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 		for (const FWWOAimPart& Part : Target->GetAimParts())
@@ -754,6 +754,7 @@ void UWWOWeaponComponent::MeleeStrike()
 	}
 	if (!Best) return;
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Best);
+	FWWODamageBy By(P);
 	const float Boosted = M("melee_damage", MeleeDamage) * P->Abilities->MeleeMultiplier() * P->VeilMeleeMultiplier();
 	bool bKilled;
 	if (GetNetMode() == NM_Client)
@@ -942,7 +943,7 @@ void UWWOWeaponComponent::Shoot()
 		AWWOFXActor::ImpactMark(GetWorld(), Hit.ImpactPoint);
 		Ends.Add(Hit.ImpactPoint);
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Hit.GetActor());
-		if (!Target || Target->IsDead()) continue;
+		if (!Target || Target->IsDead() || !UWWOWorldSubsystem::CanHurt(P, Hit.GetActor())) continue; // PvP: not your team
 		const bool bCritical = Target->IsCriticalComponent(Hit.GetComponent());
 		FTotal& Entry = Totals.FindOrAdd(Hit.GetActor());
 		if (Entry.Damage == 0.f) Entry.Point = Hit.ImpactPoint;
@@ -957,6 +958,7 @@ void UWWOWeaponComponent::Shoot()
 	// host last sent. The host's own shot applies directly. Either way the others see it.
 	const ENetMode Mode = GetWorld()->GetNetMode();
 	const bool bJoiner = Mode == NM_Client;
+	FWWODamageBy By(P); // the host's own hits are credited to it (PvP)
 	FWWOGunShot NetShot;
 	NetShot.WeaponId = Weapon->Id;
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))

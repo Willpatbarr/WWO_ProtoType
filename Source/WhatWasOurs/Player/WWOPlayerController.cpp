@@ -1,4 +1,6 @@
 #include "Player/WWOPlayerController.h"
+#include "Game/WWOPlayerState.h"
+#include "Game/WWOGameMode.h"
 #include "Net/WWONetSubsystem.h"
 #include "RHI.h"
 #include "RenderCore.h"
@@ -46,6 +48,13 @@ namespace
 	constexpr float ChordWindow = 0.1f; // seconds to wait for the second bumper
 }
 
+void AWWOPlayerController::ServerSwitchTeam_Implementation()
+{
+	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	AWWOPlayerState* PS = GetPlayerState<AWWOPlayerState>();
+	if (GM && GM->bPvP && PS) GM->SetTeam(PS, 1 - PS->Team);
+}
+
 AWWOPlayerController::AWWOPlayerController()
 {
 	PrimaryActorTick.bTickEvenWhenPaused = true;
@@ -84,6 +93,7 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
 	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
 	bAutoTestNet = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestNet"));
+	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
 	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
 	bAutoTestHiddenOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestHidden"));
 	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"));
@@ -318,6 +328,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 	{
 		if (AWWOCharacter* P = GetWWOCharacter()) UpdatePerfTest(P, FApp::GetDeltaTime());
 	}
+	else if (bAutoTestPvP) UpdateAutoPvPTest(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
 	else if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
 }

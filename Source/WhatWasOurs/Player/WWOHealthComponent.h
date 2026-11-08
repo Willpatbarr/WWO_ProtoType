@@ -46,6 +46,7 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_Dead) bool bDead = false;
 	UPROPERTY(Replicated) bool bRevived = false;      // the last time bDead cleared was a revive (in place)
 	UPROPERTY(Replicated) float BeingRevived = 0.f;   // while down: how far a teammate's revive is (0-1)
+	TWeakObjectPtr<AActor> LastAttacker; // host: who hit you last (PvP kill credit)
 	bool bWantsRevive = false; // host: this player holds Revive (their own input, or ServerSetRevive)
 	float ReviveProgress = 0.f; // host: this player's revive of ReviveTarget
 	TWeakObjectPtr<class AWWOCharacter> ReviveTarget;

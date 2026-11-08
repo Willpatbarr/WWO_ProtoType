@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Game/WWOGameMode.h"
 #include "WWOTypes.h"
 #include "Net/UnrealNetwork.h"
 
@@ -116,7 +117,10 @@ void UWWOHealthComponent::Die()
 	Health = 0.f;
 	bDead = true;
 	BeingRevived = 0.f;
-	RespawnLeft = IsOnline() ? -1.f : RespawnTime; // online: down until a teammate revives you
+	// Alone: respawn shortly. Co-op online: down until a teammate revives you. PvP: respawn after its delay.
+	const AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	if (UWWOWorldSubsystem::IsPvP(this)) RespawnLeft = GM ? FMath::Max(GM->PvPRespawnTime, 0.1f) : 3.f;
+	else RespawnLeft = IsOnline() ? -1.f : RespawnTime;
 	DieLocally();
 }
 
@@ -137,8 +141,12 @@ void UWWOHealthComponent::Respawn()
 	bRevived = false;
 	BeingRevived = 0.f;
 	SetBodyBlocks(true);
-	P->TeleportTo(Spawn.GetLocation(), Spawn.Rotator());
-	P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
+	FTransform Where = Spawn;
+	if (const AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>(); GM && UWWOWorldSubsystem::IsPvP(this)) Where = GM->PvPSpawnFor(P);
+	Spawn = Where; // a joiner faces it too (OnRep_Dead)
+	P->TeleportTo(Where.GetLocation(), Where.Rotator());
+	P->SetViewRotation(0.f, Where.Rotator().Yaw);
+	LastAttacker = nullptr;
 	P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 	P->ClearStatusEffects();
 	Health = MaxHealth();
@@ -178,7 +186,7 @@ void UWWOHealthComponent::UpdateHealth(float DeltaSeconds)
 AWWOCharacter* UWWOHealthComponent::FindReviveTarget() const
 {
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	if (!P || bDead || !IsOnline()) return nullptr;
+	if (!P || bDead || !IsOnline() || UWWOWorldSubsystem::IsPvP(this)) return nullptr; // PvP: no reviving, you respawn
 	AWWOCharacter* Best = nullptr;
 	float BestDistance = ReviveRange * WWO::M;
 	for (AWWOCharacter* Other : UWWOWorldSubsystem::Get(this)->GetPlayers())

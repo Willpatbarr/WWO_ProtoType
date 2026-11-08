@@ -7,6 +7,9 @@
 //   Clear them all and the next wave starts after a short break.
 // - Clear WavesToWin waves: ARENA CLEARED. Go down with no teammate standing: DEFEATED, and
 //   the run restarts. Enabled = 0 keeps the level as a sandbox.
+// - PvP (hosted with ?pvp): team deathmatch instead of waves. Players join the smaller team, kill
+//   the other team's players, respawn after PvPRespawnTime away from them; first team to KillTarget
+//   kills wins, or the most kills when TimeLimit runs out (either can be 0 = off). Then it restarts.
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
@@ -15,7 +18,7 @@
 class AWWOEnemy;
 
 UENUM()
-enum class EWWOWaveState : uint8 { Idle, Countdown, Spawning, Won, Lost };
+enum class EWWOWaveState : uint8 { Idle, Countdown, Spawning, Won, Lost, Match, MatchOver };
 
 UCLASS()
 class WHATWASOURS_API AWWOGameMode : public AGameModeBase
@@ -24,6 +27,8 @@ class WHATWASOURS_API AWWOGameMode : public AGameModeBase
 
 public:
 	AWWOGameMode();
+	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
+	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	// Every map has one Player Start. Online, each player arriving takes the first free spot in
@@ -38,6 +43,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Waves") float BreakTime = 2.5f;
 	UPROPERTY(EditAnywhere, Category = "Waves") float SizeScale = 2.f;
 	UPROPERTY(EditAnywhere, Category = "Waves") float SpawnStagger = 0.35f;
+	UPROPERTY(EditAnywhere, Category = "PvP") float KillTarget = 50.f;   // team kills to win (0 = off)
+	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
+	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
+
+	bool bPvP = false; // this match is team deathmatch (the map was opened with ?pvp)
+	float MatchLeft = 0.f; // seconds
+	int32 Winner = -1;     // the team that won (-1: a draw or not over)
+	FTransform PvPSpawnFor(const class AWWOCharacter* Player) const; // away from the other team
+	void SetTeam(class AWWOPlayerState* PS, int32 Team);
+	void BalanceTeam(AController* Player); // the smaller team
+	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
 
 	EWWOWaveState State = EWWOWaveState::Idle;
 	int32 Wave = 0;
@@ -56,6 +72,8 @@ private:
 	TArray<FName> Queue;
 	TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
 	TSet<TWeakObjectPtr<class AWWOCharacter>> BoundPlayers; // players whose death the waves listen for
+	TSet<TWeakObjectPtr<class AWWOCharacter>> PvPBound;     // players whose death PvP scores
+	TSet<TWeakObjectPtr<class AWWOPlayerState>> TeamGiven;  // players BalanceTeam already placed
 	bool bStarted = false;
 
 	// -WWOWaveTest: plays every wave with god mode on, cuts each fight short after a while
@@ -78,6 +96,10 @@ private:
 
 	void Begin();
 	void Countdown(float Seconds);
+	void UpdateMatch(float DeltaSeconds);
+	void OnPvPDeath(class AWWOCharacter* Victim);
+	void EndMatch(int32 WinningTeam);
+	class AWWOGameState* WGS() const;
 	void StartWave();
 	void WaveCleared();
 	void OnPlayerDied();

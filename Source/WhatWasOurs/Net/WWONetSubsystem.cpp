@@ -1,4 +1,6 @@
 #include "Net/WWONetSubsystem.h"
+#include "Game/WWOPlayerState.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "WhatWasOurs.h"
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
@@ -77,19 +79,28 @@ FString UWWONetSubsystem::DescribeStatus(const UObject* WorldContext) const
 	const AGameStateBase* GS = World->GetGameState();
 	const int32 Players = GS ? GS->PlayerArray.Num() : 1;
 	FString Line;
+	const bool bPvP = UWWOWorldSubsystem::IsPvP(World);
 	switch (World->GetNetMode())
 	{
 	case NM_ListenServer:
-		Line = FString::Printf(TEXT("Hosting a LAN game: %d of %d players. Others join at %s"), Players, MaxPlayers, *LocalAddress());
+		Line = FString::Printf(TEXT("Hosting a LAN %s: %d of %d players. Others join at %s"), bPvP ? TEXT("PvP game") : TEXT("game"), Players,
+			bPvP ? MaxPvPPlayers : MaxPlayers, *LocalAddress());
 		break;
 	case NM_Client:
-		Line = FString::Printf(TEXT("In a LAN game: %d players"), Players);
+		Line = FString::Printf(TEXT("In a LAN %s: %d players"), bPvP ? TEXT("PvP game") : TEXT("game"), Players);
 		if (Status.StartsWith(TEXT("Only the host"))) Line += TEXT(". ") + Status;
 		break;
 	default:
 		Line = TEXT("Playing alone");
 		if (!Status.IsEmpty()) Line += TEXT(". ") + Status;
 		break;
+	}
+	// PvP: which team you're on.
+	if (bPvP)
+	{
+		const APlayerController* PC = World->GetFirstPlayerController();
+		const AWWOPlayerState* PS = PC ? PC->GetPlayerState<AWWOPlayerState>() : nullptr;
+		if (PS) Line += FString::Printf(TEXT(". You're on %s (%d kills, %d deaths)"), *AWWOPlayerState::TeamName(PS->Team), PS->Kills, PS->Deaths);
 	}
 	return Line;
 }
@@ -105,15 +116,16 @@ bool UWWONetSubsystem::IsOnline(const UObject* WorldContext) const
 	return World && World->GetNetMode() != NM_Standalone;
 }
 
-void UWWONetSubsystem::Host(FName Map)
+void UWWONetSubsystem::Host(FName Map, bool bPvP)
 {
 	PendingMap = Map;
+	bPendingPvP = bPvP;
 	Status = TEXT("Starting a LAN game...");
 	const IOnlineSessionPtr S = Sessions();
 	if (!S.IsValid())
 	{
 		// No session system: still host, just without being found by search (join by address).
-		UGameplayStatics::OpenLevel(GetWorld(), PendingMap, true, TEXT("listen"));
+		UGameplayStatics::OpenLevel(GetWorld(), PendingMap, true, HostOptions());
 		return;
 	}
 	if (S->GetNamedSession(SessionName))
@@ -137,7 +149,7 @@ void UWWONetSubsystem::CreateSession()
 	const IOnlineSessionPtr S = Sessions();
 	FOnlineSessionSettings Settings;
 	Settings.bIsLANMatch = true;
-	Settings.NumPublicConnections = MaxPlayers;
+	Settings.NumPublicConnections = bPendingPvP ? MaxPvPPlayers : MaxPlayers;
 	Settings.bShouldAdvertise = true;
 	Settings.bAllowJoinInProgress = true;
 	Settings.bUsesPresence = false;
@@ -147,7 +159,7 @@ void UWWONetSubsystem::CreateSession()
 	if (!S->CreateSession(0, SessionName, Settings))
 	{
 		S->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
-		UGameplayStatics::OpenLevel(GetWorld(), PendingMap, true, TEXT("listen"));
+		UGameplayStatics::OpenLevel(GetWorld(), PendingMap, true, HostOptions());
 	}
 }
 
@@ -158,7 +170,7 @@ void UWWONetSubsystem::OnCreated(FName Name, bool bOk)
 	Status = FString();
 	const FName Map = PendingMap;
 	PendingMap = NAME_None;
-	UGameplayStatics::OpenLevel(GetWorld(), Map, true, TEXT("listen")); // the same map, now accepting players
+	UGameplayStatics::OpenLevel(GetWorld(), Map, true, HostOptions()); // the same map, now accepting players
 }
 
 void UWWONetSubsystem::FindAndJoin()
@@ -233,7 +245,11 @@ void UWWONetSubsystem::HandleCommandLine(const UObject* WorldContext)
 	bCommandLineDone = true;
 	const TCHAR* Cmd = FCommandLine::Get();
 	FString Address;
-	if (FParse::Param(Cmd, TEXT("WWOHost")))
+	if (FParse::Param(Cmd, TEXT("WWOHostPvP")))
+	{
+		Host(FName(*UGameplayStatics::GetCurrentLevelName(WorldContext)), true);
+	}
+	else if (FParse::Param(Cmd, TEXT("WWOHost")))
 	{
 		Host(FName(*UGameplayStatics::GetCurrentLevelName(WorldContext)));
 	}

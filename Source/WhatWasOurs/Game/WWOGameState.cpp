@@ -10,6 +10,8 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AWWOGameState, StatusLine);
 	DOREPLIFETIME(AWWOGameState, StatusColor);
+	DOREPLIFETIME(AWWOGameState, bPvP);
+	DOREPLIFETIME(AWWOGameState, TeamScores);
 }
 
 void AWWOGameState::Bolt(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Lifetime, AActor* FromActor, AActor* ToActor)

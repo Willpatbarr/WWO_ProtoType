@@ -338,7 +338,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Under)) HealthBar(Target);
 	if (Pl->HealthBarRadius > 0.f && !Pl->Ult->bActive)
 	{
-		for (AActor* Actor : WS->LivingTargets())
+		for (AActor* Actor : WS->LivingTargets(Pl))
 		{
 			const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 			if (!Target || Actor == Under || Target->IsDead()) continue;

@@ -321,6 +321,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			if (!P->Weapon->bMeleeing) P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
 			const float Flat = FVector2D(Dummy->GetActorLocation() - P->GetActorLocation()).Size() / WWO::M;
 			MoveValue = Flat > 1.8f && T < MeleePunches[0] + 2.5f ? FVector2D(0.f, 1.f) : FVector2D::ZeroVector;
+			Held[(int32)EWWOAction::Sprint] = Flat > 6.f && T < MeleePunches[0]; // far away: run there
 			for (const float At : MeleePunches) if (Crossed(At)) JustPressed[(int32)EWWOAction::Melee] = true;
 			if (Crossed(MeleeForge))
 			{

@@ -27,9 +27,10 @@ public:
 	static UWWONetSubsystem* Get(const UObject* WorldContext);
 
 	// Wave survival: up to 6 players (PvP will allow 12).
-	static constexpr int32 MaxPlayers = 6;
+	static constexpr int32 MaxPlayers = 6;     // co-op waves
+	static constexpr int32 MaxPvPPlayers = 12; // team deathmatch
 
-	void Host(FName Map);
+	void Host(FName Map, bool bPvP = false); // bPvP: team deathmatch instead of waves
 	void FindAndJoin();
 	void JoinAddress(const FString& Address);
 	void Leave();
@@ -49,6 +50,8 @@ public:
 
 private:
 	FName PendingMap;
+	bool bPendingPvP = false;
+	FString HostOptions() const { return bPendingPvP ? TEXT("listen?pvp") : TEXT("listen"); }
 	TSharedPtr<FOnlineSessionSearch> Search;
 	FDelegateHandle CreateHandle, DestroyHandle, FindHandle, JoinHandle;
 	bool bCommandLineDone = false;

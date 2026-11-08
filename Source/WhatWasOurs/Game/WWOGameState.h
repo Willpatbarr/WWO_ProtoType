@@ -18,6 +18,9 @@ class WHATWASOURS_API AWWOGameState : public AGameStateBase
 public:
 	UPROPERTY(Replicated) FString StatusLine;
 	UPROPERTY(Replicated) FLinearColor StatusColor = FLinearColor::White;
+	// PvP (team deathmatch): set by the host when the match is PvP; both teams' kills.
+	UPROPERTY(Replicated) bool bPvP = false;
+	UPROPERTY(Replicated) TArray<int32> TeamScores;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

@@ -143,7 +143,8 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
 	TickLeft = 0.5f;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	FWWODamageBy By(this);
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 		const FVector Feet = Target->FeetLocation();
@@ -528,7 +529,7 @@ AActor* AWWOChainLightning::NextTarget() const
 	const FVector Origin = Current.IsValid() ? AWWOLightningBolt::CenterOf(Current.Get()) : GetActorLocation();
 	AActor* Best = nullptr;
 	float BestDistance = Range * WWO::M;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets())
+	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(Player.Get()))
 	{
 		if (Hit.Contains(Actor)) continue;
 		const FVector Point = AWWOLightningBolt::CenterOf(Actor);
@@ -557,7 +558,8 @@ void AWWOChainLightning::Burst(AActor* Target, int32 Arcs, float Reach, float Ti
 void AWWOChainLightning::DamageTarget(AActor* Target, float Amount)
 {
 	IWWOTargetable* T = Cast<IWWOTargetable>(Target);
-	if (T && !T->IsDead()) T->TakeHit(Amount, false, AWWOLightningBolt::CenterOf(Target));
+	FWWODamageBy By(Player.Get());
+	if (T && !T->IsDead() && UWWOWorldSubsystem::CanHurt(Player.Get(), Target)) T->TakeHit(Amount, false, AWWOLightningBolt::CenterOf(Target));
 }
 
 void AWWOChainLightning::Tick(float DeltaSeconds)

@@ -37,6 +37,8 @@ public:
 	AWWOPlayerController();
 
 	virtual void BeginPlay() override;
+	// PvP: move to the other team (the host decides; it replicates).
+	UFUNCTION(Server, Reliable) void ServerSwitchTeam();
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
@@ -156,6 +158,11 @@ private:
 	float AutoNetShootHealth = 0.f;
 	int32 AutoNetShotPulls = 0; // joiner: OnDamaged fired from the host's replicated health
 	bool bAutoNetBound = false;
+	// -WWOAutoTestPvP (WWOPlayerControllerAutoPvP.cpp): team deathmatch, host (-WWOHostPvP) and joiner.
+	bool bAutoTestPvP = false;
+	float AutoPvPHostHealth = 0.f;
+	int32 AutoPvPRejected = 0;
+	void UpdateAutoPvPTest(float DeltaTime);
 	void UpdateAutoNetTest(float DeltaTime);
 	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
 	bool bPerfTest = false;
