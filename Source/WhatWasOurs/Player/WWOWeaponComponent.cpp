@@ -282,6 +282,7 @@ UStaticMeshComponent* UWWOWeaponComponent::Part(FName Name) const
 
 void UWWOWeaponComponent::SetFirstPersonHidden(bool bHidden)
 {
+	bFirstPersonHidden = bHidden;
 	if (ModelRoot) ModelRoot->SetVisibility(!bHidden, true);
 	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
 	{
@@ -337,6 +338,7 @@ void UWWOWeaponComponent::BuildModel()
 		Comp->SetupAttachment(ModelRoot);
 		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Comp->SetCastShadow(false);
+		Comp->SetVisibility(!bFirstPersonHidden); // rebuilt after equips: stays hidden on someone else's character
 		Comp->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
 		Comp->SetStaticMesh(Mesh);
 		if (Color) Comp->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
@@ -1027,7 +1029,7 @@ void UWWOWeaponComponent::UpdateFov()
 	{
 		// Mod parts that would block the view through the sight (scopes, holo frames) fade out of the way.
 		const bool bAdsHidden = AdsHiddenParts.Contains(Pair.Key) && AdsAmount > 0.6f;
-		if (Pair.Value) Pair.Value->SetVisibility(bShowModel && !bAdsHidden && (Pair.Key != "MuzzleFlash" || bFlashVisible));
+		if (Pair.Value) Pair.Value->SetVisibility(!bFirstPersonHidden && bShowModel && !bAdsHidden && (Pair.Key != "MuzzleFlash" || bFlashVisible));
 	}
 }
 
@@ -1196,6 +1198,7 @@ float UWWOWeaponComponent::ThrowAnimTime(float Clock) const
 void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float PitchDeg, float Push, float Drop, bool bVisible)
 {
 	if (!Arm.Root) return;
+	bVisible = bVisible && !bFirstPersonHidden;
 	Arm.Root->SetVisibility(bVisible, true);
 	if (!bVisible || !Arm.Mesh || !Arm.Anim) return;
 	const USkeletalMesh* Manny = Cast<USkeletalMesh>(Arm.Mesh->GetSkinnedAsset());

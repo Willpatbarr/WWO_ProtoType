@@ -122,6 +122,18 @@ void AWWOCharacter::BeginPlay()
 void AWWOCharacter::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
+	RefreshLocalVisuals();
+}
+
+void AWWOCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	if (bLocalVisuals != (IsLocallyControlled() && IsPlayerControlled())) UE_LOG(LogWWO, Display, TEXT("Net visuals: %s fixed up by its player state"), *GetName());
+	RefreshLocalVisuals(); // a joiner's controller often arrives before its player state
+}
+
+void AWWOCharacter::RefreshLocalVisuals()
+{
 	// A bot is run here but isn't anyone's view: it shows its whole body like another player.
 	const bool bMine = IsLocallyControlled() && IsPlayerControlled();
 	if (bMine != bLocalVisuals) SetupVisuals(bMine);
@@ -132,6 +144,7 @@ void AWWOCharacter::SetupVisuals(bool bLocal)
 	// Yours: the first-person gun and arms, and only your body's shadow (with your flora's grafts and
 	// frame part colors). Someone else's (online): their whole body on their flora's model, no gun.
 	bLocalVisuals = bLocal;
+	if (GetNetMode() != NM_Standalone) UE_LOG(LogWWO, Display, TEXT("Net visuals: %s set up as %s"), *GetName(), bLocal ? TEXT("mine") : TEXT("someone else's"));
 	Weapon->SetFirstPersonHidden(!bLocal);
 	if (bLocal)
 	{

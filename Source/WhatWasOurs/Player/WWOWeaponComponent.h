@@ -131,6 +131,7 @@ public:
 	int32 MagazineSize() const;
 	// Someone else's character (online): no first-person gun or arms (they're drawn for its owner).
 	void SetFirstPersonHidden(bool bHidden);
+	bool bFirstPersonHidden = false; // someone else's character online: no first-person gun or arms
 
 	// A line from the eyes (ignores the player). Returns true on a hit.
 	bool CastRayTo(const FVector& To, FHitResult& OutHit) const;
