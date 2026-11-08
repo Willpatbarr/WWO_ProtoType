@@ -94,10 +94,20 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
 6. **Spawning: fixed.** One Player Start per map: the engine's pick failed when the host stood on it with no
    room beside it (the joiner never spawned). `AWWOGameMode::SpawnDefaultPawnFor` puts each player on the first
    free spot in rings 1.5 / 3 / 4.5 m around it.
-7. **Still open for phase 1:** mantling online (the kit crate stacks have no clean chest-height face, so the
-   test can't trigger one; try it by hand, or add a mantle block to the test range); two machines over
-   real Wi-Fi/Ethernet (LAN search, firewall, local network prompt); hand Will the packaged app; fold this
-   file into HANDOFF.md once phase 1 is closed.
+7. **Two machines: done** (2026-11-07). Host: the Mac mini (packaged); joiner: the M1 MacBook Air (packaged,
+   macOS 26.6, reached over SSH as `williambarr@192.168.4.45`; copy the app to `~/Applications/WhatWasOurs/`,
+   launch with `open -n ... --args -WWOJoin -WWOAutoTestNet -log=NetJoin.log`). LAN search found the host; the
+   whole test passed (health, menu, movement, gunfire with the forged hit refused, melee, restart round 2).
+   Two things it took:
+   - **SM5 shaders.** The Air's GPU falls back to Metal SM5, and the build only had SM6 shaders ("Shader platform
+     SF_METAL_SM5 was not cooked"). `DefaultEngine.ini` now targets both; packaging takes ~9 min the first time.
+   - **Local Network permission.** macOS asks on the joiner's first LAN search; until you click Allow the search
+     silently finds nothing. Both Macs have their firewall off, so no firewall prompt.
+   One 23 cm correction while sprinting at full speed (same speed and movement state on both sides, one frame
+   ahead): probably a frame hitch on the Air (it runs ~30 FPS at 1280x720). Watch for it in longer sessions.
+8. **Still open for phase 1:** mantling online (the kit crate stacks have no clean chest-height face, so the
+   test can't trigger one; try it by hand, or add a mantle block to the test range); fold this file into
+   HANDOFF.md once phase 1 is closed.
 
 ## Phase 2 groundwork (done)
 - **Player health** (`UWWOHealthComponent`): host-owned, `Health` / `Shield` / `bDead` replicated. Damage, regen,
