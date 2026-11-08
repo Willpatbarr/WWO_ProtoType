@@ -19,6 +19,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Game/WWOGameState.h"
 
 AWWOGrenade::AWWOGrenade()
 {
@@ -344,16 +345,9 @@ void AWWOGrenade::AddHalo()
 
 void AWWOGrenade::Blast(const FVector& Center)
 {
-	SpawnBlast(Center, Spec.BlastRadius);
-	if (IsOnline()) MulticastBlast(Center, Spec.BlastRadius);
-}
-
-void AWWOGrenade::MulticastBlast_Implementation(FVector_NetQuantize Center, float RadiusM)
-{
-	if (HasAuthority()) return; // shown already
-	if (Trail.IsValid()) Trail->StopAndFade();
-	SetActorHiddenInGame(true);
-	SpawnBlast(Center, RadiusM);
+	// Here and, from the host, on everyone's screen (through the game state, which every machine
+	// already has: a grenade that goes off the moment it exists hasn't reached them yet).
+	AWWOGameState::Blast(GetWorld(), Look, Center, Spec.BlastRadius, this);
 }
 
 void AWWOGrenade::Finish()
@@ -539,11 +533,10 @@ void AWWOGrenade::ShareShields(const FVector& Center)
 	}
 }
 
-void AWWOGrenade::SpawnBlast(const FVector& Center, float RadiusM)
+void AWWOGrenade::SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore)
 {
 	// A soft glowing ball that pops out to the blast size and fades, a white-hot core, a
 	// light flash, sparks, a ground shockwave, and a little extra in the flora's style.
-	UWorld* World = GetWorld();
 	const float R = RadiusM;
 	const FLinearColor Color = Look.Color;
 	const float S = R * WWO::M / 50.f; // sphere mesh is 50 cm in radius
@@ -563,7 +556,7 @@ void AWWOGrenade::SpawnBlast(const FVector& Center, float RadiusM)
 	AWWOParticles::Burst(World, Center, FMath::Lerp(Color, FLinearColor::White, 0.3f), FMath::Clamp(FMath::RoundToInt(R * 9.f), 6, 70),
 		0.55f, R * 1.2f, R * 3.f, FMath::Clamp(R * 0.025f, 0.04f, 0.2f), FVector(0, 0, -9.8f));
 	FVector Ground;
-	const bool bGround = WWOFX::GroundBelow(World, Center, FMath::Max(R * 0.5f, 0.6f) * WWO::M, Ground, this);
+	const bool bGround = WWOFX::GroundBelow(World, Center, FMath::Max(R * 0.5f, 0.6f) * WWO::M, Ground, Ignore);
 	if (bGround && R >= 1.f) AWWOFXActor::Shockwave(World, Ground, Color, R * 1.2f, 0.4f);
 	if (Look.Flavor == "voltvine")
 	{

@@ -10,6 +10,7 @@
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOAbilityComponent.h"
 #include "Player/WWOGrenadeComponent.h"
 #include "Flora/WWOFloraEffects.h"
 #include "Weapons/WWOGrenade.h"
@@ -251,6 +252,22 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		P->ServerThrowGrenade(P->EyeLocation(), P->AimForward());
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a second throw with no grenade ready (the host should refuse it)"));
 	}
+	// Ability: the joiner switches on Thornfist (slot 2); the host's copy should have it on too.
+	if (!bHost && Crossed(10.3f)) JustPressed[(int32)EWWOAction::Ability2] = true;
+	if (Crossed(11.2f))
+	{
+		const AWWOCharacter* Joiner = bHost ? Other : P;
+		if (Joiner) UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s sees the joiner's Thornfist on %d (abilities the host ran for joiners %d)"),
+			bHost ? TEXT("host") : TEXT("joiner"), Joiner->Abilities->ThornfistActive() != nullptr, AWWOCharacter::NetAbilitiesUsed);
+	}
+	// Ult (end of the run): the joiner casts its ult; the host runs the blast and everyone sees it.
+	if (!bHost && Crossed(46.7f)) JustPressed[(int32)EWWOAction::Ult] = true;
+	if (Crossed(48.2f))
+	{
+		const AWWOCharacter* Joiner = bHost ? Other : P;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s: joiner ults the host cast %d, blasts seen from the host %d, joiner still ulting %d"),
+			bHost ? TEXT("host") : TEXT("joiner"), AWWOCharacter::NetUltsCast, AWWOGameState::BlastsSeen, Joiner ? Joiner->bUlting : -1);
+	}
 	if (Crossed(11.5f))
 	{
 		int32 Pools = 0;
@@ -341,7 +358,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	{
 		const FVector To = Other->GetActorLocation() - P->GetActorLocation();
 		P->SetViewRotation(-0.5f, To.Rotation().Yaw);
-		const bool bClose = FVector2D(To).Size() <= 1.5f * WWO::M;
+		const bool bClose = FVector2D(To).Size() <= 1.5f * WWO::M || P->Health->FindReviveTarget() == Other; // in reach (the prompt's own test)
 		MoveValue = bClose ? FVector2D::ZeroVector : FVector2D(0.f, 1.f);
 		Held[(int32)EWWOAction::Sprint] = !bClose && FVector2D(To).Size() > 4.f * WWO::M;
 		const bool bWasHolding = Held[(int32)EWWOAction::Revive];

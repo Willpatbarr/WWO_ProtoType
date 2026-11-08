@@ -1,5 +1,6 @@
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
+#include "Game/WWOGameState.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
@@ -766,7 +767,6 @@ void UWWOWeaponComponent::MeleeStrike()
 	}
 	else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	OnHitConfirmed.Broadcast(false, bKilled);
-	P->Abilities->OnMeleeLanded(); // Melee Guard
 	Kick = 1.f;
 	MeleeImpact(Best, bKilled, BestPoint);
 }
@@ -779,23 +779,47 @@ void UWWOWeaponComponent::MeleeImpact(AActor* TargetActor, bool bKilled, const F
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const UWWOFloraData* Flora = Loadout ? Loadout->GetFlora() : nullptr;
 	const FLinearColor Color = Flora && Flora->GraftColor.A > 0.f ? Flora->GraftColor : FLinearColor(0.25f, 0.55f, 1.f);
+	if (GetNetMode() == NM_Client)
+	{
+		// A joiner shows its own discharge now; the host runs the rest (ServerMeleeHit).
+		if (const UWWOAbilityData* Thornfist = P->Abilities->ThornfistActive())
+		{
+			if (Thornfist->DischargeArcs >= 1.f)
+			{
+				AWWODischarge::Spawn(GetWorld(), TargetActor, Point, (Point - P->EyeLocation()).GetSafeNormal(), Color,
+					FMath::RoundToInt(Thornfist->DischargeArcs), Thornfist->DischargeRadius, Thornfist->DischargeTime);
+			}
+		}
+		P->Abilities->OnMeleeLanded();
+		P->Abilities->ConsumeStaticCharge(); // used up here too (the HUD); the host sends the chain
+	}
+	else MeleeKitEffects(TargetActor, Point);
+	P->AddRecoil(FMath::DegreesToRadians(MeleeJolt * Boost), 0.f, 0.02f, 1.f, 0.12f); // the view snaps up and settles
+	StartPunch(MeleePunchFov * Boost, MeleePunchRoll * Boost, MeleePunchTime);
+	Rumble(MeleeRumbleWeak * Boost, MeleeRumbleStrong * Boost, MeleeRumbleTime * Boost);
+	if (GetNetMode() != NM_Client) MeleeKnockBack(TargetActor, bKilled); // a joiner's is the host's (it moves the target)
+	if (AWWOPlayerController* PC = P->GetWWOController()) PC->Hitstop(MeleeHitstop * Boost);
+}
+
+void UWWOWeaponComponent::MeleeKitEffects(AActor* TargetActor, const FVector& Point)
+{
+	AWWOCharacter* P = GetPlayer();
+	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+	const UWWOFloraData* Flora = Loadout ? Loadout->GetFlora() : nullptr;
+	const FLinearColor Color = Flora && Flora->GraftColor.A > 0.f ? Flora->GraftColor : FLinearColor(0.25f, 0.55f, 1.f);
+	P->Abilities->OnMeleeLanded(); // Melee Guard
 	if (const UWWOAbilityData* Thornfist = P->Abilities->ThornfistActive())
 	{
 		if (Thornfist->DischargeArcs >= 1.f)
 		{
-			AWWODischarge::Spawn(GetWorld(), TargetActor, Point, (Point - P->EyeLocation()).GetSafeNormal(), Color,
-				FMath::RoundToInt(Thornfist->DischargeArcs), Thornfist->DischargeRadius, Thornfist->DischargeTime);
+			AWWOGameState::Discharge(GetWorld(), TargetActor, Point, (Point - P->EyeLocation()).GetSafeNormal(), Color,
+				FMath::RoundToInt(Thornfist->DischargeArcs), Thornfist->DischargeRadius, Thornfist->DischargeTime, P);
 		}
 	}
 	if (const UWWOAbilityData* StaticCharge = P->Abilities->ConsumeStaticCharge())
 	{
 		AWWOChainLightning::Spawn(GetWorld(), StaticCharge, TargetActor, P, Color);
 	}
-	P->AddRecoil(FMath::DegreesToRadians(MeleeJolt * Boost), 0.f, 0.02f, 1.f, 0.12f); // the view snaps up and settles
-	StartPunch(MeleePunchFov * Boost, MeleePunchRoll * Boost, MeleePunchTime);
-	Rumble(MeleeRumbleWeak * Boost, MeleeRumbleStrong * Boost, MeleeRumbleTime * Boost);
-	if (GetNetMode() != NM_Client) MeleeKnockBack(TargetActor, bKilled); // a joiner's is the host's (it moves the target)
-	if (AWWOPlayerController* PC = P->GetWWOController()) PC->Hitstop(MeleeHitstop * Boost);
 }
 
 void UWWOWeaponComponent::MeleeKnockBack(AActor* TargetActor, bool bKilled) const
@@ -1274,7 +1298,8 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 	if (!L) return;
 	bOverpressure = false; // any shot uses it up, hit or miss
 	AimHeld = 0.f;         // Patience starts over
-	if (bCritical && FirstHit && L->HasPerk("ricochet"))
+	const bool bJoiner = GetNetMode() == NM_Client; // a joiner's arcs are the host's (ServerGunShot)
+	if (!bJoiner && bCritical && FirstHit && L->HasPerk("ricochet"))
 	{
 		// One bounce from the target that was hit, for 60% of the gun's damage.
 		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(1.f, 0.62f, 0.2f),
@@ -1286,11 +1311,11 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 	if (HitCount > 0 && L->HasPerk("static"))
 	{
 		StaticHits += 1;
-		if (StaticHits >= 10 && FirstHit)
+		if (StaticHits >= 10 && (FirstHit || bJoiner))
 		{
 			StaticHits = 0;
 			// Two jumps from the target that was hit, for twice the gun's damage each.
-			AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(0.45f, 0.75f, 1.f),
+			if (!bJoiner) AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, GetOwner(), FLinearColor(0.45f, 0.75f, 1.f),
 				Weapon->Damage * 2.f, 6.f, 0.85f, 2, 0.07f);
 		}
 	}

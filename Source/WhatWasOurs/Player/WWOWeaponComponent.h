@@ -142,6 +142,10 @@ public:
 	// Melee, for the host checking a joiner's punch (see AWWOCharacter::ServerMeleeHit).
 	float MeleeSwingTime() const { return M("melee_time", MeleeTime); }
 	void MeleeKnockBack(AActor* Target, bool bKilled) const; // shove it away from the player (host only online)
+	// The kit a landed punch sets off: Melee Guard, Thornfist's discharge, an armed Static Charge's
+	// chain. The host runs it for every punch (a joiner's too); a joiner only shows its own discharge.
+	void MeleeKitEffects(AActor* Target, const FVector& Point);
+	int32 HostStaticHits = 0; // host: a joiner's hits toward the Static perk's arc
 
 private:
 	UPROPERTY() TObjectPtr<UWWOWeaponData> BaseWeapon; // the asset

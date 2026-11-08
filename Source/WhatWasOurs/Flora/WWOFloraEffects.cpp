@@ -1,5 +1,6 @@
 #include "Flora/WWOFloraEffects.h"
 #include "Flora/WWOSporeFog.h"
+#include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -550,7 +551,7 @@ void AWWOChainLightning::Burst(AActor* Target, int32 Arcs, float Reach, float Ti
 	const FVector Impact = AWWOLightningBolt::CenterOf(Target);
 	const AWWOCharacter* P = Cast<AWWOCharacter>(Player.Get());
 	const FVector Away = P ? (Impact - P->EyeLocation()).GetSafeNormal() : FVector::ForwardVector; // from the camera, like Godot
-	AWWODischarge::Spawn(GetWorld(), Target, Impact, Away, Color, Arcs, Reach, Time);
+	AWWOGameState::Discharge(GetWorld(), Target, Impact, Away, Color, Arcs, Reach, Time); // everyone sees it
 }
 
 void AWWOChainLightning::DamageTarget(AActor* Target, float Amount)
@@ -572,13 +573,14 @@ void AWWOChainLightning::Tick(float DeltaSeconds)
 		return;
 	}
 	JumpsLeft -= 1;
-	AWWOLightningBolt::Spawn(GetWorld(), Current.IsValid() ? AWWOLightningBolt::CenterOf(Current.Get()) : GetActorLocation(),
+	AWWOGameState::Bolt(GetWorld(), Current.IsValid() ? AWWOLightningBolt::CenterOf(Current.Get()) : GetActorLocation(),
 		AWWOLightningBolt::CenterOf(Next), Color, 0.4f, Current.Get(), Next);
 	Damage *= Falloff;
 	Hit.Add(Next);
 	Burst(Next, 5, 0.9f, 0.35f);
 	DamageTarget(Next, Damage);
-	if (AWWOCharacter* P = Cast<AWWOCharacter>(Player.Get()))
+	AWWOCharacter* P = Cast<AWWOCharacter>(Player.Get());
+	if (P && P->IsLocallyControlled())
 	{
 		if (AWWOPlayerController* PC = P->GetWWOController()) PC->Rumble(0.6f, 0.35f, 0.06f); // a sharp buzz with each jump
 	}

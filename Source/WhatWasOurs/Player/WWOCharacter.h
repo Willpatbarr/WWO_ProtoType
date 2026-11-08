@@ -256,6 +256,13 @@ public:
 	UFUNCTION(Client, Unreliable) void ClientHitMarker(bool bKilled);
 	// Online: a joiner's grenade leaves its hand (the host builds and throws it).
 	UFUNCTION(Server, Reliable) void ServerThrowGrenade(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir);
+	// Online kit: a joiner's ability or ult (its own machine runs it at once; the host runs the
+	// world side), the host's slow on a joiner, and roots everyone else sees.
+	UFUNCTION(Server, Reliable) void ServerUseAbility(int32 Slot);
+	UFUNCTION(Server, Reliable) void ServerActivateUlt();
+	UFUNCTION(Client, Reliable) void ClientApplySlow(float Amount, float Seconds);
+	UFUNCTION(NetMulticast, Reliable) void MulticastEntrenchRoots(float Seconds);
+	static int32 NetAbilitiesUsed, NetUltsCast; // host: joiners' abilities and ults it ran
 	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
 
 	AWWOPlayerController* GetWWOController() const;
@@ -331,5 +338,7 @@ private:
 	bool bSentRevive = false;
 	bool bPosedDown = false; // the death clip has been started for this downing (it holds its last frame)
 	void UpdateReviveInput();
+	void TickStatusTimers(float DeltaSeconds);
+	void TickRemoteOnHost(float DeltaSeconds); // someone else's character, on the host
 	bool JustPressed(EWWOAction Action) const;
 };

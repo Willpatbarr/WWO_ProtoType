@@ -92,8 +92,9 @@ void UWWOUltComponent::Begin()
 	P->bUlting = true;
 	UCharacterMovementComponent* Move = P->GetCharacterMovement();
 	Move->Velocity = FVector(0, 0, FMath::Min(Move->Velocity.Z, 0.f));
-	P->Weapon->SetVisibility(false, true);
-	P->Body->SetShadowOnly(false); // the whole body (and its grafts) shows in third person
+	const bool bMine = P->IsLocallyControlled(); // the camera and first-person gun are only the player's own
+	if (bMine) P->Weapon->SetVisibility(false, true);
+	if (bMine) P->Body->SetShadowOnly(false); // the whole body (and its grafts) shows in third person
 	Clock = 0.f;
 	bExploded = false;
 	bCast = false;
@@ -103,8 +104,11 @@ void UWWOUltComponent::Begin()
 	GlideTo = ThirdPersonTransform();
 	UltCamera->SetWorldTransform(GlideFrom);
 	UltCamera->SetFieldOfView(P->Camera->FieldOfView);
-	P->Camera->Deactivate();
-	UltCamera->Activate();
+	if (bMine)
+	{
+		P->Camera->Deactivate();
+		UltCamera->Activate();
+	}
 	if (Kind == EKind::Blast)
 	{
 		Blend = CameraBlend;
@@ -154,6 +158,9 @@ void UWWOUltComponent::Release()
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+	// Online the host's copy does the world part (blast, fog, roots); a joiner's own copy only
+	// starts its veil or entrench (they change how it moves and what hits it).
+	const bool bHost = P->HasAuthority();
 	if (Kind == EKind::Blast)
 	{
 		if (Orb)
@@ -162,6 +169,7 @@ void UWWOUltComponent::Release()
 			Orb = nullptr;
 			OrbLight = nullptr;
 		}
+		if (!bHost) return;
 		// A grenade that goes off the moment it exists: same damage rules and blast look.
 		FWWOGrenadeSpec Spec;
 		Spec.Color = Color;
@@ -172,23 +180,27 @@ void UWWOUltComponent::Release()
 	}
 	else if (Kind == EKind::Veil)
 	{
-		AWWOSporeFog::SpawnFog(GetWorld(), P->GetActorLocation(), VeilFogRadius, VeilFogTime, true, P);
+		if (bHost) AWWOSporeFog::SpawnFog(GetWorld(), P->GetActorLocation(), VeilFogRadius, VeilFogTime, true, P);
 		P->VeilLeft = VeilTime;
 	}
 	else
 	{
 		P->EntrenchLeft = EntrenchTime;
-		AWWOEntrenchRoots::Spawn(GetWorld(), P, EntrenchTime);
+		AWWOEntrenchRoots::Spawn(GetWorld(), P, EntrenchTime); // on this machine (looks only)
+		if (bHost && GetNetMode() == NM_ListenServer) P->MulticastEntrenchRoots(EntrenchTime); // and on the others
 	}
 }
 
 void UWWOUltComponent::Finish()
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	UltCamera->Deactivate();
-	P->Camera->Activate();
-	P->Body->SetShadowOnly(true);
-	P->Weapon->SetVisibility(true, true);
+	if (P->IsLocallyControlled())
+	{
+		UltCamera->Deactivate();
+		P->Camera->Activate();
+		P->Body->SetShadowOnly(true);
+		P->Weapon->SetVisibility(true, true);
+	}
 	P->bUlting = false;
 	P->ResetInputEdges(); // a button held through the ult doesn't fire on release
 	bActive = false;
@@ -201,7 +213,10 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		if (Charge < 1.f) Charge = FMath::Min(Charge + DeltaSeconds / FMath::Max(ChargeTime, 0.1f), 1.f);
 		AWWOPlayerController* PC = P->GetWWOController();
-		if (PC && (PC->WasJustPressed(EWWOAction::Ult) || PC->ConsumeChord(EWWOChord::Ult))) ActivateUlt(); // F, or L1 + R1
+		if (PC && P->IsLocallyControlled() && (PC->WasJustPressed(EWWOAction::Ult) || PC->ConsumeChord(EWWOChord::Ult)) && ActivateUlt()) // F, or L1 + R1
+		{
+			if (GetNetMode() == NM_Client) P->ServerActivateUlt(); // the host runs it too (the blast, fog or roots are its)
+		}
 		return;
 	}
 	Clock += DeltaSeconds;

@@ -79,6 +79,8 @@ public:
 
 	void IgnoreActor(AActor* Other);
 	void Explode();
+	// A blast's looks (no damage) at Center; Ignore: left out of the ground check.
+	static void SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore = nullptr);
 
 	static constexpr float Radius = 0.12f; // meters (seeds are smaller)
 	static constexpr float EdgeDamage = 0.5f;
@@ -102,7 +104,6 @@ private:
 	bool bSpent = false;
 	UPROPERTY(ReplicatedUsing = OnRep_Stuck) bool bStuck = false;
 	UFUNCTION() void OnRep_Stuck();
-	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(FVector_NetQuantize Center, float RadiusM);
 	void BuildLooks();
 	void Blast(const FVector& Center); // the looks here and, online, everywhere
 	void Finish();                     // gone (online: hidden for a moment so the blast reaches everyone first)
@@ -129,6 +130,6 @@ private:
 	void Fizzle();
 	void Burst(const FVector& Center);
 	void ShareShields(const FVector& Center);
-	void SpawnBlast(const FVector& Center, float RadiusM);
+
 	void Confirm(bool bKilled);
 };

@@ -198,6 +198,24 @@ phase 3 simulates the lunge on the host.
   drips (`UWWODamageOverTime`, host-only looks), enemy blind/slow looks.
   Tested: the joiner's shock pool thrown by the host (owner the joiner), a second throw with no charge refused,
   the dummy hurt 200 -> 53, the joiner saw the grenade and the pool; single-player full test passes.
+- **Abilities and ults: done.** A joiner's own machine runs its ability or ult at once (feel, camera, its own
+  launch and veil/entrench state) and tells the host (`ServerUseAbility(Slot)`, `ServerActivateUlt`); the host's
+  copy of that player runs the same thing and owns the world side: Spore Dash's fog, Root Bombs, Thornfist's boost
+  and an armed Static Charge for its punches (`UWWOAbilityComponent::HostUseAbility`, 0.95 charge slack), the ult's
+  blast / veil fog / roots (`UWWOUltComponent::Release` spawns only on the host; roots go to everyone else with
+  `MulticastEntrenchRoots`). The host now ticks a joiner's abilities, ult, grenade charge and status timers
+  (`TickRemoteOnHost`), so a joiner's veil and entrench run out there and its casts can be checked. Camera and
+  first-person gun changes in the ult only touch the player's own character.
+  A landed punch's kit (`UWWOWeaponComponent::MeleeKitEffects`: Melee Guard, Thornfist discharge, Static Charge's
+  chain) runs on the host for every punch; a joiner only shows its own discharge. Gun arc perks (Ricochet, Static)
+  for a joiner's shots run on the host from the mods its shot names (`HostStaticHits`).
+  Static Charge fills on a joiner from the damage the host reports (`OnDamaged`), so both copies agree.
+  Slows the host puts on a joiner reach it (`ClientApplySlow`): its moves must be slowed too.
+  Visual relay on the game state (`AWWOGameState::Blast / Bolt / Discharge`): the host draws it and multicasts it.
+  Grenade blasts go through it too (a blast that goes off the moment it exists, like the ult's, can't use the
+  grenade's own channel yet). Chain lightning uses it, so everyone sees the jumps.
+  Tested: the joiner's Thornfist on in the host's copy; the joiner's ult cast on the host (blast 584 damage) and
+  seen by the joiner; single-player full test passes (every ability and ult).
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);

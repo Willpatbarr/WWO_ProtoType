@@ -23,7 +23,10 @@ public:
 	UWWOAbilityComponent();
 	void UpdateAbilities(float DeltaSeconds); // called by the character
 
-	bool ActivateAbility(UWWOAbilityData* Ability);
+	bool ActivateAbility(UWWOAbilityData* Ability, float Ready = 1.f);
+	// Host: a joiner used the ability in this slot (its own machine already did; this runs the
+	// world side: fog, bombs, Thornfist's boost and an armed Static Charge for its punches).
+	void HostUseAbility(int32 Slot);
 	float Charge(const UWWOAbilityData* Ability) const;
 	bool IsEffectActive(const UWWOAbilityData* Ability) const;
 	UWWOAbilityData* Equipped(FName Id) const;

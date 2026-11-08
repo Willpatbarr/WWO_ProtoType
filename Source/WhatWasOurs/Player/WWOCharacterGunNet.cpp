@@ -14,6 +14,7 @@
 #include "Characters/WWOBodyComponent.h"
 #include "Data/WWOData.h"
 #include "FX/WWOFX.h"
+#include "Flora/WWOFloraEffects.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
 #include "WWOTypes.h"
@@ -42,10 +43,10 @@ namespace
 	// The most this gun can do with these mods (same data on every machine), perks at their best:
 	// Hammer's faster fire, Overpressure / Final Round on one shot, Focus, Hunter and Patience on crits.
 	// Mirrors UWWOWeaponComponent::RefreshStats and Shoot.
-	bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why)
+	bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks)
 	{
 		TMap<FName, float> Percent;
-		TSet<FName> Perks, Slots;
+		TSet<FName> Slots;
 		for (const FName& Id : ModIds)
 		{
 			const UWWOModData* Mod = nullptr;
@@ -82,8 +83,9 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		for (const UWWOWeaponData* W : L->Weapons) if (W && W->Id == Shot.WeaponId) { Gun = W; break; }
 	}
 	FWWOGunLimits Limits;
+	TSet<FName> Perks;
 	FString Why = Gun ? TEXT("dead") : FString::Printf(TEXT("unknown gun %s"), *Shot.WeaponId.ToString());
-	if (!Gun || Health->bDead || !GunLimits(L, Gun, Shot.Mods, Limits, Why))
+	if (!Gun || Health->bDead || !GunLimits(L, Gun, Shot.Mods, Limits, Why, Perks))
 	{
 		NetHitsRejected += Shot.Hits.Num();
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %s"), *GetName(), *Why);
@@ -103,6 +105,8 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	ShotBudget -= 1.f;
 	++NetShotsTaken;
 	int32 Kills = 0;
+	AActor* FirstHit = nullptr;
+	AActor* FirstCrit = nullptr;
 
 	for (const FWWOGunHit& Hit : Shot.Hits)
 	{
@@ -115,6 +119,18 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		}
 		++NetHitsApplied;
 		Kills += Cast<IWWOTargetable>(Hit.Target)->TakeHit(Hit.Damage, Hit.bCritical, Hit.Point) ? 1 : 0;
+		if (!FirstHit) FirstHit = Hit.Target;
+		if (Hit.bCritical && !FirstCrit) FirstCrit = Hit.Target;
+	}
+	// The joiner's arc perks (UWWOWeaponComponent::OnShotResult runs them for the host's own shots).
+	if (FirstCrit && Perks.Contains("ricochet"))
+	{
+		AWWOChainLightning::SpawnFrom(GetWorld(), FirstCrit, this, FLinearColor(1.f, 0.62f, 0.2f), Gun->Damage * 0.6f, 8.f, 1.f, 1, 0.04f);
+	}
+	if (FirstHit && Perks.Contains("static") && ++Weapon->HostStaticHits >= 10)
+	{
+		Weapon->HostStaticHits = 0;
+		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, this, FLinearColor(0.45f, 0.75f, 1.f), Gun->Damage * 2.f, 6.f, 0.85f, 2, 0.07f);
 	}
 	if (Kills > 0)
 	{
@@ -197,6 +213,7 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 	LastMeleeHitTime = GetWorld()->GetTimeSeconds();
 	const bool bKilled = Cast<IWWOTargetable>(Target)->TakeHit(Damage, false, Point);
 	Weapon->MeleeKnockBack(Target, bKilled);
+	Weapon->MeleeKitEffects(Target, Point); // Melee Guard, Thornfist's discharge, Static Charge's chain
 	if (bKilled)
 	{
 		++NetKillsCredited;

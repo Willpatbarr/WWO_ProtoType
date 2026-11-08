@@ -1,4 +1,5 @@
 #include "Player/WWOCharacter.h"
+#include "Flora/WWOFloraEffects.h"
 #include "WhatWasOurs.h"
 #include "Data/WWOData.h"
 #include "Net/UnrealNetwork.h"
@@ -93,6 +94,9 @@ void AWWOCharacter::BeginPlay()
 	Pitch = FMath::Clamp(FRotator::NormalizeAxis(FMath::RadiansToDegrees(Pitch)), -89.f, 89.f) * UE_PI / 180.f;
 	// Someone else's until a controller on this machine takes it (NotifyControllerChanged).
 	SetupVisuals(IsLocallyControlled());
+	// Online, a joiner's damage happens on the host (which charges its copy's Static Charge); the
+	// joiner's own copy charges from the damage it's told about, so both agree on when it's ready.
+	Health->OnDamaged.AddWeakLambda(this, [this](float Amount) { if (!HasAuthority()) Abilities->OnDamageTaken(Amount); });
 }
 
 void AWWOCharacter::NotifyControllerChanged()
@@ -142,6 +146,54 @@ void AWWOCharacter::ServerSetLoadout_Implementation(const FWWONetLoadout& Loadou
 	UE_LOG(LogWWO, Display, TEXT("Net: %s's loadout: flora %s, grenade %s, abilities %s, %d traits, weapon %s with %d mods"), *GetName(),
 		*Loadout.Flora.ToString(), *Loadout.Grenade.ToString(), *FString::JoinBy(Loadout.Abilities, TEXT("+"), [](const FName& N) { return N.ToString(); }),
 		Loadout.Traits.Num(), *Loadout.Weapon.ToString(), Loadout.ModIds.Num());
+}
+
+int32 AWWOCharacter::NetAbilitiesUsed = 0;
+int32 AWWOCharacter::NetUltsCast = 0;
+
+void AWWOCharacter::TickStatusTimers(float DeltaSeconds)
+{
+	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
+	VeilLeft = FMath::Max(VeilLeft - DeltaSeconds, 0.f);
+	EntrenchLeft = FMath::Max(EntrenchLeft - DeltaSeconds, 0.f);
+}
+
+void AWWOCharacter::TickRemoteOnHost(float DeltaSeconds)
+{
+	Health->UpdateHealth(DeltaSeconds);
+	TickStatusTimers(DeltaSeconds);                 // their veil, entrench and slows run out here too
+	Grenades->UpdateCharge(DeltaSeconds);           // to check their throws
+	if (!Health->bDead)
+	{
+		Abilities->UpdateAbilities(DeltaSeconds);   // recharges (their presses arrive as ServerUseAbility)
+		Ult->UpdateUlt(DeltaSeconds);               // a cast ult plays out here (and its charge)
+	}
+	if (!bUlting && EntrenchLeft <= 0.f) UpdateModel(); // the body replicates to everyone else
+}
+
+void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot)
+{
+	++NetAbilitiesUsed;
+	Abilities->HostUseAbility(Slot);
+}
+
+void AWWOCharacter::ServerActivateUlt_Implementation()
+{
+	if (Ult->Charge >= 0.95f) Ult->Fill(); // a little slack: the two charges run a frame or two apart
+	const bool bCast = Ult->ActivateUlt();
+	NetUltsCast += bCast ? 1 : 0;
+	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), bCast ? TEXT("cast") : TEXT("refused"));
+}
+
+void AWWOCharacter::ClientApplySlow_Implementation(float Amount, float Seconds)
+{
+	ApplySlow(Amount, Seconds); // the host slowed you: your moves must slow too, or they disagree
+}
+
+void AWWOCharacter::MulticastEntrenchRoots_Implementation(float Seconds)
+{
+	if (HasAuthority() || IsLocallyControlled()) return; // the host's and the player's own already show them
+	AWWOEntrenchRoots::Spawn(GetWorld(), this, Seconds);
 }
 
 void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
@@ -335,10 +387,9 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
 	if (!IsLocallyControlled())
 	{
-		// Someone else's character: the host runs their health; everyone shows their body.
-		if (HasAuthority()) Health->UpdateHealth(DeltaSeconds);
-		if (HasAuthority()) Grenades->UpdateCharge(DeltaSeconds); // to check their throws
-		if (HasAuthority()) UpdateModel(); // the host's copy moves by their inputs; the body replicates to the rest
+		// Someone else's character: the host runs their health and the world side of their kit;
+		// everyone shows their body.
+		if (HasAuthority()) TickRemoteOnHost(DeltaSeconds);
 		return;
 	}
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
@@ -407,9 +458,7 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 
 	AimAssist->UpdateHiddenWindow(DeltaSeconds);
 	UpdateRecoil(DeltaSeconds);
-	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
-	VeilLeft = FMath::Max(VeilLeft - DeltaSeconds, 0.f);
-	EntrenchLeft = FMath::Max(EntrenchLeft - DeltaSeconds, 0.f);
+	TickStatusTimers(DeltaSeconds);
 	ClientAuthLeft = FMath::Max(ClientAuthLeft - DeltaSeconds, 0.f);
 
 	if ((bUlting || EntrenchLeft > 0.f) && bLunging)
@@ -953,6 +1002,7 @@ void AWWOCharacter::ApplySlow(float Amount, float Seconds)
 {
 	SlowAmount = FMath::Max(FMath::Clamp(Amount, 0.f, 0.95f), SlowLeft > 0.f ? SlowAmount : 0.f);
 	SlowLeft = FMath::Max(SlowLeft, Seconds);
+	if (HasAuthority() && !IsLocallyControlled() && GetNetMode() != NM_Standalone) ClientApplySlow(Amount, Seconds);
 }
 
 bool AWWOCharacter::IsInvisible() const

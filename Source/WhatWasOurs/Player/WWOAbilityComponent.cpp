@@ -1,5 +1,6 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOHealthComponent.h"
 #include "Player/WWOPlayerController.h"
 #include "Weapons/WWOGrenade.h"
 #include "Flora/WWOSporeFog.h"
@@ -8,6 +9,7 @@
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
+#include "WhatWasOurs.h"
 
 UWWOAbilityComponent::UWWOAbilityComponent()
 {
@@ -45,19 +47,47 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 		const bool bPressed = PC->WasJustPressed(Slot == 0 ? EWWOAction::Ability1 : EWWOAction::Ability2);
 		if (A && A->Kind == EWWOAbilityKind::Charged)
 		{
-			if (bPressed && !PlayerBusy() && Charge(A) >= 1.f) Armed.Add(A->Id, true); // the next melee hit discharges it
+			if (bPressed && !PlayerBusy() && Charge(A) >= 1.f)
+			{
+				Armed.Add(A->Id, true); // the next melee hit discharges it
+				if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner()); Me && GetNetMode() == NM_Client) Me->ServerUseAbility(Slot);
+			}
 			continue;
 		}
 		if (!A || A->Kind != EWWOAbilityKind::Active) continue;
 		ChargeById.Add(A->Id, FMath::Min(Charge(A) + DeltaSeconds / FMath::Max(A->Cooldown, 0.1f), 1.f));
 		ActiveLeft.Add(A->Id, FMath::Max(ActiveLeft.FindRef(A->Id) - DeltaSeconds, 0.f));
-		if (bPressed && !PlayerBusy()) ActivateAbility(A);
+		if (bPressed && !PlayerBusy() && ActivateAbility(A) && GetNetMode() == NM_Client)
+		{
+			if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner())) Me->ServerUseAbility(Slot); // the host runs it too
+		}
 	}
 }
 
-bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A)
+void UWWOAbilityComponent::HostUseAbility(int32 Slot)
 {
-	if (A->Kind != EWWOAbilityKind::Active || Charge(A) < 1.f) return false;
+	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this); // the joiner's copy
+	UWWOAbilityData* A = Loadout ? Loadout->GetAbility(Slot) : nullptr;
+	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!A || !P || P->Health->bDead)
+	{
+		UE_LOG(LogWWO, Display, TEXT("NetAbility refused from %s: slot %d %s"), *GetNameSafe(P), Slot, A ? TEXT("dead") : TEXT("empty"));
+		return;
+	}
+	constexpr float Ready = 0.95f; // a little slack: the two machines' recharges run a frame or two apart
+	bool bDone = false;
+	if (A->Kind == EWWOAbilityKind::Charged && Charge(A) >= Ready)
+	{
+		Armed.Add(A->Id, true);
+		bDone = true;
+	}
+	else if (A->Kind == EWWOAbilityKind::Active) bDone = ActivateAbility(A, Ready);
+	UE_LOG(LogWWO, Display, TEXT("NetAbility %s from %s: %s (charge %.2f)"), *A->Id.ToString(), *P->GetName(), bDone ? TEXT("used") : TEXT("refused, not ready"), Charge(A));
+}
+
+bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
+{
+	if (A->Kind != EWWOAbilityKind::Active || Charge(A) < Ready) return false;
 	ChargeById.Add(A->Id, 0.f);
 	ActiveLeft.Add(A->Id, A->Duration);
 	if (A->Id == "spore_dash") SporeDash(A);
@@ -152,10 +182,11 @@ void UWWOAbilityComponent::SporeDash(UWWOAbilityData* A)
 	// thick fog where you were standing.
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const FVector At = P->GetActorLocation();
-	AWWOSporeFog::SpawnFog(GetWorld(), At, A->DashFogRadius, A->DashFogTime, true, GetOwner());
+	if (P->HasAuthority()) AWWOSporeFog::SpawnFog(GetWorld(), At, A->DashFogRadius, A->DashFogTime, true, GetOwner()); // online it replicates
 	AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(AWWOSporeFog::Color(), 0.15f), 0.5f), 18, 1.f, 1.5f, 4.f, 0.9f,
 		FVector(0, 0, 0.3f), EWWOParticleStyle::Smoke);
 	AWWOParticles::Burst(GetWorld(), At, WWO::Lightened(AWWOSporeFog::Color(), 0.4f), 24, 0.7f, 2.f, 5.f, 0.06f, FVector(0, 0, -2.f));
+	if (!P->IsLocallyControlled()) return; // the launch is the dashing player's own move
 	FVector Back = -P->GetActorForwardVector();
 	Back.Z = 0.f;
 	P->Launch((Back.GetSafeNormal() * A->DashSpeed + FVector(0, 0, A->DashUp)) * WWO::M);
@@ -166,6 +197,7 @@ void UWWOAbilityComponent::RootBombs(UWWOAbilityData* A)
 	// Two big bombs, thrown a little left and right of where you're looking, that blow up the
 	// moment they hit something.
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!P->HasAuthority()) return; // the host throws a joiner's bombs (they replicate)
 	const float Bigger = 1.f + UWWOLoadoutSubsystem::Bonus(this, "blast_bigger");
 	const FTransform Eye = P->Camera->GetComponentTransform();
 	TArray<AWWOGrenade*> Thrown;
