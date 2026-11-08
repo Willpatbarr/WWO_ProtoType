@@ -24,16 +24,18 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	static FLinearColor Color() { return FLinearColor(0.62f, 0.45f, 0.85f); }
-	static AWWOSporeFog* SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick = false);
+	// Owner: the player whose kit made it (online the host spawns it and it replicates).
+	static AWWOSporeFog* SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick = false, AActor* Owner = nullptr);
 	static bool Contains(const UWorld* World, const FVector& Point);
 	static bool Blocks(const UWorld* World, const FVector& From, const FVector& To);
 
-	float Radius = 3.f; // meters
-	float Duration = 6.f;
-	bool bBlocksSight = false;
-	float Opacity = 0.22f;
+	UPROPERTY(Replicated) float Radius = 3.f; // meters
+	UPROPERTY(Replicated) float Duration = 6.f;
+	UPROPERTY(Replicated) bool bBlocksSight = false;
+	UPROPERTY(Replicated) float Opacity = 0.22f;
 
 	float Strength() const;
 

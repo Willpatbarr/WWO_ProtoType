@@ -152,7 +152,7 @@ void UWWOAbilityComponent::SporeDash(UWWOAbilityData* A)
 	// thick fog where you were standing.
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const FVector At = P->GetActorLocation();
-	AWWOSporeFog::SpawnFog(GetWorld(), At, A->DashFogRadius, A->DashFogTime, true);
+	AWWOSporeFog::SpawnFog(GetWorld(), At, A->DashFogRadius, A->DashFogTime, true, GetOwner());
 	AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(AWWOSporeFog::Color(), 0.15f), 0.5f), 18, 1.f, 1.5f, 4.f, 0.9f,
 		FVector(0, 0, 0.3f), EWWOParticleStyle::Smoke);
 	AWWOParticles::Burst(GetWorld(), At, WWO::Lightened(AWWOSporeFog::Color(), 0.4f), 24, 0.7f, 2.f, 5.f, 0.06f, FVector(0, 0, -2.f));

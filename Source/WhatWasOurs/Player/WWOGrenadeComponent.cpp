@@ -3,11 +3,16 @@
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOAbilityComponent.h"
+#include "Player/WWOHealthComponent.h"
 #include "Weapons/WWOGrenade.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
+#include "WhatWasOurs.h"
+
+int32 UWWOGrenadeComponent::NetThrows = 0;
+int32 UWWOGrenadeComponent::NetThrowsRejected = 0;
 
 UWWOGrenadeComponent::UWWOGrenadeComponent()
 {
@@ -48,10 +53,15 @@ float UWWOGrenadeComponent::MaxCharges() const
 	return 1.f + P->Abilities->ExtraCharges(); // Extra Grenade adds a charge
 }
 
-void UWWOGrenadeComponent::UpdateGrenades(float DeltaSeconds)
+void UWWOGrenadeComponent::UpdateCharge(float DeltaSeconds)
 {
 	if (Charge < MaxCharges()) Charge = FMath::Min(Charge + DeltaSeconds / FMath::Max(EffectiveRechargeTime(), 0.1f), MaxCharges());
 	Charge = FMath::Min(Charge, MaxCharges()); // Extra Grenade unequipped
+}
+
+void UWWOGrenadeComponent::UpdateGrenades(float DeltaSeconds)
+{
+	UpdateCharge(DeltaSeconds);
 	if (ReleaseLeft >= 0.f)
 	{
 		ReleaseLeft -= DeltaSeconds;
@@ -81,10 +91,39 @@ void UWWOGrenadeComponent::Release()
 	// The grenade leaves your hand, toward wherever you're looking now: a bit above it,
 	// fast enough to land ThrowDistance away on flat ground when you look level.
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	const FVector Dir = P->AimForward().RotateAngleAxis(-LaunchAngle, P->Camera->GetRightVector()).GetSafeNormal();
+	// Where it leaves your (left) hand, relative to the camera.
+	const FVector Hand = P->Camera->GetComponentTransform().TransformPosition(FVector(50.f, -8.f, -6.f));
+	// Online a joiner's grenade is the host's (built there from this player's loadout); everyone sees it fly.
+	if (GetNetMode() == NM_Client) P->ServerThrowGrenade(Hand, Dir);
+	else ThrowFrom(Hand, Dir);
+}
+
+bool UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
+{
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	FString Why;
+	if (P->Health->bDead) Why = TEXT("dead");
+	else if (Charge < 0.95f) Why = FString::Printf(TEXT("no grenade ready (charge %.2f)"), Charge); // a little slack for timing
+	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = TEXT("thrown from somewhere else");
+	if (!Why.IsEmpty())
+	{
+		++NetThrowsRejected;
+		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *Why);
+		return false;
+	}
+	++NetThrows;
+	Charge = FMath::Max(Charge - 1.f, 0.f);
+	ThrowFrom(Hand, Dir.GetSafeNormal());
+	return true;
+}
+
+void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
+{
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	UWWOGrenadeData* Data = Loadout ? Loadout->GetGrenade() : nullptr;
 	if (!Data) return;
-	const FVector Dir = P->AimForward().RotateAngleAxis(-LaunchAngle, P->Camera->GetRightVector()).GetSafeNormal();
 	const float Gravity = 9.8f;
 	const float Speed = FMath::Sqrt(EffectiveThrowDistance() * Gravity / FMath::Sin(FMath::DegreesToRadians(2.f * LaunchAngle)));
 
@@ -98,7 +137,5 @@ void UWWOGrenadeComponent::Release()
 	Spec.SporePatches = P->Abilities->Equipped("spore_patches");
 	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && Data->Kind != EWWOGrenadeKind::Spike && Data->Kind != EWWOGrenadeKind::Tripmine;
 	Spec.ThrownFrom = P->GetActorLocation();
-	// Where it leaves your (left) hand, relative to the camera.
-	const FVector Hand = P->Camera->GetComponentTransform().TransformPosition(FVector(50.f, -8.f, -6.f));
 	AWWOGrenade::Throw(GetWorld(), Spec, Hand, Dir * Speed * WWO::M, P);
 }

@@ -10,9 +10,12 @@
 // - Wall: blows up and raises a bark wall facing the thrower.
 // - Blind: blows up and blinds enemies.
 // Seedburst splits it into seeds; Spore Patches sprouts patches where it touches down.
+// Online the host runs every grenade (a joiner's throw is spawned there from its loadout); it
+// replicates its look once and its position, everyone sees it fly, and its blast is multicast.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Engine/NetSerialization.h"
 #include "WWOGrenade.generated.h"
 
 class USphereComponent;
@@ -44,6 +47,19 @@ struct FWWOGrenadeSpec
 	bool bVisible = true;
 };
 
+// What other machines need to draw a grenade and its blast (sent once).
+USTRUCT()
+struct FWWOGrenadeLook
+{
+	GENERATED_BODY()
+	UPROPERTY() FLinearColor Color = FLinearColor::White;
+	UPROPERTY() float Size = 12.f;        // cm radius
+	UPROPERTY() float BlastRadius = 4.f;  // m
+	UPROPERTY() FName Flavor;
+	UPROPERTY() bool bVisible = true;
+	UPROPERTY() bool bBlind = false;      // the blind grenade's brighter flash
+};
+
 UCLASS()
 class WHATWASOURS_API AWWOGrenade : public AActor
 {
@@ -56,8 +72,10 @@ public:
 	// A blast that goes off the moment it exists (the ult).
 	static void ExplodeAt(UWorld* World, const FWWOGrenadeSpec& Spec, const FVector& At, AActor* Instigator);
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void IgnoreActor(AActor* Other);
 	void Explode();
@@ -69,6 +87,8 @@ public:
 	static constexpr float ContactFriction = 0.8f; // the Godot grenade's physics material friction
 
 	FWWOGrenadeSpec Spec;
+	static int32 SeenRemote; // grenades this machine drew for the host (-WWOAutoTestNet)
+	UPROPERTY(Replicated) FWWOGrenadeLook Look;
 
 private:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Collision;
@@ -80,7 +100,14 @@ private:
 	TWeakObjectPtr<AActor> Thrower;
 
 	bool bSpent = false;
-	bool bStuck = false;
+	UPROPERTY(ReplicatedUsing = OnRep_Stuck) bool bStuck = false;
+	UFUNCTION() void OnRep_Stuck();
+	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(FVector_NetQuantize Center, float RadiusM);
+	void BuildLooks();
+	void Blast(const FVector& Center); // the looks here and, online, everywhere
+	void Finish();                     // gone (online: hidden for a moment so the blast reaches everyone first)
+	void AddHalo();
+	bool IsOnline() const { return GetNetMode() != NM_Standalone; }
 	float ArmLeft = -1.f;
 	float Age = 0.f;
 	float LifeLimit = 0.f; // fuse or fizzle time
@@ -102,6 +129,6 @@ private:
 	void Fizzle();
 	void Burst(const FVector& Center);
 	void ShareShields(const FVector& Center);
-	void SpawnBlast(const FVector& Center);
+	void SpawnBlast(const FVector& Center, float RadiusM);
 	void Confirm(bool bKilled);
 };

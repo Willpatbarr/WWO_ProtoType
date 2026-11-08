@@ -13,15 +13,26 @@
 #include "Components/BoxComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
 
 namespace
 {
-	FActorSpawnParameters Always()
+	FActorSpawnParameters Always(AActor* Owner = nullptr)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		P.bDeferConstruction = true;
+		P.Owner = Owner; // whose kit made it (its loadout answers for it, its hits go to them)
 		return P;
+	}
+
+	// A hit by something a player left in the world: their hit marker (a joiner's goes over the network).
+	void ConfirmFor(AActor* Player, bool bKilled)
+	{
+		AWWOCharacter* P = Cast<AWWOCharacter>(Player);
+		if (!P) return;
+		if (P->IsLocallyControlled()) P->Weapon->OnHitConfirmed.Broadcast(false, bKilled);
+		else P->ClientHitMarker(bKilled);
 	}
 
 	float BackOut(float T)
@@ -40,11 +51,44 @@ AWWOSporePool::AWWOSporePool()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+	bReplicates = true;
+}
+
+void AWWOSporePool::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AWWOSporePool, Radius, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporePool, Duration, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporePool, Color, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporePool, Flavor, COND_InitialOnly);
+}
+
+int32 AWWOSporePool::SeenRemote = 0;
+
+void AWWOSporePool::BeginPlay()
+{
+	Super::BeginPlay();
+	if (!HasAuthority()) ++SeenRemote;
+	const FVector At = GetActorLocation();
+	Disc = WWOFX::AddGroundDisc(this, GetRootComponent(), Color, 0.1f, 0.55f, 0.8f);
+	Disc->SetRelativeLocation(FVector(0, 0, 4.f));
+	Mat = WWOFX::MID(Disc);
+	if (AWWOParticles* B = AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(Color, 0.3f), 0.8f), FMath::RoundToInt(Radius * 10.f),
+		1.2f, 0.3f, 0.9f, 0.08f, FVector(0, 0, 0.6f), EWWOParticleStyle::Glow, false))
+	{
+		B->bOneShot = false;
+		B->Direction = FVector::UpVector;
+		B->SpreadDegrees = 15.f;
+		B->Shape = EWWOEmitShape::Ring;
+		B->ShapeRadius = Radius * 0.9f;
+		B->Start();
+		Bubbles = B;
+	}
 }
 
 AWWOSporePool* AWWOSporePool::Spawn(UWorld* World, const FVector& At, float RadiusM, float InDps, float InDuration, const FLinearColor& InColor, FName InFlavor, AActor* InThrower)
 {
-	AWWOSporePool* Pool = World->SpawnActor<AWWOSporePool>(At, FRotator::ZeroRotator, Always());
+	AWWOSporePool* Pool = World->SpawnActor<AWWOSporePool>(At, FRotator::ZeroRotator, Always(InThrower));
 	if (!Pool) return nullptr;
 	Pool->Radius = RadiusM;
 	Pool->Dps = InDps;
@@ -52,21 +96,7 @@ AWWOSporePool* AWWOSporePool::Spawn(UWorld* World, const FVector& At, float Radi
 	Pool->Color = InColor;
 	Pool->Flavor = InFlavor;
 	Pool->Thrower = InThrower;
-	Pool->FinishSpawning(FTransform(At));
-	Pool->Disc = WWOFX::AddGroundDisc(Pool, Pool->GetRootComponent(), InColor, 0.1f, 0.55f, 0.8f);
-	Pool->Disc->SetRelativeLocation(FVector(0, 0, 4.f));
-	Pool->Mat = WWOFX::MID(Pool->Disc);
-	if (AWWOParticles* B = AWWOParticles::Burst(World, At, WWO::WithAlpha(WWO::Lightened(InColor, 0.3f), 0.8f), FMath::RoundToInt(RadiusM * 10.f),
-		1.2f, 0.3f, 0.9f, 0.08f, FVector(0, 0, 0.6f), EWWOParticleStyle::Glow, false))
-	{
-		B->bOneShot = false;
-		B->Direction = FVector::UpVector;
-		B->SpreadDegrees = 15.f;
-		B->Shape = EWWOEmitShape::Ring;
-		B->ShapeRadius = RadiusM * 0.9f;
-		B->Start();
-		Pool->Bubbles = B;
-	}
+	Pool->FinishSpawning(FTransform(At)); // BeginPlay builds the looks
 	return Pool;
 }
 
@@ -82,7 +112,8 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	Age += DeltaSeconds;
 	if (Age >= Duration)
 	{
-		Destroy();
+		if (HasAuthority()) Destroy(); // a joiner's copy goes when the host's does
+		else SetActorHiddenInGame(true);
 		return;
 	}
 	// Grows in quickly, shrinks and fades at the end.
@@ -107,6 +138,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 				C + FVector(FMath::Cos(B), FMath::Sin(B), 0.f) * R * FMath::FRandRange(0.3f, 0.9f), Color, FMath::FRandRange(0.1f, 0.18f));
 		}
 	}
+	if (!HasAuthority()) return; // the damage is the host's
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
 	TickLeft = 0.5f;
@@ -118,7 +150,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 		if (Flat.Size() <= Radius * WWO::M && FMath::Abs(Feet.Z - GetActorLocation().Z) < 150.f)
 		{
 			const bool bKilled = Target->TakeHit(Dps * 0.5f, false, Feet + FVector(0, 0, 30.f), Color);
-			if (AWWOCharacter* P = Cast<AWWOCharacter>(Thrower.Get())) P->Weapon->OnHitConfirmed.Broadcast(false, bKilled);
+			ConfirmFor(Thrower.Get(), bKilled);
 		}
 	}
 }
@@ -129,42 +161,54 @@ AWWOSporePatch::AWWOSporePatch()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+	bReplicates = true;
 }
 
-AWWOSporePatch* AWWOSporePatch::Spawn(UWorld* World, const FVector& At, float RadiusM, float InDuration)
+void AWWOSporePatch::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-	AWWOSporePatch* Patch = World->SpawnActor<AWWOSporePatch>(At, FRotator::ZeroRotator, Always());
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AWWOSporePatch, Radius, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporePatch, Duration, COND_InitialOnly);
+}
+
+AWWOSporePatch* AWWOSporePatch::Spawn(UWorld* World, const FVector& At, float RadiusM, float InDuration, AActor* InOwner)
+{
+	AWWOSporePatch* Patch = World->SpawnActor<AWWOSporePatch>(At, FRotator::ZeroRotator, Always(InOwner));
 	if (!Patch) return nullptr;
 	Patch->Radius = RadiusM;
 	Patch->Duration = InDuration;
-	Patch->FinishSpawning(FTransform(At));
+	Patch->FinishSpawning(FTransform(At)); // BeginPlay builds the looks
+	AWWOSporeFog::SpawnFog(World, At + FVector(0, 0, 40.f), RadiusM, InDuration, false, InOwner);
+	return Patch;
+}
+
+void AWWOSporePatch::BeginPlay()
+{
+	Super::BeginPlay();
+	const FVector At = GetActorLocation();
 	// A little mushroom: a pale stem and a glowing purple cap.
-	UStaticMeshComponent* Stem = WWOFX::AddShape(Patch, Patch->GetRootComponent(), WWOFX::Cylinder(), TEXT("M_WWO_Solid"), FLinearColor(0.85f, 0.82f, 0.7f));
+	UStaticMeshComponent* Stem = WWOFX::AddShape(this, GetRootComponent(), WWOFX::Cylinder(), TEXT("M_WWO_Solid"), FLinearColor(0.85f, 0.82f, 0.7f));
 	Stem->SetRelativeLocation(FVector(0, 0, 12.5f));
 	Stem->SetRelativeScale3D(FVector(0.12f, 0.12f, 0.25f));
-	UStaticMeshComponent* Cap = WWOFX::AddShape(Patch, Patch->GetRootComponent(), WWOFX::Sphere(), TEXT("M_WWO_Solid"), AWWOSporeFog::Color(), 1.5f);
+	UStaticMeshComponent* Cap = WWOFX::AddShape(this, GetRootComponent(), WWOFX::Sphere(), TEXT("M_WWO_Solid"), AWWOSporeFog::Color(), 1.5f);
 	Cap->SetRelativeLocation(FVector(0, 0, 25.f));
 	Cap->SetRelativeScale3D(FVector(0.32f, 0.32f, 0.16f));
-	Patch->SetActorScale3D(FVector(0.01f));
-	AWWOSporeFog::SpawnFog(World, At + FVector(0, 0, 40.f), RadiusM, InDuration);
-	AWWOParticles::Burst(World, At + FVector(0, 0, 30.f), WWO::WithAlpha(WWO::Lightened(AWWOSporeFog::Color(), 0.2f), 0.5f), 10, 0.9f, 0.8f, 2.f, 0.5f,
+	SetActorScale3D(FVector(0.01f));
+	AWWOParticles::Burst(GetWorld(), At + FVector(0, 0, 30.f), WWO::WithAlpha(WWO::Lightened(AWWOSporeFog::Color(), 0.2f), 0.5f), 10, 0.9f, 0.8f, 2.f, 0.5f,
 		FVector(0, 0, 0.3f), EWWOParticleStyle::Smoke);
-	if (AWWOCharacter* P = UWWOWorldSubsystem::Get(World)->GetPlayer())
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (P && P->IsLocallyControlled())
 	{
 		P->Abilities->LivePatches++; // keeps the Spore Patches HUD box lit
-		Patch->bCounted = true;
+		bCounted = true;
 	}
-	return Patch;
 }
 
 void AWWOSporePatch::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (bCounted)
 	{
-		if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this))
-		{
-			if (AWWOCharacter* P = WS->GetPlayer()) P->Abilities->LivePatches = FMath::Max(P->Abilities->LivePatches - 1, 0);
-		}
+		if (AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner())) P->Abilities->LivePatches = FMath::Max(P->Abilities->LivePatches - 1, 0);
 	}
 	Super::EndPlay(Reason);
 }
@@ -176,7 +220,7 @@ void AWWOSporePatch::Tick(float DeltaSeconds)
 	const float In = BackOut(Age / 0.25f);
 	const float Out = FMath::Clamp(1.f - (Age - Duration) / 0.3f, 0.01f, 1.f);
 	SetActorScale3D(FVector(FMath::Max(In * Out, 0.01f)));
-	if (Age >= Duration + 0.3f) Destroy();
+	if (Age >= Duration + 0.3f && HasAuthority()) Destroy();
 }
 
 // --- Poison -----------------------------------------------------------------------------------
@@ -253,9 +297,24 @@ AWWOBarkWall::AWWOBarkWall()
 	Visual = CreateDefaultSubobject<USceneComponent>(TEXT("Visual"));
 	Visual->SetupAttachment(Box);
 	Tags.Add("Cover");
+	bReplicates = true; // solid: everyone needs it where the host has it, or moves disagree
 }
 
-AWWOBarkWall* AWWOBarkWall::Raise(UWorld* World, const FVector& Center, const FVector& FacingFrom, float WidthM, float HeightM, float Seconds)
+void AWWOBarkWall::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AWWOBarkWall, Width, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOBarkWall, Height, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOBarkWall, Duration, COND_InitialOnly);
+}
+
+void AWWOBarkWall::BeginPlay()
+{
+	Super::BeginPlay();
+	if (!HasAuthority()) Build(); // the host's is built in Raise; this one arrives already standing in place
+}
+
+AWWOBarkWall* AWWOBarkWall::Raise(UWorld* World, const FVector& Center, const FVector& FacingFrom, float WidthM, float HeightM, float Seconds, AActor* InOwner)
 {
 	// On the ground under the blast, facing the thrower.
 	FVector Ground = Center;
@@ -264,7 +323,7 @@ AWWOBarkWall* AWWOBarkWall::Raise(UWorld* World, const FVector& Center, const FV
 	FVector Toward = FacingFrom - Ground;
 	Toward.Z = 0.f;
 	const FRotator Facing = Toward.Size() > 10.f ? Toward.Rotation() : FRotator::ZeroRotator;
-	AWWOBarkWall* Wall = World->SpawnActor<AWWOBarkWall>(Ground, Facing, Always());
+	AWWOBarkWall* Wall = World->SpawnActor<AWWOBarkWall>(Ground, Facing, Always(InOwner));
 	if (!Wall) return nullptr;
 	Wall->Width = WidthM;
 	Wall->Height = HeightM;
@@ -279,7 +338,7 @@ void AWWOBarkWall::Build()
 	// The wall faces the thrower: its thin side (x) points at them.
 	const FVector Extent(0.25f * WWO::M, Width * 0.5f * WWO::M, Height * 0.5f * WWO::M);
 	Box->SetBoxExtent(Extent);
-	Box->AddLocalOffset(FVector(0, 0, Extent.Z));
+	if (HasAuthority()) Box->AddLocalOffset(FVector(0, 0, Extent.Z)); // a joiner's copy arrives already raised
 	Visual->SetRelativeLocation(FVector::ZeroVector);
 	UStaticMeshComponent* Slab = WWOFX::AddShape(this, Visual, WWOFX::Cube(), TEXT("M_WWO_Solid"), BarkColor);
 	Slab->SetRelativeScale3D(FVector(0.5f, Width, Height));
@@ -340,7 +399,7 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 		return;
 	}
 	SetRise(1.f - Age / 0.4f);
-	if (Age >= 0.4f) Destroy();
+	if (Age >= 0.4f && HasAuthority()) Destroy();
 }
 
 // --- Entrench roots ---------------------------------------------------------------------------

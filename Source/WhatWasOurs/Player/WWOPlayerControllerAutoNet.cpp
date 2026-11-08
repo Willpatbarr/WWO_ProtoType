@@ -10,6 +10,9 @@
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOGrenadeComponent.h"
+#include "Flora/WWOFloraEffects.h"
+#include "Weapons/WWOGrenade.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOHealthComponent.h"
@@ -227,6 +230,42 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner fired %d times at %s: its health %.0f -> %.0f (host's), dead %d; saw %d host shots"), AutoNetShotPulls,
 				*GetNameSafe(Dummy), AutoNetShootHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, AWWOCharacter::NetShotsSeen);
+		}
+	}
+
+	// Grenade (during the stop, 8 to 12 s): the joiner throws its grenade at the nearest dummy (the host
+	// throws it from the joiner's loadout and everyone sees it), then a second throw with no charge left.
+	if (!bHost && Crossed(9.f) && Dummies.Num() > 0)
+	{
+		AWWOTarget* Near = Dummies[0];
+		for (AWWOTarget* D : Dummies) if (FVector::Dist(D->GetActorLocation(), P->GetActorLocation()) < FVector::Dist(Near->GetActorLocation(), P->GetActorLocation())) Near = D;
+		const FVector To = Near->GetActorLocation() - P->EyeLocation();
+		P->SetViewRotation(FMath::Asin(To.GetSafeNormal().Z) + 0.05f, To.Rotation().Yaw);
+		AutoNetGrenadeTarget = Near;
+		AutoNetGrenadeHealth = Near->GetHealth();
+		JustPressed[(int32)EWWOAction::Grenade] = true;
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner throwing its grenade at %s %.1f m away (health %.0f, charge %.2f)"), *Near->GetName(), To.Size() / WWO::M, AutoNetGrenadeHealth, P->Grenades->Charge);
+	}
+	if (!bHost && Crossed(9.8f))
+	{
+		P->ServerThrowGrenade(P->EyeLocation(), P->AimForward());
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a second throw with no grenade ready (the host should refuse it)"));
+	}
+	if (Crossed(11.5f))
+	{
+		int32 Pools = 0;
+		FString PoolOwner;
+		for (TActorIterator<AWWOSporePool> It(World); It; ++It) { ++Pools; PoolOwner = GetNameSafe(It->GetOwner()); }
+		if (bHost)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host threw %d joiner grenades, refused %d; %d pools now (owner %s)"),
+				UWWOGrenadeComponent::NetThrows, UWWOGrenadeComponent::NetThrowsRejected, Pools, *PoolOwner);
+		}
+		else
+		{
+			const AWWOTarget* Thrown = Cast<AWWOTarget>(AutoNetGrenadeTarget.Get());
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner saw %d grenades and %d pools from the host (%d pools now); %s health %.0f -> %.0f"),
+				AWWOGrenade::SeenRemote, AWWOSporePool::SeenRemote, Pools, *GetNameSafe(Thrown), AutoNetGrenadeHealth, Thrown ? Thrown->GetHealth() : 0.f);
 		}
 	}
 

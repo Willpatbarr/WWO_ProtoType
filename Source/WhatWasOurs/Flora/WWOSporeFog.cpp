@@ -1,4 +1,5 @@
 #include "Flora/WWOSporeFog.h"
+#include "Net/UnrealNetwork.h"
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOAbilityComponent.h"
@@ -21,17 +22,28 @@ AWWOSporeFog::AWWOSporeFog()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+	bReplicates = true;
 }
 
-AWWOSporeFog* AWWOSporeFog::SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick)
+void AWWOSporeFog::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AWWOSporeFog, Radius, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporeFog, Duration, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporeFog, bBlocksSight, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AWWOSporeFog, Opacity, COND_InitialOnly);
+}
+
+AWWOSporeFog* AWWOSporeFog::SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick, AActor* InOwner)
 {
 	FActorSpawnParameters Params;
+	Params.Owner = InOwner;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Params.bDeferConstruction = true;
 	AWWOSporeFog* Fog = World->SpawnActor<AWWOSporeFog>(At, FRotator::ZeroRotator, Params);
 	if (!Fog) return nullptr;
 	Fog->Radius = RadiusM;
-	Fog->Duration = Seconds * (1.f + UWWOLoadoutSubsystem::Bonus(World, "fog_longer")); // Longer Fog trait
+	Fog->Duration = Seconds * (1.f + UWWOLoadoutSubsystem::Bonus(InOwner ? static_cast<const UObject*>(InOwner) : World, "fog_longer")); // Longer Fog trait (the owner's)
 	Fog->bBlocksSight = bThick;
 	Fog->Opacity = bThick ? 0.32f : 0.22f;
 	Fog->FinishSpawning(FTransform(At));
@@ -108,7 +120,7 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	Age += DeltaSeconds;
 	if (Age >= Duration)
 	{
-		Destroy();
+		if (HasAuthority()) Destroy(); // a joiner's copy goes when the host's does
 		return;
 	}
 	if (Material) Material->SetScalarParameterValue("Alpha", Opacity * 2.2f * Strength()); // the soft edges thin it out
@@ -119,10 +131,11 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 		Puffs[i]->SetRelativeScale3D(Sizes[i] * (1.f + 0.05f * FMath::Sin(Age * 1.3f + i * 1.7f)));
 	}
 	// Spore Fog Damage: hurts the rank and file (Swarm and Soldiers) inside it.
+	if (!HasAuthority()) return; // the damage is the host's
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
 	TickLeft = FogTick;
-	const AWWOCharacter* Player = UWWOWorldSubsystem::Get(this)->GetPlayer();
+	const AWWOCharacter* Player = GetOwner() ? Cast<AWWOCharacter>(GetOwner()) : UWWOWorldSubsystem::Get(this)->GetPlayer(); // whose Spore Fog Damage
 	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
 	if (!Ability || Strength() < 0.3f) return;
 	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())

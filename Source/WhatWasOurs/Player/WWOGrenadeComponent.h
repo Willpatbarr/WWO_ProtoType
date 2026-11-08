@@ -33,9 +33,13 @@ public:
 	float MaxCharges() const;
 	bool IsReady() const { return Charge >= 1.f; }
 	bool ThrowGrenade();
+	void UpdateCharge(float DeltaSeconds); // the recharge (the host runs a joiner's too, to check its throws)
+	bool HostThrow(const FVector& Hand, const FVector& Dir); // host: a joiner's throw (see AWWOCharacter::ServerThrowGrenade)
+	static int32 NetThrows, NetThrowsRejected; // the host's tally of joiners' throws
 
 private:
 	float ReleaseLeft = -1.f; // seconds until the grenade leaves the hand
 	void Release();
+	void ThrowFrom(const FVector& Hand, const FVector& Dir); // build the grenade from the loadout and let go
 	const UWWOGrenadeData* Current(const UWWOGrenadeData* Grenade) const;
 };

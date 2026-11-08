@@ -10,6 +10,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOWeaponComponent.h"
+#include "Player/WWOGrenadeComponent.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Data/WWOData.h"
 #include "FX/WWOFX.h"
@@ -201,6 +202,17 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 		++NetKillsCredited;
 		ClientKillCredit(1, true);
 	}
+}
+
+void AWWOCharacter::ClientHitMarker_Implementation(bool bKilled)
+{
+	Weapon->OnHitConfirmed.Broadcast(false, bKilled);
+	if (bKilled) ++NetKillsCredited;
+}
+
+void AWWOCharacter::ServerThrowGrenade_Implementation(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir)
+{
+	Grenades->HostThrow(Hand, Dir);
 }
 
 void AWWOCharacter::ClientKillCredit_Implementation(int32 Kills, bool bMelee)

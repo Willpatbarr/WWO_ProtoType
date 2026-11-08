@@ -185,6 +185,19 @@ phase 3 simulates the lunge on the host.
   or an actor it owns or instigated (a few levels up), so traits, abilities, grenade data and frame parts answer
   for the right player without changing call sites. Spawned kit must set its Owner (or Instigator) for this.
   Tested: the host's copy matches the joiner's own loadout; single-player full test passes.
+- **Grenades: done** (`AWWOGrenade`, `UWWOGrenadeComponent::HostThrow / ThrowFrom / UpdateCharge`,
+  `ServerThrowGrenade`). Every grenade is the host's: a joiner's release sends hand + direction, the host checks it
+  (alive, a charge ready, hand near the eye; the host runs the joiner's recharge too) and throws it from the
+  joiner's loadout copy (grenade, Seedburst, Spore Patches, traits). The grenade replicates its look once
+  (`FWWOGrenadeLook`) and its movement; joiners draw it and stop simulating it. Blasts go out with
+  `MulticastBlast`; online a spent grenade hides for 0.5 s before it's destroyed so the blast arrives first.
+  Owned by the thrower (spawn Owner), so hits go to them (`ClientHitMarker` for a joiner) and their loadout answers.
+  What grenades leave behind replicates the same way (sent once, looks built in BeginPlay, effect host-only,
+  host destroys): `AWWOSporePool`, `AWWOSporePatch`, `AWWOSporeFog` (also from Spore Dash and the Veil ult, owned by
+  the player), `AWWOBarkWall` (solid on every machine; only the host raises its box). Not replicated yet: poison
+  drips (`UWWODamageOverTime`, host-only looks), enemy blind/slow looks.
+  Tested: the joiner's shock pool thrown by the host (owner the joiner), a second throw with no charge refused,
+  the dummy hurt 200 -> 53, the joiner saw the grenade and the pool; single-player full test passes.
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);

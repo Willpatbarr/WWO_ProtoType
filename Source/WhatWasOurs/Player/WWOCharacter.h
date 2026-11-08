@@ -252,6 +252,10 @@ public:
 
 	// The host's word on what a joiner's shot or punch killed (kill perks, the kill marker).
 	UFUNCTION(Client, Reliable) void ClientKillCredit(int32 Kills, bool bMelee);
+	// A hit by something this joiner left in the world (its grenade, pool...): the hit marker.
+	UFUNCTION(Client, Unreliable) void ClientHitMarker(bool bKilled);
+	// Online: a joiner's grenade leaves its hand (the host builds and throws it).
+	UFUNCTION(Server, Reliable) void ServerThrowGrenade(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir);
 	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
 
 	AWWOPlayerController* GetWWOController() const;

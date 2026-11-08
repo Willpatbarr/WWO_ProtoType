@@ -172,7 +172,7 @@ void UWWOUltComponent::Release()
 	}
 	else if (Kind == EKind::Veil)
 	{
-		AWWOSporeFog::SpawnFog(GetWorld(), P->GetActorLocation(), VeilFogRadius, VeilFogTime, true);
+		AWWOSporeFog::SpawnFog(GetWorld(), P->GetActorLocation(), VeilFogRadius, VeilFogTime, true, P);
 		P->VeilLeft = VeilTime;
 	}
 	else

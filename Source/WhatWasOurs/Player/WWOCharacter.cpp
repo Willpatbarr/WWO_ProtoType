@@ -337,6 +337,7 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	{
 		// Someone else's character: the host runs their health; everyone shows their body.
 		if (HasAuthority()) Health->UpdateHealth(DeltaSeconds);
+		if (HasAuthority()) Grenades->UpdateCharge(DeltaSeconds); // to check their throws
 		if (HasAuthority()) UpdateModel(); // the host's copy moves by their inputs; the body replicates to the rest
 		return;
 	}

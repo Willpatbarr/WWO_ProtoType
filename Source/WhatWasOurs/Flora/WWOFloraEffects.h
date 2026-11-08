@@ -7,6 +7,8 @@
 // - AWWOBarkWall: a bark slab facing the thrower (Wall Grenade); enemies use it as cover.
 // - AWWOEntrenchRoots: the ring of roots around you during the Entrench ult.
 // - AWWOChainLightning: Static Charge's lightning, jumping enemy to enemy.
+// Online the pool, patch and wall replicate: the host spawns them (owned by the player whose kit
+// made them) and runs their effect; everyone builds the looks from the settings sent once.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -28,6 +30,9 @@ public:
 	AWWOSporePool();
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	static int32 SeenRemote; // pools this machine drew for the host (-WWOAutoTestNet)
 	static AWWOSporePool* Spawn(UWorld* World, const FVector& At, float RadiusM, float Dps, float Duration, const FLinearColor& Color, FName Flavor, AActor* Thrower);
 
 private:
@@ -35,9 +40,11 @@ private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Mat;
 	TWeakObjectPtr<AWWOParticles> Bubbles;
 	TWeakObjectPtr<AActor> Thrower;
-	float Radius = 3.f, Dps = 25.f, Duration = 5.f, Age = 0.f, TickLeft = 0.f, NextArc = 0.f;
-	FLinearColor Color;
-	FName Flavor;
+	UPROPERTY(Replicated) float Radius = 3.f;
+	UPROPERTY(Replicated) float Duration = 5.f;
+	UPROPERTY(Replicated) FLinearColor Color;
+	UPROPERTY(Replicated) FName Flavor;
+	float Dps = 25.f, Age = 0.f, TickLeft = 0.f, NextArc = 0.f;
 };
 
 UCLASS()
@@ -49,10 +56,14 @@ public:
 	AWWOSporePatch();
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
-	static AWWOSporePatch* Spawn(UWorld* World, const FVector& At, float RadiusM, float Duration);
+	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	static AWWOSporePatch* Spawn(UWorld* World, const FVector& At, float RadiusM, float Duration, AActor* InOwner = nullptr);
 
 private:
-	float Radius = 2.f, Duration = 6.f, Age = 0.f;
+	UPROPERTY(Replicated) float Radius = 2.f;
+	UPROPERTY(Replicated) float Duration = 6.f;
+	float Age = 0.f;
 	bool bCounted = false;
 };
 
@@ -84,9 +95,13 @@ class WHATWASOURS_API AWWOBarkWall : public AActor
 public:
 	AWWOBarkWall();
 	virtual void Tick(float DeltaSeconds) override;
-	static AWWOBarkWall* Raise(UWorld* World, const FVector& Center, const FVector& FacingFrom, float WidthM, float HeightM, float Seconds);
+	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	static AWWOBarkWall* Raise(UWorld* World, const FVector& Center, const FVector& FacingFrom, float WidthM, float HeightM, float Seconds, AActor* InOwner = nullptr);
 
-	float Width = 5.f, Height = 2.6f, Duration = 10.f;
+	UPROPERTY(Replicated) float Width = 5.f;
+	UPROPERTY(Replicated) float Height = 2.6f;
+	UPROPERTY(Replicated) float Duration = 10.f;
 
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Box;
