@@ -10,6 +10,8 @@ Run headless from the project folder after Tools/create_assets.py and Tools/impo
   east hallway with three side rooms; upper west wing with two rooms and an overlook, two staircases,
   and a bridge to the tower. 9 spawn points.
 - L_TestRange: the original gray-box range in Godot's flat colors (no spawn points, so it stays a sandbox).
+- L_ArenaRing: the 4v4 PvP ring map, gray box, from the mockup's JSON (see build_ring_arena).
+WWO_MAPS=ring (or range, large, arena, comma separated) builds only those.
 The arenas are built from the same Quaternius Sci-Fi kit pieces as the Godot maps (imported by
 Tools/import_kit.py), placed as build_scifi_map.gd places them: positions and yaws are worked out in
 Godot space and converted. Each piece collides as its own mesh (Godot's trimesh shapes); stairs
@@ -19,7 +21,9 @@ Fix over Godot: the small arena's three stairs climb toward their 2 m platforms 
 the side away from the platform, so the platforms can't be reached).
 Coordinates: a Godot point (x, y, z) in meters is Unreal (-z, x, y) * 100.
 """
+import json
 import math
+import os
 import random
 
 import unreal
@@ -776,6 +780,241 @@ def build_test_range():
     log("L_TestRange done")
 
 
-build_test_range()
-build_arena_large()
-build_arena()
+# --- Ring (4v4 PvP) ---------------------------------------------------------------------------
+# From ~/Documents/WWO_PvP_Mockups/ring_map_geometry.json (ring_map.py makes it; see that folder's
+# HANDOFF_RingMap.md). Mockup meters: x east, y north, origin at the center. Unreal X = y * 100,
+# Unreal Y = x * 100 (north up in the top view); a direction (dx, dy) has Unreal yaw atan2(dx, dy).
+# Gray box: flat-colored boxes. Curved walls are straight pieces of about 4 m along each arc (the
+# arcs end exactly at the door edges). Floor-1 walls stand 0-4 m, floor-2 walls 4-8 m.
+RING_JSON = os.environ.get("WWO_RING_JSON", os.path.expanduser("~/Documents/WWO_PvP_Mockups/ring_map_geometry.json"))
+FLOOR2 = 4.0
+SLAB = 0.3          # floor-2 slab thickness (top at 4 m)
+LOW_COVER = 1.2     # Will: shoot over it
+RAIL = 1.1
+
+
+def mu(x, y, z=0.0):
+    """A mockup point (meters) in Unreal cm."""
+    return unreal.Vector(y * 100.0, x * 100.0, z * 100.0)
+
+
+def mu_yaw(dx, dy):
+    return math.degrees(math.atan2(dx, dy))
+
+
+def ring_box(b, x, y, z0, z1, length, thickness, yaw, mat, label, tags=()):
+    """A box standing from z0 to z1 (meters) centered on mockup (x, y), `length` along Unreal yaw `yaw`."""
+    return b.box(mu(x, y, (z0 + z1) * 0.5), (length, thickness, z1 - z0), mat, label, tags, yaw=yaw)
+
+
+def arc_pieces(b, r, a0, a1, z0, z1, thickness, mat, label, step=4.0, hidden=False):
+    """Straight pieces along an arc of radius r (meters) from angle a0 to a1 (degrees, ccw from east)."""
+    span = math.radians(a1 - a0)
+    n = max(1, int(math.ceil(abs(span) * r / step)))
+    for i in range(n):
+        am = math.radians(a0) + span * (i + 0.5) / n
+        chord = 2.0 * r * math.sin(abs(span) / n * 0.5) + 0.05  # a hair long, so the joins close
+        x, y = r * math.cos(am), r * math.sin(am)
+        tangent = (-math.sin(am), math.cos(am))
+        a = ring_box(b, x, y, z0, z1, chord, thickness, mu_yaw(*tangent), mat, label)
+        if hidden:
+            a.set_actor_hidden_in_game(True)
+            a.static_mesh_component.set_editor_property("cast_shadow", False)
+
+
+def polygon_wall(b, poly, z0, z1, mat, label):
+    """A wall footprint from the JSON: a curved band (many points) or a rectangle (4 points)."""
+    if len(poly) <= 5:
+        pts = poly[:4]
+        e1 = (pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])
+        e2 = (pts[2][0] - pts[1][0], pts[2][1] - pts[1][1])
+        l1, l2 = math.hypot(*e1), math.hypot(*e2)
+        along = e1 if l1 >= l2 else e2
+        cx = sum(p[0] for p in pts) / 4.0
+        cy = sum(p[1] for p in pts) / 4.0
+        ring_box(b, cx, cy, z0, z1, max(l1, l2), min(l1, l2), mu_yaw(*along), mat, label)
+        return
+    rs = [math.hypot(x, y) for x, y in poly]
+    r = (min(rs) + max(rs)) * 0.5
+    thickness = max(rs) - min(rs)
+    # Unwrap the angles along the outline; the arc runs from the smallest to the largest.
+    angs = [math.degrees(math.atan2(poly[0][1], poly[0][0]))]
+    for x, y in poly[1:]:
+        a = math.degrees(math.atan2(y, x))
+        while a - angs[-1] > 180.0:
+            a -= 360.0
+        while a - angs[-1] < -180.0:
+            a += 360.0
+        angs.append(a)
+    a0, a1 = min(angs), max(angs)
+    if a1 - a0 > 355.0:
+        a0, a1 = 0.0, 360.0
+    arc_pieces(b, r, a0, a1, z0, z1, thickness, mat, label)
+
+
+def polyline_pieces(b, line, z0, z1, thickness, mat, label, step=4.0):
+    """Straight pieces along a polyline (windows' sills and lintels, railings)."""
+    run = [line[0]]
+    total = 0.0
+    for p in line[1:]:
+        total += math.hypot(p[0] - run[-1][0], p[1] - run[-1][1])
+        run.append(p)
+        if total >= step or p is line[-1]:
+            (x0, y0), (x1, y1) = run[0], run[-1]
+            length = math.hypot(x1 - x0, y1 - y0)
+            if length > 0.05:
+                ring_box(b, (x0 + x1) * 0.5, (y0 + y1) * 0.5, z0, z1, length + 0.05, thickness, mu_yaw(x1 - x0, y1 - y0), mat, label)
+            run = [p]
+            total = 0.0
+
+
+def in_rect(px, py, rect, grow=0.0):
+    """Is mockup point (px, py) inside the rotated rectangle (center, length, thickness, yaw ccw from east)?"""
+    cx, cy = rect["center"]
+    t = math.radians(rect["yaw_deg_ccw_from_east"])
+    dx, dy = px - cx, py - cy
+    u = dx * math.cos(t) + dy * math.sin(t)
+    v = -dx * math.sin(t) + dy * math.cos(t)
+    return abs(u) <= rect["length"] * 0.5 + grow and abs(v) <= rect["thickness"] * 0.5 + grow
+
+
+def slab_band(b, r0, r1, holes, mat, label, radial=2.0, tangential=2.0):
+    """The floor-2 slab over a ring band r0..r1: cells about radial x tangential meters, with stair
+    openings left out. Cells away from any opening merge along the band into longer pieces."""
+    rings = max(1, int(round((r1 - r0) / radial)))
+    for k in range(rings):
+        ra = r0 + (r1 - r0) * k / rings
+        rb = r0 + (r1 - r0) * (k + 1) / rings
+        rm = (ra + rb) * 0.5
+        n = max(8, int(math.ceil(2.0 * math.pi * rb / tangential)))
+        keep = []
+        for i in range(n):
+            am = 2.0 * math.pi * (i + 0.5) / n
+            # Leave the cell out if its middle or its corners fall in an opening.
+            probe = [(rm, am)] + [(rr, am + s * math.pi / n) for rr in (ra, rb) for s in (-1, 1)]
+            blocked = any(in_rect(rr * math.cos(aa), rr * math.sin(aa), h, 0.1) for h in holes for rr, aa in probe)
+            keep.append(not blocked)
+        # Runs of kept cells (wrapping around) become one piece each, at most 6 cells long.
+        i = 0
+        while i < n:
+            if not keep[i]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < n and keep[j + 1] and j + 1 - i < 6:
+                j += 1
+            a0 = 360.0 * i / n
+            a1 = 360.0 * (j + 1) / n
+            span = math.radians(a1 - a0)
+            am = math.radians(a0) + span * 0.5
+            chord = 2.0 * rb * math.sin(span * 0.5) + 0.05
+            ring_box(b, rm * math.cos(am), rm * math.sin(am), FLOOR2 - SLAB, FLOOR2, chord, rb - ra + 0.02, mu_yaw(-math.sin(am), math.cos(am)), mat, label)
+            i = j + 1
+
+
+def ramp(b, s, z_bottom, z_top, mat):
+    """A stair as a smooth ramp from its bottom point to its top point."""
+    (x0, y0), (x1, y1) = s["bottom"], s["top"]
+    run = math.hypot(x1 - x0, y1 - y0)
+    rise = z_top - z_bottom
+    pitch = math.degrees(math.atan2(rise, run))
+    slope = math.hypot(run, rise)
+    thick = 0.3
+    cz = (z_bottom + z_top) * 0.5 - thick * 0.5 * math.cos(math.radians(pitch))
+    # Stretch it a little past both ends so it meets the floor and the slab without a lip.
+    b.box(mu((x0 + x1) * 0.5, (y0 + y1) * 0.5, cz), (slope + 0.6, s["thickness"], thick), mat, "Stairs", yaw=mu_yaw(x1 - x0, y1 - y0), pitch=pitch)
+
+
+def build_ring_arena():
+    new_level("/Game/WWO/Maps/L_ArenaRing")
+    data = json.load(open(RING_JSON))
+    b = Builder(1, 1, 7)
+    lighting()
+    ground = solid_material("RingGround", (0.18, 0.19, 0.21))
+    ring_floor = solid_material("RingLane", (0.23, 0.22, 0.2))
+    slab = solid_material("RingSlab", (0.26, 0.27, 0.3))
+    wall = solid_material("RingWall", (0.55, 0.57, 0.6))
+    ringwall = solid_material("RingWallRing", (0.45, 0.48, 0.52))
+    cover = solid_material("RingCover", (0.25, 0.3, 0.4))
+    crate = solid_material("RingCrate", (0.5, 0.36, 0.2))
+    pillar = solid_material("RingPillar", (0.38, 0.4, 0.44))
+    stairs = solid_material("RingStairs", (0.32, 0.34, 0.38))
+    rail = solid_material("RingRail", (0.7, 0.72, 0.75))
+    blue = solid_material("TeamBlue", (0.2, 0.4, 0.9))
+    orange = solid_material("TeamOrange", (0.95, 0.5, 0.15))
+    R = data["radii"]
+    f1, f2 = data["floor1"], data["floor2"]
+
+    # Ground: one slab under the whole map (its corners sit outside the 8 m boundary wall); the
+    # ring's lane a shade lighter on top, so the open middle band reads from above.
+    b.box(mu(0, 0, -0.25), (R["map"] * 2 + 4, R["map"] * 2 + 4, 0.5), ground, "Ground")
+    b.box(mu(0, 0, -0.24), (R["ring_outer"] * 2, R["ring_outer"] * 2, 0.5), ring_floor, "Lane", mesh=CYLINDER)
+    b.box(mu(0, 0, -0.23), (R["core"] * 2, R["core"] * 2, 0.5), ground, "CoreFloor", mesh=CYLINDER)
+    # Walls: a wall on both floors with the same footprint is one 8 m piece.
+    f2_keys = {(len(p), tuple(p[0])) for p in f2["walls_full_height"]}
+    f1_keys = set()
+    for poly in f1["walls_full_height"]:
+        key = (len(poly), tuple(poly[0]))
+        f1_keys.add(key)
+        rs = [math.hypot(x, y) for x, y in poly]
+        ringy = len(poly) > 5 and 21.0 < min(rs) < 33.0
+        polygon_wall(b, poly, 0.0, 8.0 if key in f2_keys else FLOOR2, ringwall if ringy else wall, "Wall")
+    for poly in f2["walls_full_height"]:
+        if (len(poly), tuple(poly[0])) in f1_keys:
+            continue
+        rs = [math.hypot(x, y) for x, y in poly]
+        ringy = len(poly) > 5 and 21.0 < min(rs) < 33.0
+        polygon_wall(b, poly, FLOOR2, 8.0, ringwall if ringy else wall, "Wall2")
+    # Floor-2 windows in the inner ring wall: open from the 5 m sill to 7 m, wall below and above.
+    for line in f2["windows_polyline"]:
+        polyline_pieces(b, line, FLOOR2, 5.0, R["wall_thickness"], ringwall, "WindowSill")
+        polyline_pieces(b, line, 7.0, 8.0, R["wall_thickness"], ringwall, "WindowLintel")
+    # Floor-2 ledges (outer ring wall, and the atrium's edge): open, with a railing.
+    for line in f2["ledges_railing_polyline"]:
+        polyline_pieces(b, line, FLOOR2, FLOOR2 + RAIL, 0.2, rail, "Railing")
+    # Floor-2 slab: the core (outside the atrium hole) and the outer band, with the stair openings.
+    holes = f2["stairs"]
+    slab_band(b, 6.0, R["core"] + 0.3, holes, slab, "Slab")
+    slab_band(b, R["ring_outer"] - 0.3, R["map"] + 0.4, holes, slab, "Slab")
+    # Stairs: ramps rising from floor 1 to floor 2 (the same list is in both floors).
+    for s in f1["stairs"]:
+        ramp(b, s, 0.0, FLOOR2, stairs)
+    # Cover, crates and pillars on both floors.
+    for z, fl in ((0.0, f1), (FLOOR2, f2)):
+        for c in fl["low_cover"]:
+            x, y = c["center"]
+            ring_box(b, x, y, z, z + LOW_COVER, c["length"], c["thickness"], 90.0 - c["yaw_deg_ccw_from_east"], cover, "LowCover", ("Cover",))
+        for c in fl["crates"]:
+            x, y = c["center"]
+            h = (1.0, 1.3, 1.6)[int(round(abs(x) * 7.0 + abs(y) * 3.0)) % 3]  # mixed heights, the same on mirrored crates
+            ring_box(b, x, y, z, z + h, c["length"], c["thickness"], 90.0 - c["yaw_deg_ccw_from_east"], crate, "Crate", ("Cover",))
+        for p in fl["pillars"]:
+            x, y = p["center"]
+            r = math.hypot(x, y)
+            top = 8.0 if (z == 0.0 and R["core"] < r < R["ring_outer"]) else z + FLOOR2  # the ring is open sky: full height
+            b.box(mu(x, y, (z + top) * 0.5), (p["radius"] * 2, p["radius"] * 2, top - z), pillar, "Pillar", ("Cover",), mesh=CYLINDER)
+    # Spawns: a Player Start on each point, facing the middle, on a team-colored pad.
+    for team, mat in (("blue", blue), ("orange", orange)):
+        for i, (x, y) in enumerate(f1["spawns"][team]):
+            b.box(mu(x, y, 0.02), (2.2, 2.2, 0.04), mat, "SpawnPad", mesh=CYLINDER)
+            place(unreal.PlayerStart, mu(x, y, 1.05), mu(0, 0, 1.05), 0.0, "PlayerStart_%s%d" % (team.capitalize(), i + 1))
+    # Out of bounds: invisible walls above the 8 m boundary wall, a floor under everything, nav.
+    arc_pieces(b, R["map"] + 0.3, 0.0, 360.0, 8.0, 30.0, 0.6, None, "Boundary", step=6.0, hidden=True)
+    b.box(unreal.Vector(0, 0, -60.0), (R["map"] * 2 + 10, R["map"] * 2 + 10, 0.2), None, "SafetyFloor", hidden=True)
+    vol = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume, unreal.Vector(0, 0, 500.0))
+    ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
+    vol.set_actor_scale3d(unreal.Vector((R["map"] + 2) * 100.0 / ext, (R["map"] + 2) * 100.0 / ext, 700.0 / ext))
+    levels.save_current_level()
+    log("L_ArenaRing: %d pieces" % b.count)
+
+
+# WWO_MAPS picks which to build (comma separated: range, large, arena, ring); all by default.
+_wanted = os.environ.get("WWO_MAPS", "range,large,arena,ring").split(",")
+if "range" in _wanted:
+    build_test_range()
+if "large" in _wanted:
+    build_arena_large()
+if "arena" in _wanted:
+    build_arena()
+if "ring" in _wanted:
+    build_ring_arena()

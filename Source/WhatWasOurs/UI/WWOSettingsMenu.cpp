@@ -406,6 +406,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	AddGlobal(TEXT("Maps"), { Header(TEXT("Switch maps (restarts the run on that map)")) }, {
 		MapButton(TEXT("Small arena"), TEXT("L_Arena")),
 		MapButton(TEXT("Large arena (two levels)"), TEXT("L_ArenaLarge")),
+		MapButton(TEXT("Ring (4v4 PvP)"), TEXT("L_ArenaRing")),
 		MapButton(TEXT("Test range (gray box)"), TEXT("L_TestRange")),
 	});
 	// LAN play (UWWONetSubsystem). Hosting reopens this map for others to join; joining loads the host's.
