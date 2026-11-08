@@ -252,8 +252,21 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		P->ServerThrowGrenade(P->EyeLocation(), P->AimForward());
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a second throw with no grenade ready (the host should refuse it)"));
 	}
-	// Ability: the joiner switches on Thornfist (slot 2); the host's copy should have it on too.
-	if (!bHost && Crossed(10.3f)) JustPressed[(int32)EWWOAction::Ability2] = true;
+	// Ability: the joiner switches on Thornfist (whichever slot has it); the host's copy should have it on too.
+	if (!bHost && Crossed(10.3f))
+	{
+		const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
+		const bool bFirst = L && L->GetAbility(0) && L->GetAbility(0)->Id == "thornfist";
+		JustPressed[(int32)(bFirst ? EWWOAction::Ability1 : EWWOAction::Ability2)] = true;
+	}
+	// The moves can end anywhere (each machine's own movement settings): before the shooting the host
+	// puts the joiner back where it started, so the rest doesn't depend on where the run ended.
+	if (bHost && Other && Crossed(0.5f)) AutoNetJoinerStart = Other->GetActorTransform();
+	if (bHost && Other && Crossed(21.6f) && !AutoNetJoinerStart.GetLocation().IsZero())
+	{
+		Other->TeleportTo(AutoNetJoinerStart.GetLocation(), AutoNetJoinerStart.Rotator());
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: host put the joiner back at its start for the shooting"));
+	}
 	if (Crossed(11.2f))
 	{
 		const AWWOCharacter* Joiner = bHost ? Other : P;

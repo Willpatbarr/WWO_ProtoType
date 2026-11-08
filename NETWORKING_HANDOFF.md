@@ -267,7 +267,21 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
   Result (Mac mini, two editor copies, host + joiner + 10 bots, 95 s): 54 kills; host 8 ms a frame with the bots
   alone, 16 ms with the joiner's copy sharing the GPU; joiner 15 ms; ~11 KB/s to the joiner, 0 packets lost,
   1 correction a minute. Bandwidth grows with joiners (about 11 KB/s each at 12 players): fine on a LAN.
-- **Not yet:** the Air with the PvP build (the newly signed build needs a one-time "Open Anyway" on each Mac).
+- **On two Macs (2026-11-07): done.** Host: the editor build on the Mac mini (its logs stay readable; the signed
+  app's container needs approval to read); joiner: the packaged, signed app on the MacBook Air. Co-op test: the
+  Air's own loadout on the host (rifle, Volt Grenade, Thornfist + Static Charge, 4 traits), Thornfist on in the
+  host's copy, grenade throw and a refused second one, 6 of 7 shots applied, revive, ult, loss and restart.
+  PvP test: opposite teams, both moving by the host's settings, the Air's rifle took the host 270 -> 30, no damage
+  on the same team, BLUE won 3-0 and the match restarted as PvP. The first launch of a newly signed build asked
+  for Local Network access on the Air again; after Allow, later signed builds kept it.
+  The network test now puts the joiner back at its start before the shooting (each machine's own movement
+  settings take the run to different places) and uses whichever ability slot holds Thornfist.
+
+## What's left
+- Phase 1: hand Will the packaged app (it's at /Volumes/UnrealSSD/Builds/WhatWasOurs, signed); fold this file
+  into HANDOFF.md.
+- PvP extras worth considering: a kill feed, a scoreboard screen, team spawn sides, team-colored bodies.
+- The Metal renderer crash (`BindUniformBuffer`) still happens now and then on its own (single player too).
 - Builds are now signed with this Mac's Apple Development identity when there is one (`Tools/package_mac.sh`), so
   macOS keeps the Local Network permission across builds. The first signed build asks once on each Mac
   ("differs from previously opened versions": Open Anyway). Reading a signed sandboxed app's container from

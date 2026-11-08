@@ -153,6 +153,7 @@ private:
 	TWeakObjectPtr<AActor> AutoNetMeleeTarget; // joiner: the dummy it punches
 	float AutoNetMeleeHealth = 0.f;
 	float AutoNetReviveSeen = 0.f;
+	FTransform AutoNetJoinerStart = FTransform(FVector::ZeroVector); // host: where the joiner began
 	TWeakObjectPtr<AActor> AutoNetGrenadeTarget; // joiner: the dummy it threw at
 	float AutoNetGrenadeHealth = 0.f; // joiner: the most of the host's revive bar it saw
 	float AutoNetShootHealth = 0.f;
