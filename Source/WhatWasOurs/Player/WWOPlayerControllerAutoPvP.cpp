@@ -79,6 +79,18 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 			MyPS ? MyPS->Team : -1, OtherPS ? OtherPS->Team : -1, UWWOWorldSubsystem::CanHurt(P, Other), *Score(), GS ? *GS->StatusLine : TEXT("-"));
 	}
 
+	if (Crossed(1.6f))
+	{
+		const TArray<float> Base = P->BaseMoveStats();
+		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: %s moves by walk %.2f sprint %.2f jump %.2f (the host's settings)"), bHost ? TEXT("host") : TEXT("joiner"), Base[0], Base[1], Base[5]);
+	}
+	if (!bHost && Crossed(1.8f))
+	{
+		const FVector To = Other->EyeLocation() - P->EyeLocation();
+		P->SetViewRotation(FMath::Asin(To.GetSafeNormal().Z), To.Rotation().Yaw);
+	}
+	if (!bHost && Crossed(2.1f)) Shot(TEXT("60_pvp_joiner_sees_host"));
+
 	// The joiner shoots the host's head (semi-auto: a fresh pull every half second).
 	auto ShootAt = [this, P, Other, T](float From)
 	{

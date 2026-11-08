@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "Allies/WWOAlly.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
@@ -134,8 +135,9 @@ void AWWOGameMode::Begin()
 	bStarted = true;
 	if (bPvP)
 	{
-		// Team deathmatch: no waves, no enemies.
+		// Team deathmatch: no waves, no enemies, no AI teammates.
 		for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It) It->Destroy();
+		for (TActorIterator<AWWOAlly> It(GetWorld()); It; ++It) It->Destroy();
 		if (AWWOGameState* GS = WGS())
 		{
 			GS->bPvP = true;

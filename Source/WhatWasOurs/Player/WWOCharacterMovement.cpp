@@ -1,5 +1,7 @@
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOAbilityComponent.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
 #include "Player/WWOWeaponComponent.h"
 #include "WhatWasOurs.h"
@@ -135,6 +137,12 @@ void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTim
 		Owner->MoveIn = static_cast<const FWWOMoveData*>(GetCurrentNetworkMoveData())->Input;
 		// A lunge or a launch comes with the velocity the player's machine gave it: no faster than
 		// a lunge or a dash can go (a tampered move would just be slow to arrive, not teleport).
+		if (UWWOWorldSubsystem::IsPvP(Owner))
+		{
+			// PvP: no faster than this player's loadout allows (aiming and slows only lower it).
+			Owner->MoveIn.SpeedScale = FMath::Min(Owner->MoveIn.SpeedScale, Owner->Abilities->SpeedMultiplier() + 0.01f);
+			Owner->MoveIn.ExtraJumps = (uint8)FMath::Min<int32>(Owner->MoveIn.ExtraJumps, Owner->Abilities->ExtraJumps());
+		}
 		if (Owner->MoveIn.HasPush())
 		{
 			const float Cap = (Owner->MoveIn.Held & MoveLunge) ? Owner->Weapon->LungeSpeed * WWO::M * 1.05f : 30.f * WWO::M;

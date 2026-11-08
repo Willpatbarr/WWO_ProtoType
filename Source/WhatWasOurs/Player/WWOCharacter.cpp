@@ -179,6 +179,21 @@ void AWWOCharacter::TickStatusTimers(float DeltaSeconds)
 
 void AWWOCharacter::TickRemoteOnHost(float DeltaSeconds)
 {
+	if (UWWOWorldSubsystem::IsPvP(this))
+	{
+		// Move by the host's settings (its own character's base values) plus this player's loadout copy.
+		bNetStats = false;
+		if (const AWWOCharacter* Mine = UWWOWorldSubsystem::Get(this)->GetPlayer())
+		{
+			const TArray<float> Base = Mine->BaseMoveStats();
+			if (Base != SentMoveBase)
+			{
+				SentMoveBase = Base;
+				ApplyMoveBase(Base);
+				ClientSetMoveBase(Base);
+			}
+		}
+	}
 	Health->UpdateHealth(DeltaSeconds);
 	TickStatusTimers(DeltaSeconds);                 // their veil, entrench and slows run out here too
 	Grenades->UpdateCharge(DeltaSeconds);           // to check their throws
@@ -708,8 +723,28 @@ TArray<float> AWWOCharacter::LocalMoveStats() const
 	};
 }
 
+TArray<float> AWWOCharacter::BaseMoveStats() const
+{
+	return { WalkSpeed, SprintSpeed, CrouchSpeed, SlideSpeed, SlideDistance, JumpHeight1, JumpHeight2, AirControl,
+		AscentGravity, DescentGravity, ApexHang, CoyoteTime, MantleReach, MantleTime };
+}
+
+void AWWOCharacter::ApplyMoveBase(const TArray<float>& V)
+{
+	if (V.Num() < 14) return;
+	WalkSpeed = V[0]; SprintSpeed = V[1]; CrouchSpeed = V[2]; SlideSpeed = V[3];
+	SlideDistance = V[4]; JumpHeight1 = V[5]; JumpHeight2 = V[6]; AirControl = V[7];
+	AscentGravity = V[8]; DescentGravity = V[9]; ApexHang = V[10]; CoyoteTime = V[11]; MantleReach = V[12]; MantleTime = V[13];
+}
+
+void AWWOCharacter::ClientSetMoveBase_Implementation(const TArray<float>& V)
+{
+	ApplyMoveBase(V); // M() then adds this player's own loadout, as the host's copy does
+}
+
 void AWWOCharacter::ServerSetMoveStats_Implementation(const TArray<float>& V)
 {
+	if (UWWOWorldSubsystem::IsPvP(this)) return; // PvP: the host's settings and the player's loadout, not their word
 	if (V.Num() < 14) return;
 	WalkSpeed = V[0]; SprintSpeed = V[1]; CrouchSpeed = V[2]; SlideSpeed = V[3];
 	SlideDistance = V[4]; JumpHeight1 = V[5]; JumpHeight2 = V[6]; AirControl = V[7];

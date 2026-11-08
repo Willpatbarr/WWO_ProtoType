@@ -249,9 +249,15 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
   Tested (`-WWOAutoTestPvP`, host also `-WWOKillTarget=3`): different teams; the joiner shoots the host dead (kill
   to ORANGE, host respawns); on the same team its shots don't hurt (270 -> 270); the host's kills end the match at 3
   ("BLUE WINS 3 – 1" on both), the restart stays PvP. Co-op network test and single-player test still pass.
+- **Team markers: done.** In PvP the HUD puts a team-colored square over every other player in sight (bigger for
+  the other team), above their health bar. AI allies are removed in PvP.
+- **Move values in PvP: done.** Everyone moves by the host's movement settings: the host ignores a joiner's
+  `ServerSetMoveStats`, gives its copy the host's base values and sends them (`ClientSetMoveBase`) so the joiner
+  predicts the same; each player's loadout still applies on both (the host's loadout copy). `SpeedScale` and
+  `ExtraJumps` in a joiner's moves are capped at what its loadout allows (`MoveAutonomous`). Co-op is unchanged.
+  Tested: host and joiner both move by walk 5 / sprint 10 / jump 2 in the PvP test.
 - **Not yet:** the Air with the PvP build (the newly signed build needs a one-time "Open Anyway" on each Mac);
-  team colors on other players' bodies; a 12-player stress test (bots, or several copies); PvP hardening of the
-  trusted move values (move stats, `SpeedScale`, `ExtraJumps`: the host could compute them from its loadout copy).
+  a 12-player stress test (bots, or several copies of the game).
 - Builds are now signed with this Mac's Apple Development identity when there is one (`Tools/package_mac.sh`), so
   macOS keeps the Local Network permission across builds. The first signed build asks once on each Mac
   ("differs from previously opened versions": Open Anyway). Reading a signed sandboxed app's container from

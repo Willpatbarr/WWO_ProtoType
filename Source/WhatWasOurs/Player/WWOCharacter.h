@@ -246,6 +246,12 @@ public:
 	// Your movement values (after loadout modifiers and your Settings sliders), sent to the host once
 	// and whenever they change, so it simulates you with them.
 	UFUNCTION(Server, Reliable) void ServerSetMoveStats(const TArray<float>& Values);
+	// PvP: everyone moves by the host's movement settings (their loadouts still count): the host
+	// sends its base values, and doesn't take a joiner's word for them.
+	UFUNCTION(Client, Reliable) void ClientSetMoveBase(const TArray<float>& Values);
+	TArray<float> BaseMoveStats() const; // the unmodified values, same order as LocalMoveStats
+	void ApplyMoveBase(const TArray<float>& Values);
+	TArray<float> SentMoveBase; // host: what this joiner was last sent
 
 	// Online: your flora, so everyone else sees your character model (Config/CharacterModels.json).
 	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;

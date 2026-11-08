@@ -1,5 +1,6 @@
 #include "UI/WWOHUDWidget.h"
 #include "Game/WWOGameState.h"
+#include "Game/WWOPlayerState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -348,6 +349,28 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			FHitResult Hit;
 			if (!Gun->CastRayTo(Middle, Hit) || Hit.GetActor() != Actor) continue; // in sight only
 			HealthBar(Target);
+		}
+	}
+
+	// PvP: a team-colored marker over every other player you can see (yours: a small dot; the other
+	// team: a bigger one), so friend and foe read at a glance.
+	if (UWWOWorldSubsystem::IsPvP(Pl))
+	{
+		const int32 MyTeam = UWWOWorldSubsystem::TeamOf(Pl);
+		for (AWWOCharacter* Other : WS->GetPlayers())
+		{
+			if (Other == Pl || Other->Health->bDead) continue;
+			const int32 Team = UWWOWorldSubsystem::TeamOf(Other);
+			if (Team < 0) continue;
+			FVector2D At;
+			if (!ToScreen(Other->EyeLocation() + FVector(0, 0, 85.f), At)) continue; // above the health bar
+			FHitResult Hit;
+			if (Gun->CastRayTo(Other->EyeLocation(), Hit) && Hit.GetActor() != Other) continue; // in sight only
+			const bool bFoe = Team != MyTeam;
+			const float D = bFoe ? 12.f : 8.f;
+			const FLinearColor C = AWWOPlayerState::TeamColor(Team);
+			P.Box(At - FVector2D(D * 0.5f + 2.f, D * 0.5f + 2.f), FVector2D(D + 4.f, D + 4.f), FLinearColor(0, 0, 0, 0.6f));
+			P.Box(At - FVector2D(D * 0.5f, D * 0.5f), FVector2D(D, D), C);
 		}
 	}
 
