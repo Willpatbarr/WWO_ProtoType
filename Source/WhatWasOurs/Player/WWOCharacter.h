@@ -38,7 +38,8 @@ enum EWWOMoveBit : uint8
 	MoveFire = 1 << 3,
 	MoveAim = 1 << 4,
 	MoveFrozen = 1 << 5,     // the ult or Entrench: no moving
-	MoveClientAuth = 1 << 6, // a move the host can't simulate yet (melee lunge, Spore Dash): it takes your position
+	MoveLunge = 1 << 6,      // Held: lunging this move, at Push (the velocity your machine aimed it with)
+	MoveLaunch = 1 << 7,     // Pressed: launched this move (Spore Dash), Push is the new velocity
 };
 
 struct FWWOMoveInput
@@ -48,10 +49,13 @@ struct FWWOMoveInput
 	uint8 Pressed = 0;                      // went down this frame
 	float SpeedScale = 1.f;                 // abilities x aiming x slow
 	uint8 ExtraJumps = 0;                   // from abilities
+	FVector Push = FVector::ZeroVector;     // cm/s, with MoveLunge or MoveLaunch (the host caps it)
 
+	bool HasPush() const { return (Held & MoveLunge) || (Pressed & MoveLaunch); }
 	bool operator==(const FWWOMoveInput& O) const
 	{
-		return Move.Equals(O.Move, 0.01f) && Held == O.Held && Pressed == O.Pressed && FMath::IsNearlyEqual(SpeedScale, O.SpeedScale, 0.01f) && ExtraJumps == O.ExtraJumps;
+		return Move.Equals(O.Move, 0.01f) && Held == O.Held && Pressed == O.Pressed && FMath::IsNearlyEqual(SpeedScale, O.SpeedScale, 0.01f) && ExtraJumps == O.ExtraJumps
+			&& Push.Equals(O.Push, 1.f);
 	}
 	void Serialize(FArchive& Ar);
 	void Quantize(); // round to what Serialize sends, so your machine simulates the same input as the host
@@ -61,7 +65,7 @@ struct FWWOMoveInput
 struct FWWOMoveState
 {
 	bool bSprinting = false, bCrouching = false, bSliding = false, bCrouchToggled = false, bSlideQueued = false;
-	bool bCrouchWasHeld = false, bLandedSprinting = false, bMantling = false;
+	bool bCrouchWasHeld = false, bLandedSprinting = false, bMantling = false, bLungeFlight = false;
 	uint8 JumpsUsed = 0;
 	float TakeoffSpeed = 0.f, SlideSpeedNow = 0.f, LaunchTime = 0.f, AirTime = 0.f, SinceLanded = 99.f, MantleT = 0.f;
 	FVector SlideDir = FVector::ForwardVector, MantleFrom = FVector::ZeroVector, MantleTo = FVector::ZeroVector;
@@ -173,6 +177,7 @@ public:
 	FVector LungeVelocity = FVector::ZeroVector; // cm/s, while lunging or mantling
 
 	bool IsLunging() const { return bLunging; }
+	bool IsInLungeFlight() const { return bLungeFlight; } // the movement side of a lunge (from the move input)
 	bool IsMantling() const { return bMantling; }
 	bool IsOnFloor() const;
 	bool IsInvisible() const;
@@ -222,7 +227,6 @@ public:
 	// Your movement values (after loadout modifiers and your Settings sliders), sent to the host once
 	// and whenever they change, so it simulates you with them.
 	UFUNCTION(Server, Reliable) void ServerSetMoveStats(const TArray<float>& Values);
-	float ClientAuthLeft = 0.f; // seconds the host takes your position (after a Spore Dash launch)
 
 	// Online: your flora, so everyone else sees your character model (Config/CharacterModels.json).
 	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;
@@ -279,7 +283,12 @@ private:
 	float ReticleDropAngle() const; // what ReticleDrop needs now (FOV, aiming)
 
 	float Pitch = 0.f;
-	bool bLunging = false;
+	bool bLunging = false;     // your machine steering a lunge at its target (it sends the velocity)
+	bool bLungeFlight = false; // moving as a lunge this move (both machines, from MoveLunge)
+	bool bLaunchPending = false;
+	FVector PendingLaunch = FVector::ZeroVector;
+	void EndLungeFlight();
+	void ApplyLaunch(const FVector& NewVelocityCm);
 	bool bMantling = false;
 	TWeakObjectPtr<AActor> LungeTarget;
 	float LungeTime = 0.f;

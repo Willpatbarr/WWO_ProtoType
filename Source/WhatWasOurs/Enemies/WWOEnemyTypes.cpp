@@ -1,4 +1,6 @@
 #include "Enemies/WWOEnemyTypes.h"
+#include "Net/UnrealNetwork.h"
+#include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
@@ -575,7 +577,7 @@ void AWWOTank::Slam()
 {
 	const UWWOTankData* T = D();
 	Body->Play("Jump_Land", 1.4f, 0.05f);
-	AWWOFXActor::Shockwave(GetWorld(), FeetLocation() + FVector(0, 0, 10.f), FLinearColor(1.f, 0.7f, 0.3f, 0.8f), T->SlamRadius, 0.45f);
+	AWWOGameState::Shockwave(GetWorld(), FeetLocation() + FVector(0, 0, 10.f), FLinearColor(1.f, 0.7f, 0.3f, 0.8f), T->SlamRadius, 0.45f); // everyone sees it
 	// Hits you and any teammates in range (the slam counts as melee).
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
 	auto InRange = [this, T](const AActor* Victim)
@@ -611,12 +613,37 @@ void AWWOTank::Lob()
 	AWWOEnemyProjectile::Fire(GetWorld(), Hand, Velocity, T->LobDamage, Time + 2.f, Gravity, T->LobRadius, ShellColor, 0.2f);
 }
 
-void AWWOTank::Animate(float DeltaSeconds)
+void AWWOTank::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOTank, Shield);
+	DOREPLIFETIME(AWWOTank, MaxShield);
+}
+
+void AWWOTank::OnRep_Shield(float Before)
+{
+	if (Shield < Before) BubbleFlash = 1.f;                 // hit
+	if (Before > 0.f && Shield <= 0.f) ShieldBreak();       // the pop
+}
+
+void AWWOTank::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!HasAuthority()) UpdateBubble(DeltaSeconds); // the host's runs in Animate
+}
+
+void AWWOTank::UpdateBubble(float DeltaSeconds)
 {
 	if (!Bubble) return;
 	Bubble->SetVisibility(Shield > 0.f);
 	BubbleFlash = WWO::MoveToward(BubbleFlash, 0.f, 4.f * DeltaSeconds);
 	if (UMaterialInstanceDynamic* M = WWOFX::MID(Bubble)) M->SetScalarParameterValue("Alpha", FMath::Lerp(0.06f, 0.35f, BubbleFlash));
+}
+
+void AWWOTank::Animate(float DeltaSeconds)
+{
+	if (!Bubble) return;
+	UpdateBubble(DeltaSeconds);
 	if (SlamTime >= 0.f || Lobbing > 0.f) return; // the slam and throw poses play out
 	const float Speed = GetVelocity().Size2D() / WWO::M;
 	constexpr float WalkAnimSpeed = 1.6f; // m/s the Walk animation looks right at, at full size

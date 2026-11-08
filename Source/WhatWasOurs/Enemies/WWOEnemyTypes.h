@@ -102,6 +102,8 @@ public:
 	virtual float GetMaxShield() const override { return MaxShield; }
 	virtual bool IsRankAndFile() const override { return false; }
 	virtual FString DebugState() const override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 	virtual UWWOEnemyData* Data() const override;
@@ -118,7 +120,12 @@ protected:
 
 private:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Bubble;
-	float Shield = 0.f, MaxShield = 0.f, SinceHit = 99.f, LobTimer = 1.5f, SlamCooldown = 0.f, SlamTime = -1.f, Lobbing = 0.f, BubbleFlash = 0.f;
+	// Online the host's shield replicates: joiners draw the bubble from it (and guess kills through it).
+	UPROPERTY(ReplicatedUsing = OnRep_Shield) float Shield = 0.f;
+	UPROPERTY(Replicated) float MaxShield = 0.f;
+	UFUNCTION() void OnRep_Shield(float Before);
+	void UpdateBubble(float DeltaSeconds);
+	float SinceHit = 99.f, LobTimer = 1.5f, SlamCooldown = 0.f, SlamTime = -1.f, Lobbing = 0.f, BubbleFlash = 0.f;
 	bool bSlamLanded = false;
 	UWWOTankData* D() const;
 	void ResetShield();

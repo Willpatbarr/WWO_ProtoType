@@ -1,5 +1,7 @@
 #include "Player/WWOCharacterMovement.h"
 #include "Player/WWOCharacter.h"
+#include "WWOTypes.h"
+#include "Player/WWOWeaponComponent.h"
 #include "WhatWasOurs.h"
 
 UWWOCharacterMovement::UWWOCharacterMovement()
@@ -131,10 +133,13 @@ void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTim
 	if (Owner && GetCurrentNetworkMoveData())
 	{
 		Owner->MoveIn = static_cast<const FWWOMoveData*>(GetCurrentNetworkMoveData())->Input;
-		// A move it can't simulate yet (lunge, Spore Dash): take the player's position for it.
-		const bool bClientAuth = (Owner->MoveIn.Held & MoveClientAuth) != 0;
-		bIgnoreClientMovementErrorChecksAndCorrection = bClientAuth;
-		bServerAcceptClientAuthoritativePosition = bClientAuth;
+		// A lunge or a launch comes with the velocity the player's machine gave it: no faster than
+		// a lunge or a dash can go (a tampered move would just be slow to arrive, not teleport).
+		if (Owner->MoveIn.HasPush())
+		{
+			const float Cap = (Owner->MoveIn.Held & MoveLunge) ? Owner->Weapon->LungeSpeed * WWO::M * 1.05f : 30.f * WWO::M;
+			Owner->MoveIn.Push = Owner->MoveIn.Push.GetClampedToMaxSize(Cap);
+		}
 	}
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
@@ -205,7 +210,7 @@ void UWWOCharacterMovement::CalcVelocity(float DeltaTime, float Friction, bool b
 		Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
 		return;
 	}
-	if (Owner->IsLunging() || Owner->IsMantling())
+	if (Owner->IsInLungeFlight() || Owner->IsMantling())
 	{
 		Velocity = Owner->LungeVelocity; // flying: full 3D, no gravity
 		return;

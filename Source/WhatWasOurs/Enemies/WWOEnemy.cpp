@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemy.h"
+#include "Game/WWOGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
@@ -245,14 +246,14 @@ void AWWOEnemy::KnockBack(const FVector& Push)
 void AWWOEnemy::ApplyBlind(float Seconds)
 {
 	BlindLeft = FMath::Max(BlindLeft, Seconds);
-	UWWOWorldSubsystem::Get(this)->ShowText(TEXT("BLINDED"), false, FeetLocation() + FVector(0, 0, BodyHeight() + 30.f), FLinearColor(1.f, 0.95f, 0.6f));
+	AWWOGameState::Text(GetWorld(), TEXT("BLINDED"), FeetLocation() + FVector(0, 0, BodyHeight() + 30.f), FLinearColor(1.f, 0.95f, 0.6f)); // everyone sees it
 }
 
 void AWWOEnemy::ApplySlow(float Amount, float Seconds)
 {
 	SlowAmount = FMath::Max(FMath::Clamp(Amount, 0.f, 0.95f), SlowLeft > 0.f ? SlowAmount : 0.f);
 	SlowLeft = FMath::Max(SlowLeft, Seconds);
-	UWWOWorldSubsystem::Get(this)->ShowText(TEXT("SLOWED"), false, FeetLocation() + FVector(0, 0, BodyHeight() + 30.f), FLinearColor(0.5f, 0.65f, 1.f));
+	AWWOGameState::Text(GetWorld(), TEXT("SLOWED"), FeetLocation() + FVector(0, 0, BodyHeight() + 30.f), FLinearColor(0.5f, 0.65f, 1.f));
 }
 
 // --- Each frame ----------------------------------------------------------------------------

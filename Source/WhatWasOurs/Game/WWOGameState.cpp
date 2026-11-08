@@ -1,5 +1,7 @@
 #include "Game/WWOGameState.h"
 #include "FX/WWOFX.h"
+#include "Flora/WWOFloraEffects.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
@@ -37,6 +39,68 @@ void AWWOGameState::MulticastBlast_Implementation(const FWWOGrenadeLook& Look, F
 	if (HasAuthority()) return; // the host drew it already
 	++BlastsSeen;
 	AWWOGrenade::SpawnBlast(GetWorld(), Look, Center, RadiusM);
+}
+
+void AWWOGameState::Text(UWorld* World, const FString& Words, const FVector& At, const FLinearColor& Color)
+{
+	if (!World) return;
+	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(World)) WS->ShowText(Words, false, At, Color);
+	if (World->GetNetMode() == NM_ListenServer)
+	{
+		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastText(Words, At, Color);
+	}
+}
+
+void AWWOGameState::MulticastText_Implementation(const FString& Words, FVector_NetQuantize At, FLinearColor Color)
+{
+	if (HasAuthority()) return;
+	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->ShowText(Words, false, At, Color);
+}
+
+void AWWOGameState::Poison(AActor* Target, float DamagePerSecond, float Seconds)
+{
+	if (!Target) return;
+	UWWODamageOverTime::Apply(Target, DamagePerSecond, Seconds); // the damage (on a joiner its ticks only flash and show numbers)
+	UWorld* World = Target->GetWorld();
+	if (World && World->GetNetMode() == NM_ListenServer)
+	{
+		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastPoison(Target, DamagePerSecond, Seconds);
+	}
+}
+
+void AWWOGameState::MulticastPoison_Implementation(AActor* Target, float DamagePerSecond, float Seconds)
+{
+	if (!HasAuthority() && Target) UWWODamageOverTime::Apply(Target, DamagePerSecond, Seconds);
+}
+
+void AWWOGameState::Tracer(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color)
+{
+	if (!World) return;
+	AWWOFXActor::Tracer(World, From, To, Color);
+	if (World->GetNetMode() == NM_ListenServer)
+	{
+		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastTracer(From, To, Color);
+	}
+}
+
+void AWWOGameState::MulticastTracer_Implementation(FVector_NetQuantize From, FVector_NetQuantize To, FLinearColor Color)
+{
+	if (!HasAuthority()) AWWOFXActor::Tracer(GetWorld(), From, To, Color);
+}
+
+void AWWOGameState::Shockwave(UWorld* World, const FVector& At, const FLinearColor& Color, float RadiusM, float Seconds)
+{
+	if (!World) return;
+	AWWOFXActor::Shockwave(World, At, Color, RadiusM, Seconds);
+	if (World->GetNetMode() == NM_ListenServer)
+	{
+		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastShockwave(At, Color, RadiusM, Seconds);
+	}
+}
+
+void AWWOGameState::MulticastShockwave_Implementation(FVector_NetQuantize At, FLinearColor Color, float RadiusM, float Seconds)
+{
+	if (!HasAuthority()) AWWOFXActor::Shockwave(GetWorld(), At, Color, RadiusM, Seconds);
 }
 
 void AWWOGameState::Discharge(UWorld* World, AActor* Target, const FVector& Impact, const FVector& Away, const FLinearColor& Color,

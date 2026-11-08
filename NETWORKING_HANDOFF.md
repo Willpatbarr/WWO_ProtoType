@@ -45,8 +45,7 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   the host in `MoveAutonomous`, and on a correction restores the rules' state (`FWWOMoveResponse`
   carries `FWWOMoveState`) before the replay. The owner sends its effective movement values with
   `ServerSetMoveStats` (loadout + its Settings sliders; host's `M()` then returns them as-is).
-  **Escape hatch:** `MoveClientAuth` (melee lunge, Spore Dash launch via `ClientAuthLeft`) makes the
-  host accept the client position; phase 3 should replace it with real simulation.
+  (The old `MoveClientAuth` escape hatch for the lunge and Spore Dash is gone: see phase 3.)
   Known trust surfaces to harden for PvP: move stats, `SpeedScale`, `ExtraJumps`.
 - **Other players' look:** `AWWOCharacter::SetupVisuals` (from `BeginPlay` / `NotifyControllerChanged`):
   yours = first-person gun + shadow-only body; someone else's = full body on their flora's model
@@ -216,6 +215,18 @@ phase 3 simulates the lunge on the host.
   grenade's own channel yet). Chain lightning uses it, so everyone sees the jumps.
   Tested: the joiner's Thornfist on in the host's copy; the joiner's ult cast on the host (blast 584 damage) and
   seen by the joiner; single-player full test passes (every ability and ult).
+- **Lunge and Spore Dash simulated on the host: done** (the `MoveClientAuth` shortcut is gone). The lunging
+  machine steers the lunge at its target in `TickMovement` (`ApplyLunge`) and sends the velocity with each move
+  (`MoveLunge` + `FWWOMoveInput::Push`, whole cm/s); both machines fly it in `SimulateMove` (`bLungeFlight`, in
+  the move state) and end it the same way (`EndLungeFlight`). Spore Dash's launch goes out with the next move
+  (`MoveLaunch`, `ApplyLaunch`). The host caps the pushed velocity (lunge speed x1.05, launches 30 m/s).
+  Tested: 0 corrections in every step of the network test (lunges included, a mantle too); alone, lunge and dash
+  distances match the old ones (2.01 vs 2.04 m, 6.04 vs 6.09 m).
+- **Everyone sees the rest: done.** Through the game state relay: ally tracers, the Tank's slam shockwave,
+  BLINDED / SLOWED texts, poison (each machine runs its own `UWWODamageOverTime`: drips and numbers; only the
+  host's deals damage). The Tank's bubble shield replicates (`Shield`, `MaxShield`, `OnRep_Shield`: flash on a hit,
+  the pop when it breaks), so joiners see it and guess kills through it. Shield Share refills other players'
+  shields too, not just allies'.
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);

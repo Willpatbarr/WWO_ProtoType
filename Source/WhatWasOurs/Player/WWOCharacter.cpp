@@ -459,13 +459,16 @@ void AWWOCharacter::TickMovement(float DeltaSeconds)
 	AimAssist->UpdateHiddenWindow(DeltaSeconds);
 	UpdateRecoil(DeltaSeconds);
 	TickStatusTimers(DeltaSeconds);
-	ClientAuthLeft = FMath::Max(ClientAuthLeft - DeltaSeconds, 0.f);
 
 	if ((bUlting || EntrenchLeft > 0.f) && bLunging)
 	{
 		bLunging = false; // a lunge can't move while you're frozen or rooted; drop it so the punch lands
-		Move->SetMovementMode(MOVE_Falling);
+		LungeVelocity = FVector::ZeroVector;
 	}
+	// Steer the lunge from where you are now; the velocity goes into this move's input, so the host
+	// flies the same lunge (it doesn't need the target, and can't drift from you on its position).
+	if (bLunging) ApplyLunge(DeltaSeconds);
+	(void)Move;
 	// Frozen for the ult; rooted while entrenched you can still look (and shoot).
 	if (!bUlting) Look(LookStick * StickSensitivity * DeltaSeconds * AimAssist->FrictionScale()); // friction: slower near targets
 	CaptureMoveInput();
@@ -486,7 +489,17 @@ void AWWOCharacter::CaptureMoveInput()
 	Bit(EWWOAction::Fire, MoveFire);
 	if (Weapon->IsAiming()) In.Held |= MoveAim;
 	if (bUlting || EntrenchLeft > 0.f) In.Held |= MoveFrozen;
-	if (bLunging || ClientAuthLeft > 0.f) In.Held |= MoveClientAuth;
+	if (bLunging)
+	{
+		In.Held |= MoveLunge;
+		In.Push = LungeVelocity;
+	}
+	if (bLaunchPending)
+	{
+		In.Pressed |= MoveLaunch;
+		In.Push = PendingLaunch;
+		bLaunchPending = false;
+	}
 	In.SpeedScale = Abilities->SpeedMultiplier() * Weapon->MoveMultiplier() * SlowMultiplier();
 	In.ExtraJumps = (uint8)FMath::Clamp(Abilities->ExtraJumps(), 0, 255);
 	if (GetNetMode() == NM_Client) In.Quantize();
@@ -502,8 +515,10 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 		WishVelocity = FVector::ZeroVector;
 		return;
 	}
+	if (MoveIn.Pressed & MoveLaunch) ApplyLaunch(MoveIn.Push);
 	if (MoveIn.Held & MoveFrozen)
 	{
+		if (bLungeFlight) EndLungeFlight();
 		bSprinting = false;
 		bSliding = false;
 		UpdateAir(DeltaSeconds);
@@ -515,6 +530,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 
 	if (bMantling || TryMantle(Input))
 	{
+		if (bLungeFlight) EndLungeFlight();
 		UpdateMantle(DeltaSeconds);
 		return;
 	}
@@ -527,7 +543,14 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 	const bool bOnFloor = IsOnFloor();
 	HandleJump(WishDir);
 	ApplyHorizontal(WishDir, bOnFloor, DeltaSeconds);
-	if (bLunging) ApplyLunge(DeltaSeconds);
+	if (MoveIn.Held & MoveLunge)
+	{
+		// Flying at the velocity the lunging machine sent (CalcVelocity uses LungeVelocity).
+		bLungeFlight = true;
+		LungeVelocity = MoveIn.Push;
+		if (Move->MovementMode != MOVE_Flying) Move->SetMovementMode(MOVE_Flying);
+	}
+	else if (bLungeFlight) EndLungeFlight();
 	if (!IsOnFloor()) LastFallSpeed = -Move->Velocity.Z / WWO::M;
 }
 
@@ -537,6 +560,7 @@ FWWOMoveState AWWOCharacter::GetMoveState() const
 	S.bSprinting = bSprinting; S.bCrouching = bCrouching; S.bSliding = bSliding; S.bCrouchToggled = bCrouchToggled;
 	S.bSlideQueued = bSlideQueued; S.bCrouchWasHeld = bCrouchWasHeld; S.bLandedSprinting = bLandedSprinting; S.bMantling = bMantling;
 	S.JumpsUsed = (uint8)FMath::Clamp(JumpsUsed, 0, 255);
+	S.bLungeFlight = bLungeFlight;
 	S.TakeoffSpeed = TakeoffSpeed; S.SlideSpeedNow = SlideSpeedNow; S.LaunchTime = LaunchTime; S.AirTime = AirTime;
 	S.SinceLanded = SinceLanded; S.MantleT = MantleT;
 	S.SlideDir = SlideDir; S.MantleFrom = MantleFrom; S.MantleTo = MantleTo;
@@ -548,6 +572,7 @@ void AWWOCharacter::SetMoveState(const FWWOMoveState& S)
 	bSprinting = S.bSprinting; bCrouching = S.bCrouching; bSliding = S.bSliding; bCrouchToggled = S.bCrouchToggled;
 	bSlideQueued = S.bSlideQueued; bCrouchWasHeld = S.bCrouchWasHeld; bLandedSprinting = S.bLandedSprinting; bMantling = S.bMantling;
 	JumpsUsed = S.JumpsUsed;
+	bLungeFlight = S.bLungeFlight;
 	TakeoffSpeed = S.TakeoffSpeed; SlideSpeedNow = S.SlideSpeedNow; LaunchTime = S.LaunchTime; AirTime = S.AirTime;
 	SinceLanded = S.SinceLanded; MantleT = S.MantleT;
 	SlideDir = S.SlideDir; MantleFrom = S.MantleFrom; MantleTo = S.MantleTo;
@@ -560,6 +585,9 @@ void FWWOMoveState::Serialize(FArchive& Ar)
 	Ar << Bits;
 	bSprinting = Bits & 1; bCrouching = Bits & 2; bSliding = Bits & 4; bCrouchToggled = Bits & 8;
 	bSlideQueued = Bits & 16; bCrouchWasHeld = Bits & 32; bLandedSprinting = Bits & 64; bMantling = Bits & 128;
+	uint8 More = bLungeFlight ? 1 : 0;
+	Ar << More;
+	bLungeFlight = More & 1;
 	Ar << JumpsUsed << TakeoffSpeed << SlideSpeedNow << LaunchTime << AirTime << SinceLanded << MantleT;
 	Ar << SlideDir << MantleFrom << MantleTo;
 }
@@ -573,12 +601,24 @@ void FWWOMoveInput::Serialize(FArchive& Ar)
 	Ar << X << Y << Held << Pressed << Scale << ExtraJumps;
 	Move = FVector2D(X / 127.f, Y / 127.f);
 	SpeedScale = Scale / 100.f;
+	if (HasPush())
+	{
+		// Whole cm/s, plenty for a lunge or a dash.
+		int16 PX = (int16)FMath::Clamp(FMath::RoundToInt(Push.X), -32767, 32767);
+		int16 PY = (int16)FMath::Clamp(FMath::RoundToInt(Push.Y), -32767, 32767);
+		int16 PZ = (int16)FMath::Clamp(FMath::RoundToInt(Push.Z), -32767, 32767);
+		Ar << PX << PY << PZ;
+		Push = FVector(PX, PY, PZ);
+	}
+	else Push = FVector::ZeroVector;
 }
 
 void FWWOMoveInput::Quantize()
 {
 	Move = FVector2D(FMath::RoundToInt(FMath::Clamp(Move.X, -1.f, 1.f) * 127.f) / 127.f, FMath::RoundToInt(FMath::Clamp(Move.Y, -1.f, 1.f) * 127.f) / 127.f);
 	SpeedScale = FMath::Clamp(FMath::RoundToInt(SpeedScale * 100.f), 0, 65535) / 100.f;
+	Push = HasPush() ? FVector(FMath::Clamp(FMath::RoundToInt(Push.X), -32767, 32767), FMath::Clamp(FMath::RoundToInt(Push.Y), -32767, 32767),
+		FMath::Clamp(FMath::RoundToInt(Push.Z), -32767, 32767)) : FVector::ZeroVector;
 }
 
 FString FWWOMoveState::ToString() const
@@ -681,14 +721,30 @@ void AWWOCharacter::StartSlide(const FVector& WishDir)
 
 void AWWOCharacter::Launch(const FVector& NewVelocityCm)
 {
+	// Goes out with the next move (MoveLaunch), so the host launches you in the same move.
+	PendingLaunch = NewVelocityCm;
+	bLaunchPending = true;
+}
+
+void AWWOCharacter::ApplyLaunch(const FVector& NewVelocityCm)
+{
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	Move->Velocity = NewVelocityCm;
 	Move->SetMovementMode(MOVE_Falling);
 	TakeoffSpeed = FVector2D(NewVelocityCm.X, NewVelocityCm.Y).Size() / WWO::M;
 	LaunchTime = 0.15f;
-	ClientAuthLeft = 1.5f; // online: the host can't simulate the launch yet, so it takes your position
 	bSliding = false;
 	bSprinting = false;
+}
+
+void AWWOCharacter::EndLungeFlight()
+{
+	// The lunge is over: stop dead and let gravity take over (this move's stick too, like Godot's velocity = ZERO).
+	bLungeFlight = false;
+	LungeVelocity = FVector::ZeroVector;
+	GetCharacterMovement()->Velocity = FVector::ZeroVector;
+	WishVelocity = FVector::ZeroVector;
+	GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 }
 
 float AWWOCharacter::CurrentGravityZ() const
@@ -873,8 +929,7 @@ void AWWOCharacter::StartLunge(AActor* Target)
 	LungeTime = 0.f;
 	LungeLastFlat = TNumericLimits<float>::Max();
 	bSprinting = false;
-	bSliding = false;
-	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	bSliding = false; // the next move flies it (MoveLunge)
 }
 
 void AWWOCharacter::ApplyLunge(float DeltaSeconds)
@@ -882,9 +937,8 @@ void AWWOCharacter::ApplyLunge(float DeltaSeconds)
 	const IWWOTargetable* Target = Cast<IWWOTargetable>(LungeTarget.Get());
 	if (!Target)
 	{
-		bLunging = false;
+		bLunging = false; // the next move ends the flight
 		LungeVelocity = FVector::ZeroVector;
-		GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 		return;
 	}
 	LungeTime += DeltaSeconds;
@@ -905,11 +959,8 @@ void AWWOCharacter::ApplyLunge(float DeltaSeconds)
 	const bool bArrived = Flat <= Reach || bStalled;
 	if ((bArrived && LungeTime >= LungeMinTime) || LungeTime > LungeMaxTime)
 	{
-		bLunging = false;
+		bLunging = false; // arrived: this move ends the flight (EndLungeFlight stops you dead)
 		LungeVelocity = FVector::ZeroVector;
-		GetCharacterMovement()->Velocity = FVector::ZeroVector; // stop dead; gravity takes over
-		WishVelocity = FVector::ZeroVector; // (this frame's move too, like Godot's velocity = ZERO)
-		GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 		return;
 	}
 	LungeVelocity = bArrived ? FVector::ZeroVector : To.GetSafeNormal() * Weapon->LungeSpeed * WWO::M;

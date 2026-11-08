@@ -1,6 +1,7 @@
 #include "Weapons/WWOGrenade.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
+#include "Player/WWOHealthComponent.h"
 #include "Player/WWOAbilityComponent.h"
 #include "Enemies/WWOEnemy.h"
 #include "Allies/WWOAlly.h"
@@ -408,7 +409,7 @@ void AWWOGrenade::SpikeHit(AActor* TargetActor)
 	if (!bKilled)
 	{
 		const float Potency = 1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage"); // Stronger Poison
-		UWWODamageOverTime::Apply(TargetActor, Spec.Data->PoisonDps * Potency, Spec.Data->PoisonTime);
+		AWWOGameState::Poison(TargetActor, Spec.Data->PoisonDps * Potency, Spec.Data->PoisonTime); // everyone sees it
 	}
 	Spec.BlastRadius = 0.8f;
 	Blast(Point);
@@ -527,9 +528,16 @@ void AWWOGrenade::ShareShields(const FVector& Center)
 	AWWOCharacter* P = Cast<AWWOCharacter>(Thrower.Get());
 	const UWWOAbilityData* Share = P ? P->Abilities->Equipped("shield_share") : nullptr;
 	if (!Share) return;
+	const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
 	for (AWWOAlly* Mate : UWWOWorldSubsystem::Get(this)->LivingTeammates())
 	{
-		if (FVector::Dist(Mate->GetActorLocation(), Center) <= (Spec.BlastRadius + 0.5f) * WWO::M) Mate->RestoreShield(Share->ShieldAmount);
+		if (FVector::Dist(Mate->GetActorLocation(), Center) <= Reach) Mate->RestoreShield(Share->ShieldAmount);
+	}
+	// Online, the other players caught in it too (their shields are the host's; they replicate).
+	for (AWWOCharacter* Mate : UWWOWorldSubsystem::Get(this)->GetPlayers())
+	{
+		if (Mate == P || Mate->Health->bDead || FVector::Dist(Mate->GetActorLocation(), Center) > Reach) continue;
+		Mate->Health->Shield = FMath::Min(Mate->Health->Shield + Share->ShieldAmount, Mate->Health->MaxShield());
 	}
 }
 

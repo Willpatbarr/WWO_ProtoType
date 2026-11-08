@@ -1,4 +1,5 @@
 #include "Allies/WWOAlly.h"
+#include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemy.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
@@ -275,7 +276,7 @@ void AWWOAlly::Shoot(AWWOEnemy* Enemy)
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOAllyShot), false, this);
 	FHitResult Hit;
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, From, From + Dir * (Data->SightRange + 5.f) * WWO::M, ECC_Visibility, Params);
-	AWWOFXActor::Tracer(GetWorld(), From, bHit ? Hit.ImpactPoint : From + Dir * Data->SightRange * WWO::M, FLinearColor(0.5f, 1.f, 0.9f, 0.8f));
+	AWWOGameState::Tracer(GetWorld(), From, bHit ? Hit.ImpactPoint : From + Dir * Data->SightRange * WWO::M, FLinearColor(0.5f, 1.f, 0.9f, 0.8f)); // everyone sees it
 	if (bHit)
 	{
 		if (AWWOEnemy* Victim = Cast<AWWOEnemy>(Hit.GetActor())) Victim->TakeHit(Data->Damage, false, Hit.ImpactPoint, FLinearColor(0.55f, 0.9f, 0.85f));
