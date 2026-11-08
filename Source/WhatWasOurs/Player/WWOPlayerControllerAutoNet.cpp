@@ -36,13 +36,14 @@ namespace
 	const FNetStep NetSteps[] = {
 		{ 0.f, TEXT("idle") }, { 3.f, TEXT("walk") }, { 5.f, TEXT("sprint") }, { 6.5f, TEXT("slide") },
 		{ 8.f, TEXT("stop") }, { 12.f, TEXT("crouch_walk") }, { 15.f, TEXT("jump") }, { 19.f, TEXT("mantle") },
-		{ 22.f, TEXT("shoot") }, { 25.5f, TEXT("melee") }, { 31.5f, TEXT("end") },
+		{ 22.f, TEXT("shoot") }, { 25.5f, TEXT("melee") }, { 31.5f, TEXT("revive") }, { 46.5f, TEXT("end") },
 	};
 	constexpr int32 NumNetSteps = UE_ARRAY_COUNT(NetSteps);
 	constexpr float SettleSeconds = 4.f; // after both are in: the joiner's world loads, bodies get their models
 	constexpr float WaitLimit = 180.f;   // give up waiting for the other player
 	constexpr float HostLimit = 120.f;   // the host quits by then even if the joiner never left
-	constexpr float RestartAt = 34.f;   // the host restarts the run (the joiner is done at 33)
+	constexpr float RestartAt = 48.5f;  // the host downs both players: the lost round restarts the run (the joiner is done at 48)
+	constexpr float ReviveDownAt = 32.f, ReviveReport = 46.f; // the host goes down; the joiner runs over and revives it
 	constexpr float ShootFrom = 22.f, ShootTo = 25.f; // both shoot their nearest dummy (the host checks the joiner's hits)
 	constexpr float MeleeFrom = 25.5f;                // the joiner walks up to the nearest dummy and punches it
 	const float MeleePunches[] = { 28.f, 29.f, 30.f };
@@ -71,12 +72,9 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	AWWOCharacter* Other = nullptr;
 	for (AWWOCharacter* C : Players) if (C != P) { Other = C; break; }
 
-	// Nobody dies during the test (the host owns health; the joiner's copy is harmless).
-	for (AWWOCharacter* C : Players)
-	{
-		C->Health->GodMode = 1.f;
-		if (bHost && C->Health->bDead) C->Health->Respawn();
-	}
+	// Nobody goes down to the waves during the test (the host owns health; the joiner's copy is
+	// harmless). The revive and loss steps down players on purpose (Kill ignores god mode).
+	for (AWWOCharacter* C : Players) C->Health->GodMode = 1.f;
 
 	UWWOCharacterMovement::bLogNetCorrections = true;
 	if (!bAutoNetSawOther)
@@ -272,6 +270,46 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		}
 	}
 
+	// Revive (31.5 to 46.5 s): the host goes down where it stands; the joiner sprints over and,
+	// once within 1.5 m, holds Revive until it's back up (ReviveTime, 3 s).
+	if (bHost && Crossed(ReviveDownAt))
+	{
+		P->Health->Kill();
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: host went down (dead %d, respawn timer %.1f)"), P->Health->bDead, P->Health->RespawnLeft);
+	}
+	if (!bHost && Other && T >= ReviveDownAt + 0.2f && T < ReviveReport)
+	{
+		const FVector To = Other->GetActorLocation() - P->GetActorLocation();
+		P->SetViewRotation(-0.5f, To.Rotation().Yaw);
+		const bool bClose = FVector2D(To).Size() <= 1.5f * WWO::M;
+		MoveValue = bClose ? FVector2D::ZeroVector : FVector2D(0.f, 1.f);
+		Held[(int32)EWWOAction::Sprint] = !bClose && FVector2D(To).Size() > 4.f * WWO::M;
+		const bool bWasHolding = Held[(int32)EWWOAction::Revive];
+		Held[(int32)EWWOAction::Revive] = bClose && Other->Health->bDead;
+		AutoNetReviveSeen = FMath::Max(AutoNetReviveSeen, Other->Health->BeingRevived);
+		if (Held[(int32)EWWOAction::Revive] && !bWasHolding)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner holding Revive %.1f m from the host (host down %d, its clip %s, revive target %s)"),
+				To.Size() / WWO::M, Other->Health->bDead, *Other->Body->CurrentAnim().ToString(), *GetNameSafe(P->Health->FindReviveTarget()));
+		}
+	}
+	if (Crossed(ReviveReport))
+	{
+		Held[(int32)EWWOAction::Revive] = false;
+		Held[(int32)EWWOAction::Sprint] = false;
+		MoveValue = FVector2D::ZeroVector;
+		if (bHost)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host after the revive: dead %d, revived %d, health %.0f shield %.0f"),
+				P->Health->bDead, P->Health->bRevived, P->Health->Health, P->Health->Shield);
+		}
+		else if (Other)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sees the host dead %d, health %.0f; revive bar reached %.2f; host clip %s"),
+				Other->Health->bDead, Other->Health->Health, AutoNetReviveSeen, *Other->Body->CurrentAnim().ToString());
+		}
+	}
+
 	auto LookAt = [P](const AActor* A)
 	{
 		const FVector Dir = A->GetActorLocation() + FVector(0.f, 0.f, 40.f) - P->EyeLocation();
@@ -304,9 +342,18 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		}
 		if (Crossed(RestartAt) && Other)
 		{
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host restarting the run with %d players"), Players.Num());
+			// Everyone down loses the round, and a lost round restarts the run (online that's a ServerTravel).
 			GAutoNetRound = 1;
 			GAutoNetRound1 = this;
+			Other->Health->Kill();
+			P->Health->Kill();
+			const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host downed both players (%d players): round lost %d"), Players.Num(), GM && GM->State == EWWOWaveState::Lost);
+			return;
+		}
+		if (Crossed(RestartAt + 8.f))
+		{
+			UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL everyone down didn't restart the run; restarting by hand"));
 			if (AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>()) GM->Restart();
 			return;
 		}

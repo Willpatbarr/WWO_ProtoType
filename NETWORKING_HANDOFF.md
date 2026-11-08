@@ -146,8 +146,21 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   same instant refused, 0 corrections. One earlier run had 3 tiny (2 cm, vertical) corrections just after
   lunges: the host takes the joiner's position at the lunge's end (`MoveClientAuth`) and then thinks it's
   falling for a moment. Harmless; goes away when phase 3 simulates the lunge on the host.
+- **Downed and revive: done** (`UWWOHealthComponent`: `Revive`, `UpdateRevive`, `FindReviveTarget`). Agreed with Will:
+  online, 0 health means down where you fell (body plays `Death01` once and holds it), no respawn timer and no
+  bleed-out; a teammate within `ReviveRange` (2.5 m) holds **Revive** (E, or Square, which then doesn't reload)
+  for `ReviveTime` (3 s) and you're back up in place with `ReviveHealth` (50%) health and no shield; letting go
+  or stepping away starts over. Everyone down loses the round (allies don't count online, they can't revive),
+  which restarts it as before. Alone nothing changed (die, respawn after 2 s). Host-run: the reviver's
+  `bWantsRevive` (own input, or `ServerSetRevive`), progress on the host, `BeingRevived` replicated on the
+  downed player for both HUDs ("You're down" / "Being revived" + bar; "Hold E / Square to revive" + bar).
+  `bRevived` tells a joiner not to snap its view to the start. Settings: Player, Revive rows.
+  Tested (`-WWOAutoTestNet` revive step): the host goes down (no timer), the joiner sprints over and holds
+  Revive, the bar fills on the joiner, the host is back up where it fell; then the host downs both and the
+  lost round restarts the run (round 2 follows).
 - **Not yet:** grenades and abilities from a joiner still only happen on its own screen (phase 3 kit); kill credit back to the shooter (perks, ult charge use the predicted kill);
-  each player's own gun and mods on the host (it validates against base stats); downed / revive.
+  each player's own gun and mods on the host (it validates against base stats); taking damage doesn't interrupt
+  a revive yet (only letting go or stepping away does).
 
 ## Phase 2 notes (from the design discussion)
 - Shots: client predicts (flash, tracer, hit marker), sends shot (origin, direction, timestamp);

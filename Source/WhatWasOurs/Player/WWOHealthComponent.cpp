@@ -4,6 +4,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
+#include "Systems/WWOWorldSubsystem.h"
+#include "WWOTypes.h"
 #include "Net/UnrealNetwork.h"
 
 UWWOHealthComponent::UWWOHealthComponent()
@@ -18,11 +20,18 @@ void UWWOHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWWOHealthComponent, Health);
 	DOREPLIFETIME(UWWOHealthComponent, Shield);
 	DOREPLIFETIME(UWWOHealthComponent, bDead);
+	DOREPLIFETIME(UWWOHealthComponent, bRevived);
+	DOREPLIFETIME(UWWOHealthComponent, BeingRevived);
 }
 
 bool UWWOHealthComponent::IsHost() const
 {
 	return GetOwner() && GetOwner()->HasAuthority();
+}
+
+bool UWWOHealthComponent::IsOnline() const
+{
+	return GetOwner() && GetOwner()->GetNetMode() != NM_Standalone;
 }
 
 void UWWOHealthComponent::OnRep_Health()
@@ -44,9 +53,10 @@ void UWWOHealthComponent::OnRep_Dead()
 	}
 	else
 	{
-		// Respawned on the host (it moved you to the start); face the way the start faces.
+		// Respawned on the host (it moved you to the start; face the way the start faces), or
+		// revived where you fell (keep looking where you were).
 		P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-		if (P->IsLocallyControlled()) P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
+		if (P->IsLocallyControlled() && !bRevived) P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
 		P->ClearStatusEffects();
 		SinceDamage = 99.f;
 		OnRespawned.Broadcast();
@@ -103,7 +113,8 @@ void UWWOHealthComponent::Die()
 {
 	Health = 0.f;
 	bDead = true;
-	RespawnLeft = RespawnTime;
+	BeingRevived = 0.f;
+	RespawnLeft = IsOnline() ? -1.f : RespawnTime; // online: down until a teammate revives you
 	DieLocally();
 }
 
@@ -120,6 +131,8 @@ void UWWOHealthComponent::Respawn()
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	if (!IsHost()) return;
 	bDead = false;
+	bRevived = false;
+	BeingRevived = 0.f;
 	P->TeleportTo(Spawn.GetLocation(), Spawn.Rotator());
 	P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
 	P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
@@ -136,10 +149,10 @@ void UWWOHealthComponent::UpdateHealth(float DeltaSeconds)
 	if (!IsHost()) return; // a joiner's own health runs on the host and replicates here
 	if (bDead)
 	{
-		RespawnLeft -= DeltaSeconds;
-		if (RespawnLeft <= 0.f) Respawn();
+		if (RespawnLeft > 0.f && (RespawnLeft -= DeltaSeconds) <= 0.f) Respawn();
 		return;
 	}
+	UpdateRevive(DeltaSeconds);
 	if (P->GetActorLocation().Z < KillZ)
 	{
 		Kill();
@@ -154,4 +167,58 @@ void UWWOHealthComponent::UpdateHealth(float DeltaSeconds)
 		if (Health < MaxHealth()) Health = FMath::Min(Health + HealthRegen * DeltaSeconds, MaxHealth());
 		else Shield = FMath::Min(Shield + P->M("shield_regen", ShieldRegen) * DeltaSeconds, MaxShield());
 	}
+}
+
+// --- Revive (online) -----------------------------------------------------------------------------
+
+AWWOCharacter* UWWOHealthComponent::FindReviveTarget() const
+{
+	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!P || bDead || !IsOnline()) return nullptr;
+	AWWOCharacter* Best = nullptr;
+	float BestDistance = ReviveRange * WWO::M;
+	for (AWWOCharacter* Other : UWWOWorldSubsystem::Get(this)->GetPlayers())
+	{
+		if (Other == P || !Other->Health->bDead) continue;
+		const float Distance = FVector::Dist(Other->GetActorLocation(), P->GetActorLocation());
+		if (Distance <= BestDistance) { Best = Other; BestDistance = Distance; }
+	}
+	return Best;
+}
+
+void UWWOHealthComponent::UpdateRevive(float DeltaSeconds)
+{
+	// Holding Revive next to a downed teammate fills it up; letting go, moving away or switching
+	// to someone else starts over.
+	AWWOCharacter* Target = bWantsRevive ? FindReviveTarget() : nullptr;
+	if (Target != ReviveTarget.Get())
+	{
+		if (AWWOCharacter* Old = ReviveTarget.Get()) Old->Health->BeingRevived = 0.f;
+		ReviveTarget = Target;
+		ReviveProgress = 0.f;
+	}
+	if (!Target) return;
+	ReviveProgress += DeltaSeconds / FMath::Max(ReviveTime, 0.1f);
+	Target->Health->BeingRevived = FMath::Min(ReviveProgress, 1.f);
+	if (ReviveProgress >= 1.f)
+	{
+		Target->Health->Revive();
+		ReviveTarget = nullptr;
+		ReviveProgress = 0.f;
+	}
+}
+
+void UWWOHealthComponent::Revive()
+{
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!IsHost() || !bDead) return;
+	bDead = false;
+	bRevived = true;
+	BeingRevived = 0.f;
+	P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+	P->ClearStatusEffects();
+	Health = FMath::Max(MaxHealth() * ReviveHealth, 1.f);
+	Shield = 0.f;
+	SinceDamage = 0.f; // regen waits its usual delay
+	OnRespawned.Broadcast();
 }

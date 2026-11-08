@@ -159,6 +159,7 @@ void AWWOPlayerController::BuildInput()
 	Map(MakeAction(EWWOAction::WeaponNext), { EKeys::MouseScrollUp, EKeys::Gamepad_FaceButton_Top });
 	Map(MakeAction(EWWOAction::WeaponPrev), { EKeys::MouseScrollDown });
 	Map(MakeAction(EWWOAction::NextConfig), { EKeys::B, EKeys::Gamepad_DPad_Down });
+	Map(MakeAction(EWWOAction::Revive), { EKeys::E, EKeys::Gamepad_FaceButton_Left }); // Square also reloads, unless someone's down beside you
 	// Menu keys work while paused (the menus pause the game).
 	Map(MakeAction(EWWOAction::Menu, true), { EKeys::Tab, EKeys::Escape, EKeys::Gamepad_Special_Right });
 	Map(MakeAction(EWWOAction::MenuBack, true), { EKeys::Gamepad_FaceButton_Right }); // Esc is Menu, which also backs out (one step per press)

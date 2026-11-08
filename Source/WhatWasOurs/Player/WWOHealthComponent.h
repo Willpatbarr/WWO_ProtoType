@@ -3,6 +3,8 @@
 // The player's health and shields, Destiny-style (Godot: player_health.gd).
 // Damage hits the shield first. After RechargeDelay without damage, health refills, then
 // the shield. At 0 health you die and respawn at the Player Start after RespawnTime.
+// Online (co-op) you go down instead: you stay where you fell until a teammate revives you (holds
+// Revive within ReviveRange for ReviveTime); no respawn. Everyone down loses the round.
 // Falling below KillZ counts as a death too. Durability points raise the maximums.
 // Online the host owns every player's health: damage, regen, death and respawn happen there, and
 // Health / Shield / bDead replicate to everyone. Your own machine replays the effects from them
@@ -33,12 +35,20 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Player") float ShieldRegen = 60.f;
 	UPROPERTY(EditAnywhere, Category = "Player") float RespawnTime = 2.f;
 	UPROPERTY(EditAnywhere, Category = "Player") float GodMode = 0.f;
+	UPROPERTY(EditAnywhere, Category = "Player") float ReviveTime = 3.f;    // s of holding Revive
+	UPROPERTY(EditAnywhere, Category = "Player") float ReviveRange = 2.5f;  // m from the downed player
+	UPROPERTY(EditAnywhere, Category = "Player") float ReviveHealth = 0.5f; // of max health, no shield
 
 	static constexpr float KillZ = -3000.f; // cm
 
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Health = 100.f;
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Shield = 100.f;
 	UPROPERTY(ReplicatedUsing = OnRep_Dead) bool bDead = false;
+	UPROPERTY(Replicated) bool bRevived = false;      // the last time bDead cleared was a revive (in place)
+	UPROPERTY(Replicated) float BeingRevived = 0.f;   // while down: how far a teammate's revive is (0-1)
+	bool bWantsRevive = false; // host: this player holds Revive (their own input, or ServerSetRevive)
+	float ReviveProgress = 0.f; // host: this player's revive of ReviveTarget
+	TWeakObjectPtr<class AWWOCharacter> ReviveTarget;
 	float SinceDamage = 99.f;
 	float RespawnLeft = 0.f;
 
@@ -51,12 +61,16 @@ public:
 	void TakeDamage(float Amount, bool bMelee = false); // bMelee: a bite, punch or slam
 	void Kill();
 	void Respawn();
+	void Revive();         // host: back up where you fell
+	bool IsOnline() const; // co-op: down instead of dead-and-respawn
+	class AWWOCharacter* FindReviveTarget() const; // the nearest downed teammate in reach (any machine)
 
 private:
 	FTransform Spawn;
 	float LastSeen = -1.f; // Health + Shield when last replicated (a drop = damage)
 	void Die();
 	void DieLocally();     // the effects of dying (no moving), on whichever machine
+	void UpdateRevive(float DeltaSeconds); // host: this player reviving someone
 	UFUNCTION() void OnRep_Health();
 	UFUNCTION() void OnRep_Dead();
 	bool IsHost() const;

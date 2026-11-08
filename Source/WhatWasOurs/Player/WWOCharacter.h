@@ -223,6 +223,8 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;
 	UFUNCTION() void OnRep_NetFlora();
 	UFUNCTION(Server, Reliable) void ServerSetFlora(FName Flora);
+	// Online: you're holding Revive next to a downed teammate (the host runs the revive).
+	UFUNCTION(Server, Reliable) void ServerSetRevive(bool bHolding);
 
 	// Online gunfire (see FWWOGunShot).
 	UFUNCTION(Server, Reliable) void ServerGunShot(const FWWOGunShot& Shot);
@@ -308,5 +310,8 @@ private:
 	bool TryMantle(const FVector2D& Input);
 	void UpdateMantle(float DeltaSeconds);
 	bool Pressed(EWWOAction Action) const;
+	bool bSentRevive = false;
+	bool bPosedDown = false; // the death clip has been started for this downing (it holds its last frame)
+	void UpdateReviveInput();
 	bool JustPressed(EWWOAction Action) const;
 };

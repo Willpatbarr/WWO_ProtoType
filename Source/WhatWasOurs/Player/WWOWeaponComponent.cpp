@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "Player/WWOHealthComponent.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
@@ -811,7 +812,8 @@ void UWWOWeaponComponent::MeleeKnockBack(AActor* TargetActor, bool bKilled) cons
 void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 {
 	Ammo = FMath::Min(Ammo, MagazineSize()); // in case the slider shrank the magazine
-	if (JustPressed((int32)EWWOAction::Reload)) StartReload();
+	// Square is Revive too: next to a downed teammate it revives instead.
+	if (JustPressed((int32)EWWOAction::Reload) && !GetPlayer()->Health->FindReviveTarget()) StartReload();
 	if (bReloading && GetPlayer()->bSprinting) CancelReload(); // sprinting cancels a reload, like Destiny
 	if (!bReloading) return;
 	const float Adrenal = AdrenalLeft > 0.f ? 1.4f : 1.f; // Adrenal: reloads 40% faster after a kill

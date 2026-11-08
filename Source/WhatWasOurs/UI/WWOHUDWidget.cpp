@@ -482,11 +482,32 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		Tag(Pl->EntrenchLeft > 0.f, 2, TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f));
 		// Damage flash and death screen.
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.8f, 0.05f, 0.02f, DamageFlash));
-		if (H->bDead)
+		auto ReviveBar = [&](float Frac, float Y)
+		{
+			const FVector2D BarSize(320.f, 12.f), BarAt(Center.X - BarSize.X * 0.5f, Y);
+			P.Box(BarAt, BarSize, FLinearColor(0, 0, 0, 0.5f));
+			P.Box(BarAt, FVector2D(BarSize.X * FMath::Clamp(Frac, 0.f, 1.f), BarSize.Y), FLinearColor(0.45f, 1.f, 0.55f));
+			P.Outline(BarAt, BarSize, FLinearColor(1, 1, 1, 0.6f), 1.f);
+		};
+		if (H->bDead && H->IsOnline())
+		{
+			// Down: a teammate can bring you back.
+			P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.05f, 0.f, 0.f, 0.45f));
+			P.Text(TEXT("You're down"), Center - FVector2D(0, 50), 40.f, FLinearColor::White, 0.5f);
+			P.Text(H->BeingRevived > 0.f ? TEXT("Being revived") : TEXT("A teammate can revive you"), Center, 30.f, FLinearColor::White, 0.5f);
+			if (H->BeingRevived > 0.f) ReviveBar(H->BeingRevived, Center.Y + 40.f);
+		}
+		else if (H->bDead)
 		{
 			P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.05f, 0.f, 0.f, 0.6f));
 			P.Text(TEXT("You died"), Center - FVector2D(0, 50), 40.f, FLinearColor::White, 0.5f);
 			P.Text(FString::Printf(TEXT("Respawning in %.1f"), FMath::Max(H->RespawnLeft, 0.f)), Center, 40.f, FLinearColor::White, 0.5f);
+		}
+		else if (const AWWOCharacter* Downed = H->FindReviveTarget())
+		{
+			// Next to a downed teammate: how to revive them, and how far along you are.
+			P.Text(TEXT("Hold E / Square to revive"), Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
+			if (Downed->Health->BeingRevived > 0.f) ReviveBar(Downed->Health->BeingRevived, Center.Y + 125.f);
 		}
 	}
 

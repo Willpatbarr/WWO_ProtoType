@@ -271,7 +271,9 @@ void AWWOGameMode::WaveCleared()
 void AWWOGameMode::OnPlayerDied()
 {
 	if (State == EWWOWaveState::Idle || State == EWWOWaveState::Won || State == EWWOWaveState::Lost) return;
-	bool bAnyoneUp = UWWOWorldSubsystem::Get(this)->LivingTeammates().Num() > 0;
+	// Alone, a living ally keeps the run going (you respawn). Online, downed players stay down
+	// until revived, and only players can revive: everyone down loses.
+	bool bAnyoneUp = GetNetMode() == NM_Standalone && UWWOWorldSubsystem::Get(this)->LivingTeammates().Num() > 0;
 	for (const AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers()) bAnyoneUp |= !P->Health->bDead;
 	if (!bAnyoneUp)
 	{

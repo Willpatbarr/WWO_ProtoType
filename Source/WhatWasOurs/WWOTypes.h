@@ -136,5 +136,6 @@ enum class EWWOAction : uint8
 	Ability1, Ability2, WeaponNext, WeaponPrev,
 	Menu, MenuBack, TabNext, TabPrev, CharacterMenu,
 	NextConfig, // cycle saved weapon configs (draft mods)
+	Revive,     // hold next to a downed teammate (online)
 	Count UMETA(Hidden)
 };

@@ -134,6 +134,23 @@ void AWWOCharacter::ServerSetFlora_Implementation(FName Flora)
 	OnRep_NetFlora(); // the host shows it too
 }
 
+void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
+{
+	Health->bWantsRevive = bHolding;
+}
+
+void AWWOCharacter::UpdateReviveInput()
+{
+	if (GetNetMode() == NM_Standalone) return;
+	const bool bHolding = !Health->bDead && Pressed(EWWOAction::Revive) && Health->FindReviveTarget();
+	if (HasAuthority()) Health->bWantsRevive = bHolding;
+	else if (bHolding != bSentRevive)
+	{
+		bSentRevive = bHolding;
+		ServerSetRevive(bHolding);
+	}
+}
+
 AWWOPlayerController* AWWOCharacter::GetWWOController() const
 {
 	return Cast<AWWOPlayerController>(Controller);
@@ -305,7 +322,12 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 		return;
 	}
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
-	if (Health->bDead) return; // no shooting or throwing
+	UpdateReviveInput();
+	if (Health->bDead)
+	{
+		UpdateModel(); // lying where you fell (online the host's replicates to everyone)
+		return; // no shooting or throwing
+	}
 	if (!bUlting && EntrenchLeft <= 0.f) UpdateModel(); // frozen or rooted: the ult drives the body
 	UpdateCamera(DeltaSeconds);
 	AimAssist->UpdateAdhesion();
@@ -321,6 +343,14 @@ void AWWOCharacter::UpdateModel()
 	// speed (m/s) each animation looks right at.
 	constexpr float WalkAnimSpeed = 1.6f, JogAnimSpeed = 4.5f, SprintAnimSpeed = 7.f, CrouchAnimSpeed = 1.5f;
 	const float Speed = GetCharacterMovement()->Velocity.Size2D() / WWO::M;
+	if (Health->bDead)
+	{
+		// Down (online: until a teammate revives you). Once: replaying a finished clip starts it over.
+		if (!bPosedDown) Body->Play("Death01", 1.f, 0.1f);
+		bPosedDown = true;
+		return;
+	}
+	bPosedDown = false;
 	if (bMantling)
 	{
 		Body->Play("Jump_Start");

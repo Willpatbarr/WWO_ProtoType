@@ -150,6 +150,7 @@ private:
 	TWeakObjectPtr<AActor> AutoNetShootTarget; // the dummy this side shoots at
 	TWeakObjectPtr<AActor> AutoNetMeleeTarget; // joiner: the dummy it punches
 	float AutoNetMeleeHealth = 0.f;
+	float AutoNetReviveSeen = 0.f; // joiner: the most of the host's revive bar it saw
 	float AutoNetShootHealth = 0.f;
 	int32 AutoNetShotPulls = 0; // joiner: OnDamaged fired from the host's replicated health
 	bool bAutoNetBound = false;
