@@ -163,6 +163,9 @@ private:
 	float AutoPvPHostHealth = 0.f;
 	int32 AutoPvPRejected = 0;
 	void UpdateAutoPvPTest(float DeltaTime);
+	float StressClock = 0.f, StressFrames = 0.f, StressWorst = 0.f, StressNext = 5.f;
+	int32 StressCorrections = 0;
+	void LogJoinerStress(float DeltaTime); // -WWOStress on a joiner
 	void UpdateAutoNetTest(float DeltaTime);
 	// -WWOPerfTest (WWOPerfTest.cpp): frame and GPU time at each map view, logged, then quit.
 	bool bPerfTest = false;

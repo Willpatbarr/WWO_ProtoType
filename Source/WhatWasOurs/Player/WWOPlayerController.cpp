@@ -329,6 +329,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 		if (AWWOCharacter* P = GetWWOCharacter()) UpdatePerfTest(P, FApp::GetDeltaTime());
 	}
 	else if (bAutoTestPvP) UpdateAutoPvPTest(FApp::GetDeltaTime());
+	else if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogJoinerStress(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
 	else if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
 }

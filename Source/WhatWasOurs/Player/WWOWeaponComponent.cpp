@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
 #include "Game/WWOGameState.h"
 #include "Characters/WWOBodyComponent.h"
@@ -218,12 +219,14 @@ float UWWOWeaponComponent::M(FName Stat, float Base) const
 
 bool UWWOWeaponComponent::Pressed(int32 Action) const
 {
+	if (const AWWOBotController* Bot = GetPlayer() ? GetPlayer()->GetBot() : nullptr) return Bot->IsHeld((EWWOAction)Action);
 	const AWWOPlayerController* PC = GetPlayer() ? GetPlayer()->GetWWOController() : nullptr;
 	return PC && PC->IsHeld((EWWOAction)Action);
 }
 
 bool UWWOWeaponComponent::JustPressed(int32 Action) const
 {
+	if (const AWWOBotController* Bot = GetPlayer() ? GetPlayer()->GetBot() : nullptr) return Bot->WasJustPressed((EWWOAction)Action);
 	const AWWOPlayerController* PC = GetPlayer() ? GetPlayer()->GetWWOController() : nullptr;
 	return PC && PC->WasJustPressed((EWWOAction)Action);
 }

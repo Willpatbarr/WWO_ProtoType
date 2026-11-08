@@ -256,8 +256,18 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
   predicts the same; each player's loadout still applies on both (the host's loadout copy). `SpeedScale` and
   `ExtraJumps` in a joiner's moves are capped at what its loadout allows (`MoveAutonomous`). Co-op is unchanged.
   Tested: host and joiner both move by walk 5 / sprint 10 / jump 2 in the PvP test.
-- **Not yet:** the Air with the PvP build (the newly signed build needs a one-time "Open Anyway" on each Mac);
-  a 12-player stress test (bots, or several copies of the game).
+- **Bots and the 12-player stress test: done.** `AWWOBotController` (an AI controller with a player state, so it
+  has a team and a score) drives a normal player character: it holds buttons and pushes the stick, and the
+  character and gun read those instead of a player controller's (`GetBot()` in `Pressed / JustPressed /
+  MoveInput`). It fights the nearest visible player of the other team (aims in at the chest with a little noise,
+  strafes, keeps 5-14 m, fires on a semi-auto rhythm) and otherwise runs between spawn spots, jumping now and then.
+  A bot shows its full body like another player. Host: `-WWOHostPvP -WWOBots=N` (up to 11) spawns them once the
+  match starts; `-WWOStress [-WWOStressTime=s]` logs the load every 5 s on the host (frame time, bandwidth per
+  joiner, packet loss, kills) and on a joiner (frame time, bandwidth, corrections).
+  Result (Mac mini, two editor copies, host + joiner + 10 bots, 95 s): 54 kills; host 8 ms a frame with the bots
+  alone, 16 ms with the joiner's copy sharing the GPU; joiner 15 ms; ~11 KB/s to the joiner, 0 packets lost,
+  1 correction a minute. Bandwidth grows with joiners (about 11 KB/s each at 12 players): fine on a LAN.
+- **Not yet:** the Air with the PvP build (the newly signed build needs a one-time "Open Anyway" on each Mac).
 - Builds are now signed with this Mac's Apple Development identity when there is one (`Tools/package_mac.sh`), so
   macOS keeps the Local Network permission across builds. The first signed build asks once on each Mac
   ("differs from previously opened versions": Open Anyway). Reading a signed sandboxed app's container from

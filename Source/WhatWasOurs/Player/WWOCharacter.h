@@ -295,6 +295,7 @@ public:
 	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
 
 	AWWOPlayerController* GetWWOController() const;
+	class AWWOBotController* GetBot() const; // a bot player (PvP stress tests), else null
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:

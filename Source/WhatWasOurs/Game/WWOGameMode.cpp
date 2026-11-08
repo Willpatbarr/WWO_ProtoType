@@ -1,4 +1,7 @@
 #include "Game/WWOGameMode.h"
+#include "Engine/NetConnection.h"
+#include "Engine/NetDriver.h"
+#include "Player/WWOBotController.h"
 #include "Allies/WWOAlly.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameState.h"
@@ -69,6 +72,7 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	FString Value;
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = FCString::Atof(*Value); // tests
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
+	if (bPvP && FParse::Value(FCommandLine::Get(), TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
@@ -273,6 +277,8 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 	}
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (bPvP) UpdateMatch(DeltaSeconds);
+	if (bPvP) UpdateBots();
+	if (FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogStress(DeltaSeconds);
 	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
 	{
 		FLinearColor Color;
@@ -548,4 +554,57 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 	ToMiddle.Z = 0.f;
 	if (!ToMiddle.IsNearlyZero()) Spot.SetRotation(ToMiddle.Rotation().Quaternion());
 	return Spot;
+}
+
+// --- Bots and load (PvP stress test) -------------------------------------------------------------
+
+void AWWOGameMode::UpdateBots()
+{
+	// One a frame, once the host's own player is in.
+	if (BotsSpawned >= BotsWanted || State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(this)->GetPlayer()) return;
+	AWWOBotController* Bot = GetWorld()->SpawnActor<AWWOBotController>();
+	if (!Bot) return;
+	++BotsSpawned;
+	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("Bot %d"), BotsSpawned));
+	BalanceTeam(Bot);
+	TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
+	RestartPlayer(Bot);
+	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
+	{
+		const FTransform Spot = PvPSpawnFor(Body);
+		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
+	}
+	UE_LOG(LogWWO, Display, TEXT("PvP: bot %d of %d joined (%s)"), BotsSpawned, BotsWanted, Bot->GetPawn() ? *Bot->GetPawn()->GetName() : TEXT("no body"));
+}
+
+void AWWOGameMode::LogStress(float DeltaSeconds)
+{
+	StressClock += DeltaSeconds;
+	StressFrames += 1.f;
+	StressWorst = FMath::Max(StressWorst, DeltaSeconds);
+	if (StressClock < StressNext) return;
+	StressNext += 5.f;
+	const UNetDriver* Driver = GetWorld()->GetNetDriver();
+	int32 Out = 0, In = 0, Lost = 0;
+	if (Driver)
+	{
+		for (const UNetConnection* C : Driver->ClientConnections)
+		{
+			if (!C) continue;
+			Out += C->OutBytesPerSecond;
+			In += C->InBytesPerSecond;
+			Lost += C->OutPacketsLost;
+		}
+	}
+	UE_LOG(LogWWO, Display, TEXT("Stress host: t=%.0f %d players (%d bots), frame avg %.1f ms worst %.1f ms, out %.1f KB/s in %.1f KB/s to %d joiners, lost %d, kills %d, %s"),
+		StressClock, UWWOWorldSubsystem::Get(this)->GetPlayers().Num(), BotsSpawned, 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
+		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, PvPKills, *GetGameState<AWWOGameState>()->StatusLine);
+	StressFrames = 0.f;
+	StressWorst = 0.f;
+	FString Value;
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
+	{
+		UE_LOG(LogWWO, Display, TEXT("Stress host: done"));
+		FPlatformMisc::RequestExit(false);
+	}
 }

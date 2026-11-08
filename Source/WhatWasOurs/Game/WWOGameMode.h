@@ -54,6 +54,11 @@ public:
 	void SetTeam(class AWWOPlayerState* PS, int32 Team);
 	void BalanceTeam(AController* Player); // the smaller team
 	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
+	// -WWOBots=N (PvP): N bot players join the match (AWWOBotController). -WWOStress logs the load.
+	int32 BotsWanted = 0, BotsSpawned = 0;
+	float StressClock = 0.f, StressFrames = 0.f, StressWorst = 0.f, StressNext = 5.f;
+	void UpdateBots();
+	void LogStress(float DeltaSeconds);
 
 	EWWOWaveState State = EWWOWaveState::Idle;
 	int32 Wave = 0;

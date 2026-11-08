@@ -10,6 +10,8 @@
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
+#include "Engine/NetConnection.h"
+#include "Player/WWOCharacterMovement.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Game/WWOGameMode.h"
@@ -157,5 +159,32 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 		GPvPRound = 1;
 		GPvPRound1 = this;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: joiner sees \"%s\""), *GS->StatusLine);
+	}
+}
+
+void AWWOPlayerController::LogJoinerStress(float DeltaTime)
+{
+	// A joiner in a busy match: its frame time, what arrives, and how often the host corrects it.
+	UWWOCharacterMovement::bLogNetCorrections = false;
+	StressClock += DeltaTime;
+	StressFrames += 1.f;
+	StressWorst = FMath::Max(StressWorst, DeltaTime);
+	if (StressClock < StressNext) return;
+	StressNext += 5.f;
+	const UNetConnection* Conn = GetNetConnection();
+	const int32 Now = UWWOCharacterMovement::NetCorrections;
+	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
+	UE_LOG(LogWWO, Display, TEXT("Stress joiner: t=%.0f %d players, frame avg %.1f ms worst %.1f ms, in %.1f KB/s out %.1f KB/s, lost %d, corrections %d, %s"),
+		StressClock, UWWOWorldSubsystem::Get(this)->GetPlayers().Num(), 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
+		Conn ? Conn->InBytesPerSecond / 1024.f : 0.f, Conn ? Conn->OutBytesPerSecond / 1024.f : 0.f, Conn ? Conn->InPacketsLost : 0, Now - StressCorrections,
+		GS ? *GS->StatusLine : TEXT("-"));
+	StressCorrections = Now;
+	StressFrames = 0.f;
+	StressWorst = 0.f;
+	FString Value;
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
+	{
+		UE_LOG(LogWWO, Display, TEXT("Stress joiner: done"));
+		FPlatformMisc::RequestExit(false);
 	}
 }

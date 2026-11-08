@@ -1,4 +1,5 @@
 #include "Player/WWOCharacter.h"
+#include "Player/WWOBotController.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Components/SphereComponent.h"
 #include "Flora/WWOFloraEffects.h"
@@ -112,7 +113,7 @@ void AWWOCharacter::BeginPlay()
 	if (Controller) Pitch = FMath::DegreesToRadians(Controller->GetControlRotation().Pitch);
 	Pitch = FMath::Clamp(FRotator::NormalizeAxis(FMath::RadiansToDegrees(Pitch)), -89.f, 89.f) * UE_PI / 180.f;
 	// Someone else's until a controller on this machine takes it (NotifyControllerChanged).
-	SetupVisuals(IsLocallyControlled());
+	SetupVisuals(IsLocallyControlled() && IsPlayerControlled());
 	// Online, a joiner's damage happens on the host (which charges its copy's Static Charge); the
 	// joiner's own copy charges from the damage it's told about, so both agree on when it's ready.
 	Health->OnDamaged.AddWeakLambda(this, [this](float Amount) { if (!HasAuthority()) Abilities->OnDamageTaken(Amount); });
@@ -121,7 +122,9 @@ void AWWOCharacter::BeginPlay()
 void AWWOCharacter::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
-	if (IsLocallyControlled() != bLocalVisuals) SetupVisuals(IsLocallyControlled());
+	// A bot is run here but isn't anyone's view: it shows its whole body like another player.
+	const bool bMine = IsLocallyControlled() && IsPlayerControlled();
+	if (bMine != bLocalVisuals) SetupVisuals(bMine);
 }
 
 void AWWOCharacter::SetupVisuals(bool bLocal)
@@ -264,8 +267,14 @@ float AWWOCharacter::M(FName Stat, float Base) const
 	return Loadout ? Loadout->Apply(Stat, Base) : Base;
 }
 
+AWWOBotController* AWWOCharacter::GetBot() const
+{
+	return Cast<AWWOBotController>(Controller);
+}
+
 bool AWWOCharacter::Pressed(EWWOAction Action) const
 {
+	if (const AWWOBotController* Bot = GetBot()) return Bot->IsHeld(Action);
 	// With a menu open (online, where menus don't pause) your buttons work the menu, not your character.
 	const AWWOPlayerController* PC = GetWWOController();
 	return PC && !PC->IsMenuOpen() && PC->IsHeld(Action);
@@ -273,12 +282,14 @@ bool AWWOCharacter::Pressed(EWWOAction Action) const
 
 bool AWWOCharacter::JustPressed(EWWOAction Action) const
 {
+	if (const AWWOBotController* Bot = GetBot()) return Bot->WasJustPressed(Action);
 	const AWWOPlayerController* PC = GetWWOController();
 	return PC && !PC->IsMenuOpen() && PC->WasJustPressed(Action);
 }
 
 FVector2D AWWOCharacter::MoveInput() const
 {
+	if (const AWWOBotController* Bot = GetBot()) return Bot->GetMoveAxis();
 	const AWWOPlayerController* PC = GetWWOController();
 	return PC ? PC->GetMoveAxis() : FVector2D::ZeroVector;
 }
