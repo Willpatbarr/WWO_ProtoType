@@ -432,6 +432,21 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(Mode, "TimeLimit", TEXT("Time limit (minutes)"), 0.f, 60.f, 1.f),
 		Row(Mode, "PvPRespawnTime", TEXT("Respawn delay (s)"), 0.5f, 15.f, 0.5f),
 	});
+	AddGlobal(TEXT("Bots"), {
+		Header(TEXT("Bot players in PvP (the host's settings count)")),
+		Row(Mode, "Bots", TEXT("Bots in the match (raising it adds them now)"), 0.f, 11.f, 1.f),
+		Row(Mode, "BotReaction", TEXT("Reaction time (s)"), 0.f, 1.5f, 0.05f),
+		Row(Mode, "BotAimError", TEXT("Aim error (degrees; 0 = perfect)"), 0.f, 8.f, 0.1f),
+		Row(Mode, "BotTurnSpeed", TEXT("Turn speed (degrees per second)"), 60.f, 720.f, 10.f),
+		Row(Mode, "BotViewAngle", TEXT("View cone (degrees)"), 30.f, 360.f, 5.f),
+		Row(Mode, "BotSightRange", TEXT("Sight range (m)"), 10.f, 150.f, 5.f),
+		Row(Mode, "BotMemory", TEXT("Hunts a lost enemy for (s)"), 0.f, 20.f, 0.5f),
+		Row(Mode, "BotAggression", TEXT("Aggression (0 = backs off early, 1 = never)"), 0.f, 1.f, 0.05f),
+		Row(Mode, "BotKitUse", TEXT("Grenade, ability and ult use (0 = never)"), 0.f, 1.f, 0.05f),
+		Header(TEXT("Teamwork")),
+		Row(Mode, "BotStickToPlayer", TEXT("Share of your team's bots that escort you (the rest pair up)"), 0.f, 1.f, 0.05f),
+		Row(Mode, "BotCalloutRange", TEXT("Callout range (m; teammates this near come to help; 0 = off)"), 0.f, 100.f, 5.f),
+	});
 	AddGlobal(TEXT("Waves"), {
 		Header(TEXT("Arena waves (changes to 'on' and the wave list apply on Restart run)")),
 		Row(Mode, "Enabled", TEXT("Waves on (0/1; 0 = sandbox)"), 0.f, 1.f, 1.f),

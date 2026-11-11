@@ -46,6 +46,18 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float KillTarget = 50.f;   // team kills to win (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
+	// Bot players (PvP; AWWOBotController reads these, the host's values count).
+	UPROPERTY(EditAnywhere, Category = "Bots") float Bots = 0.f;            // how many join (more can be added mid-match; -WWOBots=N too)
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotReaction = 0.35f;   // s before a bot acts on an enemy it just noticed
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotTurnSpeed = 260.f;  // degrees per second, the fastest it turns
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotAimError = 1.6f;    // degrees its aim wanders off the target (0 = perfect)
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotViewAngle = 120.f;  // degrees, the whole cone it sees in
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotSightRange = 60.f;  // m
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotMemory = 6.f;       // s it hunts an enemy it lost sight of
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotAggression = 0.5f;  // 0 = backs off to cover early, 1 = never backs off
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotKitUse = 1.f;       // 0-1: how readily it uses grenades, abilities and its ult
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotStickToPlayer = 0.5f; // 0-1: the share of a team's bots that escort its human (the rest pair up)
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotCalloutRange = 40.f;  // m: teammates this near hear about an enemy one of them sees (0 = no callouts)
 
 	bool bPvP = false; // this match is team deathmatch (the map was opened with ?pvp)
 	float MatchLeft = 0.f; // seconds
@@ -56,6 +68,8 @@ public:
 	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
 	// -WWOBots=N (PvP): N bot players join the match (AWWOBotController). -WWOStress logs the load.
 	int32 BotsWanted = 0, BotsSpawned = 0;
+	float BotLogNext = 10.f, BotLogClock = 0.f;
+	float StressGame = 0.f, StressRender = 0.f, StressGpu = 0.f; // ms summed since the last stress line
 	float StressClock = 0.f, StressFrames = 0.f, StressWorst = 0.f, StressNext = 5.f;
 	void UpdateBots();
 	void LogStress(float DeltaSeconds);

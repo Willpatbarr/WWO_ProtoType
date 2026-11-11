@@ -115,6 +115,7 @@ public:
 	TWeakObjectPtr<AActor> ReticleTarget;
 
 	void Equip(UWWOWeaponData* NewWeapon);
+	void RebindLoadout(); // follow the loadout this character uses now (see UWWOLoadoutSubsystem::Get)
 	bool IsAiming() const;
 	bool IsSwapping() const;
 	float LookMultiplier() const;
@@ -173,6 +174,7 @@ private:
 	UPROPERTY() FWWOFPArm ThrowArm;
 	FVector MagRest = FVector::ZeroVector; // Godot space
 	FDelegateHandle LoadoutHandle;
+	TWeakObjectPtr<class UWWOLoadoutSubsystem> BoundLoadout;
 
 	float AdsProgress = 0.f;
 	FVector2D LookDelta = FVector2D::ZeroVector;

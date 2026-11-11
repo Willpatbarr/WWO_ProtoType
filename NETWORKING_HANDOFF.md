@@ -294,3 +294,25 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
 - Slow / veil / entrench should be host state replicated to the owner (the owner's `SpeedScale` must agree
   with the host's, or corrections loop). Health already is.
 - Other effects (`AWWOFXActor`: grenade blasts, ability visuals) still exist only where they're made.
+
+## PvP bot AI (2026-11-11)
+
+`AWWOBotController` is no longer just a stress-test bot. All of it is in `Player/WWOBotController.cpp`; tuning is
+`AWWOGameMode`'s `Bot*` values (Settings, Bots). The "Bots" slider adds bots mid-match (`-WWOBots=N` still works).
+- **Moving and seeing:** navmesh paths (`WWONav::FindPath`); a view cone, sight range, fog and Veil; a reaction
+  delay; it hunts a lost enemy at its last known spot for `BotMemory` s; being shot by an unseen enemy reveals them.
+- **Aim and fire:** limited turn speed, an aim error that settles on target, fires only when its aim is on them;
+  taps / bursts / range by gun.
+- **Kit:** each bot has its own loadout (`GiveKit`: a `NetLoadout` like a joiner's, random flora, grenade, two
+  abilities, two guns). Melee, grenades (arc solved in `ThrowDirection`), abilities, ult, gun swaps (`PickGun`).
+  Bots press ability and ult buttons through `GetBot()` in `UWWOAbilityComponent` / `UWWOUltComponent`; the gun
+  follows the bot's loadout through `UWWOWeaponComponent::RebindLoadout`.
+- **Cover:** badly hurt (threshold from `BotAggression`), it runs to the nearest navmesh spot out of the enemy's
+  sight (`FindCover`).
+- **Team:** callouts to teammates in `BotCalloutRange` (`CallOut` / `HearCallout`; humans being shot, or the host
+  firing at someone, count: `ListenToHumans`), focus fire in the target score, and `PickLeader`: a share of the
+  team's bots (`BotStickToPlayer`) escort the human, the rest move in pairs.
+- **Checking it:** host with `-WWOHostPvP -WWOBots=11 -WWOStress -WWOStressTime=90`; the log has "Bots:",
+  "Bots kit:" and "Bots team:" lines every 10 s. With `-nullrhi` the whole match costs about 1.3 ms a frame.
+- Not done: joiners' `ReticleTarget` isn't known to the host (only the host's shooting calls bots in), bots don't
+  avoid a teammate's line of fire, and no objective play (there is only team deathmatch).

@@ -21,6 +21,9 @@
 #include "GameFramework/PlayerStart.h"
 #include "Engine/PlayerStartPIE.h"
 #include "EngineUtils.h"
+#include "RenderTimer.h"
+#include "UnrealClient.h"
+#include "RHI.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
@@ -561,7 +564,27 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 void AWWOGameMode::UpdateBots()
 {
 	// One a frame, once the host's own player is in.
-	if (BotsSpawned >= BotsWanted || State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(this)->GetPlayer()) return;
+	if (BotsSpawned > 0 && (BotLogClock += GetWorld()->GetDeltaSeconds()) >= BotLogNext)
+	{
+		// How the bots are getting on (every 10 s).
+		BotLogNext += 10.f;
+		int32 Count[4] = {}, Following = 0;
+		for (TActorIterator<AWWOBotController> It(GetWorld()); It; ++It)
+		{
+			++Count[FMath::Clamp(It->StateIndex(), 0, 3)];
+			Following += It->IsFollowing() ? 1 : 0;
+		}
+		UE_LOG(LogWWO, Display, TEXT("Bots team: %d following a leader, callouts acted on %d"), Following, AWWOBotController::Callouts);
+		UE_LOG(LogWWO, Display, TEXT("Bots: t=%.0f roam %d hunt %d fight %d retreat %d; sightings %d, shots %d, kills %d, paths %d (%d failed), stuck hops %d, gave up %d"),
+			BotLogClock, Count[0], Count[1], Count[2], Count[3], AWWOBotController::Sightings, AWWOBotController::ShotsFired, PvPKills,
+			AWWOBotController::PathsFound, AWWOBotController::PathsFailed, AWWOBotController::StuckJumps, AWWOBotController::Regoals);
+		UE_LOG(LogWWO, Display, TEXT("Bots kit: melees %d, grenades %d, abilities %d, ults %d, retreats %d (%d found no cover), gun swaps %d; stuck hops roaming %d hunting %d fighting %d retreating %d"),
+			AWWOBotController::Melees, AWWOBotController::Grenades, AWWOBotController::AbilitiesUsed, AWWOBotController::Ults,
+			AWWOBotController::Retreats, AWWOBotController::NoCover, AWWOBotController::Swaps,
+			AWWOBotController::StuckIn[0], AWWOBotController::StuckIn[1], AWWOBotController::StuckIn[2], AWWOBotController::StuckIn[3]);
+	}
+	const int32 Wanted = FMath::Max(BotsWanted, FMath::Clamp(FMath::RoundToInt(Bots), 0, 11));
+	if (BotsSpawned >= Wanted || State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(this)->GetPlayer()) return;
 	AWWOBotController* Bot = GetWorld()->SpawnActor<AWWOBotController>();
 	if (!Bot) return;
 	++BotsSpawned;
@@ -574,7 +597,7 @@ void AWWOGameMode::UpdateBots()
 		const FTransform Spot = PvPSpawnFor(Body);
 		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
 	}
-	UE_LOG(LogWWO, Display, TEXT("PvP: bot %d of %d joined (%s)"), BotsSpawned, BotsWanted, Bot->GetPawn() ? *Bot->GetPawn()->GetName() : TEXT("no body"));
+	UE_LOG(LogWWO, Display, TEXT("PvP: bot %d of %d joined (%s)"), BotsSpawned, Wanted, Bot->GetPawn() ? *Bot->GetPawn()->GetName() : TEXT("no body"));
 }
 
 void AWWOGameMode::LogStress(float DeltaSeconds)
@@ -582,6 +605,14 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	StressClock += DeltaSeconds;
 	StressFrames += 1.f;
 	StressWorst = FMath::Max(StressWorst, DeltaSeconds);
+	StressGame += FPlatformTime::ToMilliseconds(GGameThreadTime);
+	StressRender += FPlatformTime::ToMilliseconds(GRenderThreadTime);
+	StressGpu += FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles());
+	// -WWOProfileGPU: one GPU pass breakdown in the log, 12 s in (or -WWOProfileAt=seconds), and a screenshot at 10 s.
+	float ProfileAt = 12.f;
+	FParse::Value(FCommandLine::Get(), TEXT("WWOProfileAt="), ProfileAt);
+	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) GEngine->Exec(GetWorld(), TEXT("ProfileGPU"));
+	if (StressClock >= 10.f && StressClock - DeltaSeconds < 10.f && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
 	if (StressClock < StressNext) return;
 	StressNext += 5.f;
 	const UNetDriver* Driver = GetWorld()->GetNetDriver();
@@ -599,6 +630,9 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	UE_LOG(LogWWO, Display, TEXT("Stress host: t=%.0f %d players (%d bots), frame avg %.1f ms worst %.1f ms, out %.1f KB/s in %.1f KB/s to %d joiners, lost %d, kills %d, %s"),
 		StressClock, UWWOWorldSubsystem::Get(this)->GetPlayers().Num(), BotsSpawned, 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
 		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, PvPKills, *GetGameState<AWWOGameState>()->StatusLine);
+	UE_LOG(LogWWO, Display, TEXT("Stress threads: t=%.0f game %.1f ms, render %.1f ms, GPU %.1f ms (averages)"), StressClock,
+		StressGame / FMath::Max(StressFrames, 1.f), StressRender / FMath::Max(StressFrames, 1.f), StressGpu / FMath::Max(StressFrames, 1.f));
+	StressGame = StressRender = StressGpu = 0.f;
 	StressFrames = 0.f;
 	StressWorst = 0.f;
 	FString Value;

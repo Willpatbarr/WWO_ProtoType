@@ -238,7 +238,15 @@ void UWWOWeaponComponent::BeginPlay()
 	ModelRoot->SetupAttachment(this);
 	ModelRoot->RegisterComponent();
 	BuildArms();
-	if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this))
+	RebindLoadout();
+}
+
+void UWWOWeaponComponent::RebindLoadout()
+{
+	// Follow the loadout this character uses now (a bot gets its own after it spawns).
+	if (BoundLoadout.IsValid()) BoundLoadout->OnChanged.Remove(LoadoutHandle);
+	BoundLoadout = UWWOLoadoutSubsystem::Get(this);
+	if (UWWOLoadoutSubsystem* Loadout = BoundLoadout.Get())
 	{
 		Equip(Loadout->GetWeapon());
 		LoadoutHandle = Loadout->OnChanged.AddWeakLambda(this, [this, Loadout]()
@@ -270,7 +278,7 @@ void UWWOWeaponComponent::BeginPlay()
 
 void UWWOWeaponComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
-	if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this)) Loadout->OnChanged.Remove(LoadoutHandle);
+	if (BoundLoadout.IsValid()) BoundLoadout->OnChanged.Remove(LoadoutHandle);
 	Super::EndPlay(Reason);
 }
 

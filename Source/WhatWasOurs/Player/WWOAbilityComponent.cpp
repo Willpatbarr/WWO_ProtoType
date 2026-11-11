@@ -1,5 +1,6 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOPlayerController.h"
 #include "Weapons/WWOGrenade.h"
@@ -40,11 +41,13 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const AWWOPlayerController* PC = P ? P->GetWWOController() : nullptr;
-	if (!Loadout || !PC) return;
+	const AWWOBotController* Bot = P ? P->GetBot() : nullptr; // a bot presses its own buttons
+	if (!Loadout || (!PC && !Bot)) return;
 	for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 	{
 		UWWOAbilityData* A = Loadout->GetAbility(Slot);
-		const bool bPressed = PC->WasJustPressed(Slot == 0 ? EWWOAction::Ability1 : EWWOAction::Ability2);
+		const EWWOAction Button = Slot == 0 ? EWWOAction::Ability1 : EWWOAction::Ability2;
+		const bool bPressed = Bot ? Bot->WasJustPressed(Button) : PC->WasJustPressed(Button);
 		if (A && A->Kind == EWWOAbilityKind::Charged)
 		{
 			if (bPressed && !PlayerBusy() && Charge(A) >= 1.f)

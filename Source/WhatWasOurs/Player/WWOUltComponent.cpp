@@ -1,5 +1,6 @@
 #include "Player/WWOUltComponent.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOBotController.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
@@ -92,7 +93,7 @@ void UWWOUltComponent::Begin()
 	P->bUlting = true;
 	UCharacterMovementComponent* Move = P->GetCharacterMovement();
 	Move->Velocity = FVector(0, 0, FMath::Min(Move->Velocity.Z, 0.f));
-	const bool bMine = P->IsLocallyControlled(); // the camera and first-person gun are only the player's own
+	const bool bMine = P->IsLocallyControlled() && !P->GetBot(); // the camera and first-person gun are only the player's own
 	if (bMine) P->Weapon->SetVisibility(false, true);
 	if (bMine) P->Body->SetShadowOnly(false); // the whole body (and its grafts) shows in third person
 	Clock = 0.f;
@@ -194,7 +195,7 @@ void UWWOUltComponent::Release()
 void UWWOUltComponent::Finish()
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	if (P->IsLocallyControlled())
+	if (P->IsLocallyControlled() && !P->GetBot()) // a bot has no camera or first-person gun
 	{
 		UltCamera->Deactivate();
 		P->Camera->Activate();
@@ -213,7 +214,10 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		if (Charge < 1.f) Charge = FMath::Min(Charge + DeltaSeconds / FMath::Max(ChargeTime, 0.1f), 1.f);
 		AWWOPlayerController* PC = P->GetWWOController();
-		if (PC && P->IsLocallyControlled() && (PC->WasJustPressed(EWWOAction::Ult) || PC->ConsumeChord(EWWOChord::Ult)) && ActivateUlt()) // F, or L1 + R1
+		const AWWOBotController* Bot = P->GetBot(); // a bot presses its own button
+		const bool bPressed = Bot ? Bot->WasJustPressed(EWWOAction::Ult)
+			: (PC && P->IsLocallyControlled() && (PC->WasJustPressed(EWWOAction::Ult) || PC->ConsumeChord(EWWOChord::Ult))); // F, or L1 + R1
+		if (bPressed && ActivateUlt())
 		{
 			if (GetNetMode() == NM_Client) P->ServerActivateUlt(); // the host runs it too (the blast, fog or roots are its)
 		}
