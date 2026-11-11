@@ -20,6 +20,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Player/WWOCharacter.h"
 
 namespace
 {
@@ -124,6 +125,24 @@ void UWWOBodyComponent::BeginPlay()
 	{
 		if (!Mesh->GetSkeletalMeshAsset()) Mesh->SetSkeletalMeshAsset(Manny);
 	}
+	// Players can wear another mesh built on the mannequin's skeleton (Config/CharacterModels.json,
+	// "player_mesh"): it takes the mannequin's place and its animations directly, with its own materials.
+	bool bOwnMaterials = false;
+	if (GetOwner()->IsA<AWWOCharacter>())
+	{
+		FString Text, Path;
+		TSharedPtr<FJsonObject> Json;
+		if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))
+			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) && Json.IsValid() && Json->TryGetStringField(TEXT("player_mesh"), Path) && !Path.IsEmpty())
+		{
+			if (USkeletalMesh* Own = LoadObject<USkeletalMesh>(nullptr, *Path))
+			{
+				Mesh->SetSkeletalMeshAsset(Own);
+				bOwnMaterials = true;
+			}
+			else UE_LOG(LogWWO, Warning, TEXT("Character models: player_mesh '%s' not found"), *Path);
+		}
+	}
 	Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Mesh->SetAnimInstanceClass(UWWOBodyAnimInstance::StaticClass());
 	Mesh->SetRelativeScale3D(FVector(ModelScale));
@@ -132,7 +151,7 @@ void UWWOBodyComponent::BeginPlay()
 	for (int32 i = 0; i < Mesh->GetNumMaterials(); ++i)
 	{
 		// The mannequin's own two materials, with the paint tint picked per region (M_WWO_Body).
-		if (i < UE_ARRAY_COUNT(BodyMaterials))
+		if (!bOwnMaterials && i < UE_ARRAY_COUNT(BodyMaterials))
 		{
 			if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, BodyMaterials[i])) Mesh->SetMaterial(i, M);
 		}
@@ -161,7 +180,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	UIKRetargeter* Retargeter = Asset ? LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *K, *K)) : nullptr;
 	if (!Asset || !Retargeter)
 	{
-		if (!Key.IsNone()) UE_LOG(LogWWO, Warning, TEXT("Character model '%s': no mesh or retargeter (Config/CharacterModels.json, Tools/build_retargeters.py)"), *K);
+		if (Config.IsValid()) UE_LOG(LogWWO, Warning, TEXT("Character model '%s': no mesh or retargeter (Config/CharacterModels.json, Tools/build_retargeters.py)"), *K);
 		UpdateModelExtras();
 		return;
 	}
@@ -230,7 +249,19 @@ void UWWOBodyComponent::SetHighlight(float Alpha)
 void UWWOBodyComponent::UpdateModelExtras()
 {
 	// With a model the mannequin only drives the animation (it keeps ticking while hidden).
-	if (USkeletalMeshComponent* Driver = GetMesh()) Driver->SetVisibility(Model == nullptr, false);
+	if (USkeletalMeshComponent* Driver = GetMesh())
+	{
+		Driver->SetVisibility(Model == nullptr, false);
+		// Hidden behind a model it casts no shadow of its own (the model's is the body's shadow; two
+		// skinned shadows per character cost a few ms of shadow-map drawing in a full PvP match).
+		// Your own first-person body is the exception: its model is owner-hidden, so the mannequin's is its shadow.
+		const bool bCast = Model == nullptr || bShadowOnly;
+		if (Driver->bCastHiddenShadow != bCast)
+		{
+			Driver->bCastHiddenShadow = bCast;
+			Driver->MarkRenderStateDirty();
+		}
+	}
 	for (UPrimitiveComponent* C : Grafts)
 	{
 		if (C) C->SetVisibility(!Model || bModelGrafts);
@@ -426,6 +457,7 @@ void UWWOBodyComponent::SetShadowOnly(bool bOn)
 	{
 		Mesh->SetOwnerNoSee(bOn);
 		Mesh->FirstPersonPrimitiveType = bOn ? EFirstPersonPrimitiveType::WorldSpaceRepresentation : EFirstPersonPrimitiveType::None;
+		Mesh->bCastHiddenShadow = Model == nullptr || bOn; // see UpdateModelExtras
 		Mesh->MarkRenderStateDirty();
 	}
 	ApplyShadowOnly(Model);

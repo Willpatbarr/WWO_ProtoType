@@ -134,6 +134,7 @@ void UWWOUltComponent::Begin()
 		OrbLight->SetIntensity(2.f * 1500.f);
 		OrbLight->SetAttenuationRadius(300.f);
 		OrbLight->SetUsingAbsoluteScale(true);
+		OrbLight->SetCastShadows(false); // like every other effect light: a shadowed point light redraws shadow maps around it
 		OrbLight->RegisterComponent();
 		PlaceOrb();
 	}
@@ -166,6 +167,9 @@ void UWWOUltComponent::Release()
 	{
 		if (Orb)
 		{
+			// The light goes with the orb (destroying the orb alone left its light behind, lit and
+			// casting shadows, after every Blast ult).
+			if (OrbLight) OrbLight->DestroyComponent();
 			Orb->DestroyComponent();
 			Orb = nullptr;
 			OrbLight = nullptr;

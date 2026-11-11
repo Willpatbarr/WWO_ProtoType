@@ -22,6 +22,9 @@
 #include "Engine/PlayerStartPIE.h"
 #include "EngineUtils.h"
 #include "RenderTimer.h"
+#include "Flora/WWOSporeFog.h"
+#include "UObject/UObjectIterator.h"
+#include "Components/StaticMeshComponent.h"
 #include "UnrealClient.h"
 #include "RHI.h"
 #include "Kismet/GameplayStatics.h"
@@ -590,12 +593,26 @@ void AWWOGameMode::UpdateBots()
 	++BotsSpawned;
 	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("Bot %d"), BotsSpawned));
 	BalanceTeam(Bot);
+	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
+	// steady scene of moving characters for performance tests).
+	if (FParse::Param(FCommandLine::Get(), TEXT("WWOBotsPeace"))) SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
 	TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
 	RestartPlayer(Bot);
 	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
 	{
 		const FTransform Spot = PvPSpawnFor(Body);
 		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
+		// -WWOBotsLineUp: a repeatable scene for performance tests. The bots stand in rows of four in
+		// front of the host, facing it, and do nothing.
+		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer(); Host && FParse::Param(FCommandLine::Get(), TEXT("WWOBotsLineUp")))
+		{
+			Bot->bParked = true;
+			const int32 Index = BotsSpawned - 1;
+			const FVector Forward = Host->GetActorForwardVector(), Right = Host->GetActorRightVector();
+			const FVector At = Host->GetActorLocation() + Forward * (500.f + (Index / 4) * 220.f) + Right * ((Index % 4) - 1.5f) * 170.f + FVector(0, 0, 150.f);
+			Body->TeleportTo(At, (-Forward).Rotation(), false, true);
+			Body->SetViewRotation(0.f, (-Forward).Rotation().Yaw);
+		}
 	}
 	UE_LOG(LogWWO, Display, TEXT("PvP: bot %d of %d joined (%s)"), BotsSpawned, Wanted, Bot->GetPawn() ? *Bot->GetPawn()->GetName() : TEXT("no body"));
 }
@@ -608,11 +625,44 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	StressGame += FPlatformTime::ToMilliseconds(GGameThreadTime);
 	StressRender += FPlatformTime::ToMilliseconds(GRenderThreadTime);
 	StressGpu += FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles());
-	// -WWOProfileGPU: one GPU pass breakdown in the log, 12 s in (or -WWOProfileAt=seconds), and a screenshot at 10 s.
+	// -WWOProfileGPU: one GPU pass breakdown in the log, 12 s in (or -WWOProfileAt=seconds), and a screenshot 2 s before it.
+	// -WWOFogTest=N: N thick Veil-sized spore fogs around the host 3 s in (-WWOFogAhead=meters: how far in front).
+	int32 FogCount = 0;
+	if (StressClock >= 3.f && StressClock - DeltaSeconds < 3.f && FParse::Value(FCommandLine::Get(), TEXT("WWOFogTest="), FogCount))
+	{
+		float Ahead = 0.f;
+		FParse::Value(FCommandLine::Get(), TEXT("WWOFogAhead="), Ahead);
+		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer())
+		{
+			for (int32 i = 0; i < FogCount; ++i)
+			{
+				AWWOSporeFog::SpawnFog(GetWorld(), Host->GetActorLocation() + Host->GetActorForwardVector() * (Ahead + i * 2.f) * WWO::M, 7.f, 600.f, true);
+			}
+		}
+	}
 	float ProfileAt = 12.f;
 	FParse::Value(FCommandLine::Get(), TEXT("WWOProfileAt="), ProfileAt);
+	if (StressClock >= ProfileAt - 2.f && StressClock - DeltaSeconds < ProfileAt - 2.f && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
+	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU")))
+	{
+		// What is casting shadows and can move (each one makes the sun's shadow map redraw around it).
+		TMap<FString, FVector3f> Casters; // name -> count, biggest radius (m), visible count
+		for (TObjectIterator<UPrimitiveComponent> It; It; ++It)
+		{
+			const UPrimitiveComponent* C = *It;
+			if (C->GetWorld() != GetWorld() || !C->IsRegistered() || !C->CastShadow || C->Mobility != EComponentMobility::Movable) continue;
+			if (!C->IsVisible() && !C->bCastHiddenShadow) continue;
+			const UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(C);
+			const FString Name = FString::Printf(TEXT("%s / %s / %s"), *GetNameSafe(C->GetOwner() ? C->GetOwner()->GetClass() : nullptr), *C->GetClass()->GetName(),
+				SM ? *GetNameSafe(SM->GetStaticMesh()) : TEXT("-"));
+			FVector3f& V = Casters.FindOrAdd(Name);
+			V.X += 1.f;
+			V.Y = FMath::Max(V.Y, (float)C->Bounds.SphereRadius / WWO::M);
+		}
+		Casters.ValueSort([](const FVector3f& A, const FVector3f& B) { return A.X * A.Y > B.X * B.Y; });
+		for (const auto& Pair : Casters) UE_LOG(LogWWO, Display, TEXT("Shadow caster (movable): %3.0f x %s, biggest radius %.1f m"), Pair.Value.X, *Pair.Key, Pair.Value.Y);
+	}
 	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) GEngine->Exec(GetWorld(), TEXT("ProfileGPU"));
-	if (StressClock >= 10.f && StressClock - DeltaSeconds < 10.f && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
 	if (StressClock < StressNext) return;
 	StressNext += 5.f;
 	const UNetDriver* Driver = GetWorld()->GetNetDriver();
@@ -632,6 +682,16 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, PvPKills, *GetGameState<AWWOGameState>()->StatusLine);
 	UE_LOG(LogWWO, Display, TEXT("Stress threads: t=%.0f game %.1f ms, render %.1f ms, GPU %.1f ms (averages)"), StressClock,
 		StressGame / FMath::Max(StressFrames, 1.f), StressRender / FMath::Max(StressFrames, 1.f), StressGpu / FMath::Max(StressFrames, 1.f));
+	// What's alive right now (effects, grenades, fogs...), to line slow stretches up with.
+	TMap<FString, int32> AliveNow;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		const FString ClassName = It->GetClass()->GetName();
+		if (ClassName.StartsWith(TEXT("WWO")) && !It->IsA<APawn>() && !It->IsA<AController>() && !It->IsA<AInfo>()) ++AliveNow.FindOrAdd(ClassName);
+	}
+	FString AliveText;
+	for (const auto& Pair : AliveNow) AliveText += FString::Printf(TEXT(" %s %d"), *Pair.Key.RightChop(3), Pair.Value);
+	UE_LOG(LogWWO, Display, TEXT("Stress alive: t=%.0f%s"), StressClock, AliveText.IsEmpty() ? TEXT(" nothing") : *AliveText);
 	StressGame = StressRender = StressGpu = 0.f;
 	StressFrames = 0.f;
 	StressWorst = 0.f;

@@ -14,6 +14,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
+#include "Misc/CommandLine.h"
 #include "Engine/World.h"
 
 int32 AWWOBotController::Sightings = 0;
@@ -322,6 +323,8 @@ void AWWOBotController::PickLeader(const AWWOCharacter* Me)
 	// StickToPlayer) escort the nearest living human on it; the rest pair up, every second one
 	// following the one before it. Leaders (and anyone whose leader is dead) roam by themselves.
 	Leader = nullptr;
+	static const bool bPeace = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsPeace")); // performance tests: everyone roams alone
+	if (bPeace) return;
 	const FBotTuning T = TuningFor(this);
 	const int32 Team = UWWOWorldSubsystem::TeamOf(Me);
 	AWWOCharacter* Human = nullptr;
@@ -592,6 +595,21 @@ void AWWOBotController::Tick(float DeltaSeconds)
 		return;
 	}
 	if (Me->bUlting) return; // the ult plays out by itself
+	if (bParked)
+	{
+		// -WWOBotsMarch: parked bots pace side to side (a repeatable moving scene).
+		static const bool bMarch = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsMarch"));
+		Clock += DeltaSeconds;
+		if (bMarch) Move = FVector2D(FMath::Fmod(Clock, 3.f) < 1.5f ? 1.f : -1.f, 0.f);
+		// -WWOBotsStopGo: a second of walking, three of standing still, and back (how players move in a fight).
+		static const bool bStopGo = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsStopGo"));
+		if (bStopGo)
+		{
+			const float Phase = FMath::Fmod(Clock, 8.f);
+			Move = FVector2D(Phase < 1.f ? 1.f : (Phase >= 4.f && Phase < 5.f ? -1.f : 0.f), 0.f);
+		}
+		return;
+	}
 	Clock += DeltaSeconds;
 	const FBotTuning T = TuningFor(this);
 	const FVector Eye = Me->EyeLocation();

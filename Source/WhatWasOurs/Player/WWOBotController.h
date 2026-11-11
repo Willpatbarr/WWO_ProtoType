@@ -55,6 +55,7 @@ public:
 	static int32 Callouts;   // callouts a teammate acted on
 	AWWOCharacter* GetFoe() const { return Foe.Get(); }
 	bool IsFollowing() const { return Leader.IsValid(); }
+	bool bParked = false; // -WWOBotsLineUp (performance tests): it stands where it was put and does nothing
 
 private:
 	// --- Buttons and stick (what the character reads) ---

@@ -260,6 +260,14 @@ void AWWOPlayerController::OnMove(const FInputActionInstance& Instance)
 	MoveValue = Instance.GetValue().Get<FVector2D>();
 }
 
+// Test runs (-WWOStress) ignore the mouse and sticks: the window opens in the background, and the
+// camera following the mouse there would make every run look at a different scene.
+static bool TestRunIgnoresInput()
+{
+	static const bool bIgnore = FParse::Param(FCommandLine::Get(), TEXT("WWOStress"));
+	return bIgnore;
+}
+
 void AWWOPlayerController::OnLook(const FInputActionInstance& Instance)
 {
 	LookValue = Instance.GetValue().Get<FVector2D>();
@@ -267,6 +275,7 @@ void AWWOPlayerController::OnLook(const FInputActionInstance& Instance)
 
 void AWWOPlayerController::OnMouseLook(const FInputActionInstance& Instance)
 {
+	if (TestRunIgnoresInput()) return;
 	if (IsMenuOpen() || IsPaused()) return;
 	AWWOCharacter* Player = GetWWOCharacter();
 	if (!Player || Player->bUlting) return;
@@ -282,13 +291,13 @@ void AWWOPlayerController::OnMouseLook(const FInputActionInstance& Instance)
 
 FVector2D AWWOPlayerController::GetMoveAxis() const
 {
-	if (IsMenuOpen()) return FVector2D::ZeroVector;
+	if (IsMenuOpen() || TestRunIgnoresInput()) return FVector2D::ZeroVector;
 	return MoveValue.GetClampedToMaxSize(1.f);
 }
 
 FVector2D AWWOPlayerController::GetLookAxis() const
 {
-	if (IsMenuOpen()) return FVector2D::ZeroVector;
+	if (IsMenuOpen() || TestRunIgnoresInput()) return FVector2D::ZeroVector;
 	return LookValue.GetClampedToMaxSize(1.f);
 }
 
