@@ -558,7 +558,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		const int32 Steps = Radar(Pl, Lit);
 		const float R = Pl->RadarSize, Hub = R * 0.2f;
 		const FVector2D Mid(24.f + R, 24.f + R);
-		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(0.9f, 0.62f, 0.6f), You(0.68f, 0.83f, 1.f); // pale (these darken a good deal on the way to the screen)
+		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(0.92f, 0.45f, 0.41f), You(0.68f, 0.83f, 1.f); // pale (these darken a good deal on the way to the screen)
 		constexpr float Gap = 0.035f; // radians left clear each side of a section
 		constexpr int32 Slices = 6;
 		// A piece of a ring: between two radii, across one section (less the gaps).
