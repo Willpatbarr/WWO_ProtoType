@@ -26,3 +26,6 @@ Build/Mac/*.PackageVersionCounter
 __pycache__/
 *.pyc
 Tools/*.log
+
+# A model imported for local testing only (Tools/import_test_gun.py)
+Content/WWO/Test/

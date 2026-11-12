@@ -53,6 +53,34 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 			for (UWWOWeaponData* W : L->Weapons) if (W && W->Id == FName(*Gun)) L->EquipWeapon(W);
 		}
 	}
+	// -WWOTesterFrames=N (run with -benchmark -fps=60 so every frame is 1/60 s): aim in, fire one
+	// shot, and save N frames in a row from just before it (87_frame_000 ...), to lay beside footage.
+	static int32 Frames = -1, FrameAt = 0;
+	if (Frames < 0) { Frames = 0; FParse::Value(FCommandLine::Get(), TEXT("WWOTesterFrames="), Frames); }
+	if (Frames > 0)
+	{
+		static bool bStrafeToo = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterStrafe"));
+		static bool bNoShot = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterNoShot"));
+		if (Crossed(6.f)) { FiringTester->ResetPlayer(); if (bStrafeToo) FiringTester->SetStrafe(true); }
+		ScriptHold(EWWOAction::Aim, TesterClock >= 6.2f);
+		static bool bFired = false;
+		if (TesterClock >= 7.f)
+		{
+			if (FrameAt == 9 && !bFired && !bNoShot) { ScriptPress(EWWOAction::Fire); bFired = true; }
+			ScriptHold(EWWOAction::Fire, !bNoShot && FrameAt >= 9 && FrameAt <= 11); // (a held-trigger gun reads the hold)
+			if (FrameAt < Frames) Shot(*FString::Printf(TEXT("87_frame_%03d"), FrameAt));
+			else if (FrameAt == Frames + 3)
+			{
+				if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); L && TesterGunBefore.IsValid()) L->EquipWeapon(TesterGunBefore.Get());
+				if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this)) L->FlushSave();
+				if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
+				UE_LOG(LogWWO, Display, TEXT("AutoTest tester: %d frames saved"), Frames);
+				WWOTest::Exit();
+			}
+			++FrameAt;
+		}
+		return;
+	}
 	if (Crossed(6.f))
 	{
 		int32 Dummies = 0;

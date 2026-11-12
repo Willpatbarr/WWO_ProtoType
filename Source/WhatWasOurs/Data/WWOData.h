@@ -91,6 +91,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickReturn = -1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float AdsKick = -1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickPush = 1.f;
+	// The kick turns the gun about a point below and ahead of the sight (cm; the wrist, more or
+	// less), so the rear of the gun drops as the muzzle comes up. 0, 0: about the sight itself.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickPivotDown = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickPivotAhead = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickSide = 0.f; // cm to the right at the peak
+	// 1: the view's recoil rises and falls along the curves read off Destiny 2 footage (quick then
+	// steady up over the rise time; slow, faster, then tailing off down over the fall-back time).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float RecoilShape = 0.f;
 	// What marks the aim point when aimed in. It is drawn by the HUD at the point shots go to, so
 	// nothing the gun does moves it: 0 none (a scope draws its own), 1 a dot, 2 iron-sight marks.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float AdsMark = -1.f;

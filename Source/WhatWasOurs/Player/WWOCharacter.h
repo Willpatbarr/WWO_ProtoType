@@ -409,6 +409,8 @@ private:
 
 	// Recoil (radians)
 	float KickLeft = 0.f, KickYawLeft = 0.f, KickRate = 0.f;
+	bool bKickShaped = false; // the rise follows RiseShape, not a steady rate
+	float KickShapeTotal = 0.f, KickShapeTime = 0.1f, KickShapeAge = 0.f;
 	float RecoilRest = 0.f;
 	bool bRecovering = false;
 	float RecoveryTime = 0.12f, RecoveryCurve = 0.f, RecoveryAge = 0.f, RecoveryDrop = 0.f, RecoveryLeft = 0.f;

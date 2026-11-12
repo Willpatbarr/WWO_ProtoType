@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "WhatWasOurs.h"
 #include "Weapons/WWOPerks.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOBotController.h"
@@ -95,6 +96,18 @@ namespace
 			bRead = true;
 			FString Text;
 			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
+			// Saved/WWO/WeaponModels.local.json (this machine only, never in git or a build): its
+			// "weapons" entries replace the shipped ones, for trying a model that isn't the game's.
+			TSharedPtr<FJsonObject> Local;
+			const TSharedPtr<FJsonObject>* Ours;
+			const TSharedPtr<FJsonObject>* Theirs;
+			if (Json.IsValid() && FFileHelper::LoadFileToString(Text, *(FPaths::ProjectSavedDir() / TEXT("WWO/WeaponModels.local.json")))
+				&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Local) && Local.IsValid()
+				&& Json->TryGetObjectField(TEXT("weapons"), Ours) && Local->TryGetObjectField(TEXT("weapons"), Theirs))
+			{
+				for (const auto& Pair : (*Theirs)->Values) (*Ours)->SetField(Pair.Key, Pair.Value);
+				UE_LOG(LogWWO, Display, TEXT("Weapon models: %d replaced by Saved/WWO/WeaponModels.local.json"), (*Theirs)->Values.Num());
+			}
 		}
 		if (!Json.IsValid()) return nullptr;
 		const TSharedPtr<FJsonObject>* Weapons;
@@ -610,8 +623,11 @@ void UWWOWeaponComponent::BuildModel()
 		}
 	}
 
-	// The equipped mods' parts, each at its slot's anchor (or the part's own "at").
-	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	// The equipped mods' parts, each at its slot's anchor (or the part's own "at"). A model can say
+	// "no_mods": true to show none (a model that has its own sights and barrel).
+	bool bNoMods = false;
+	if (Model.IsValid()) Model->TryGetBoolField(TEXT("no_mods"), bNoMods);
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); L && !bNoMods)
 	{
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
 		{
@@ -1084,7 +1100,7 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 	KickAge += DeltaSeconds;
 	{
 		const float Back = FMath::Clamp((KickAge - FMath::Max(Weapon->KickHold, 0.f)) / FMath::Max(Weapon->KickReturn, 0.01f), 0.f, 1.f);
-		Kick = (1.f - Back) * (1.f - Back);
+		Kick = 1.f - Back * Back * (3.f - 2.f * Back); // slow off the top, slow onto rest
 	}
 	FlashTime -= DeltaSeconds;
 	bFlashVisible = FlashTime > 0.f; // decided before this frame's shot, like Godot (a new flash shows from the next frame)
@@ -1319,8 +1335,10 @@ void UWWOWeaponComponent::Shoot()
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
 	float RecoveryTime = Weapon->RecoilRecoveryTime;
 	if (bSynced) RecoveryTime = 60.f / FMath::Max(Weapon->FireRate, 1.f) - Weapon->RecoilKickTime + Weapon->RecoilRecoveryDelay;
+	const bool bShaped = Weapon->RecoilShape >= 0.5f; // the measured rise and fall, over the rise and fall-back times
+	if (bShaped) RecoveryTime = Weapon->RecoilRecoveryTime;
 	P->AddRecoil(FMath::DegreesToRadians(Weapon->RecoilUp), FMath::DegreesToRadians(FMath::FRandRange(-Weapon->RecoilSide, Weapon->RecoilSide)),
-		Weapon->RecoilKickTime, Weapon->RecoilRecovery, RecoveryTime, bSynced ? Weapon->RecoilRecoveryCurve : 0.f);
+		Weapon->RecoilKickTime, Weapon->RecoilRecovery, RecoveryTime, bShaped ? -1.f : (bSynced ? Weapon->RecoilRecoveryCurve : 0.f));
 	Rumble(Weapon->RumbleWeak, Weapon->RumbleStrong, Weapon->RumbleTime);
 	StartPunch(Weapon->PunchFov, Weapon->PunchRoll * (FMath::FRand() < 0.5f ? 1.f : -1.f), Weapon->PunchTime);
 }
@@ -1431,7 +1449,9 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Rot.Z += FMath::DegreesToRadians(Weapon->StrafeRoll) * StrafeLean;
 	const float KickNow = Kick * 0.06f * FMath::Lerp(1.f, FMath::Clamp(Weapon->AdsKick, 0.f, 1.f), AdsAmount); // how much is left aimed in is the frame's
 	Rot.X += KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
-	Rot.Y -= KickNow * Weapon->HorizontalKick; // Godot yaw: + turns left, so + kick swings the muzzle right
+	// The sideways part (the swing and the shift) comes back sooner than the tilt: it follows the
+	// kick squared, so half way down the tilt it is a quarter of what it was (as in the footage).
+	Rot.Y -= KickNow * Kick * Weapon->HorizontalKick; // Godot yaw: + turns left, so + kick swings the muzzle right
 	// The low reticle: the gun (drawn with its own FOV) points at it, and aimed in, its sight point
 	// (the model's origin) moves down onto it.
 	const float GunDrop = P->ReticleAngleForFov(Weapon->ViewmodelFov);
@@ -1456,6 +1476,15 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Pos += ThrowOffset * ThrowAmount;
 	Rot += ThrowRotation * ThrowAmount;
 	Pos.Z += Kick * Weapon->KickPush * 0.01f; // back toward you at the peak
+	Pos.X += Kick * Kick * Weapon->KickSide * 0.01f;
+	{
+		// The kick's turn is about a point below and ahead of the sight, not the sight itself: the
+		// sight point swings down and back around it as the muzzle comes up.
+		const float Turn = KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
+		const float Down = Weapon->KickPivotDown * 0.01f, Ahead = Weapon->KickPivotAhead * 0.01f;
+		Pos.Y += -Ahead * FMath::Sin(Turn) - Down * (1.f - FMath::Cos(Turn));
+		Pos.Z += -Ahead * (1.f - FMath::Cos(Turn)) + Down * FMath::Sin(Turn);
+	}
 	// Weapon swap: dip down and back up.
 	SwapLeft = FMath::Max(SwapLeft - DeltaSeconds, 0.f);
 	const float SwapAmount = SwapLeft > 0.f ? FMath::Sin(UE_PI * SwapLeft / SwapLength) : 0.f;

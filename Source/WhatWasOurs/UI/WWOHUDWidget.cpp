@@ -343,9 +343,21 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			if (W->AdsMark < 1.5f) P.Dot(AimAt, FMath::Max(Gun->AdsDotSize, 0.5f), Mark);
 			else
 			{
-				P.Dot(AimAt, 1.3f, Mark);
-				P.Line(AimAt + FVector2D(-14.f, 0.f), AimAt + FVector2D(-8.f, 0.f), Mark, 1.5f);
-				P.Line(AimAt + FVector2D(8.f, 0.f), AimAt + FVector2D(14.f, 0.f), Mark, 1.5f);
+				// Iron-sight marks sit on the aim point, but they belong to the sight: while the gun is
+				// flipped up by a shot they swing away with it (down and to the right), as in the footage.
+				const float Flip = W->AdsKick > 0.2f ? Gun->KickAmount() : 0.f; // (a gun that barely kicks aimed in keeps them still)
+				const FVector2D At = AimAt + FVector2D(0.278f, 0.143f) * Size.Y * Flip;
+				Mark.A *= 1.f - 0.5f * Flip;
+				// A pip between two brackets, ( . ), in the sight's own red (blue over a teammate).
+				if (Mark.B < 0.5f || Mark.R > 0.9f) { const float A = Mark.A; Mark = FLinearColor(1.f, 0.3f, 0.3f, A); }
+				const float Gap = 0.03f * Size.Y, Tall = 0.011f * Size.Y, Bow = 0.004f * Size.Y;
+				P.Dot(At, 1.4f, Mark);
+				for (const float Side : { -1.f, 1.f })
+				{
+					const FVector2D Mid = At + FVector2D(Side * Gap, 0.f);
+					P.Line(Mid + FVector2D(-Side * Bow, -Tall), Mid, Mark, 1.5f);
+					P.Line(Mid, Mid + FVector2D(-Side * Bow, Tall), Mark, 1.5f);
+				}
 			}
 		}
 	}

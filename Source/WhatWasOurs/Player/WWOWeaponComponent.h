@@ -237,6 +237,8 @@ private:
 	float ReadyLeft = 0.f;
 	bool bReadyShotQueued = false;
 	float FireCooldown = 0.f;
+	public: float KickAmount() const { return Kick; } // 0-1, for the HUD's iron-sight marks
+	private:
 	float Kick = 0.f;       // the gun model's kick now, 1 at the shot (looks only)
 	float KickAge = 1000.f; // s since the shot that started it
 	float StrafeLean = 0.f; // -1 to 1: how hard you are moving left or right, eased

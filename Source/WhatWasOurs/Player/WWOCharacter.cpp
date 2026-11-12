@@ -1536,6 +1536,22 @@ void AWWOCharacter::ResetRecoil()
 	bRecovering = false;
 }
 
+namespace
+{
+	// The shaped recoil (UWWOWeaponData::RecoilShape): how a hand cannon's view moves in Destiny 2,
+	// read off 60 fps footage. The rise is quick then steady (it reaches the top in the kick time);
+	// the fall starts slowly, speeds up, and tails off (it takes the recovery time).
+	const float RiseShape[] = { 0.f, 0.288f, 0.475f, 0.644f, 0.729f, 0.797f, 0.864f, 0.932f, 1.f };
+	const float FallShape[] = { 1.f, 0.915f, 0.83f, 0.746f, 0.627f, 0.458f, 0.356f, 0.271f, 0.186f, 0.136f, 0.105f, 0.08f, 0.055f, 0.035f, 0.015f, 0.f };
+	template <int32 N>
+	float Shape(const float (&Table)[N], float Progress)
+	{
+		const float At = FMath::Clamp(Progress, 0.f, 1.f) * (N - 1);
+		const int32 i = FMath::Min(FMath::FloorToInt(At), N - 2);
+		return FMath::Lerp(Table[i], Table[i + 1], At - i);
+	}
+}
+
 void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, float Recovery, float InRecoveryTime, float InRecoveryCurve)
 {
 	// With a kick time, the view rises over that time, then falls back by Recovery of the
@@ -1550,6 +1566,10 @@ void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, floa
 	KickLeft += PitchRad;
 	KickYawLeft += YawRad;
 	KickRate = KickLeft / FMath::Max(KickTime, 0.001f);
+	bKickShaped = InRecoveryCurve < 0.f; // a negative curve asks for the shaped rise and fall
+	KickShapeTotal = KickLeft;
+	KickShapeTime = FMath::Max(KickTime, 0.001f);
+	KickShapeAge = 0.f;
 	const float Peak = Pitch + KickLeft;
 	RecoilRest = Peak - PitchRad * FMath::Clamp(Recovery, 0.f, 1.f); // only this shot's kick falls back
 	RecoveryTime = FMath::Max(InRecoveryTime, 0.01f);
@@ -1563,6 +1583,7 @@ void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, floa
 float AWWOCharacter::TimedLeft(float Age) const
 {
 	const float Progress = FMath::Clamp(Age / RecoveryTime, 0.f, 1.f);
+	if (RecoveryCurve < 0.f) return RecoveryDrop * Shape(FallShape, Progress);
 	return RecoveryDrop * FMath::Pow(1.f - Progress, RecoveryCurve);
 }
 
@@ -1570,7 +1591,14 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 {
 	if (KickLeft > 0.f)
 	{
-		const float Step = FMath::Min(KickLeft, KickRate * DeltaSeconds);
+		float Step = KickRate * DeltaSeconds;
+		if (bKickShaped)
+		{
+			const float Before = Shape(RiseShape, KickShapeAge / KickShapeTime);
+			KickShapeAge += DeltaSeconds;
+			Step = KickShapeAge >= KickShapeTime ? KickLeft : KickShapeTotal * (Shape(RiseShape, KickShapeAge / KickShapeTime) - Before);
+		}
+		Step = FMath::Min(KickLeft, Step);
 		const float Fraction = Step / KickLeft;
 		const float YawStep = KickYawLeft * Fraction;
 		KickLeft -= Step;
@@ -1586,7 +1614,7 @@ void AWWOCharacter::UpdateRecoil(float DeltaSeconds)
 		bRecovering = false; // settled, or you already pulled it down yourself
 		return;
 	}
-	if (RecoveryCurve > 0.f)
+	if (RecoveryCurve != 0.f)
 	{
 		// Timed: what's left falls as (1 - progress)^curve, landing on time. Moves by the
 		// change each frame, so your own aiming adds on top.
