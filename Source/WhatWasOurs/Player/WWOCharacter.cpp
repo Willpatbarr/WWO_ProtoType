@@ -208,6 +208,9 @@ void AWWOCharacter::SetupVisuals(bool bLocal)
 			if (HasActorBegunPlay()) Weapon->RebindLoadout();
 		}
 		Body->FollowLoadout(true);
+		// If it was shown whole a moment ago (set up as someone else's first, as a joiner's own
+		// character often is), the body and its grafts go back to shadow only for your own view.
+		Body->SetShadowOnly(true);
 	}
 	else
 	{
@@ -256,6 +259,9 @@ void AWWOCharacter::OnRep_NetFists()
 
 void AWWOCharacter::ShowLook()
 {
+	// Your own body is never shown to you from here: it follows your own loadout, shadow only
+	// (a look that arrives late for your own character must not turn the whole body back on).
+	if (bLocalVisuals) return;
 	// Rebuilt only when something you can see changed (not for a swapped gun or its mods).
 	FString Look = NetLook.Flora.ToString() + TEXT("|") + NetLook.Grenade.ToString();
 	for (const FName& Id : NetLook.Abilities) Look += TEXT("|") + Id.ToString();

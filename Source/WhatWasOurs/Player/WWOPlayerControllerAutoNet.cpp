@@ -96,6 +96,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		bAutoNetSawOther = true;
 	}
 	const float Before = AutoNetClock;
+	// Your own body must stay hidden from your own view (shadow only) on both sides, all run long.
+	if (AutoNetClock >= 1.f && !P->bUlting && !P->Health->bDead && P->GetMesh() && !P->GetMesh()->bOwnerNoSee && !bAutoNetOwnBodyShown) // (the ult shows it, in third person)
+	{
+		bAutoNetOwnBodyShown = true;
+		UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL %s sees its own body at t=%.1f"), bHost ? TEXT("the host") : TEXT("the joiner"), AutoNetClock);
+	}
 	AutoNetClock += DeltaTime;
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
@@ -361,7 +367,9 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d; kills credited to the joiner %d"),
 				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected, AWWOCharacter::NetKillsCredited);
 			// Of the three punches sent at once (one forged), at most one may land.
-			if (AWWOCharacter::NetMeleeRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host took more than one of three punches sent at once (rejected %d)"), AWWOCharacter::NetMeleeRejected);
+			// (No punches arrived at all: the joiner found no dummy left to punch, so the step didn't run.)
+			if (AWWOCharacter::NetMeleeApplied + AWWOCharacter::NetMeleeRejected == 0) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: melee step skipped (no punches arrived)")); }
+			else if (AWWOCharacter::NetMeleeRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host took more than one of three punches sent at once (rejected %d)"), AWWOCharacter::NetMeleeRejected);
 		}
 		else
 		{

@@ -193,6 +193,7 @@ private:
 	FVector AutoNetCrate = FVector::ZeroVector;
 	FBox AutoNetCrateBox = FBox(ForceInit);
 	int32 AutoNetDamageEvents = 0;
+	bool bAutoNetOwnBodyShown = false;
 	TWeakObjectPtr<AActor> AutoNetShootTarget; // the dummy this side shoots at
 	TWeakObjectPtr<AActor> AutoNetMeleeTarget; // joiner: the dummy it punches
 	float AutoNetMeleeHealth = 0.f;
