@@ -124,6 +124,11 @@ public:
 	TWeakObjectPtr<AActor> ReticleTarget;
 
 	void Equip(UWWOWeaponData* NewWeapon);
+	// The gun other players see in this character's right hand (its weapon's mesh from
+	// Config/WeaponModels.json, gripped at the model's "hand" point): lowered at rest, and up along
+	// the look as the body's aim pose comes in. Called for every character, every frame.
+	void UpdateWorldGun(bool bShow);
+	bool bForceWorldGun = false; // the pose test: show it on your own body too
 	// Stops what the gun was in the middle of (a burst, a reload, a punch): when its owner dies or
 	// starts an ult, so none of it carries on by itself afterwards.
 	void Interrupt();
@@ -195,6 +200,9 @@ private:
 	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
 	void ApplyKillPerks(int32 Kills); // Hammer, Scavenger, Adrenal
 	bool bLastShotPredictedKill = false; // joiner: the kill marker already showed for the last shot
+	UPROPERTY() TObjectPtr<USceneComponent> WorldGunRoot;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> WorldGun;
+	FName WorldGunId;
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming

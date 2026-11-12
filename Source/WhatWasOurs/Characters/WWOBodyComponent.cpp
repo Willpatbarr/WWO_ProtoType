@@ -479,6 +479,18 @@ void UWWOBodyComponent::ClearLayers()
 	}
 }
 
+float UWWOBodyComponent::UpperWeightNow() const
+{
+	const UWWOBodyAnimInstance* A = GetAnimInstance();
+	return A ? A->GetUpperWeight() : 0.f;
+}
+
+float UWWOBodyComponent::HunchSpineNow() const
+{
+	const UWWOBodyAnimInstance* A = GetAnimInstance();
+	return A ? A->HunchSpine : 0.f;
+}
+
 void UWWOBodyComponent::SetHunch(float SpineDegrees, float HeadDegrees)
 {
 	if (UWWOBodyAnimInstance* A = GetAnimInstance())

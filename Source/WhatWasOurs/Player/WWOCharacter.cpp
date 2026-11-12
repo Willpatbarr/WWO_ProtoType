@@ -718,6 +718,7 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	UpdateHitboxes(); // PvP hitboxes on or off, on every machine
 	UpdateTeamTint();
+	Weapon->UpdateWorldGun(!bLocalVisuals); // the gun in the hand of a body others see whole
 	// The movement component has already run PrepareMovement and moved (it ticks first);
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
 	if (!IsLocallyControlled())
@@ -810,7 +811,7 @@ void AWWOCharacter::UpdateModel()
 		ShownRaise = WWO::MoveToward(ShownRaise, bPlain ? 0.f : PoseRaise, 7.f * Step);
 		ShownPitch = FMath::Lerp(ShownPitch, bPlain ? 0.f : PosePitch, 1.f - FMath::Exp(-12.f * Step));
 		Body->SetUpperBody("Pistol_Aim_Neutral", ShownRaise);
-		Body->SetHunch(-ShownPitch * 0.55f, ShownPitch * 0.25f);
+		Body->SetHunch(-ShownPitch * 0.55f, ShownPitch * 0.25f); // (0.55: UWWOWeaponComponent::UpdateWorldGun reads the look back from it)
 	}
 	// Pick the body animation from what you're doing. Playback speeds up or slows to match the
 	// speed (m/s) each animation looks right at.

@@ -1,8 +1,9 @@
 {
-  "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game.",
+  "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. hand is where the grip is (from the mesh's own origin, after scale and rot): the point that sits in the right hand of the gun other players see. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game.",
   "weapons": {
     "rifle": {
       "mesh": "/Game/WWO/Meshes/SM_Rifle_NoSights.SM_Rifle_NoSights",
+      "hand": [-3, 0, -4],
       "scale": 0.75,
       "rot": [0, -90, 0],
       "offset": [0, 0, -6.7],
@@ -18,6 +19,7 @@
     },
     "handcannon": {
       "mesh": "/Game/Weapons/Pistol/Mesh/SM_Pistol.SM_Pistol",
+      "hand": [-4, 0, -4],
       "scale": 1.1,
       "rot": [0, -90, 0],
       "offset": [0, 0, -6.4],
@@ -33,6 +35,7 @@
     },
     "burstrifle": {
       "mesh": "/Game/WWO/Meshes/SM_Rifle_NoSights.SM_Rifle_NoSights",
+      "hand": [-3, 0, -4],
       "scale": 0.8,
       "rot": [0, -90, 0],
       "offset": [0, 0, -7.1],
@@ -74,6 +77,7 @@
     },
     "shotgun": {
       "mesh": "/Game/Weapons/Shotgun/Mesh/SM_Shotgun.SM_Shotgun",
+      "hand": [-2, 0, -2],
       "scale": 1.1,
       "rot": [0, -90, 0],
       "offset": [0, 0, -11],
@@ -89,6 +93,7 @@
     },
     "sniper": {
       "mesh": "/Game/Weapons/Rifle/Mesh/SM_Rifle.SM_Rifle",
+      "hand": [-3, 0, -4],
       "scale": 0.85,
       "rot": [0, -90, 0],
       "offset": [0, 0, -13],

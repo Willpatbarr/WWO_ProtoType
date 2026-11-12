@@ -89,6 +89,7 @@ public:
 	// Degrees spread over the spine bones and over the neck and head (HunchModifier).
 	float HunchSpine = 0.f;
 	float HunchHead = 0.f;
+	float GetUpperWeight() const { return Upper.Weight; }
 
 	void Advance(float DeltaSeconds); // run by the proxy before each update
 	void Snapshot(FWWOBodyAnimProxy& Proxy) const;

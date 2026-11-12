@@ -362,6 +362,52 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	UWWOSound::PlayFor(GetOwner(), "weapon_swap");
 }
 
+void UWWOWeaponComponent::UpdateWorldGun(bool bShow)
+{
+	AWWOCharacter* P = GetPlayer();
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); // that player's own loadout, on any machine
+	const UWWOWeaponData* W = L ? L->GetWeapon() : nullptr;
+	bShow = (bShow || bForceWorldGun) && P && W && !P->Health->bDead && !P->bUlting && P->GetMesh();
+	if (!bShow)
+	{
+		if (WorldGunRoot) WorldGunRoot->SetVisibility(false, true);
+		return;
+	}
+	if (!WorldGunRoot)
+	{
+		WorldGunRoot = NewObject<USceneComponent>(P);
+		WorldGunRoot->SetupAttachment(P->GetRootComponent());
+		WorldGunRoot->SetUsingAbsoluteLocation(true);
+		WorldGunRoot->SetUsingAbsoluteRotation(true);
+		WorldGunRoot->RegisterComponent();
+		WorldGun = NewObject<UStaticMeshComponent>(P);
+		WorldGun->SetupAttachment(WorldGunRoot);
+		WorldGun->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		WorldGun->SetCanEverAffectNavigation(false);
+		WorldGun->RegisterComponent();
+	}
+	if (WorldGunId != W->Id)
+	{
+		// The same mesh, scale and turn as the first-person model; "hand" is where the grip is, from the
+		// mesh's own origin (cm, x forward, z up), so that point sits in the hand.
+		WorldGunId = W->Id;
+		const TSharedPtr<FJsonObject> Model = ModelConfig(W->Id);
+		FString MeshPath;
+		UStaticMesh* Mesh = Model.IsValid() && Model->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<UStaticMesh>(nullptr, *MeshPath) : nullptr;
+		WorldGun->SetStaticMesh(Mesh);
+		const FVector Rot = JsonVec(Model, TEXT("rot"));
+		WorldGun->SetRelativeScale3D(JsonVec(Model, TEXT("scale"), FVector(1.0)));
+		WorldGun->SetRelativeRotation(FRotator(Rot.X, Rot.Y, Rot.Z));
+		WorldGun->SetRelativeLocation(-JsonVec(Model, TEXT("hand"), FVector(0.0, 0.0, -5.0)));
+	}
+	WorldGunRoot->SetVisibility(true, true);
+	// In the right hand: pointing down and ahead at rest, along the look once the arms are up.
+	const float Raise = FMath::Clamp(P->Body->UpperWeightNow(), 0.f, 1.f);
+	const float LookPitch = -P->Body->HunchSpineNow() / 0.55f; // AWWOCharacter::UpdateModel bends the spine by 0.55 of the look
+	const FRotator Aim(FMath::Lerp(-45.f, LookPitch, Raise), P->GetActorRotation().Yaw, 0.f);
+	WorldGunRoot->SetWorldLocationAndRotation(P->GetMesh()->GetSocketLocation("hand_r"), Aim);
+}
+
 void UWWOWeaponComponent::StoreGunState()
 {
 	if (!BaseWeapon || !GetWorld()) return;

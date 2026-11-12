@@ -98,6 +98,10 @@ public:
 	void ClearLayers();
 	// The Swarm's hunch (HunchModifier): degrees over the spine, and lifted back over the neck and head.
 	void SetHunch(float SpineDegrees, float HeadDegrees);
+	// As posed now, on any machine (a player's gun in hand follows these): how far the upper-body
+	// layer is in, 0-1, and the spine's bend in degrees.
+	float UpperWeightNow() const;
+	float HunchSpineNow() const;
 	UWWOBodyAnimInstance* GetAnimInstance() const;
 	void FollowLoadout(bool bShadow); // rebuild the grafts whenever the loadout changes
 	void RebuildGrafts();

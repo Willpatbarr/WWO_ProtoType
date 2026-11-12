@@ -47,7 +47,8 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 			if (TabsClock < 8.f) return;
 			P->Health->GodMode = 1.f;
 			P->Body->SetShadowOnly(false);
-			P->Weapon->SetVisibility(false, true);
+			P->Weapon->SetFirstPersonHidden(true);
+			P->Weapon->bForceWorldGun = true;
 			const FVector Side = P->GetActorLocation() + P->GetActorForwardVector() * 230.f + P->GetActorRightVector() * 230.f + FVector(0, 0, 40.f);
 			Camera = GetWorld()->SpawnActor<ACameraActor>(Side, (P->GetActorLocation() + FVector(0, 0, 30.f) - Side).Rotation());
 			if (Camera.IsValid()) SetViewTarget(Camera.Get());
