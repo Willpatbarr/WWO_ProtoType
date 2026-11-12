@@ -129,6 +129,9 @@ public:
 	void ResetSection(const FString& Key);
 	void ResetAll();
 	bool SaveDefaults();
+	// One slider row of a section ("weapon/rifle", "global/Camera"), for another screen to show (the
+	// firing tester). Null when the section has no such row.
+	UWidget* MakeRowFor(const FString& Key, FName Id);
 
 	// Shared styling helpers (the character menu uses them too). Godot draws every label in its
 	// default font, Open Sans SemiBold; Roboto Medium is the engine's closest weight.

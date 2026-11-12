@@ -94,7 +94,7 @@ namespace
 	const TMap<FString, TArray<FName>>& OwnSettings()
 	{
 		static const TMap<FString, TArray<FName>> Own = {
-			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity" } },
+			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsDotSize", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity" } },
 			{ TEXT("Audio"), {} },
 			{ TEXT("HUD"), {} },
 		};
@@ -219,6 +219,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	AddGlobal(TEXT("Camera"), {
 		Row(G, "HipFov", TEXT("Field of view (horizontal)"), 55.f, 120.f, 1.f),
 		Row(P, "ReticleDrop", TEXT("Reticle below center (fraction of screen height)"), 0.f, 0.2f, 0.005f),
+		Row(G, "AdsDotSize", TEXT("Aimed-in dot size (px)"), 0.5f, 6.f, 0.1f),
 		Row(G, "AdsGunScale", TEXT("Gun and sight size when aimed, all weapons (1 = same as at the hip)"), 0.3f, 3.f, 0.05f),
 		Row(G, "AdsLevel", TEXT("Level the gun's top when aimed (1 = look straight along it, 0 = off)"), 0.f, 1.f, 0.05f),
 		Row(P, "MouseSensitivity", TEXT("Mouse sensitivity"), 0.1f, 10.f, 0.1f),
@@ -555,6 +556,10 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "RecoilRecoveryDelay", TEXT("Synced fall-back lands after shot is ready by (s)"), -0.15f, 0.15f, 0.005f),
 			Row(W, "VerticalKick", TEXT("Vertical kick (gun tilts up; 1 = about 3.4 degrees)"), 0.f, 20.f, 0.1f),
 			Row(W, "HorizontalKick", TEXT("Horizontal kick (+ right, - left)"), -5.f, 5.f, 0.1f),
+			Row(W, "KickHold", TEXT("Kick holds at the top for (s)"), 0.f, 0.4f, 0.005f),
+			Row(W, "KickReturn", TEXT("Kick comes back over (s)"), 0.02f, 0.8f, 0.01f),
+			Row(W, "AdsKick", TEXT("Kick left when aimed in (0-1)"), 0.f, 1.f, 0.01f),
+			Row(W, "KickPush", TEXT("Kick pushes the gun back (cm)"), 0.f, 6.f, 0.1f),
 			Row(W, "MagazineSize", TEXT("Magazine size"), 1.f, 100.f, 1.f),
 			Row(W, "ReloadTime", TEXT("Reload time (s)"), 0.3f, 6.f, 0.05f),
 			Header(TEXT("Rumble")),
@@ -569,6 +574,9 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "ViewmodelFov", TEXT("Gun FOV"), 40.f, 100.f, 1.f),
 			Row(W, "Sway", TEXT("Gun sway"), 0.f, 3.f, 0.1f),
 			Row(W, "GunBob", TEXT("Gun bob"), 0.f, 3.f, 0.1f),
+			Row(W, "StrafeShift", TEXT("Strafe: gun shifts sideways (cm)"), -3.f, 3.f, 0.05f),
+			Row(W, "StrafeRoll", TEXT("Strafe: gun rolls (degrees)"), -8.f, 8.f, 0.1f),
+			Row(W, "AdsMark", TEXT("Aimed-in mark (0 none, 1 dot, 2 iron-sight marks)"), 0.f, 2.f, 1.f),
 			Row(W, "SlideTilt", TEXT("Slide gun tilt (degrees)"), 0.f, 60.f, 1.f),
 			Header(TEXT("Aim assist")),
 			Row(W, "AimAssistance", TEXT("Aim assistance stat"), 0.f, 100.f, 1.f),
@@ -1059,6 +1067,14 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	KeepHandler(H);
 	Live.Add({ Slider, Value, Fill, Key, RowIndex });
 	return Root;
+}
+
+UWidget* UWWOSettingsMenu::MakeRowFor(const FString& Key, FName Id)
+{
+	const FWWOSettingSection* S = Find(Key);
+	if (!S) return nullptr;
+	const int32 Index = S->Rows.IndexOfByPredicate([Id](const FWWOSettingRow& Row) { return Row.Header.IsEmpty() && Row.Id == Id; });
+	return Index == INDEX_NONE ? nullptr : MakeRow(Key, Index);
 }
 
 void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)

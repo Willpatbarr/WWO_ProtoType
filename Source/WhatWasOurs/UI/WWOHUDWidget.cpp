@@ -321,11 +321,33 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	if (Pl->Ult->bActive) Ret.A = 0.f;
 	if (Ret.A > 0.f)
 	{
+		// The ticks open out to the gun's hip-fire spread (shots land inside them).
+		const float TanHalfV = FMath::Tan(FMath::DegreesToRadians(Pl->Camera->FieldOfView) * 0.5f) * Size.Y / FMath::Max(Size.X, 1.f);
+		const float Bloom = W ? FMath::Tan(FMath::DegreesToRadians(W->HipSpread * (1.f - Aimed))) / FMath::Max(TanHalfV, 0.01f) * Size.Y * 0.5f : 0.f;
 		for (const FVector2D Dir : { FVector2D(0, -1), FVector2D(0, 1), FVector2D(-1, 0), FVector2D(1, 0) })
 		{
-			P.Line(AimAt + Dir * 7.f, AimAt + Dir * 16.f, Ret, 2.f);
+			P.Line(AimAt + Dir * (7.f + Bloom), AimAt + Dir * (16.f + Bloom), Ret, 2.f);
 		}
 		P.Dot(AimAt, 1.5f, Ret);
+	}
+	// Aimed in: the aim mark, here on the HUD at the point shots go to (not on the gun, whose kick,
+	// sway and strafe lean would carry it off that point). A dot for dot and holo sights, three
+	// small marks for iron sights; a scope draws its own.
+	if (W && W->AdsMark >= 0.5f && W->ScopeOverlay < 0.5f && !Pl->Ult->bActive)
+	{
+		FLinearColor Mark = Gun->bTargetUnderReticle ? FLinearColor(1.f, 0.1f, 0.08f) : FLinearColor(0.95f, 0.95f, 0.95f);
+		if (const AActor* OverNow = Gun->ReticleTarget.Get(); OverNow && !UWWOWorldSubsystem::CanHurt(Pl, OverNow)) Mark = FLinearColor(0.3f, 0.6f, 1.f);
+		Mark.A = FMath::Clamp((Aimed - 0.55f) / 0.35f, 0.f, 1.f);
+		if (Mark.A > 0.f)
+		{
+			if (W->AdsMark < 1.5f) P.Dot(AimAt, FMath::Max(Gun->AdsDotSize, 0.5f), Mark);
+			else
+			{
+				P.Dot(AimAt, 1.3f, Mark);
+				P.Line(AimAt + FVector2D(-14.f, 0.f), AimAt + FVector2D(-8.f, 0.f), Mark, 1.5f);
+				P.Line(AimAt + FVector2D(8.f, 0.f), AimAt + FVector2D(14.f, 0.f), Mark, 1.5f);
+			}
+		}
 	}
 	// Hit marker: four diagonal ticks; bigger and yellow for crits, red for kills.
 	if (HitTime > 0.f)

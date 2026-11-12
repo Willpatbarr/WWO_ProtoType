@@ -55,6 +55,7 @@ public:
 
 	// bPvP: team deathmatch instead of waves. Bots: bot players in a PvP match (-1 = the host's Bots setting).
 	void Host(FName Map, bool bPvP = false, int32 Bots = -1);
+	void PlayTester(); // the firing tester: the Test Range alone, one dummy, no enemies (AWWOGameMode::bTester)
 	void PlayLocal(FName Map, bool bPvP = false, int32 Bots = -1); // alone (PvP: against bots)
 	void FindAndJoin();
 	// The launch screen's list: FindGames searches (bSearching until it's done), Games is what the

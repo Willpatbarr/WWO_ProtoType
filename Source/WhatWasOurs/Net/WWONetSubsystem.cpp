@@ -89,6 +89,16 @@ void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 	UGameplayStatics::OpenLevel(GetWorld(), Map, true, MatchOptions(false, bPvP, Bots));
 }
 
+void UWWONetSubsystem::PlayTester()
+{
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	Status = FString();
+	bShowTitle = false;
+	CancelSearch();
+	UE_LOG(LogWWO, Display, TEXT("Net: opening the firing tester"));
+	UGameplayStatics::OpenLevel(GetWorld(), "L_TestRange", true, TEXT("tester"));
+}
+
 void UWWONetSubsystem::LeaveToTitle()
 {
 	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);

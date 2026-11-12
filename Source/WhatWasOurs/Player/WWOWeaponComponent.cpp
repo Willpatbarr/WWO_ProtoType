@@ -976,6 +976,7 @@ void UWWOWeaponComponent::MeleeStrike()
 	else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	OnHitConfirmed.Broadcast(false, bKilled);
 	Kick = 1.f;
+	KickAge = 0.f;
 	AWWOFXActor::HitSpark(GetWorld(), BestPoint, (Origin - BestPoint).GetSafeNormal(), bKilled); // sparks off the hit; the gold flare on a kill
 	UWWOSound::Play(this, "melee_hit", BestPoint);
 	if (bKilled && P->IsLocallyControlled() && P->IsPlayerControlled()) UWWOSound::PlayFlat(this, "kill");
@@ -1079,7 +1080,12 @@ bool UWWOWeaponComponent::WantsToFire() const
 void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 {
 	AWWOCharacter* P = GetPlayer();
-	Kick = WWO::MoveToward(Kick, 0.f, 12.f * DeltaSeconds);
+	// The gun model's kick: full at the shot, held, then eased back (UWWOWeaponData::KickHold / KickReturn).
+	KickAge += DeltaSeconds;
+	{
+		const float Back = FMath::Clamp((KickAge - FMath::Max(Weapon->KickHold, 0.f)) / FMath::Max(Weapon->KickReturn, 0.01f), 0.f, 1.f);
+		Kick = (1.f - Back) * (1.f - Back);
+	}
 	FlashTime -= DeltaSeconds;
 	bFlashVisible = FlashTime > 0.f; // decided before this frame's shot, like Godot (a new flash shows from the next frame)
 
@@ -1180,6 +1186,7 @@ void UWWOWeaponComponent::Shoot()
 {
 	AWWOCharacter* P = GetPlayer();
 	Kick = 1.f;
+	KickAge = 0.f;
 	FlashTime = MuzzleFlashTime;
 	const int32 PelletCount = FMath::Max(1, FMath::RoundToInt(Weapon->Pellets));
 	// Hip-fire spread shrinks to nothing as you aim in; pellets scatter around that aim.
@@ -1339,7 +1346,9 @@ void UWWOWeaponComponent::UpdateFov()
 	{
 		// Mod parts that would block the view through the sight (scopes, holo frames) fade out of the way.
 		const bool bAdsHidden = AdsHiddenParts.Contains(Pair.Key) && AdsAmount > 0.6f;
-		if (Pair.Value) Pair.Value->SetVisibility(!bFirstPersonHidden && bShowModel && !bAdsHidden && (!IsFlashPart(Pair.Key) || bFlashVisible));
+		// (The dot on the gun is never drawn: the HUD draws the aim mark at the aim point, where the
+		// gun's kick and sway can't move it. See UWWOWeaponData::AdsMark.)
+		if (Pair.Value) Pair.Value->SetVisibility(!bFirstPersonHidden && bShowModel && !bAdsHidden && Pair.Key != "SightDot" && (!IsFlashPart(Pair.Key) || bFlashVisible));
 	}
 }
 
@@ -1390,7 +1399,13 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	SlidePose = WWO::MoveToward(SlidePose, P->bSliding ? 1.f : 0.f, 6.f * DeltaSeconds);
 	const float HipOnly = 1.f - AdsAmount;
 	const float SprintAmount = WWO::SmoothStep(0.f, 1.f, SprintPose) * HipOnly;
-	const float SlideAmount = WWO::SmoothStep(0.f, 1.f, SlidePose) * (1.f - 0.8f * AdsAmount);
+	const float SlideAmount = WWO::SmoothStep(0.f, 1.f, SlidePose) * (1.f - 0.8f * AdsAmount); // the tilt
+	const float SlideShift = WWO::SmoothStep(0.f, 1.f, SlidePose) * HipOnly;                   // the move
+
+	// The rule the rest of this follows: aimed in, the gun's sight point (the model's origin) stays
+	// on the aim point, where the HUD draws the aim mark. Everything that turns the gun turns it
+	// about that point, and everything that moves it bodily (bob, air lag, landing, the slide's
+	// shift) fades out as you aim in. Only the strafe's small sideways shift is kept.
 
 	// Air: the gun lags behind vertical motion.
 	float AirTarget = 0.f;
@@ -1399,18 +1414,22 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 		AirTarget = FMath::Clamp(-P->GetVelocity().Z / WWO::M * AirLagPerSpeed, -AirLagMax, AirLagMax);
 	}
 	AirLag = FMath::Lerp(AirLag, AirTarget, FMath::Min(8.f * DeltaSeconds, 1.f));
-	const FVector AirOffset = FVector(0.f, AirLag + P->LandOffset * 0.6f, 0.f) * Settle;
+	const FVector AirOffset = FVector(0.f, AirLag + P->LandOffset * 0.6f, 0.f) * HipOnly;
 
 	// Bob: follows the player's step timing. Sprinting swings it much harder.
 	const FVector Swing(FMath::Cos(P->BobTime * 0.5f), -FMath::Abs(FMath::Sin(P->BobTime)), 0.f);
-	FVector Bob = Swing * FVector(0.012f, 0.01f, 0.f) * Weapon->GunBob * (1.f - 0.85f * AdsAmount);
+	FVector Bob = Swing * FVector(0.012f, 0.01f, 0.f) * Weapon->GunBob * HipOnly;
 	Bob += Swing * FVector(0.03f, 0.025f, 0.f) * Weapon->GunBob * SprintAmount;
 	Bob *= P->BobWeight;
 	const float BobRoll = FMath::Cos(P->BobTime * 0.5f) * 0.08f * Weapon->GunBob * SprintAmount * P->BobWeight;
 
 	FVector Rot(SwayValue.Y + AirLag * 2.f * Settle, SwayValue.X, BobRoll);
 	Rot += SprintRotation * SprintAmount + FVector(FMath::DegreesToRadians(Weapon->SlideTilt), 0.f, 0.f) * SlideAmount;
-	const float KickNow = Kick * 0.06f * (1.f - 0.6f * AdsAmount); // aiming tames the jolt
+	// Strafing: the gun trails the way you move and rolls with it.
+	const float SideSpeed = FVector::DotProduct(P->GetVelocity(), P->GetActorRightVector()) / WWO::M;
+	StrafeLean = FMath::Lerp(StrafeLean, FMath::Clamp(SideSpeed / 6.f, -1.f, 1.f), FMath::Min(8.f * DeltaSeconds, 1.f));
+	Rot.Z += FMath::DegreesToRadians(Weapon->StrafeRoll) * StrafeLean;
+	const float KickNow = Kick * 0.06f * FMath::Lerp(1.f, FMath::Clamp(Weapon->AdsKick, 0.f, 1.f), AdsAmount); // how much is left aimed in is the frame's
 	Rot.X += KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
 	Rot.Y -= KickNow * Weapon->HorizontalKick; // Godot yaw: + turns left, so + kick swings the muzzle right
 	// The low reticle: the gun (drawn with its own FOV) points at it, and aimed in, its sight point
@@ -1424,7 +1443,8 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	const float LevelAngle = FMath::Atan2(TopBelowSight * FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount), EyeToSight);
 	Rot.X -= FMath::Min(LevelAngle, FMath::DegreesToRadians(8.f)) * FMath::Clamp(AdsLevel, 0.f, 1.f) * AdsAmount; // muzzle down: the top's near end comes up to the eye line
 	Pos.Y -= -Pos.Z * FMath::Tan(GunDrop) * AdsAmount; // Godot: z is forward (negative), y up
-	Pos += SprintOffset * SprintAmount + SlideOffset * SlideAmount;
+	Pos += SprintOffset * SprintAmount + SlideOffset * SlideShift;
+	Pos.X -= StrafeLean * Weapon->StrafeShift * 0.01f;
 	// Mantling: hands are busy, so the gun dips out of the way.
 	MantlePose = WWO::MoveToward(MantlePose, P->IsMantling() ? 1.f : 0.f, 8.f * DeltaSeconds);
 	const float MantleAmount = WWO::SmoothStep(0.f, 1.f, MantlePose);
@@ -1435,7 +1455,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	const float ThrowAmount = ThrowTime > 0.f ? FMath::Sin(UE_PI * ThrowTime / ThrowPoseLength()) : 0.f;
 	Pos += ThrowOffset * ThrowAmount;
 	Rot += ThrowRotation * ThrowAmount;
-	Pos.Z += 0.035f * KickNow;
+	Pos.Z += Kick * Weapon->KickPush * 0.01f; // back toward you at the peak
 	// Weapon swap: dip down and back up.
 	SwapLeft = FMath::Max(SwapLeft - DeltaSeconds, 0.f);
 	const float SwapAmount = SwapLeft > 0.f ? FMath::Sin(UE_PI * SwapLeft / SwapLength) : 0.f;

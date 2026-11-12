@@ -22,6 +22,7 @@ class UWWOHUDWidget;
 class UWWOSettingsMenu;
 class UWWOCharacterMenu;
 class UWWOLaunchMenu;
+class UWWOFiringTester;
 class AWWOCharacter;
 class FWWOMenuCursor;
 class FWWOMenuKeys;
@@ -61,8 +62,17 @@ public:
 
 	// With a menu open your buttons work the menu, not your character: nothing reads as held or
 	// pressed (online the game doesn't pause under a menu, so this is what keeps the gun quiet).
-	bool IsHeld(EWWOAction Action) const { return Held[(int32)Action] && !IsMenuOpen(); }
-	bool WasJustPressed(EWWOAction Action) const { return JustPressed[(int32)Action] && !IsMenuOpen(); }
+	bool IsHeld(EWWOAction Action) const { return (Held[(int32)Action] && !IsMenuOpen()) || ScriptHeld[(int32)Action]; }
+	bool WasJustPressed(EWWOAction Action) const { return (JustPressed[(int32)Action] && !IsMenuOpen()) || ScriptNow[(int32)Action]; }
+	// Scripted input (the firing tester's ADS / FIRE / STRAFE buttons): read exactly like the real
+	// thing, and also while a pane has the cursor. A press lasts one frame.
+	void ScriptHold(EWWOAction Action, bool bDown) { ScriptHeld[(int32)Action] = bDown; }
+	void ScriptPress(EWWOAction Action) { ScriptQueued[(int32)Action] = true; }
+	void ScriptMove(FVector2D Axis) { ScriptMoveValue = Axis; }
+	void ClearScript();
+	UWWOFiringTester* GetFiringTester() const { return FiringTester; }
+	bool IsOtherMenuOpen() const; // a real menu (settings, character, launch), not the tester's own pane
+	void RefreshMenuMode() { SetMenuMode(IsMenuOpen()); }
 	FVector2D GetMoveAxis() const;  // x = right, y = forward, length <= 1
 	FVector2D GetLookAxis() const;  // right stick, x = right, y = up
 	bool ConsumeChord(EWWOChord Chord);
@@ -118,6 +128,11 @@ private:
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> SettingsMenu;
 	UPROPERTY() TObjectPtr<UWWOCharacterMenu> CharacterMenu;
 	UPROPERTY() TObjectPtr<UWWOLaunchMenu> LaunchMenu; // only when the map opened on the launch screen
+	UPROPERTY() TObjectPtr<UWWOFiringTester> FiringTester; // only in the firing tester (AWWOGameMode::bTester)
+	bool ScriptHeld[(int32)EWWOAction::Count] = {};
+	bool ScriptQueued[(int32)EWWOAction::Count] = {};
+	bool ScriptNow[(int32)EWWOAction::Count] = {};
+	FVector2D ScriptMoveValue = FVector2D::ZeroVector;
 	TSharedPtr<FWWOMenuCursor> MenuCursor;
 	TSharedPtr<FWWOMenuKeys> MenuKeys; // Play-in-Editor only
 	bool bCreateHeld = false;
@@ -181,6 +196,8 @@ private:
 	// -WWOAutoTestTabs (WWOPlayerControllerAutoTabs.cpp): the Weapon and Shell tabs fit on one screen.
 	bool bAutoTestTabs = false;
 	void UpdateAutoTabsTest(float DeltaTime);
+	bool bAutoTestTester = false;
+	void UpdateAutoTesterTest(float DeltaTime); // -WWOAutoTestTester: the firing tester
 	// -WWOAutoTestNet (WWOPlayerControllerAutoNet.cpp): online play, run on the host and the joiner.
 	bool bAutoTestNet = false;
 	float AutoNetWait = 0.f;   // seconds since start

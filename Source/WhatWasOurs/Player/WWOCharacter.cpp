@@ -429,14 +429,14 @@ bool AWWOCharacter::Pressed(EWWOAction Action) const
 	if (const AWWOBotController* Bot = GetBot()) return Bot->IsHeld(Action);
 	// With a menu open (online, where menus don't pause) your buttons work the menu, not your character.
 	const AWWOPlayerController* PC = GetWWOController();
-	return PC && !PC->IsMenuOpen() && PC->IsHeld(Action);
+	return PC && PC->IsHeld(Action); // (false under a menu, true for scripted input: the controller decides)
 }
 
 bool AWWOCharacter::JustPressed(EWWOAction Action) const
 {
 	if (const AWWOBotController* Bot = GetBot()) return Bot->WasJustPressed(Action);
 	const AWWOPlayerController* PC = GetWWOController();
-	return PC && !PC->IsMenuOpen() && PC->WasJustPressed(Action);
+	return PC && PC->WasJustPressed(Action);
 }
 
 FVector2D AWWOCharacter::MoveInput() const

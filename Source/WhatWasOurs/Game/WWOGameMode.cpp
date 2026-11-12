@@ -9,6 +9,7 @@
 #include "Engine/NetDriver.h"
 #include "Player/WWOBotController.h"
 #include "Allies/WWOAlly.h"
+#include "World/WWOTarget.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
@@ -81,6 +82,7 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
+	bTester = !bPvP && (UGameplayStatics::HasOption(Options, TEXT("tester")) || FParse::Param(FCommandLine::Get(), TEXT("WWOTester")));
 	FString Value;
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = CmdKillTarget = FCString::Atof(*Value); // tests
 	bTestRun = FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) != nullptr;
@@ -263,6 +265,16 @@ void AWWOGameMode::Begin()
 		State = EWWOWaveState::Match;
 		return;
 	}
+	if (bTester)
+	{
+		// The firing tester: nothing to fight. The map's own dummies go too; one is put in front of
+		// the player once they are in (UpdateTester).
+		for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It) It->Destroy();
+		for (TActorIterator<AWWOAlly> It(GetWorld()); It; ++It) It->Destroy();
+		for (TActorIterator<AWWOTarget> It(GetWorld()); It; ++It) It->Destroy();
+		State = EWWOWaveState::Idle;
+		return;
+	}
 	if (Enabled < 0.5f || SpawnPoints().Num() == 0)
 	{
 		State = EWWOWaveState::Idle;
@@ -393,6 +405,7 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 		PublishLeft = 2.f;
 		if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(this)) Net->PublishMatch(this);
 	}
+	if (bTester) UpdateTester();
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (bPvP) UpdateMatch(DeltaSeconds);
 	if (bPvP) UpdateBots();
@@ -707,6 +720,29 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 	ToMiddle.Z = 0.f;
 	if (!ToMiddle.IsNearlyZero()) Spot.SetRotation(ToMiddle.Rotation().Quaternion());
 	return Spot;
+}
+
+// --- Firing tester ---------------------------------------------------------------------------------
+
+void AWWOGameMode::UpdateTester()
+{
+	// One dummy straight ahead of where the player starts, far enough to read the kick against.
+	AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer();
+	if (TesterTarget.IsValid() || !P || !bStarted) return;
+	if (!bTesterHomeSet)
+	{
+		bTesterHomeSet = true;
+		TesterHome = P->GetActorTransform();
+	}
+	const FVector Forward = FRotator(0.f, TesterHome.Rotator().Yaw, 0.f).Vector();
+	FVector At = TesterHome.GetLocation() + Forward * TesterTargetDistance * WWO::M;
+	// Stand it on the floor under that point.
+	FHitResult Floor;
+	if (GetWorld()->LineTraceSingleByChannel(Floor, At + FVector(0, 0, 300.f), At - FVector(0, 0, 1000.f), ECC_Visibility)) At = Floor.ImpactPoint;
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	TesterTarget = GetWorld()->SpawnActor<AWWOTarget>(AWWOTarget::StaticClass(), At, FRotator(0.f, TesterHome.Rotator().Yaw + 180.f, 0.f), Params);
+	UE_LOG(LogWWO, Display, TEXT("Tester: target dummy %.0f m ahead of the start (%s)"), TesterTargetDistance, TesterTarget.IsValid() ? TEXT("placed") : TEXT("FAILED"));
 }
 
 // --- Bots and load (PvP stress test) -------------------------------------------------------------

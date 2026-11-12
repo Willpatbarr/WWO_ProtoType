@@ -26,7 +26,7 @@ class WHATWASOURS_API UWWOLaunchMenu : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	enum { ConnNone = -1, ConnHost, ConnJoin, ConnLocal };
+	enum { ConnNone = -1, ConnHost, ConnJoin, ConnLocal, ConnTester }; // ConnTester: the firing tester (UWWOFiringTester), no mode or map to pick
 	enum { ModeNone = -1, ModePvP, ModePvE };
 
 	virtual void NativeOnInitialized() override;

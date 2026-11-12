@@ -1,4 +1,6 @@
 #include "Player/WWOPlayerController.h"
+#include "UI/WWOFiringTester.h"
+#include "Game/WWOGameMode.h"
 #include "Player/WWOTestRun.h"
 #include "Systems/WWOSound.h"
 #include "Game/WWOPlayerState.h"
@@ -85,7 +87,7 @@ void AWWOPlayerController::BeginPlay()
 	}
 
 	HUDWidget = CreateWidget<UWWOHUDWidget>(this, UWWOHUDWidget::StaticClass());
-	HUDWidget->AddToViewport(0);
+	HUDWidget->AddToPlayerScreen(0); // the player's own view rectangle (the whole screen, but for the firing tester's window)
 	SettingsMenu = CreateWidget<UWWOSettingsMenu>(this, UWWOSettingsMenu::StaticClass());
 	SettingsMenu->AddToViewport(10);
 	SettingsMenu->SetVisibility(ESlateVisibility::Collapsed);
@@ -102,6 +104,13 @@ void AWWOPlayerController::BeginPlay()
 		LaunchMenu->Open();
 		HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	// The firing tester's screen: its pane on the left, the player's view in a window.
+	if (const AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>(); GM && GM->bTester && !LaunchMenu)
+	{
+		FiringTester = CreateWidget<UWWOFiringTester>(this, UWWOFiringTester::StaticClass());
+		FiringTester->AddToViewport(4); // over the HUD (drawn in the window), under the menus
+		FiringTester->Open();
+	}
 	SetMenuMode(IsMenuOpen());
 	if (Net) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
 	if (FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest"))) WWOTest::Watch(); // count the FAIL lines of a test run
@@ -117,6 +126,7 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"))
 		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
 	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
+	bAutoTestTester = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTester"));
 	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
 	bAutoTestHiddenOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestHidden"));
 	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"))
@@ -473,6 +483,7 @@ void AWWOPlayerController::OnMouseLook(const FInputActionInstance& Instance)
 
 FVector2D AWWOPlayerController::GetMoveAxis() const
 {
+	if (!ScriptMoveValue.IsZero()) return ScriptMoveValue.GetClampedToMaxSize(1.f);
 	if (IsMenuOpen() || TestRunIgnoresInput()) return FVector2D::ZeroVector;
 	return MoveValue.GetClampedToMaxSize(1.f);
 }
@@ -488,6 +499,8 @@ FVector2D AWWOPlayerController::GetLookAxis() const
 void AWWOPlayerController::PlayerTick(float DeltaTime)
 {
 	FMemory::Memzero(JustPressed, sizeof(JustPressed));
+	FMemory::Memcpy(ScriptNow, ScriptQueued, sizeof(ScriptNow)); // a scripted press: readable for this frame
+	FMemory::Memzero(ScriptQueued, sizeof(ScriptQueued));
 	Super::PlayerTick(DeltaTime); // processes input: fills Held / JustPressed for this frame
 	UpdateDevice();
 	UpdateChord(DeltaTime);
@@ -521,6 +534,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 	}
 	else if (bAutoTestTitle) { if (IsLocalController()) UpdateAutoTitleTest(FApp::GetDeltaTime()); }
 	else if (bAutoTestTabs) { if (IsLocalController()) UpdateAutoTabsTest(FApp::GetDeltaTime()); }
+	else if (bAutoTestTester) { if (IsLocalController()) UpdateAutoTesterTest(FApp::GetDeltaTime()); }
 	else if (bAutoTestPvP) UpdateAutoPvPTest(FApp::GetDeltaTime());
 	else if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogJoinerStress(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
@@ -615,7 +629,20 @@ void AWWOPlayerController::Hitstop(float Seconds)
 
 bool AWWOPlayerController::IsMenuOpen() const
 {
+	return IsOtherMenuOpen() || (FiringTester && FiringTester->WantsCursor());
+}
+
+bool AWWOPlayerController::IsOtherMenuOpen() const
+{
 	return (SettingsMenu && SettingsMenu->IsOpen()) || (CharacterMenu && CharacterMenu->IsOpen()) || (LaunchMenu && LaunchMenu->IsOpen());
+}
+
+void AWWOPlayerController::ClearScript()
+{
+	FMemory::Memzero(ScriptHeld, sizeof(ScriptHeld));
+	FMemory::Memzero(ScriptQueued, sizeof(ScriptQueued));
+	FMemory::Memzero(ScriptNow, sizeof(ScriptNow));
+	ScriptMoveValue = FVector2D::ZeroVector;
 }
 
 void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
@@ -641,6 +668,13 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 		// The launch screen: back one step (its own buttons open the other menus).
 		if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) LaunchMenu->Back();
 		return;
+	}
+	if (FiringTester && FiringTester->IsOpen())
+	{
+		// The tester's pane is its settings: the Settings key hands the cursor back to it.
+		// (Circle is crouch while you have control, so only the Settings key does it.)
+		if (Id == EWWOAction::Menu) { FiringTester->SetControl(false); return; }
+		if (Id == EWWOAction::MenuBack) return;
 	}
 	if (Id == EWWOAction::Menu) ToggleSettingsMenu();
 	else if (Id == EWWOAction::CharacterMenu) ToggleCharacterMenu();
@@ -673,7 +707,8 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 {
 	// Alone, a menu pauses the game. Online the match keeps running (the host's pause would freeze
 	// everyone); your character just ignores your input while a menu is open (AWWOCharacter::Pressed).
-	if (GetNetMode() == NM_Standalone || !bOpen) SetPause(bOpen);
+	// (The firing tester's pane doesn't pause: its buttons run the player while the cursor is out.)
+	if (GetNetMode() == NM_Standalone || !bOpen) SetPause(bOpen && IsOtherMenuOpen());
 	bShowMouseCursor = bOpen;
 	if (bOpen)
 	{

@@ -257,6 +257,20 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   it. Shots `60_title` to `72_joiner_multiplayer`; lines `AutoTest title: ... ok|FAIL`. To keep the host up
   for the joiner add `-WWOTitleHostTime=95` and start the joiner about 75 s after the host.
 
+## Firing tester and gun motion (2026-11-12)
+
+- **What it is:** a bench for how a gun looks and kicks. Launch screen, PLAY, "Firing tester", START (`UWWONetSubsystem::PlayTester` opens `L_TestRange?tester`; `-WWOTester` on the command line does the same). `AWWOGameMode::bTester`: no waves, no enemies, the map's dummies removed and one put 20 m ahead of the start (`UpdateTester`).
+- **The screen** (`UI/WWOFiringTester`): the pane on the left has the gun and saved-config pickers and that gun's motion sliders (real Settings rows, `UWWOSettingsMenu::MakeRowFor`, so "Save as defaults" keeps them). The player's view is the real game drawn in a 16:9 window: the engine's "no split" layout entry is shrunk to the window while the tester is up (`SetViewRect`), and the HUD is added to the player's screen (`AddToPlayerScreen`), so it sits in the window too.
+- **Control:** TAKE CONTROL hands you the player (mouse and keys or controller); Tab / Esc / Options gives the cursor back to the pane (`HandleMenuPress`). The game doesn't pause under the pane. ADS, ADS + FIRE, HIP FIRE and STRAFE play that action without you taking control, through the controller's scripted input (`ScriptHold` / `ScriptPress` / `ScriptMove`, read by `IsHeld` / `WasJustPressed` / `GetMoveAxis` like real input). RESET puts the player back at the start, facing the dummy.
+- **Gun motion, rebuilt from Destiny footage** (frame-by-frame notes: reticle fixed to the screen, camera does the recoil, gun moves around the aim point):
+  - The aim mark when aimed in is drawn by the HUD at the aim point (`UWWOWeaponData::AdsMark`: 1 a dot, 2 three iron-sight marks, 0 none), not on the gun: the model's `SightDot` part is never shown. Kick, sway and strafe lean can't move it.
+  - The gun model's kick has a shape: full at the shot, held `KickHold`, eased back over `KickReturn`; `AdsKick` is how much is left aimed in; `KickPush` pushes it back toward you. Iron-sight frames (hand cannon, shotgun) start with a long hold and a big aimed-in kick, dot frames with a short one and 15%.
+  - Aimed in, nothing moves the gun bodily: bob, air lag, the landing dip and the slide's shift fade to zero. What is left is turning about the sight point, plus the strafe's sideways shift and roll (`StrafeShift`, `StrafeRoll`).
+  - The hip reticle's ticks open to the gun's hip spread.
+  - Camera recoil (`AWWOCharacter::AddRecoil`) is unchanged.
+- **Test:** `-WWOTester -WWOAutoTestTester [-WWOTesterGun=<id>]` on `L_TestRange` (screenshots `86_tester_*`).
+- **Not done:** the amounts are first guesses to tune in the tester; the sign of the strafe shift and roll is a guess (both sliders go negative); jumping, hip-fire movement and fast turns were not in the footage.
+
 ## Settings online: the host's tuning, your own preferences (2026-11-12)
 
 - In someone else's game the Settings menu shows only a player's own settings: Camera (field of view,

@@ -38,6 +38,13 @@ public:
 	{
 		Super::PostLoad();
 		if (VerticalKick < 0.f) VerticalKick = GunKick; // assets saved before the kick split start from Godot's gun_kick
+		// The gun-motion values start from the kind of sight the frame has: iron sights flip hard and
+		// come back slowly (the aim marks stay put on the HUD); a dot or holo housing barely moves.
+		const bool bIron = Id == "handcannon" || Id == "shotgun";
+		if (AdsMark < 0.f) AdsMark = bIron ? 2.f : 1.f;
+		if (KickHold < 0.f) KickHold = bIron ? 0.12f : 0.02f;
+		if (KickReturn < 0.f) KickReturn = bIron ? 0.25f : 0.1f;
+		if (AdsKick < 0.f) AdsKick = bIron ? 0.45f : 0.15f;
 	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon") FString Archetype;
@@ -77,6 +84,19 @@ public:
 	// right (+) or left (-), so together they can kick diagonally.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float VerticalKick = -1.f; // -1: take GunKick
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float HorizontalKick = 0.f;
+	// The kick's shape (looks only): it jumps to full at once, holds for KickHold seconds, then
+	// eases back over KickReturn. AdsKick is how much of it is left when aimed in (0-1), and
+	// KickPush how far (cm) the gun comes back toward you at the peak. (-1: set by sight kind, PostLoad.)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickHold = -1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickReturn = -1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float AdsKick = -1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickPush = 1.f;
+	// What marks the aim point when aimed in. It is drawn by the HUD at the point shots go to, so
+	// nothing the gun does moves it: 0 none (a scope draws its own), 1 a dot, 2 iron-sight marks.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float AdsMark = -1.f;
+	// Strafing: the gun shifts against the way you move (cm at full speed) and rolls into it (degrees).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float StrafeShift = 0.6f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float StrafeRoll = 2.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float MagazineSize = 30.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float ReloadTime = 2.f;
 

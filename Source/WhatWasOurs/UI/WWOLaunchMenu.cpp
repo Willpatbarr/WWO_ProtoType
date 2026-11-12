@@ -259,7 +259,7 @@ void UWWOLaunchMenu::ChooseConnection(int32 Choice)
 
 void UWWOLaunchMenu::ChooseMode(int32 Choice)
 {
-	if (StartedAt > 0.0 || Connection == ConnNone || Connection == ConnJoin) return;
+	if (StartedAt > 0.0 || Connection == ConnNone || Connection == ConnJoin || Connection == ConnTester) return;
 	Mode = Choice;
 	// The picked map stays if it suits the new mode too.
 	const FWWOMapInfo* Info = UWWONetSubsystem::FindMap(Map);
@@ -288,6 +288,7 @@ bool UWWOLaunchMenu::CanStart() const
 {
 	if (!bSetup || StartedAt > 0.0) return false;
 	if (Connection == ConnJoin) return Game != INDEX_NONE;
+	if (Connection == ConnTester) return true;
 	return Connection != ConnNone && Mode != ModeNone && !Map.IsNone();
 }
 
@@ -305,6 +306,7 @@ void UWWOLaunchMenu::Start()
 	// Alone, PvP is against bots: enough to fill both teams of the map's size.
 	case ConnLocal: Net->PlayLocal(Map, bPvP, bPvP && Info ? Info->TeamSize * 2 - 1 : -1); break;
 	case ConnJoin: Net->JoinGame(Game); break;
+	case ConnTester: Net->PlayTester(); break;
 	default: break;
 	}
 	Rebuild();
@@ -313,7 +315,7 @@ void UWWOLaunchMenu::Start()
 FString UWWOLaunchMenu::DebugState() const
 {
 	if (!bSetup) return TEXT("title");
-	static const TCHAR* const Conns[] = { TEXT("none"), TEXT("host"), TEXT("join"), TEXT("local") };
+	static const TCHAR* const Conns[] = { TEXT("none"), TEXT("host"), TEXT("join"), TEXT("local"), TEXT("tester") };
 	static const TCHAR* const Modes[] = { TEXT("none"), TEXT("pvp"), TEXT("pve") };
 	return FString::Printf(TEXT("setup %s %s %s%s%s"), Conns[Connection + 1], Modes[Mode + 1], Map.IsNone() ? TEXT("-") : *Map.ToString(),
 		Game != INDEX_NONE ? *FString::Printf(TEXT(" game %d"), Game) : TEXT(""), CanStart() ? TEXT(" ready") : TEXT(""));
@@ -511,6 +513,8 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 		[WeakThis] { if (WeakThis.IsValid()) WeakThis->ChooseConnection(ConnJoin); }));
 	AddChoice(Left, Choice(TEXT("Local"), TEXT("Play on this machine only"), Connection == ConnLocal,
 		[WeakThis] { if (WeakThis.IsValid()) WeakThis->ChooseConnection(ConnLocal); }));
+	AddChoice(Left, Choice(TEXT("Firing tester"), TEXT("Tune how guns move and kick, with one target"), Connection == ConnTester,
+		[WeakThis] { if (WeakThis.IsValid()) WeakThis->ChooseConnection(ConnTester); }));
 	if (Connection == ConnHost || Connection == ConnLocal)
 	{
 		Left->AddChildToVerticalBox(StepLabel(2, TEXT("Mode")))->SetPadding(FMargin(0, 26.f * K, 0, 12.f * K));
@@ -554,6 +558,12 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 				14.f, Dim, 120, true), 0.f);
 		}
 		if (Net && Net->Games.IsValidIndex(Game)) Summary = FString::Printf(TEXT("Join  ·  %s  ·  %s"), Net->Games[Game].bPvP ? TEXT("PvP") : TEXT("PvE"), *Net->Games[Game].MapTitle);
+	}
+	else if (Connection == ConnTester)
+	{
+		Right->AddChildToVerticalBox(Spaced(TEXT("A range with one target dummy and no enemies. The gun's settings are on the left and the player's view on the right; take control to shoot it yourself, or use the buttons to aim, fire and strafe."),
+			14.f, Dim, 120, true))->SetPadding(FMargin(0, 34.f * K, 14.f * K, 0));
+		Summary = TEXT("Firing tester  ·  Test Range");
 	}
 	else if (Connection != ConnNone && Mode != ModeNone)
 	{

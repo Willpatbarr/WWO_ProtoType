@@ -74,6 +74,14 @@ public:
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	int32 People() const; // players who aren't bots
 	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
+	// The firing tester (?tester, from the launch screen; -WWOTester): no waves, no enemies, one
+	// target dummy ahead of the start. UWWOFiringTester is the screen over it.
+	bool bTester = false;
+	FTransform TesterHome;            // where the player started (the strafe run is centred on it)
+	bool bTesterHomeSet = false;
+	TWeakObjectPtr<class AWWOTarget> TesterTarget;
+	float TesterTargetDistance = 20.f; // m
+	void UpdateTester();
 	// -WWOBots=N (PvP): N bot players join the match (AWWOBotController). -WWOStress logs the load.
 	int32 BotsWanted = 0, BotsSpawned = 0;
 	float CmdKillTarget = -1.f; // -WWOKillTarget= (tests): wins over the saved setting

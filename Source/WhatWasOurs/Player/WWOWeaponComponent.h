@@ -65,6 +65,7 @@ public:
 	// How big every gun's model is when aimed down sights, against its hip size (1 = the same). It
 	// scales around the sight point, so the sight stays on the reticle. Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float AdsGunScale = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Camera") float AdsDotSize = 2.f; // px: the aimed-in dot the HUD draws at the aim point
 	// Aimed in, the gun tips down just enough that you look exactly along its top instead of down
 	// onto it: the top shows as a level edge under the sight, not a ramp running up to it
 	// (1 = fully level, 0 = the gun points straight at the reticle as at the hip). Not from Godot.
@@ -236,7 +237,9 @@ private:
 	float ReadyLeft = 0.f;
 	bool bReadyShotQueued = false;
 	float FireCooldown = 0.f;
-	float Kick = 0.f;
+	float Kick = 0.f;       // the gun model's kick now, 1 at the shot (looks only)
+	float KickAge = 1000.f; // s since the shot that started it
+	float StrafeLean = 0.f; // -1 to 1: how hard you are moving left or right, eased
 	float FlashTime = 0.f;
 	bool bFlashVisible = false;
 	float PunchAge = 1e9f, PunchFovValue = 0.f, PunchRollValue = 0.f, PunchLength = 0.1f;
