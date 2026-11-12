@@ -36,6 +36,7 @@ namespace
 {
 	const FLinearColor ReticleColor(1, 1, 1, 0.9f);
 	const FLinearColor ReticleOnTarget(1.f, 0.25f, 0.2f, 0.95f);
+	const FLinearColor ReticleOnFriend(0.25f, 1.f, 0.35f, 0.95f); // over someone you can't hurt (a teammate)
 	const FLinearColor CritColor(1.f, 0.85f, 0.2f);
 	const FLinearColor KillColor(1.f, 0.25f, 0.2f);
 	const FLinearColor ShieldColor(0.55f, 0.8f, 1.f);
@@ -314,9 +315,11 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 
 	// Where shots go: ReticleDrop below center (Destiny-style), hip and aimed.
 	// Reticle: fades out early as you aim in, red over a target. None in third person.
-	FLinearColor Ret = Gun->bTargetUnderReticle ? ReticleOnTarget : ReticleColor;
-	// Over a teammate (PvP: someone you can't hurt) it turns blue, not the on-target red.
-	if (const AActor* OverNow = Gun->ReticleTarget.Get(); OverNow && !UWWOWorldSubsystem::CanHurt(Pl, OverNow)) Ret = FLinearColor(0.3f, 0.6f, 1.f);
+	// Over a teammate (someone you can't hurt) it turns green, never the on-target red.
+	const AActor* OverNow = Gun->ReticleTarget.Get();
+	const bool bOverFriend = OverNow && !UWWOWorldSubsystem::CanHurt(Pl, OverNow);
+	const bool bOverFoe = Gun->bTargetUnderReticle && !bOverFriend;
+	FLinearColor Ret = bOverFriend ? ReticleOnFriend : (bOverFoe ? ReticleOnTarget : ReticleColor);
 	Ret.A *= FMath::Clamp(1.f - Aimed * 2.5f, 0.f, 1.f);
 	if (Pl->Ult->bActive) Ret.A = 0.f;
 	if (Ret.A > 0.f)
@@ -335,8 +338,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	// small marks for iron sights; a scope draws its own.
 	if (W && W->AdsMark >= 0.5f && W->ScopeOverlay < 0.5f && !Pl->Ult->bActive)
 	{
-		FLinearColor Mark = Gun->bTargetUnderReticle ? FLinearColor(1.f, 0.1f, 0.08f) : FLinearColor(0.95f, 0.95f, 0.95f);
-		if (const AActor* OverNow = Gun->ReticleTarget.Get(); OverNow && !UWWOWorldSubsystem::CanHurt(Pl, OverNow)) Mark = FLinearColor(0.3f, 0.6f, 1.f);
+		FLinearColor Mark = bOverFriend ? ReticleOnFriend : (bOverFoe ? FLinearColor(1.f, 0.1f, 0.08f) : FLinearColor(0.95f, 0.95f, 0.95f));
 		Mark.A = FMath::Clamp((Aimed - 0.55f) / 0.35f, 0.f, 1.f);
 		if (Mark.A > 0.f)
 		{
@@ -352,8 +354,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 				if (Gun->SightOnScreen(Seen, Roll)) At = Center + Seen * Size.X * 0.5f;
 				const FVector2D AxisX(FMath::Cos(Roll), FMath::Sin(Roll)), AxisY(-FMath::Sin(Roll), FMath::Cos(Roll));
 				const float Flip = Gun->KickAmount();
-				// A pip between two brackets, ( . ), in the sight's own red (blue over a teammate).
-				if (Mark.B < 0.5f || Mark.R > 0.9f) { const float A = Mark.A; Mark = FLinearColor(1.f, 0.3f, 0.3f, A); }
+				// A pip between two brackets, ( . ), in the sight's own red (green over a teammate).
+				if (!bOverFriend) { const float A = Mark.A; Mark = FLinearColor(1.f, 0.3f, 0.3f, A); }
 				const float Gap = 0.03f * Size.Y, Tall = 0.011f * Size.Y, Bow = 0.004f * Size.Y;
 				P.Dot(AimAt, 1.4f, Mark);
 				Mark.A *= 1.f - 0.5f * Flip;
