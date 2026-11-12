@@ -123,6 +123,11 @@ public:
 	TWeakObjectPtr<AActor> ReticleTarget;
 
 	void Equip(UWWOWeaponData* NewWeapon);
+	// Stops what the gun was in the middle of (a burst, a reload, a punch): when its owner dies or
+	// starts an ult, so none of it carries on by itself afterwards.
+	void Interrupt();
+	// A fresh life: every gun full and its perks as on first pickup.
+	void ResetForRespawn();
 	void RebindLoadout(); // follow the loadout this character uses now (see UWWOLoadoutSubsystem::Get)
 	bool IsAiming() const;
 	bool IsSwapping() const;
@@ -175,6 +180,11 @@ private:
 	float BurstCooldown = 0.f;
 	bool bFullBurst = false;    // Full Burst: the last burst landed every round
 	bool bBurstBoosted = false; // ...so this one hits harder
+	// What each gun was left with when you swapped away from it, by weapon id: swapping back is
+	// not a reload and doesn't re-arm Overpressure or Cold Bore.
+	struct FGunState { int32 Ammo = 0; bool bOverpressure = true; double LastShot = -1000.0; };
+	TMap<FName, FGunState> GunStates;
+	void StoreGunState();
 	void BeginBurst(int32 Rounds);
 	void EndBurst();
 	void FireRound(); // one round: the shot, the ammo, a refunded round

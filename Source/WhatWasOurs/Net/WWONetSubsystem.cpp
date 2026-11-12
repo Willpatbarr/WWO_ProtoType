@@ -83,6 +83,7 @@ void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 {
 	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = FString();
+	bShowTitle = false;
 	UE_LOG(LogWWO, Display, TEXT("Net: playing %s alone (%s)"), *Map.ToString(), bPvP ? TEXT("PvP against bots") : TEXT("waves"));
 	UGameplayStatics::OpenLevel(GetWorld(), Map, true, MatchOptions(false, bPvP, Bots));
 }
@@ -142,22 +143,40 @@ void UWWONetSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+bool UWWONetSubsystem::IsHosting() const
+{
+	const UWorld* World = GetWorld();
+	return World && World->GetNetMode() == NM_ListenServer;
+}
+
 void UWWONetSubsystem::OnNetworkFailure(UWorld* World, UNetDriver* Driver, ENetworkFailure::Type Type, const FString& Error)
 {
 	// The host left or the connection dropped: the engine takes you back to the start map alone,
 	// which opens on the launch screen with this as its status line.
 	// (A host hears of a joiner's dropped connection here too: its own game goes on.)
-	if (World && World->GetNetMode() == NM_ListenServer) return;
-	Status = FString::Printf(TEXT("Lost the connection (%s)"), ENetworkFailure::ToString(Type));
-	if (World && World->GetNetMode() == NM_Client) bShowTitle = true;
+	if (IsHosting()) return;
+	// A connection that never got going (the host is gone, the address is wrong) comes with no world.
+	const bool bNeverJoined = Type == ENetworkFailure::PendingConnectionFailure || !World || World->GetNetMode() != NM_Client;
+	Status = bNeverJoined ? FString::Printf(TEXT("Couldn't join (%s)"), ENetworkFailure::ToString(Type))
+		: FString::Printf(TEXT("Lost the connection (%s)"), ENetworkFailure::ToString(Type));
+	bShowTitle = true; // either way the engine reloads the start map: open it on the launch screen
 	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	UE_LOG(LogWWO, Warning, TEXT("Net: network failure %s: %s"), ENetworkFailure::ToString(Type), *Error);
 }
 
 void UWWONetSubsystem::OnTravelFailure(UWorld* World, ETravelFailure::Type Type, const FString& Error)
 {
-	Status = FString::Printf(TEXT("Couldn't join (%s)"), ETravelFailure::ToString(Type));
 	UE_LOG(LogWWO, Warning, TEXT("Net: travel failure %s: %s"), ETravelFailure::ToString(Type), *Error);
+	if (IsHosting())
+	{
+		Status = FString::Printf(TEXT("Couldn't change maps (%s)"), ETravelFailure::ToString(Type));
+		return;
+	}
+	// Not a host (any more): the engine falls back to the start map alone. No session of ours should
+	// stay advertised, and that map opens on the launch screen with the reason.
+	Status = FString::Printf(TEXT("Couldn't join (%s)"), ETravelFailure::ToString(Type));
+	bShowTitle = true;
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 }
 
 FString UWWONetSubsystem::LocalAddress()
@@ -218,6 +237,7 @@ void UWWONetSubsystem::Host(FName Map, bool bPvP, int32 Bots)
 	PendingMap = Map;
 	bPendingPvP = bPvP;
 	PendingBots = Bots;
+	bShowTitle = false;
 	Status = TEXT("Starting a LAN game...");
 	const IOnlineSessionPtr S = Sessions();
 	if (!S.IsValid())
@@ -306,9 +326,11 @@ void UWWONetSubsystem::OnFound(bool bOk)
 	UE_LOG(LogWWO, Display, TEXT("Net: LAN search %s, %d game(s) found"), bOk ? TEXT("done") : TEXT("failed"), Count);
 	bSearching = false;
 	Games.Reset();
+	FoundResults.Reset();
 	for (int32 i = 0; i < Count; ++i)
 	{
 		const FOnlineSessionSearchResult& R = Search->SearchResults[i];
+		FoundResults.Add(R);
 		FWWOGameInfo Info;
 		// The LAN name is "<computer>[.local]-<32 hex digits>": keep the computer's name.
 		Info.Host = R.Session.OwningUserName;
@@ -343,7 +365,7 @@ void UWWONetSubsystem::OnFound(bool bOk)
 void UWWONetSubsystem::JoinGame(int32 Index)
 {
 	const IOnlineSessionPtr S = Sessions();
-	if (!S.IsValid() || !Search.IsValid() || !Search->SearchResults.IsValidIndex(Index))
+	if (!S.IsValid() || !FoundResults.IsValidIndex(Index))
 	{
 		Status = TEXT("That game is gone: search again");
 		return;
@@ -352,7 +374,8 @@ void UWWONetSubsystem::JoinGame(int32 Index)
 	if (S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = TEXT("Joining...");
 	JoinHandle = S->AddOnJoinSessionCompleteDelegate_Handle(FOnJoinSessionCompleteDelegate::CreateUObject(this, &UWWONetSubsystem::OnJoined));
-	if (!S->JoinSession(0, SessionName, Search->SearchResults[Index]))
+	bShowTitle = false;
+	if (!S->JoinSession(0, SessionName, FoundResults[Index]))
 	{
 		S->ClearOnJoinSessionCompleteDelegate_Handle(JoinHandle);
 		Status = TEXT("Couldn't join that game");
@@ -378,6 +401,7 @@ void UWWONetSubsystem::JoinAddress(const FString& Address)
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC) return;
 	Status = TEXT("Joining ") + Address;
+	bShowTitle = false;
 	UE_LOG(LogWWO, Display, TEXT("Net: joining %s"), *Address);
 	PC->ClientTravel(Address, TRAVEL_Absolute);
 }

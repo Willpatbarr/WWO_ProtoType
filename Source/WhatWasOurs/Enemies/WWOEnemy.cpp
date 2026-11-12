@@ -221,6 +221,11 @@ void AWWOEnemy::Die()
 	RespawnLeft = (bRespawns && WS && WS->RespawnTime > 0.f) ? FMath::Max(WS->RespawnTime, CorpseTime) : -1.f;
 }
 
+void AWWOEnemy::OnRep_Dead()
+{
+	SetCollision(!bDead);
+}
+
 void AWWOEnemy::SetCollision(bool bOn)
 {
 	BodyHitbox->SetCollisionEnabled(bOn ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);

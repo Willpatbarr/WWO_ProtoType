@@ -261,9 +261,11 @@ void UWWODamageOverTime::Apply(AActor* Target, float DamagePerSecond, float Seco
 	{
 		Existing->Dps = FMath::Max(Existing->Dps, DamagePerSecond);
 		Existing->TimeLeft = FMath::Max(Existing->TimeLeft, Seconds);
+		if (UWWOWorldSubsystem::CurrentAttacker.IsValid()) Existing->By = UWWOWorldSubsystem::CurrentAttacker;
 		return;
 	}
 	UWWODamageOverTime* Poison = NewObject<UWWODamageOverTime>(Target);
+	Poison->By = UWWOWorldSubsystem::CurrentAttacker;
 	Poison->Dps = DamagePerSecond;
 	Poison->TimeLeft = Seconds;
 	Poison->RegisterComponent();
@@ -294,7 +296,8 @@ void UWWODamageOverTime::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	TickLeft -= DeltaTime;
 	if (TickLeft <= 0.f)
 	{
-		TickLeft = 0.5f;
+		TickLeft += 0.5f; // not reset: a late frame doesn't cost damage
+		FWWODamageBy Credit(By.Get());
 		Target->TakeHit(Dps * 0.5f, false, Target->FeetLocation() + FVector(0, 0, 100.f), Color());
 	}
 	if (TimeLeft <= 0.f) DestroyComponent();

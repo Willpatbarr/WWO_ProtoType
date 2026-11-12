@@ -272,12 +272,20 @@ void UWWOWeaponComponent::RebindLoadout()
 				}
 				if (Signature != ModSignature)
 				{
+					// Other mods on the same gun (your other slot's config of it, or a change in the menu):
+					// a full magazine stays full at its new size, a part-used one keeps its rounds, perks
+					// keep their state, and it takes a swap like any other change of weapon.
+					const bool bWasFull = Ammo >= MagazineSize();
 					ModSignature = Signature;
 					RefreshStats();
 					BuildModel(); // the mods' parts
-					Ammo = MagazineSize();
+					Ammo = bWasFull ? MagazineSize() : FMath::Min(Ammo, MagazineSize());
 					HitStreak = StaticHits = 0;
-					bOverpressure = true;
+					BurstLeft = 0;
+					bFullBurst = bBurstBoosted = false;
+					CancelReload();
+					SwapLength = FMath::Max(M("swap_time", SwapTime), 0.05f);
+					SwapLeft = SwapLength;
 				}
 			}
 			UpdateArmColor();
@@ -317,12 +325,14 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 {
 	// Swap in the weapon's model and start it with a full magazine.
 	if (!NewWeapon) return;
+	StoreGunState(); // the gun you're putting away keeps its rounds
 	BaseWeapon = NewWeapon;
 	Weapon = DuplicateObject<UWWOWeaponData>(NewWeapon, this);
 	HitStreak = StaticHits = 0;
 	bOverpressure = true;
 	AimHeld = 0.f;
 	SinceShot = 100.f;
+	bMeleeLanded = false;
 	RefundRounds = 0;
 	BurstLeft = BurstSize = BurstHits = 0;
 	bFullBurst = bBurstBoosted = false;
@@ -337,12 +347,54 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	RefreshStats();
 	BuildModel();
 	Ammo = MagazineSize();
+	// Back to a gun you carried this life: as you left it (a first pickup is full, perks ready).
+	if (const FGunState* Kept = GunStates.Find(NewWeapon->Id))
+	{
+		Ammo = FMath::Clamp(Kept->Ammo, 0, MagazineSize());
+		bOverpressure = Kept->bOverpressure;
+		SinceShot = GetWorld() ? float(GetWorld()->GetTimeSeconds() - Kept->LastShot) : 100.f;
+	}
 	CancelReload();
 	AdsProgress = 0.f;
 	FireCooldown = 0.f;
 	SwapLength = FMath::Max(M("swap_time", SwapTime), 0.05f);
 	SwapLeft = SwapLength;
 	UWWOSound::PlayFor(GetOwner(), "weapon_swap");
+}
+
+void UWWOWeaponComponent::StoreGunState()
+{
+	if (!BaseWeapon || !GetWorld()) return;
+	FGunState& State = GunStates.FindOrAdd(BaseWeapon->Id);
+	State.Ammo = Ammo;
+	State.bOverpressure = bOverpressure;
+	State.LastShot = GetWorld()->GetTimeSeconds() - SinceShot;
+}
+
+void UWWOWeaponComponent::Interrupt()
+{
+	BurstLeft = 0;
+	bBurstBoosted = false;
+	bReadyShotQueued = false;
+	CancelReload();
+	bMeleeing = false;
+	MeleeProgress = 0.f;
+	bMeleeLanded = false;
+	MeleeTarget = nullptr;
+}
+
+void UWWOWeaponComponent::ResetForRespawn()
+{
+	Interrupt();
+	GunStates.Reset();
+	HitStreak = StaticHits = 0;
+	AdrenalLeft = HammerLeft = 0.f;
+	bFullBurst = false;
+	bOverpressure = true;
+	SinceShot = 100.f;
+	AimHeld = 0.f;
+	FireCooldown = 0.f;
+	if (Weapon) Ammo = MagazineSize();
 }
 
 void UWWOWeaponComponent::BuildModel()

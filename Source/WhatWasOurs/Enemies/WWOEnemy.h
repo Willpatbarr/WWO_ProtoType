@@ -119,7 +119,8 @@ protected:
 	TWeakObjectPtr<AActor> TargetActor; // the player or the closest teammate
 	UPROPERTY(Replicated) float Health = 100.f;
 	UPROPERTY(Replicated) float MaxHealth = 100.f;
-	UPROPERTY(Replicated) bool bDead = false;
+	UPROPERTY(ReplicatedUsing = OnRep_Dead) bool bDead = false;
+	UFUNCTION() void OnRep_Dead(); // a joiner: a corpse stops blocking its shots and its steps too
 	float ModelScale = 1.f;
 
 private:

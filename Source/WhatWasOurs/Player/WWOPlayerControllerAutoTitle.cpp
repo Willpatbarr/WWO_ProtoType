@@ -11,6 +11,7 @@
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOWeaponComponent.h"
 #include "UI/WWOLaunchMenu.h"
 #include "UI/WWOSettingsMenu.h"
 #include "Net/WWONetSubsystem.h"
@@ -46,6 +47,38 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	const FString Level = UGameplayStatics::GetCurrentLevelName(this);
 	auto Quit = [] { UE_LOG(LogWWO, Display, TEXT("AutoTest title: done")); FPlatformMisc::RequestExit(false); };
 
+	// -WWOAutoTestTitleJoinFail: from the title, join an address nobody is hosting at. When the
+	// connection gives up, the game must be back on the launch screen (a freshly loaded start map)
+	// with the reason, not in a solo game.
+	static const bool bJoinFail = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
+	if (bJoinFail)
+	{
+		static uint32 FirstController = 0;
+		switch (TitleStage)
+		{
+		case 0:
+			if (TitleClock > 8.f && Launch)
+			{
+				FirstController = GetUniqueID();
+				Net->JoinAddress(TEXT("127.0.0.1:7999"));
+				Next();
+			}
+			break;
+		case 1:
+			if (GetUniqueID() != FirstController && TitleClock > 3.f)
+			{
+				Check(Launch && IsPaused() && GetNetMode() == NM_Standalone && Net->Status.StartsWith(TEXT("Couldn't join")),
+					FString::Printf(TEXT("a join that fails comes back to the launch screen (%s; status \"%s\")"), Launch ? *Launch->DebugState() : TEXT("no launch screen"), *Net->Status));
+				Shot(TEXT("73_join_failed"));
+				Next();
+			}
+			else if (TitleClock > 150.f) { Check(false, TEXT("the failed join ended")); Quit(); }
+			break;
+		case 2: if (TitleClock > 1.f) Quit(); break;
+		default: break;
+		}
+		return;
+	}
 	if (bJoiner)
 	{
 		switch (TitleStage)
@@ -175,8 +208,20 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		else if (TitleClock > 60.f) { Check(false, TEXT("hosted a game")); Quit(); }
 		break;
 	case 16:
+		if (TitleClock > 0.2f && TitleClock < 1.2f)
+		{
+			// Hosting, the game runs on under the menu: the trigger, held, must not reach the gun.
+			Held[(int32)EWWOAction::Fire] = true;
+			JustPressed[(int32)EWWOAction::Fire] = true;
+		}
 		if (TitleClock > 1.5f)
 		{
+			Held[(int32)EWWOAction::Fire] = false;
+			if (const AWWOCharacter* Me = GetWWOCharacter())
+			{
+				Check(IsMenuOpen() && !IsPaused() && Me->Weapon->Ammo == Me->Weapon->MagazineSize(),
+					FString::Printf(TEXT("online, an open menu keeps the gun quiet (ammo %d of %d after 1 s of trigger)"), Me->Weapon->Ammo, Me->Weapon->MagazineSize()));
+			}
 			const int32 Pages = SettingsMenu->ShownPageCount();
 			Check(!SettingsMenu->IsRestricted() && Pages > 20, FString::Printf(TEXT("the host's settings show everything (%d pages)"), Pages));
 			SettingsMenu->ShowPage(TEXT("Multiplayer"));

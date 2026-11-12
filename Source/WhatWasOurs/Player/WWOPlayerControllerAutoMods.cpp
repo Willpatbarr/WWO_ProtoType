@@ -429,6 +429,8 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	case 76:
 	case 77:
 	case 78:
+	case 79:
+	case 80:
 	{
 		static const FName Frames[] = { "shotgun", "sniper", "burstrifle" };
 		static int32 AmmoBefore = 0;
@@ -510,13 +512,27 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			Held[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
 			Step(78);
 			break;
-		default:
+		case 78:
 			if (AutoModClock < 1.9f) break; // bursts start at 0, 0.4, 0.8, 1.2 and 1.6 s
 			Held[(int32)EWWOAction::Fire] = false;
 			{
 				const int32 Fired = AmmoBefore - Gun->Ammo;
 				Check(Fired == 15, FString::Printf(TEXT("1.9 s of holding the trigger fired %d rounds (5 bursts of 3)"), Fired));
 			}
+			// Swapping away and back is not a reload: the part-used magazine comes back as it was.
+			AmmoBefore = Gun->Ammo;
+			EquipWeaponId("rifle");
+			Step(79);
+			break;
+		case 79:
+			if (AutoModClock < 0.7f) break;
+			Check(Gun->Ammo == Gun->MagazineSize(), FString::Printf(TEXT("the rifle, not yet used this life, comes up full (%d)"), Gun->Ammo));
+			EquipWeaponId("burstrifle");
+			Step(80);
+			break;
+		default:
+			if (AutoModClock < 0.7f) break;
+			Check(Gun->Ammo == AmmoBefore && AmmoBefore < Gun->MagazineSize(), FString::Printf(TEXT("back on the burst rifle it has the %d rounds it was left with (of %d)"), Gun->Ammo, Gun->MagazineSize()));
 			++AutoGunIdx;
 			Step(70);
 			break;

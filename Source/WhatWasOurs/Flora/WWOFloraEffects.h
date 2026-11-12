@@ -83,6 +83,7 @@ public:
 
 	float Dps = 20.f;
 	float TimeLeft = 5.f;
+	TWeakObjectPtr<AActor> By; // who poisoned them: each tick's damage (and a kill) is theirs
 
 private:
 	float TickLeft = 0.5f;

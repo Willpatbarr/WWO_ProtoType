@@ -17,6 +17,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
 #include "Engine/EngineBaseTypes.h"
 #include "WWONetSubsystem.generated.h"
 
@@ -100,6 +101,10 @@ private:
 	bool bShowTitle = false;    // the next map load opens on the launch screen
 	bool bJoinFirst = false;    // FindAndJoin: join the first game the search finds
 	TSharedPtr<FOnlineSessionSearch> Search;
+	// The finished search Games was built from, entry for entry: JoinGame joins from this, never
+	// from Search, which a newer search may already be refilling in another order.
+	TArray<FOnlineSessionSearchResult> FoundResults;
+	bool IsHosting() const;
 	FDelegateHandle CreateHandle, DestroyHandle, FindHandle, JoinHandle;
 	bool bCommandLineDone = false;
 	FDelegateHandle NetFailureHandle, TravelFailureHandle;

@@ -370,7 +370,9 @@ void UWWOCharacterMenu::Open()
 		PreviewSlot->SetHorizontalAlignment(HAlign_Fill);
 		PreviewSlot->SetVerticalAlignment(VAlign_Fill);
 		TileSwitcher->AddChild(Editor);
+		HeaderHandlers = CardHandlers; // the tabs were made with Card: keep theirs past BuildOverview's reset
 	}
+	SetPreviewLive(true);
 	if (PreviewActor) PreviewActor->Turntable->SetRelativeRotation(FRotator::ZeroRotator); // facing you
 	BuildOverview();
 	UWWOSound::PlayFlat(this, "ui_open");
@@ -388,6 +390,16 @@ void UWWOCharacterMenu::Close()
 	if (bOpen) UWWOSound::PlayFlat(this, "ui_close");
 	bOpen = false;
 	SetVisibility(ESlateVisibility::Collapsed);
+	SetPreviewLive(false);
+}
+
+void UWWOCharacterMenu::SetPreviewLive(bool bLive)
+{
+	// A scene capture left on renders the preview every frame of play, menu or no menu.
+	if (!PreviewActor || !PreviewActor->Capture) return;
+	PreviewActor->Capture->bCaptureEveryFrame = bLive;
+	PreviewActor->Capture->SetVisibility(bLive);
+	PreviewActor->SetActorTickEnabled(bLive);
 }
 
 void UWWOCharacterMenu::Back()

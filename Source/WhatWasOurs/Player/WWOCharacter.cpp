@@ -381,7 +381,10 @@ UWWOLoadoutSubsystem* AWWOCharacter::GetLoadout() const
 
 float AWWOCharacter::M(FName Stat, float Base) const
 {
-	if (bNetStats) return Base; // the host's copy of someone else: their values came already modified
+	// The host's copy of a joiner in co-op: its movement values came already modified
+	// (ServerSetMoveStats). Everything else (health, shields, grenades) still takes its loadout here.
+	static const TSet<FName> Sent = { "walk_speed", "sprint_speed", "crouch_speed", "slide_speed", "slide_distance", "jump_height", "air_control" };
+	if (bNetStats && Sent.Contains(Stat)) return Base;
 	const UWWOLoadoutSubsystem* Loadout = GetLoadout();
 	return Loadout ? Loadout->Apply(Stat, Base) : Base;
 }
@@ -441,8 +444,9 @@ void AWWOCharacter::UpdateHitboxes()
 		const ECollisionEnabled::Type Mode = bOn ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision;
 		BodyHitbox->SetCollisionEnabled(Mode);
 		HeadHitbox->SetCollisionEnabled(Mode);
-		// The movement capsule stops taking shots, so the hitboxes (and the head) get them.
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, bOn ? ECR_Ignore : ECR_Block);
+		// The movement capsule never takes shots (the Pawn profile ignores that channel): alive in
+		// PvP the hitboxes and the head get them, and dead nothing does.
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
 	}
 	if (bOn) BodyHitbox->SetCapsuleHalfHeight(FMath::Max(GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - 20.f, 35.f));
 }
@@ -538,7 +542,7 @@ bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, 
 	if (Health->bDead) return false;
 	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
 	if (!HasAuthority()) return false; // a joiner's hit: the number now; the host applies it (health replicates)
-	Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker;
+	if (UWWOWorldSubsystem::CurrentAttacker.IsValid()) Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker; // damage from nobody doesn't erase who hit you last
 	const AActor* By = UWWOWorldSubsystem::CurrentAttacker.Get();
 	Health->DamageCameFrom(By && By != this ? By->GetActorLocation() : Point); // whoever did it, else where it landed
 	Health->TakeDamage(Damage);
@@ -696,6 +700,13 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	}
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
 	UpdateReviveInput();
+	if (Health->bDead != bWeaponSawDead)
+	{
+		// Dying stops the gun mid-burst, mid-reload or mid-punch; coming back starts every gun full.
+		bWeaponSawDead = Health->bDead;
+		if (bWeaponSawDead) Weapon->Interrupt();
+		else Weapon->ResetForRespawn();
+	}
 	if (Health->bDead)
 	{
 		UpdateModel(); // lying where you fell (online the host's replicates to everyone)

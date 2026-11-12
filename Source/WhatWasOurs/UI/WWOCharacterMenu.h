@@ -117,6 +117,8 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> TabLabels;
 	UPROPERTY() TArray<TObjectPtr<class UBorder>> TabLines;
 	UPROPERTY() TArray<TObjectPtr<UObject>> CardHandlers; // the overview cards' click forwarders
+	UPROPERTY() TArray<TObjectPtr<UObject>> HeaderHandlers; // the four tabs' (built once; BuildOverview empties CardHandlers)
+	void SetPreviewLive(bool bLive); // the character preview renders only while the menu is open
 	// Turning the character: the right stick, A and D, or dragging it with the mouse.
 	bool bMouseWasDown = false, bDragging = false;
 	FVector2D LastCursor = FVector2D::ZeroVector;

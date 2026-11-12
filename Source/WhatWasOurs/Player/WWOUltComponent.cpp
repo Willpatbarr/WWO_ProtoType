@@ -93,6 +93,7 @@ void UWWOUltComponent::Begin()
 	Kind = !Flora ? EKind::Blast : (Flora->Ult == EWWOUltKind::Veil ? EKind::Veil : (Flora->Ult == EWWOUltKind::Entrench ? EKind::Entrench : EKind::Blast));
 	Color = Loadout && Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
 	P->bUlting = true;
+	P->Weapon->Interrupt(); // the gun isn't updated during an ult: nothing half-done waits for its end
 	UCharacterMovementComponent* Move = P->GetCharacterMovement();
 	Move->Velocity = FVector(0, 0, FMath::Min(Move->Velocity.Z, 0.f));
 	const bool bMine = P->IsLocallyControlled() && !P->GetBot(); // the camera and first-person gun are only the player's own

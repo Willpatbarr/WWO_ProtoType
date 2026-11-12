@@ -59,8 +59,10 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 	virtual void Tick(float DeltaSeconds) override; // runs while paused too (PlayerTick doesn't)
 
-	bool IsHeld(EWWOAction Action) const { return Held[(int32)Action]; }
-	bool WasJustPressed(EWWOAction Action) const { return JustPressed[(int32)Action]; }
+	// With a menu open your buttons work the menu, not your character: nothing reads as held or
+	// pressed (online the game doesn't pause under a menu, so this is what keeps the gun quiet).
+	bool IsHeld(EWWOAction Action) const { return Held[(int32)Action] && !IsMenuOpen(); }
+	bool WasJustPressed(EWWOAction Action) const { return JustPressed[(int32)Action] && !IsMenuOpen(); }
 	FVector2D GetMoveAxis() const;  // x = right, y = forward, length <= 1
 	FVector2D GetLookAxis() const;  // right stick, x = right, y = up
 	bool ConsumeChord(EWWOChord Chord);

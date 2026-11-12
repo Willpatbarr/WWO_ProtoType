@@ -291,6 +291,20 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Mac and Windows copies of the same commit should see each other on a LAN (same engine, same network
   version); untested.
 
+## Review fixes (2026-11-12)
+
+A read-through of the whole codebase found about 100 issues (the report is the doc "What Was Ours: codebase review findings"). The twelve that mattered most are fixed:
+- **Join list:** `JoinGame` joins from `FoundResults`, the finished search the list was drawn from, not from the search in flight (with two hosts it could join the wrong one).
+- **Failed join:** a connection that never gets going, or a failed travel, lands on the launch screen with "Couldn't join (...)"; before, it dropped you into a solo game. Starting a game on purpose (`Host`, `PlayLocal`, `JoinGame`, `JoinAddress`) clears the show-title flag. Test: `-WWOAutoTestTitleJoinFail`.
+- **Menus and combat input:** `AWWOPlayerController::IsHeld` / `WasJustPressed` / `ConsumeChord` read nothing while a menu is open, and the bumpers don't arm a chord then. Online the game runs on under a menu, and L1 / R1 are both the tab keys and grenade / melee.
+- **Character menu:** the four tabs keep their click handlers (`HeaderHandlers`); the preview's scene capture runs only while the menu is open (`SetPreviewLive`).
+- **Co-op stats:** on the host, `bNetStats` covers only the movement stats a joiner sends; its health, shield and grenade stats take its loadout again.
+- **Dead enemies on a joiner** stop blocking shots and steps (`AWWOEnemy::OnRep_Dead`).
+- **PvP:** a dead player's capsule no longer blocks shots; poison credits whoever applied it (`UWWODamageOverTime::By`) and damage from nobody doesn't erase the last attacker; Shield Share skips the other team.
+- **Swaps and death:** each gun keeps the rounds and perk state it was put away with (`GunStates`; a swap is not a reload, and Overpressure and Cold Bore don't re-arm); a change of mods on the same gun takes a swap and keeps a part-used magazine; dying or starting an ult stops a burst, reload or punch (`Interrupt`), and a respawn starts every gun full (`ResetForRespawn`).
+
+The rest of the report is open: the host's trust of joiners' shots, what joiners see of Soldiers' guns and allies, session failure paths, tests that can't fail, and the stale parts of this file and NETWORKING_HANDOFF.md.
+
 ## Settings menu groups
 Every header with sliders under it is a collapsible group (`UWWOSettingsMenu::BuildRows`): + to open, - to close. The first group of each section starts open, the rest closed, and each stays as you left it while the game runs. A header with no sliders under it stays a plain label. Each row is two lines: the label with its value on the right, then the slider at the panel's full width.
 

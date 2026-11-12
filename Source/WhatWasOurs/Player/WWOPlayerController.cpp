@@ -111,7 +111,8 @@ void AWWOPlayerController::BeginPlay()
 	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
 	bAutoTestNet = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestNet"));
 	bAutoTestTabs = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTabs")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"));
-	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"));
+	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"))
+		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
 	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
 	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
 	bAutoTestHiddenOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestHidden"));
@@ -401,8 +402,9 @@ void AWWOPlayerController::OnActionStarted(const FInputActionInstance& Instance)
 	if (BlockedUntilReleased[(int32)*Id]) return; // still held from the press that closed a menu
 	Held[(int32)*Id] = true;
 	JustPressed[(int32)*Id] = true;
-	if (*Id == EWWOAction::GrenadePad && !IsPaused()) ChordPending.Add(EWWOChord::Grenade, 0.f);
-	if (*Id == EWWOAction::MeleePad && !IsPaused()) ChordPending.Add(EWWOChord::Melee, 0.f);
+	// The bumpers are grenade and melee in play and the tab keys in a menu: never both.
+	if (*Id == EWWOAction::GrenadePad && !IsPaused() && !IsMenuOpen()) ChordPending.Add(EWWOChord::Grenade, 0.f);
+	if (*Id == EWWOAction::MeleePad && !IsPaused() && !IsMenuOpen()) ChordPending.Add(EWWOChord::Melee, 0.f);
 	HandleMenuPress(*Id);
 }
 
@@ -561,6 +563,11 @@ void AWWOPlayerController::UpdateChord(float DeltaTime)
 
 bool AWWOPlayerController::ConsumeChord(EWWOChord Chord)
 {
+	if (IsMenuOpen())
+	{
+		ChordFired.Remove(Chord); // pressed as a menu opened: it doesn't wait for the menu to close
+		return false;
+	}
 	return ChordFired.Remove(Chord) > 0;
 }
 

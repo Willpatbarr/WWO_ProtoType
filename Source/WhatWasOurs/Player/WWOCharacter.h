@@ -324,6 +324,7 @@ public:
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:
+	bool bWeaponSawDead = false; // the weapon has been told of the death (or the respawn) it last saw
 	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
 	double ShotBudgetTime = 0.0; // when it was last refilled
 	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const struct FWWOGunLimits& Limits, FString& Why) const;

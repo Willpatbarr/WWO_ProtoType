@@ -563,6 +563,7 @@ void AWWOGrenade::ShareShields(const FVector& Center)
 	for (AWWOCharacter* Mate : UWWOWorldSubsystem::Get(this)->GetPlayers())
 	{
 		if (Mate == P || Mate->Health->bDead || FVector::Dist(Mate->GetActorLocation(), Center) > Reach) continue;
+		if (UWWOWorldSubsystem::CanHurt(P, Mate)) continue; // PvP: your own team only
 		Mate->Health->Shield = FMath::Min(Mate->Health->Shield + Share->ShieldAmount, Mate->Health->MaxShield());
 	}
 }
