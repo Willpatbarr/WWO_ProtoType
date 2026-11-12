@@ -25,6 +25,15 @@ class WHATWASOURS_API UWWOHUDWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	// The radar. 8 sections of 45 degrees, section 0 centred on the way Viewer looks and the rest
+	// going clockwise (2 is to the right, 4 behind). Each has Steps bands, band 0 at the rim: an
+	// enemy at the edge of the range lights band 0, a nearer one lights more bands inward, and one
+	// inside RadarFullRange lights them all. Out gets 8 * Steps alphas (section * Steps + band):
+	// 0 for an unlit band, else how solid, which drops the more the enemy is above or below you.
+	// Returns Steps.
+	static int32 Radar(const class AWWOCharacter* Viewer, TArray<float>& Out);
+	static int32 RadarBands(float Distance, float Range, float FullRange, int32 Steps); // how many bands an enemy this far lights (0: out of range)
+
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;

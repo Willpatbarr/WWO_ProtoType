@@ -177,6 +177,16 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Audio") float SoundVolume = 1.f; // every sound effect you hear, times this (0 = silent)
 	UPROPERTY(EditAnywhere, Category = "HUD") float HealthBarAdsScale = 1.75f; // the marker range grows by this while aimed in
 	UPROPERTY(EditAnywhere, Category = "HUD") float DamageNumberOffset = 55.f;
+	// The radar (UWWOHUDWidget::Radar): a ring of 8 sections around you, each filled in from its rim
+	// by the nearest enemy that way. RadarRange (m) is its reach, RadarSteps how many fill steps there
+	// are, and inside RadarFullRange (m, about melee distance) a section is full. An enemy higher or
+	// lower than you fills it fainter: down to RadarMinAlpha at RadarHeightFade (m) of difference.
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarRange = 30.f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarFullRange = 4.f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarSteps = 4.f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarHeightFade = 6.f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarMinAlpha = 0.2f;
+	UPROPERTY(EditAnywhere, Category = "HUD") float RadarSize = 70.f; // px radius at 1600 x 900 (0 = no radar)
 	// The red vignette that grows around the screen as your health and shield drop (0 = off).
 	UPROPERTY(EditAnywhere, Category = "HUD") float HealthVignette = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt

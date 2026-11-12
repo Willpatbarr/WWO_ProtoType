@@ -236,6 +236,41 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	}
 }
 
+int32 UWWOHUDWidget::RadarBands(float Distance, float Range, float FullRange, int32 Steps)
+{
+	Steps = FMath::Max(Steps, 1);
+	if (Distance > Range) return 0;
+	if (Distance <= FullRange || Steps == 1 || Range <= FullRange) return Steps;
+	// The stretch from the range's edge in to the full range, cut into Steps - 1 equal parts.
+	const float In = (Range - Distance) / (Range - FullRange); // 0 at the edge, 1 at the full range
+	return FMath::Clamp(1 + FMath::FloorToInt(In * (Steps - 1)), 1, Steps - 1);
+}
+
+int32 UWWOHUDWidget::Radar(const AWWOCharacter* Viewer, TArray<float>& Out)
+{
+	const int32 Steps = Viewer ? FMath::Clamp(FMath::RoundToInt(Viewer->RadarSteps), 1, 12) : 1;
+	Out.Init(0.f, 8 * Steps);
+	const UWWOWorldSubsystem* WS = Viewer ? UWWOWorldSubsystem::Get(Viewer) : nullptr;
+	if (!WS || !Viewer->Camera) return Steps;
+	const float Yaw = Viewer->Camera->GetComponentRotation().Yaw;
+	const FVector From = Viewer->FeetLocation();
+	for (const AActor* Actor : WS->LivingTargets(Viewer)) // enemies, and in PvP the other team
+	{
+		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
+		if (!Target || Actor == Viewer) continue;
+		const FVector To = Target->FeetLocation() - From;
+		const int32 Bands = RadarBands(FVector2D(To.X, To.Y).Size() / WWO::M, Viewer->RadarRange, Viewer->RadarFullRange, Steps);
+		if (Bands <= 0) continue;
+		// Which way, from the way you look: 0 ahead, 90 to the right. (Right on top of you: ahead.)
+		const float Bearing = FMath::FindDeltaAngleDegrees(Yaw, FMath::RadiansToDegrees(FMath::Atan2(To.Y, To.X)));
+		const int32 Section = ((FMath::RoundToInt(Bearing / 45.f) % 8) + 8) % 8;
+		const float Level = FMath::Clamp(FMath::Abs(To.Z) / WWO::M / FMath::Max(Viewer->RadarHeightFade, 0.1f), 0.f, 1.f);
+		const float Alpha = FMath::Lerp(1.f, FMath::Clamp(Viewer->RadarMinAlpha, 0.f, 1.f), Level);
+		for (int32 Band = 0; Band < Bands; ++Band) Out[Section * Steps + Band] = FMath::Max(Out[Section * Steps + Band], Alpha);
+	}
+	return Steps;
+}
+
 int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, const FSlateRect& Culling,
 	FSlateWindowElementList& Out, int32 LayerId, const FWidgetStyle& Style, bool bParentEnabled) const
 {
@@ -493,45 +528,69 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	}
 	Gun->Marked = MoveTemp(StillMarked);
 
-	// PvP: a team-colored marker over every other player's head, so friend and foe read at a glance.
-	// The other team: a solid diamond, only while in sight. Your team: an open chevron, kept (fainter)
-	// through walls so you know where your side is.
+	// PvP: an open chevron over each teammate's head, kept (fainter) through walls so you know where
+	// your side is. The other team has no marker: the radar says roughly where they are.
 	if (UWWOWorldSubsystem::IsPvP(Pl))
 	{
 		const int32 MyTeam = UWWOWorldSubsystem::TeamOf(Pl);
 		for (AWWOCharacter* Other : WS->GetPlayers())
 		{
-			if (Other == Pl || Other->Health->bDead) continue;
-			const int32 Team = UWWOWorldSubsystem::TeamOf(Other);
-			if (Team < 0) continue;
+			if (Other == Pl || Other->Health->bDead || UWWOWorldSubsystem::TeamOf(Other) != MyTeam || MyTeam < 0) continue;
 			FVector2D At;
-			const FVector Head = Other->GetAimParts()[0].Position;
-			const bool bFoe = Team != MyTeam;
-			// Over the top of the body, a fixed way up the screen: clear of a foe's health and shield
-			// bars and their label at any distance.
 			if (!ToScreen(Other->FeetLocation() + FVector(0, 0, Other->GetBodyHeight()), At)) continue;
 			At.Y -= 66.f;
 			FHitResult Hit;
-			const bool bInSight = !Gun->CastRayTo(Head, Hit) || Hit.GetActor() == Other;
-			if (bFoe && !bInSight) continue;
-			const FLinearColor C = WWO::WithAlpha(AWWOPlayerState::TeamColor(Team), bInSight ? 1.f : 0.45f);
+			const bool bInSight = !Gun->CastRayTo(Other->GetAimParts()[0].Position, Hit) || Hit.GetActor() == Other;
+			const FLinearColor C = WWO::WithAlpha(AWWOPlayerState::TeamColor(MyTeam), bInSight ? 1.f : 0.45f);
 			const FLinearColor Back(0, 0, 0, bInSight ? 0.7f : 0.3f);
-			if (bFoe)
-			{
-				// A diamond: stacked rows, widest in the middle.
-				const float R = 9.f;
-				for (float Y = -R - 2.f; Y <= R + 2.f; Y += 1.f) P.Box(At + FVector2D(-(R + 2.f - FMath::Abs(Y)), Y), FVector2D((R + 2.f - FMath::Abs(Y)) * 2.f, 1.f), Back);
-				for (float Y = -R; Y <= R; Y += 1.f) P.Box(At + FVector2D(-(R - FMath::Abs(Y)), Y), FVector2D((R - FMath::Abs(Y)) * 2.f, 1.f), C);
-			}
-			else
-			{
-				const FVector2D L(-8.f, -6.f), M(0.f, 4.f), R(8.f, -6.f);
-				P.Line(At + L, At + M, Back, 6.f);
-				P.Line(At + M, At + R, Back, 6.f);
-				P.Line(At + L, At + M, C, 3.f);
-				P.Line(At + M, At + R, C, 3.f);
-			}
+			const FVector2D L(-8.f, -6.f), M(0.f, 4.f), R(8.f, -6.f);
+			P.Line(At + L, At + M, Back, 6.f);
+			P.Line(At + M, At + R, Back, 6.f);
+			P.Line(At + L, At + M, C, 3.f);
+			P.Line(At + M, At + R, C, 3.f);
 		}
+	}
+
+	// The radar (top left, under the frame rate when that shows).
+	if (Pl->RadarSize > 1.f && !Pl->Health->bDead)
+	{
+		TArray<float> Lit;
+		const int32 Steps = Radar(Pl, Lit);
+		const float R = Pl->RadarSize, Hub = R * 0.14f;
+		const FVector2D Mid(40.f + R, (CVarWWOShowFPS.GetValueOnGameThread() ? 130.f : 40.f) + R);
+		const FLinearColor Base(0.02f, 0.03f, 0.04f, 0.45f), Edge(1.f, 1.f, 1.f, 0.35f), Foe(1.f, 0.16f, 0.12f);
+		constexpr float Gap = 0.035f; // radians left clear each side of a section
+		constexpr int32 Slices = 6;
+		// A piece of a ring: between two radii, across one section (less the gaps).
+		auto Arc = [&](int32 Section, float Inner, float Outer, const FLinearColor& Color)
+		{
+			const float From = (Section - 0.5f) * UE_PI / 4.f + Gap, To = (Section + 0.5f) * UE_PI / 4.f - Gap;
+			for (int32 i = 0; i < Slices; ++i)
+			{
+				// Angle 0 is up the screen (the way you look) and they go clockwise.
+				const float A0 = FMath::Lerp(From, To, float(i) / Slices), A1 = FMath::Lerp(From, To, float(i + 1) / Slices);
+				const FVector2D D0(FMath::Sin(A0), -FMath::Cos(A0)), D1(FMath::Sin(A1), -FMath::Cos(A1));
+				P.Tri(Mid + D0 * Inner, Mid + D0 * Outer, Mid + D1 * Outer, Color);
+				P.Tri(Mid + D0 * Inner, Mid + D1 * Outer, Mid + D1 * Inner, Color);
+			}
+		};
+		for (int32 Section = 0; Section < 8; ++Section)
+		{
+			Arc(Section, Hub, R, Base);
+			for (int32 Band = 0; Band < Steps; ++Band)
+			{
+				const float A = Lit[Section * Steps + Band];
+				if (A <= 0.f) continue;
+				// Band 0 is the rim; the last band reaches the hub.
+				Arc(Section, FMath::Lerp(R, Hub, float(Band + 1) / Steps), FMath::Lerp(R, Hub, float(Band) / Steps), WWO::WithAlpha(Foe, A * 0.9f));
+			}
+			// The line between this section and the next.
+			const float A = (Section + 0.5f) * UE_PI / 4.f;
+			const FVector2D D(FMath::Sin(A), -FMath::Cos(A));
+			P.Line(Mid + D * Hub, Mid + D * R, Edge, 1.f);
+		}
+		P.Circle(Mid, R, Edge, 1.5f);
+		P.Circle(Mid, Hub, Edge, 1.f, 24);
 	}
 
 	// Ammo (bottom right): weapon name, the count (red when low), reload bar.

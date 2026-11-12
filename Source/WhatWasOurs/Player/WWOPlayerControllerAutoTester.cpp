@@ -1,6 +1,7 @@
 // -WWOAutoTestTester (with -WWOTester on the command line, which opens the firing tester): looks
 // the screen over and plays its buttons, with screenshots 86_tester_*. Logs `AutoTest tester: ... ok|FAIL`.
 
+#include "UI/WWOHUDWidget.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
@@ -90,6 +91,19 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 		Check(Dummies == 1 && GM->TesterTarget.IsValid(), FString::Printf(TEXT("%d target dummy, no waves"), Dummies));
 		Check(LP && FMath::IsNearlyEqual((float)LP->Size.X, UWWOFiringTester::WinW, 0.01f), FString::Printf(TEXT("the view is drawn in the window (%.2f of the width)"), LP ? (float)LP->Size.X : -1.f));
 		Check(FiringTester->WantsCursor() && !IsPaused(), TEXT("the pane has the cursor and the game runs under it"));
+		{
+			// The radar: fixed distances first, then the dummy 20 m straight ahead.
+			Check(UWWOHUDWidget::RadarBands(31.f, 30.f, 4.f, 4) == 0 && UWWOHUDWidget::RadarBands(29.f, 30.f, 4.f, 4) == 1
+				&& UWWOHUDWidget::RadarBands(15.f, 30.f, 4.f, 4) == 2 && UWWOHUDWidget::RadarBands(5.f, 30.f, 4.f, 4) == 3
+				&& UWWOHUDWidget::RadarBands(3.f, 30.f, 4.f, 4) == 4, TEXT("radar: bands by distance (out of range 0, rim 1, ..., melee all)"));
+			TArray<float> Lit;
+			const int32 Steps = UWWOHUDWidget::Radar(P, Lit);
+			const int32 Want = UWWOHUDWidget::RadarBands(GM->TesterTargetDistance, P->RadarRange, P->RadarFullRange, Steps);
+			int32 Ahead = 0, Elsewhere = 0;
+			for (int32 i = 0; i < Lit.Num(); ++i) (i < Steps ? Ahead : Elsewhere) += Lit[i] > 0.f ? 1 : 0;
+			Check(Ahead == Want && Elsewhere == 0 && (Want == 0 || Lit[0] > 0.95f),
+				FString::Printf(TEXT("radar: the dummy ahead lights %d bands of the front section, solid, and nothing else (%d, %d elsewhere)"), Want, Ahead, Elsewhere));
+		}
 		Shot(TEXT("86_tester_1_pane"));
 	}
 	if (Crossed(7.f)) { TesterAmmo = P->Weapon->Ammo; FiringTester->Play(UWWOFiringTester::EAct::AdsFire); }

@@ -454,3 +454,11 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Sight height:** each weapon's Settings section has "Sight dot height above gun (cm)" (`UWWOWeaponData::SightHeight`). It moves the gun and its mod parts down while the sight dot stays put, rebuilt live when the slider moves; Save as defaults keeps it.
 - **Gun screenshots:** `-WWOAutoTestGuns` (best on `L_TestRange`, no enemies in the way) saves `38_gun_<weapon>_<hip|ads|plain|perk|perk_ads>`. Add `-WWOFxShots` and each gun also fires once from the hip in slow motion, with a second shot drawn across the view as another player's would be: `39_fx_<weapon>_flash` (muzzle flash) and `_trail` (the shots in the air a moment later). A third shot, `_burst`, catches a body hit, a headshot, a death burst and a soldier's bolt placed in front of you. The effects are `AWWOFXActor::BulletTrail`, `MuzzleFlash`, `HitSpark` and `DeathBurst`; your own gun's flash is the `MuzzleFlash*` parts built in `UWWOWeaponComponent::BuildModel`.
 - **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It covers the rifle, then the hand cannon (stats checked against the mod data, perk set fired). It backs up and restores `Saved/SaveGames/Loadout.sav`.
+
+## Radar (2026-11-12)
+
+- **What it is**: a ring of 8 sections in the HUD's top left (`UWWOHUDWidget::Radar`, drawn in `NativePaint`). Section 0 is the way you look, the rest go clockwise. Each section fills from its rim inward in steps as the nearest enemy that way gets closer, and is full inside melee distance. The fill is fainter the more the enemy is above or below you (it does not say which).
+- **Who shows**: everything in `UWWOWorldSubsystem::LivingTargets` (PvE enemies, target dummies, and in PvP the other team). Always, whether or not they are moving or in sight.
+- **Settings** (Settings, HUD, Radar; on `AWWOCharacter`): `RadarSize` (0 = off), `RadarRange` 30 m, `RadarFullRange` 4 m, `RadarSteps` 4, `RadarHeightFade` 6 m, `RadarMinAlpha` 0.2.
+- **Gone**: the diamond over the other team's heads in PvP. Teammates keep their chevron.
+- **Not done**: the `no_radar` trait still does nothing. Only checked with one dummy at one height (the tester autotest).

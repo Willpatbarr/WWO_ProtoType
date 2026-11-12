@@ -243,6 +243,13 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(P, "HealthBarRadius", TEXT("Show health bars of enemies this near the reticle (px; 0 = only the one under it)"), 0.f, 500.f, 5.f),
 		Row(P, "HealthBarAdsScale", TEXT("Marker range while aiming in (times the range above)"), 1.f, 4.f, 0.05f),
 		Row(P, "DamageNumberOffset", TEXT("Damage numbers this far to the side of the hit (px)"), 0.f, 200.f, 5.f),
+		Header(TEXT("Radar")),
+		Row(P, "RadarSize", TEXT("Radar size (px radius; 0 = off)"), 0.f, 140.f, 2.f),
+		Row(P, "RadarRange", TEXT("Radar range (m)"), 5.f, 80.f, 1.f),
+		Row(P, "RadarFullRange", TEXT("Section fills completely inside (m; about melee distance)"), 1.f, 10.f, 0.25f),
+		Row(P, "RadarSteps", TEXT("Fill steps between the rim and full"), 2.f, 8.f, 1.f),
+		Row(P, "RadarHeightFade", TEXT("Height difference at which a section is faintest (m)"), 1.f, 20.f, 0.5f),
+		Row(P, "RadarMinAlpha", TEXT("Faintest a section gets (0-1)"), 0.05f, 1.f, 0.05f),
 		Header(TEXT("Your health")),
 		Row(P, "HealthVignette", TEXT("Red vignette as your health drops (strength; 0 = off)"), 0.f, 2.f, 0.05f),
 	});
