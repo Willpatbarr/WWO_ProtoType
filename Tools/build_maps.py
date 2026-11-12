@@ -11,7 +11,12 @@ Run headless from the project folder after Tools/create_assets.py and Tools/impo
   and a bridge to the tower. 9 spawn points.
 - L_TestRange: the original gray-box range in Godot's flat colors (no spawn points, so it stays a sandbox).
 - L_ArenaRing: the 4v4 PvP ring map, gray box, from the mockup's JSON (see build_ring_arena).
-WWO_MAPS=ring (or range, large, arena, comma separated) builds only those.
+- L_Arboretum: the Arboretum PvP map, from its mockup's JSON (see build_arboretum); needs
+  Tools/create_kit_concrete.py and Tools/import_flora.py to have run.
+- L_Cascade: the 6v6 PvP map (ruins over waterfalls), from its mockup's JSON through Tools/cascade_layout.py;
+  built by Tools/build_cascade.py with this file's helpers (concrete_instance, lamp_instance, fit_mesh,
+  merge_kind with base/prefix), after Tools/create_kit_concrete.py and import_flora.py.
+WWO_MAPS=ring (or range, large, arena, arboretum, cascade, comma separated) builds only those.
 The arenas are built from the same Quaternius Sci-Fi kit pieces as the Godot maps (imported by
 Tools/import_kit.py), placed as build_scifi_map.gd places them: positions and yaws are worked out in
 Godot space and converted. Each piece collides as its own mesh (Godot's trimesh shapes); stairs
@@ -790,6 +795,7 @@ def build_test_range():
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ring_layout
+import arboretum_layout
 
 RING_COLORS = {
     "ground": (0.18, 0.19, 0.21), "lane": (0.23, 0.22, 0.2), "slab": (0.26, 0.27, 0.3), "wall": (0.55, 0.57, 0.6),
@@ -805,13 +811,14 @@ def mu(x, y, z=0.0):
     return unreal.Vector(y * 100.0, x * 100.0, z * 100.0)
 
 
-def merge_kind(kind, group):
+def merge_kind(kind, group, base=None, prefix="Ring"):
     """One static mesh (with the pieces' collision) for a kind; the pieces go."""
+    base = base or RING_MERGED
     sub = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
     opts = unreal.MergeStaticMeshActorsOptions()
     opts.set_editor_property("destroy_source_actors", True)
     opts.set_editor_property("spawn_merged_actor", True)
-    opts.set_editor_property("base_package_name", RING_MERGED + "/SM_Ring_" + kind)
+    opts.set_editor_property("base_package_name", base + "/SM_" + prefix + "_" + kind)
     settings = opts.get_editor_property("mesh_merging_settings")
     settings.set_editor_property("merge_physics_data", True)
     settings.set_editor_property("merge_materials", False)
@@ -819,9 +826,9 @@ def merge_kind(kind, group):
     # The subsystem isn't there when this runs headless; the older library call still is.
     merged = sub.merge_static_mesh_actors(group, opts) if sub else unreal.EditorLevelLibrary.merge_static_mesh_actors(group, opts)
     if merged:
-        merged.set_actor_label("Ring_" + kind)
+        merged.set_actor_label(prefix + "_" + kind)
         merged.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
-        if kind == "roof":
+        if kind == "roof" and prefix == "Ring":
             # The roof doesn't block the sun, so the arena stays lit under it (gray box).
             merged.static_mesh_component.set_editor_property("cast_shadow", False)
     return merged
@@ -869,8 +876,210 @@ def build_ring_arena():
     log("L_ArenaRing: %d boxes, %d kinds merged" % (len(layout["boxes"]), merged))
 
 
-# WWO_MAPS picks which to build (comma separated: range, large, arena, ring); all by default.
-_wanted = os.environ.get("WWO_MAPS", "range,large,arena,ring").split(",")
+# --- Arboretum (L_Arboretum) -----------------------------------------------------------------
+# The PvP map from ~/Documents/WWO_PvP_Mockups (arboretum_map.py's JSON, through
+# Tools/arboretum_layout.py): a ring corridor round a center room with outer rooms off it and a
+# tunnel underneath. Structure is boxes merged per kind and surfaced with the weathered concrete
+# (M_WWO_KitConcrete projects in world space, so plain boxes take it), greenhouse roofs and the
+# center skylight are the dusty glass, crates are the kit's, planters carry the red tropical
+# plants (Tools/import_flora.py) and the spring tree stands in the middle. Opaque roofs shade the
+# inside, so it is lit by warm point lights, with the sun coming in through the glass.
+# Decoration: pipes (flat-colored cylinders) run round the ring, the rooms and the tunnel, with the
+# kit's pipe clusters on the ring wall; every light has a housing and a glowing panel (M_WWO_Lamp);
+# plants in six sizes crowd the planters and the walls, with fallen leaves on the floor.
+ARB_MERGED = "/Game/WWO/Maps/Arboretum"
+ARB_SEPARATE = ("cover", "crate", "planter", "root")     # stay their own actors
+ARB_NO_SHADOW = ("glass", "lamp", "lamp_tunnel")
+FLORA = "/Game/WWO/Flora/Meshes/SM_"
+ARB_PLANTS = {
+    "small": ["Tropical_Plant_3", "Tropical_Plant_2_1", "Tropical_Plant_6", "Tropical_Plant_1_1", "Tropical_Plant_9"],
+    "mid": ["Tropical_Plant_2_2", "Tropical_Plant_1_2", "Tropical_Plant_7_1", "Tropical_Plant_8"],
+    "big": ["Tropical_Plant_4", "Tropical_Plant_5", "Tropical_Plant_7_2", "Tropical_Plant_8"],
+}
+ARB_PLANTS["tiny"] = ARB_PLANTS["small"]
+ARB_PLANTS["huge"] = ["Tropical_Plant_5", "Tropical_Plant_4", "Tropical_Plant_7_2"]
+ARB_PLANTS["leaf"] = ["Tropical_Ground_Leaves"]
+ARB_PLANT_SCALE = {"tiny": (0.28, 0.5), "small": (0.6, 1.1), "mid": (0.65, 1.05), "big": (0.6, 1.0), "huge": (1.0, 1.4), "leaf": (1.2, 2.6)}
+# where: (candelas, color, attenuation radius cm)
+ARB_LIGHTS = {
+    "ring": (110.0, (1.0, 0.84, 0.64), 1600.0), "connector": (80.0, (1.0, 0.84, 0.64), 1400.0),
+    "center": (120.0, (1.0, 0.9, 0.78), 2000.0), "room": (150.0, (1.0, 0.88, 0.72), 2400.0),
+    "greenhouse": (190.0, (1.0, 0.92, 0.82), 2800.0), "tunnel": (40.0, (1.0, 0.62, 0.42), 1300.0),
+    "fill": (28.0, (1.0, 0.92, 0.82), 2600.0),      # low in each room, so faces the ceiling lights miss aren't black
+}
+
+
+def concrete_instance(name, tint=None, **scalars):
+    """An instance of the weathered concrete for plain boxes (no kit textures behind it)."""
+    folder = "/Game/WWO/Kit/Materials/Concrete"
+    path = folder + "/MI_Arb_" + name
+    if eal.does_asset_exist(path):
+        mi = eal.load_asset(path)
+    else:
+        mi = tools.create_asset("MI_Arb_" + name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    parent = unreal.load_asset("/Game/WWO/Materials/M_WWO_KitConcrete.M_WWO_KitConcrete")
+    if not parent:
+        raise RuntimeError("missing M_WWO_KitConcrete: run Tools/create_kit_concrete.py first")
+    mi.set_editor_property("parent", parent)
+    if tint:
+        mel.set_material_instance_vector_parameter_value(mi, "ConcreteTint", unreal.LinearColor(tint[0], tint[1], tint[2], 1.0))
+    for k, v in scalars.items():
+        mel.set_material_instance_scalar_parameter_value(mi, k, v)
+    eal.save_loaded_asset(mi)
+    return mi
+
+
+def lamp_instance(name, color, glow):
+    """A glowing panel for a light fixture: M_WWO_Lamp (unlit: Color x Glow), made on first use."""
+    path = "/Game/WWO/Materials/M_WWO_Lamp"
+    parent = eal.load_asset(path) if eal.does_asset_exist(path) else None
+    if not parent:
+        parent = tools.create_asset("M_WWO_Lamp", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
+        parent.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+        c = mel.create_material_expression(parent, unreal.MaterialExpressionVectorParameter, -500, 0)
+        c.set_editor_property("parameter_name", "Color")
+        c.set_editor_property("default_value", unreal.LinearColor(1.0, 0.85, 0.65, 1.0))
+        k = mel.create_material_expression(parent, unreal.MaterialExpressionScalarParameter, -500, 200)
+        k.set_editor_property("parameter_name", "Glow")
+        k.set_editor_property("default_value", 4.0)
+        mul = mel.create_material_expression(parent, unreal.MaterialExpressionMultiply, -250, 100)
+        mel.connect_material_expressions(c, "", mul, "A")
+        mel.connect_material_expressions(k, "", mul, "B")
+        mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        mel.recompile_material(parent)
+        eal.save_loaded_asset(parent)
+    folder = "/Game/WWO/Materials/Map"
+    ipath = folder + "/MI_Lamp_" + name
+    mi = eal.load_asset(ipath) if eal.does_asset_exist(ipath) else tools.create_asset(
+        "MI_Lamp_" + name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    mi.set_editor_property("parent", parent)
+    mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(color[0], color[1], color[2], 1.0))
+    mel.set_material_instance_scalar_parameter_value(mi, "Glow", glow)
+    eal.save_loaded_asset(mi)
+    return mi
+
+
+def fit_mesh(mesh, x, y, z0, size, yaw, label, tags=()):
+    """A mesh scaled and placed so its bounds fill a mockup box: center (x, y), base z0, size
+    (length along yaw, thickness, height) in meters."""
+    bb = mesh.get_bounding_box()
+    ext = unreal.Vector(max(bb.max.x - bb.min.x, 1.0), max(bb.max.y - bb.min.y, 1.0), max(bb.max.z - bb.min.z, 1.0))
+    scale = unreal.Vector(size[0] * 100.0 / ext.x, size[1] * 100.0 / ext.y, size[2] * 100.0 / ext.z)
+    cx, cy, cz = [(a + b) * 0.5 * k for a, b, k in ((bb.min.x, bb.max.x, scale.x), (bb.min.y, bb.max.y, scale.y), (bb.min.z, bb.max.z, scale.z))]
+    uyaw = 90.0 - yaw
+    t = math.radians(uyaw)
+    target = mu(x, y, z0 + size[2] * 0.5)
+    loc = unreal.Vector(target.x - (cx * math.cos(t) - cy * math.sin(t)), target.y - (cx * math.sin(t) + cy * math.cos(t)), target.z - cz)
+    a = actors.spawn_actor_from_class(unreal.StaticMeshActor, loc, unreal.Rotator(0.0, 0.0, uyaw))
+    a.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
+    a.static_mesh_component.set_static_mesh(mesh)
+    a.set_actor_scale3d(scale)
+    a.set_actor_label(label)
+    if tags:
+        a.set_editor_property("tags", list(tags))
+    return a
+
+
+def build_arboretum():
+    new_level("/Game/WWO/Maps/L_Arboretum")
+    if eal.does_directory_exist(ARB_MERGED):
+        eal.delete_directory(ARB_MERGED)
+    layout = arboretum_layout.build()
+    b = Builder(1, 1, 11)
+    rng = random.Random(11)
+    lighting()
+    wall = concrete_instance("Wall")
+    floor = concrete_instance("Floor", (0.35, 0.335, 0.305), KitContrast=0.0, DirtStrength=0.85)
+    tunnel = concrete_instance("Tunnel", (0.29, 0.27, 0.245), KitContrast=0.0, DirtStrength=0.9)
+    roof = concrete_instance("Roof", (0.32, 0.31, 0.29), KitContrast=0.0, Grime=0.5)
+    # Small pieces: the foot grime and streaks are sized for walls, so turn them down.
+    planter = concrete_instance("Planter", (0.385, 0.37, 0.335), KitContrast=0.0, BaseStrength=0.3, BaseHeight=30.0, StreakStrength=0.6)
+    cover = concrete_instance("Cover", (0.415, 0.4, 0.36), KitContrast=0.0, BaseStrength=0.3, BaseHeight=30.0, StreakStrength=0.6)
+    glass = unreal.load_asset("/Game/WWO/Kit/Materials/Concrete/MI_KitConcrete_M_Glass")
+    mats = {"floor": floor, "ramp": floor, "wall": wall, "wall_tall": wall, "wall_center": wall, "buttress": wall, "cover": cover,
+            "roof": roof, "glass": glass, "tunnel_floor": tunnel, "tunnel_wall": tunnel, "planter": planter,
+            "rail": solid_material("ArbRail", (0.1, 0.1, 0.11)), "frame": solid_material("ArbRail", (0.1, 0.1, 0.11)),
+            "fixture": solid_material("ArbRail", (0.1, 0.1, 0.11)), "pipe_dark": solid_material("ArbRail", (0.1, 0.1, 0.11)),
+            "pipe": solid_material("ArbPipe", (0.36, 0.4, 0.38)), "pipe_rust": solid_material("ArbPipeRust", (0.45, 0.22, 0.1)),
+            "lamp": lamp_instance("Warm", (1.0, 0.84, 0.62), 5.0), "lamp_tunnel": lamp_instance("Tunnel", (1.0, 0.55, 0.3), 4.0), "root": concrete_instance("Root", (0.3, 0.2, 0.12), KitContrast=0.0, DirtStrength=1.0)}
+    crate_meshes = [kit_mesh("Prop_Crate3"), kit_mesh("Prop_Crate4")]
+    groups = {}
+    crates = 0
+    for box in layout["boxes"]:
+        if box.kind == "crate":
+            fit_mesh(crate_meshes[crates % 2], box.x, box.y, box.z - box.height * 0.5, (box.length, box.thickness, box.height),
+                     box.yaw, "Arb_crate_%d" % crates, ("Cover",))
+            crates += 1
+            continue
+        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "Arb_" + box.kind,
+                  ("Cover",) if box.kind in ARB_SEPARATE and box.kind != "root" else (), yaw=90.0 - box.yaw, pitch=box.pitch,
+                  mesh=CYLINDER if box.shape == "cylinder" else None)
+        if box.kind in ARB_NO_SHADOW:
+            a.static_mesh_component.set_editor_property("cast_shadow", False)   # the sun comes in through the glass
+        if box.kind not in ARB_SEPARATE:
+            groups.setdefault(box.kind, []).append(a)
+    merged = 0
+    for kind, group in groups.items():
+        if len(group) < 2:
+            continue
+        try:
+            m = merge_kind(kind, group, ARB_MERGED, "Arb")
+            if m:
+                merged += 1
+                if kind in ARB_NO_SHADOW:
+                    m.static_mesh_component.set_editor_property("cast_shadow", False)
+        except Exception as e:  # keep the separate pieces if merging isn't available
+            log("arboretum: couldn't merge %s (%s); keeping %d pieces" % (kind, e, len(group)))
+    if merged:
+        eal.save_directory(ARB_MERGED, only_if_is_dirty=False, recursive=True)
+    # The kit's pipe clusters against the ring's outer wall.
+    for i, (name, x, y, z0, size, yaw) in enumerate(layout["props"]):
+        fit_mesh(kit_mesh(name), x, y, z0, size, yaw, "Arb_%s_%d" % (name, i))
+    # Plants on the planters and along the walls, fallen leaves, and the tree in the middle.
+    for i, (x, y, z, size) in enumerate(layout["plants"]):
+        mesh = unreal.load_asset(FLORA + rng.choice(ARB_PLANTS[size]))
+        a = actors.spawn_actor_from_class(unreal.StaticMeshActor, mu(x, y, z - 0.05), unreal.Rotator(0.0, 0.0, rng.uniform(0.0, 360.0)))
+        a.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
+        a.static_mesh_component.set_static_mesh(mesh)
+        a.set_actor_scale3d(unreal.Vector(1, 1, 1) * rng.uniform(*ARB_PLANT_SCALE[size]))
+        a.set_actor_label("Arb_plant_%d" % i)
+    planter_top = layout["data"]["heights_m"]["planter"]
+    for part in ("Trunk", "Crown", "Planter", "Petals"):
+        a = actors.spawn_actor_from_class(unreal.StaticMeshActor, mu(0, 0, planter_top - 0.02), unreal.Rotator(0.0, 0.0, 0.0))
+        a.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
+        a.static_mesh_component.set_static_mesh(unreal.load_asset(FLORA + "SpringTree_" + part))
+        a.set_actor_scale3d(unreal.Vector(1.15, 1.15, 1.15))
+        a.set_actor_label("Arb_tree_" + part)
+    # Lights.
+    for i, (x, y, z, where) in enumerate(layout["lights"]):
+        candelas, color, radius = ARB_LIGHTS[where]
+        a = actors.spawn_actor_from_class(unreal.PointLight, mu(x, y, z), unreal.Rotator(0.0, 0.0, 0.0))
+        c = a.get_component_by_class(unreal.PointLightComponent)
+        c.set_mobility(unreal.ComponentMobility.MOVABLE)
+        c.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+        c.set_intensity(candelas)
+        c.set_light_color(unreal.LinearColor(color[0], color[1], color[2], 1.0))
+        c.set_editor_property("attenuation_radius", radius)
+        c.set_editor_property("cast_shadows", False)
+        a.set_actor_label("Arb_light_%s_%d" % (where, i))
+    # Spawns: a Player Start on each point, facing the middle, on a team-colored pad.
+    for team, color in (("blue", (0.2, 0.4, 0.9)), ("orange", (0.95, 0.5, 0.15))):
+        mat = solid_material("Team" + team.capitalize(), color)
+        for i, (x, y) in enumerate(layout["spawns"][team]):
+            b.box(mu(x, y, 0.02), (2.2, 2.2, 0.04), mat, "SpawnPad", mesh=CYLINDER)
+            place(unreal.PlayerStart, mu(x, y, 1.05), mu(0, 0, 1.05), 0.0, "PlayerStart_%s%d" % (team.capitalize(), i + 1))
+    x0, x1, y0, y1 = layout["bounds"]
+    b.box(unreal.Vector(0, 0, layout["tunnel_z"] * 100.0 - 300.0), (y1 - y0 + 10, x1 - x0 + 10, 0.2), None, "SafetyFloor", hidden=True)
+    vol = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume, unreal.Vector((y0 + y1) * 50.0, 0, 250.0))
+    ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
+    vol.set_actor_scale3d(unreal.Vector((y1 - y0 + 4) * 50.0 / ext, (x1 - x0 + 4) * 50.0 / ext, 800.0 / ext))
+    levels.save_current_level()
+    log("L_Arboretum: %d boxes, %d kinds merged, %d crates, %d kit props, %d plants, %d lights"
+        % (len(layout["boxes"]), merged, crates, len(layout["props"]), len(layout["plants"]), len(layout["lights"])))
+
+
+# WWO_MAPS picks which to build (comma separated: range, large, arena, ring, arboretum, cascade); all by default.
+_wanted = os.environ.get("WWO_MAPS", "range,large,arena,ring,arboretum,cascade").split(",")
 if "range" in _wanted:
     build_test_range()
 if "large" in _wanted:
@@ -879,7 +1088,15 @@ if "arena" in _wanted:
     build_arena()
 if "ring" in _wanted:
     build_ring_arena()
-# Run inside the full editor (merging needs it): UnrealEditor ... -ExecutePythonScript=Tools/build_maps.py
-# with WWO_QUIT=1 closes the editor when done.
+if "arboretum" in _wanted:
+    build_arboretum()
+if "cascade" in _wanted:
+    import types
+    import build_cascade
+    build_cascade.build(types.SimpleNamespace(**globals()))   # this file's helpers, as build_cascade's ns
+# Run inside the full editor (merging needs it): UnrealEditor ... -ExecutePythonScript=<full path>/Tools/build_maps.py
+# -ExecutePythonScript closes the editor itself when the script ends; WWO_QUIT=1 is only for running this from
+# an open editor's console (with -ExecutePythonScript as well, the two exits collide and the editor crashes on
+# its way out, after the maps are saved). Delete a map's .umap before rebuilding it.
 if os.environ.get("WWO_QUIT") == "1":
     unreal.SystemLibrary.quit_editor()

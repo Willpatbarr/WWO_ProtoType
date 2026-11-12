@@ -11,8 +11,8 @@ Run headless from the project folder (the Godot project path is read from WWO_GO
   roughness = factor x ORM.g, metallic = factor x ORM.b, normal map, emissive factor), two-sided
   like the kit's. One instance per kit material, /Game/WWO/Kit/Materials/MI_Kit_<glTF name>,
   filled from the glTF files themselves.
-- Meshes: /Game/WWO/Kit/Meshes/SM_<piece> (one static mesh per glTF file, the chest's animated parts
-  baked in their rest pose). Collision is the mesh itself (complex as simple, double sided), like
+- Meshes: /Game/WWO/Kit/Meshes/SM_<piece> (one static mesh per glTF file, all 158 of the free kit;
+  the chest's and fan's animated parts baked in their rest pose). Collision is the mesh itself (complex as simple, double sided), like
   the Godot builder's trimesh shapes with backface_collision.
 Imported meshes keep glTF axes as Interchange converts them (glTF x, y, z -> Unreal x, z, y);
 build_maps.py turns each piece by 90 degrees of yaw to put it in the port's Godot convention.
@@ -33,7 +33,7 @@ mel = unreal.MaterialEditingLibrary
 eal = unreal.EditorAssetLibrary
 MP = unreal.MaterialProperty
 
-# Every piece the arenas use (build_maps.py).
+# The pieces the arenas use (build_maps.py), then every other piece in the kit (the Arboretum map).
 PIECES = [
     "Platforms/Platform_Metal", "Platforms/Platform_Metal2", "Platforms/Platform_DarkPlates", "Platforms/Platform_Squares",
     "Platforms/Platform_CenterPlate", "Platforms/Platform_Simple2", "Platforms/Platform_Stairs_4Wide", "Platforms/Door_Frame_Square",
@@ -42,6 +42,10 @@ PIECES = [
     "Props/Prop_Computer", "Props/Prop_Chest", "Props/Prop_Light_Floor", "Props/Prop_Crate4", "Props/Prop_Crate3",
     "Props/Prop_Barrel_Large", "Props/Prop_Rail_4",
 ]
+for _folder in ("Walls", "Platforms", "Columns", "Props"):
+    for _file in sorted(os.listdir(os.path.join(KIT, _folder))):
+        if _file.endswith(".gltf") and _folder + "/" + _file[:-5] not in PIECES:
+            PIECES.append(_folder + "/" + _file[:-5])
 
 
 def log(msg):
