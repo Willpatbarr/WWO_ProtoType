@@ -551,14 +551,14 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		}
 	}
 
-	// The radar (top left, under the frame rate when that shows).
+	// The radar (the top left corner; the frame rate goes under it).
 	if (Pl->RadarSize > 1.f && !Pl->Health->bDead)
 	{
 		TArray<float> Lit;
 		const int32 Steps = Radar(Pl, Lit);
 		const float R = Pl->RadarSize, Hub = R * 0.2f;
-		const FVector2D Mid(40.f + R, (CVarWWOShowFPS.GetValueOnGameThread() ? 130.f : 40.f) + R);
-		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(1.f, 0.16f, 0.12f), You(0.3f, 0.6f, 1.f);
+		const FVector2D Mid(24.f + R, 24.f + R);
+		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(0.78f, 0.3f, 0.27f), You(0.42f, 0.58f, 0.8f);
 		constexpr float Gap = 0.035f; // radians left clear each side of a section
 		constexpr int32 Slices = 6;
 		// A piece of a ring: between two radii, across one section (less the gaps).
@@ -832,8 +832,9 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	if (CVarWWOShowFPS.GetValueOnGameThread() && FpsShown > 0.f)
 	{
 		const FLinearColor C = FpsShown >= 59.f ? FLinearColor(0.45f, 1.f, 0.45f) : FpsShown >= 30.f ? FLinearColor(1.f, 0.85f, 0.3f) : FLinearColor(1.f, 0.35f, 0.3f);
-		P.Text(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(FpsShown)), FVector2D(20.f, 14.f), 56.f, C, 0.f, 10.f, 0.85f);
-		P.Text(FString::Printf(TEXT("%.1f ms"), 1000.f / FpsShown), FVector2D(22.f, 84.f), 26.f, FLinearColor(1.f, 1.f, 1.f, 0.85f), 0.f, 6.f, 0.85f);
+		const float Top = Pl->RadarSize > 1.f ? 24.f + Pl->RadarSize * 2.f + 10.f : 14.f; // under the radar
+		P.Text(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(FpsShown)), FVector2D(24.f, Top), 26.f, C, 0.f, 6.f, 0.85f);
+		P.Text(FString::Printf(TEXT("%.1f ms"), 1000.f / FpsShown), FVector2D(24.f, Top + 32.f), 16.f, FLinearColor(1.f, 1.f, 1.f, 0.85f), 0.f, 4.f, 0.85f);
 	}
 	return Result + 3;
 }
