@@ -21,6 +21,98 @@ namespace
 {
 	const FName SessionName("GameSession");
 	const FName MapKey("WWOMAP");
+	const FName PvPKey("WWOPVP");
+	const FName PlayersKey("WWOPLAYERS");
+	const FName StartMap("L_Arena"); // the launch screen sits over it (GameDefaultMap)
+}
+
+const TArray<FWWOMapInfo>& UWWONetSubsystem::Maps()
+{
+	static const TArray<FWWOMapInfo> List = {
+		{ "L_Arena", TEXT("Small Arena"), TEXT("One level, close quarters"), false, true, 4 },
+		{ "L_ArenaLarge", TEXT("Large Arena"), TEXT("Two levels, platforms and halls"), false, true, 4 },
+		{ "L_ArenaRing", TEXT("Ring"), TEXT("4 v 4 · a ring of rooms around a center"), true, false, 4 },
+		{ "L_Arboretum", TEXT("Arboretum"), TEXT("4 v 4 · greenhouses over a tunnel"), true, false, 4 },
+		{ "L_Cascade", TEXT("Cascade"), TEXT("6 v 6 · decks and bridges over the falls"), true, true, 6 },
+		{ "L_TestRange", TEXT("Test Range"), TEXT("Gray-box sandbox, no waves"), false, true, 4 },
+	};
+	return List;
+}
+
+const FWWOMapInfo* UWWONetSubsystem::FindMap(FName Level)
+{
+	return Maps().FindByPredicate([Level](const FWWOMapInfo& M) { return M.Level == Level; });
+}
+
+FString UWWONetSubsystem::MapTitle(FName Level)
+{
+	const FWWOMapInfo* Info = FindMap(Level);
+	return Info ? Info->Title : Level.ToString();
+}
+
+FString UWWONetSubsystem::MatchOptions(bool bListen, bool bPvP, int32 Bots)
+{
+	TArray<FString> Parts;
+	if (bListen) Parts.Add(TEXT("listen"));
+	if (bPvP) Parts.Add(TEXT("pvp"));
+	if (bPvP && Bots >= 0) Parts.Add(FString::Printf(TEXT("bots=%d"), Bots));
+	return FString::Join(Parts, TEXT("?"));
+}
+
+bool UWWONetSubsystem::WantsTitle(const UObject* WorldContext)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!World) return false;
+	if (!bTitleDecided)
+	{
+		bTitleDecided = true;
+		const TCHAR* Cmd = FCommandLine::Get();
+		const FString Line(Cmd);
+		// A test run or a developer's direct start (a map or a -WWO switch on the command line, or
+		// Play-in-Editor) goes straight into the game, as before there was a launch screen.
+		const bool bDirect = World->WorldType != EWorldType::Game || Line.Contains(TEXT("-WWO")) || Line.Contains(TEXT("/Game/"));
+		bShowTitle = FParse::Param(Cmd, TEXT("WWOTitle")) || Line.Contains(TEXT("-WWOAutoTestTitle")) || !bDirect;
+		UE_LOG(LogWWO, Display, TEXT("Launch: %s"), bShowTitle ? TEXT("opening on the launch screen") : TEXT("straight into the game (a map or a -WWO switch on the command line, or Play-in-Editor)"));
+	}
+	if (!bShowTitle || World->GetNetMode() != NM_Standalone) return false;
+	bShowTitle = false;
+	return true;
+}
+
+void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
+{
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	Status = FString();
+	UE_LOG(LogWWO, Display, TEXT("Net: playing %s alone (%s)"), *Map.ToString(), bPvP ? TEXT("PvP against bots") : TEXT("waves"));
+	UGameplayStatics::OpenLevel(GetWorld(), Map, true, MatchOptions(false, bPvP, Bots));
+}
+
+void UWWONetSubsystem::LeaveToTitle()
+{
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	Status = FString();
+	bShowTitle = true;
+	UE_LOG(LogWWO, Display, TEXT("Net: back to the launch screen"));
+	UGameplayStatics::OpenLevel(GetWorld(), StartMap, true);
+}
+
+void UWWONetSubsystem::PublishMatch(const UObject* WorldContext)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const IOnlineSessionPtr S = Sessions();
+	if (!World || World->GetNetMode() != NM_ListenServer || !S.IsValid()) return;
+	FOnlineSessionSettings* Settings = S->GetSessionSettings(SessionName);
+	if (!Settings) return;
+	const AGameStateBase* GS = World->GetGameState();
+	// People only: a bot has a player state too, but doesn't take a place a joiner could have.
+	int32 Players = 0;
+	if (GS) for (const APlayerState* PS : GS->PlayerArray) if (PS && !PS->IsABot()) ++Players;
+	const bool bPvP = UWWOWorldSubsystem::IsPvP(World);
+	FOnlineSessionSettings Next = *Settings;
+	Next.Set(MapKey, UGameplayStatics::GetCurrentLevelName(World), EOnlineDataAdvertisementType::ViaOnlineService);
+	Next.Set(PvPKey, bPvP ? 1 : 0, EOnlineDataAdvertisementType::ViaOnlineService);
+	Next.Set(PlayersKey, FMath::Max(Players, 1), EOnlineDataAdvertisementType::ViaOnlineService);
+	S->UpdateSession(SessionName, Next, true);
 }
 
 UWWONetSubsystem* UWWONetSubsystem::Get(const UObject* WorldContext)
@@ -52,8 +144,13 @@ void UWWONetSubsystem::Deinitialize()
 
 void UWWONetSubsystem::OnNetworkFailure(UWorld* World, UNetDriver* Driver, ENetworkFailure::Type Type, const FString& Error)
 {
-	// The host left or the connection dropped: the engine takes you back to the start map alone.
+	// The host left or the connection dropped: the engine takes you back to the start map alone,
+	// which opens on the launch screen with this as its status line.
+	// (A host hears of a joiner's dropped connection here too: its own game goes on.)
+	if (World && World->GetNetMode() == NM_ListenServer) return;
 	Status = FString::Printf(TEXT("Lost the connection (%s)"), ENetworkFailure::ToString(Type));
+	if (World && World->GetNetMode() == NM_Client) bShowTitle = true;
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	UE_LOG(LogWWO, Warning, TEXT("Net: network failure %s: %s"), ENetworkFailure::ToString(Type), *Error);
 }
 
@@ -116,10 +213,11 @@ bool UWWONetSubsystem::IsOnline(const UObject* WorldContext) const
 	return World && World->GetNetMode() != NM_Standalone;
 }
 
-void UWWONetSubsystem::Host(FName Map, bool bPvP)
+void UWWONetSubsystem::Host(FName Map, bool bPvP, int32 Bots)
 {
 	PendingMap = Map;
 	bPendingPvP = bPvP;
+	PendingBots = Bots;
 	Status = TEXT("Starting a LAN game...");
 	const IOnlineSessionPtr S = Sessions();
 	if (!S.IsValid())
@@ -155,6 +253,8 @@ void UWWONetSubsystem::CreateSession()
 	Settings.bUsesPresence = false;
 	Settings.bAllowJoinViaPresence = false;
 	Settings.Set(MapKey, PendingMap.ToString(), EOnlineDataAdvertisementType::ViaOnlineService);
+	Settings.Set(PvPKey, bPendingPvP ? 1 : 0, EOnlineDataAdvertisementType::ViaOnlineService);
+	Settings.Set(PlayersKey, 1, EOnlineDataAdvertisementType::ViaOnlineService);
 	CreateHandle = S->AddOnCreateSessionCompleteDelegate_Handle(FOnCreateSessionCompleteDelegate::CreateUObject(this, &UWWONetSubsystem::OnCreated));
 	if (!S->CreateSession(0, SessionName, Settings))
 	{
@@ -175,12 +275,21 @@ void UWWONetSubsystem::OnCreated(FName Name, bool bOk)
 
 void UWWONetSubsystem::FindAndJoin()
 {
+	bJoinFirst = true;
+	FindGames();
+}
+
+void UWWONetSubsystem::FindGames()
+{
 	const IOnlineSessionPtr S = Sessions();
 	if (!S.IsValid())
 	{
 		Status = TEXT("No session system: join by address");
+		bJoinFirst = false;
 		return;
 	}
+	if (bSearching) return; // one search at a time; its results are a moment away
+	bSearching = true;
 	Status = TEXT("Searching the LAN...");
 	Search = MakeShared<FOnlineSessionSearch>();
 	Search->bIsLanQuery = true;
@@ -195,14 +304,59 @@ void UWWONetSubsystem::OnFound(bool bOk)
 	if (S.IsValid()) S->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle);
 	const int32 Count = Search.IsValid() ? Search->SearchResults.Num() : 0;
 	UE_LOG(LogWWO, Display, TEXT("Net: LAN search %s, %d game(s) found"), bOk ? TEXT("done") : TEXT("failed"), Count);
+	bSearching = false;
+	Games.Reset();
+	for (int32 i = 0; i < Count; ++i)
+	{
+		const FOnlineSessionSearchResult& R = Search->SearchResults[i];
+		FWWOGameInfo Info;
+		// The LAN name is "<computer>[.local]-<32 hex digits>": keep the computer's name.
+		Info.Host = R.Session.OwningUserName;
+		int32 Dash = INDEX_NONE;
+		if (Info.Host.FindLastChar(TEXT('-'), Dash) && Info.Host.Len() - Dash - 1 == 32) Info.Host.LeftInline(Dash);
+		Info.Host.RemoveFromEnd(TEXT(".local"));
+		FString Map;
+		int32 PvP = 0, Players = 1;
+		R.Session.SessionSettings.Get(MapKey, Map);
+		R.Session.SessionSettings.Get(PvPKey, PvP);
+		R.Session.SessionSettings.Get(PlayersKey, Players);
+		Info.Map = FName(*Map);
+		Info.MapTitle = MapTitle(Info.Map);
+		Info.bPvP = PvP != 0;
+		Info.Players = Players;
+		Info.MaxPlayers = R.Session.SessionSettings.NumPublicConnections;
+		Info.Ping = R.PingInMs;
+		Games.Add(Info);
+	}
+	++GamesSerial;
+	const bool bJoin = bJoinFirst;
+	bJoinFirst = false;
 	if (!S.IsValid() || Count == 0)
 	{
 		Status = TEXT("No LAN games found");
 		return;
 	}
+	Status = FString();
+	if (bJoin) JoinGame(0);
+}
+
+void UWWONetSubsystem::JoinGame(int32 Index)
+{
+	const IOnlineSessionPtr S = Sessions();
+	if (!S.IsValid() || !Search.IsValid() || !Search->SearchResults.IsValidIndex(Index))
+	{
+		Status = TEXT("That game is gone: search again");
+		return;
+	}
+	// An old session (a game you hosted or joined earlier this run) would refuse the new one.
+	if (S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = TEXT("Joining...");
 	JoinHandle = S->AddOnJoinSessionCompleteDelegate_Handle(FOnJoinSessionCompleteDelegate::CreateUObject(this, &UWWONetSubsystem::OnJoined));
-	S->JoinSession(0, SessionName, Search->SearchResults[0]);
+	if (!S->JoinSession(0, SessionName, Search->SearchResults[Index]))
+	{
+		S->ClearOnJoinSessionCompleteDelegate_Handle(JoinHandle);
+		Status = TEXT("Couldn't join that game");
+	}
 }
 
 void UWWONetSubsystem::OnJoined(FName Name, EOnJoinSessionCompleteResult::Type Result)

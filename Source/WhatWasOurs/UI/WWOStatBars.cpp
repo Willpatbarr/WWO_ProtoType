@@ -27,7 +27,9 @@ int32 UWWOStatBars::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, co
 			S, F, ESlateDrawEffect::None, WWO::Lin(C));
 	};
 
-	const float BarX = 175.f, BarW = Width - BarX - 95.f, BarH = 12.f;
+	// As wide as the menu makes it (Width when it has no size yet): labels, the bar, the value.
+	const float Wide = Geo.GetLocalSize().X > 1.f ? Geo.GetLocalSize().X / K : Width;
+	const float BarX = 150.f, BarW = Wide - BarX - 92.f, BarH = 12.f;
 	const FLinearColor Track(0.13f, 0.14f, 0.17f), Bar(0.82f, 0.84f, 0.88f);
 	const FLinearColor Gain(0.35f, 0.95f, 0.45f), Loss(1.f, 0.35f, 0.3f);
 	for (int32 i = 0; i < Rows.Num(); ++i)
@@ -56,7 +58,7 @@ int32 UWWOStatBars::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, co
 		}
 		Box(BarX + BarW * 0.5f - 1.f, Mid - BarH * 0.5f - 3.f, 2.f, BarH + 6.f, FLinearColor(1, 1, 1, 0.35f), Layer + 2); // the bare frame
 		const bool bBetter = Then > Now;
-		Text(bChange ? R.PreviewValue : R.Value, Width, Mid, 17.f, bChange ? (bBetter ? Gain : Loss) : FLinearColor::White, 1.f);
+		Text(bChange ? R.PreviewValue : R.Value, Wide, Mid, 17.f, bChange ? (bBetter ? Gain : Loss) : FLinearColor::White, 1.f);
 	}
 	return Layer + 2;
 }

@@ -2,7 +2,7 @@
   "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game.",
   "weapons": {
     "rifle": {
-      "mesh": "/Game/Weapons/Rifle/Mesh/SM_Rifle.SM_Rifle",
+      "mesh": "/Game/WWO/Meshes/SM_Rifle_NoSights.SM_Rifle_NoSights",
       "scale": 0.75,
       "rot": [0, -90, 0],
       "offset": [0, 0, -6.7],
@@ -29,6 +29,47 @@
         "sight": [2, 0, 5.4],
         "chambering": [4, 2.4, 1],
         "grip": [6.8, 0.0, -0.8]
+      }
+    },
+    "burstrifle": {
+      "mesh": "/Game/WWO/Meshes/SM_Rifle_NoSights.SM_Rifle_NoSights",
+      "scale": 0.8,
+      "rot": [0, -90, 0],
+      "offset": [0, 0, -7.1],
+      "muzzle": [50, 0, 4.3],
+      "parts": [
+        {
+          "shape": "box",
+          "size": [16, 2.6, 2.6],
+          "offset": [40, 0, 4.3],
+          "color": "steel"
+        },
+        {
+          "shape": "box",
+          "size": [1.2, 2.9, 2.9],
+          "offset": [36, 0, 4.3],
+          "color": "orange"
+        },
+        {
+          "shape": "box",
+          "size": [1.2, 2.9, 2.9],
+          "offset": [40, 0, 4.3],
+          "color": "orange"
+        },
+        {
+          "shape": "box",
+          "size": [1.2, 2.9, 2.9],
+          "offset": [44, 0, 4.3],
+          "color": "orange"
+        }
+      ],
+      "anchors": {
+        "barrel": [50, 0, 4.3],
+        "magazine": [8.5, 0, -6.4],
+        "stock": [-32, 0, 1],
+        "sight": [6.4, 0, 5],
+        "chambering": [15, 2.8, -1],
+        "grip": [23.5, 0, -1]
       }
     },
     "shotgun": {

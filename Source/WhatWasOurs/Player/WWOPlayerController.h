@@ -21,6 +21,7 @@ struct FInputActionInstance;
 class UWWOHUDWidget;
 class UWWOSettingsMenu;
 class UWWOCharacterMenu;
+class UWWOLaunchMenu;
 class AWWOCharacter;
 class FWWOMenuCursor;
 class FWWOMenuKeys;
@@ -80,6 +81,7 @@ public:
 	void CloseMenus();
 	void OnMenuClosed();
 	UWWOSettingsMenu* GetSettingsMenu() const { return SettingsMenu; }
+	UWWOLaunchMenu* GetLaunchMenu() const { return LaunchMenu; } // the launch screen, when this map opened on it
 
 	// Key bindings (the settings menu's Controls page). Each row has a keyboard / mouse key and a
 	// controller button; changes are kept in Saved/WWO/Keybinds.json.
@@ -112,6 +114,7 @@ private:
 	UPROPERTY() TObjectPtr<UWWOHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> SettingsMenu;
 	UPROPERTY() TObjectPtr<UWWOCharacterMenu> CharacterMenu;
+	UPROPERTY() TObjectPtr<UWWOLaunchMenu> LaunchMenu; // only when the map opened on the launch screen
 	TSharedPtr<FWWOMenuCursor> MenuCursor;
 	TSharedPtr<FWWOMenuKeys> MenuKeys; // Play-in-Editor only
 	bool bCreateHeld = false;
@@ -168,6 +171,13 @@ private:
 	TArray<float> AutoModBase;
 	float AutoModBaseReload = 0.f, AutoModBaseSwap = 0.f;
 	bool UpdateAutoModTest(class AWWOCharacter* P, float DeltaTime);
+	// -WWOAutoTestTitle / -WWOAutoTestTitleJoin (WWOPlayerControllerAutoTitle.cpp): the launch screen's
+	// flow, across the map loads it causes.
+	bool bAutoTestTitle = false;
+	void UpdateAutoTitleTest(float DeltaTime);
+	// -WWOAutoTestTabs (WWOPlayerControllerAutoTabs.cpp): the Weapon and Shell tabs fit on one screen.
+	bool bAutoTestTabs = false;
+	void UpdateAutoTabsTest(float DeltaTime);
 	// -WWOAutoTestNet (WWOPlayerControllerAutoNet.cpp): online play, run on the host and the joiner.
 	bool bAutoTestNet = false;
 	float AutoNetWait = 0.f;   // seconds since start

@@ -8,6 +8,8 @@
 // - Ammo counter, weapon name and reload bar (bottom right).
 // - Grenade, ability and ult squares with their charge states (bottom left).
 // - Shield and health bars (bottom center), damage flash, death screen, status tags.
+// - A red vignette around the edges that grows as your health and shield drop and fades as they
+//   come back (AWWOCharacter::HealthVignette scales it).
 // - Aim assist debug cones, floating damage numbers, teammate labels, the wave line.
 
 #include "CoreMinimal.h"
@@ -34,6 +36,7 @@ private:
 	mutable TMap<FString, float> ChipPeak; // status chips: the longest time each has shown (its bar drains against it)
 	bool bHitKilled = false;
 	float DamageFlash = 0.f;
+	float HurtShown = 0.f; // the low-health vignette's strength now, 0-1 (eases toward how hurt you are)
 	// Frame rate readout (top left): averaged over a quarter second of real time.
 	float FpsShown = 0.f;
 	float FpsClock = 0.f;

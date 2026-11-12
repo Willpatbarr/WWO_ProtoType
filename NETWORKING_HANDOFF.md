@@ -277,6 +277,22 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
   The network test now puts the joiner back at its start before the shooting (each machine's own movement
   settings take the run to different places) and uses whichever ability slot holds Thornfist.
 
+## Launch screen and the game list (2026-11-12)
+- Starting and joining games is the launch screen's job now (HANDOFF.md, "Launch screen"); the Settings
+  menu's host / join buttons stay as testing shortcuts.
+- `UWWONetSubsystem`: `Host(Map, bPvP, Bots)`, `PlayLocal(Map, bPvP, Bots)` (the same match alone, PvP
+  against bots; the standalone restart keeps `?pvp?bots=N` too), `FindGames()` / `Games` / `JoinGame(i)`
+  for the list, `LeaveToTitle()`. `FindAndJoin()` (the `-WWOJoin` switch) is a search that joins the first.
+- The advertised game carries its map, mode and player count (`WWOMAP`, `WWOPVP`, `WWOPLAYERS`); the host's
+  game mode refreshes them every 2 s (`PublishMatch`), so a map change or a new player shows in others'
+  lists. Bots don't count as players.
+- A dropped connection lands the joiner on the launch screen with the reason; the host hears of a
+  joiner's drop through the same engine callback and carries on.
+- Only the host has the development settings online (HANDOFF.md, "Settings online").
+- Tested with two copies on the Mac mini (`-WWOAutoTestTitle` + `-WWOAutoTestTitleJoin`): the joiner's
+  list showed the host's game (Small Arena, PvE, 1 of 6), it joined from the list, and its Settings menu
+  had 5 pages against the host's 28. Not yet on two machines.
+
 ## What's left
 - Phase 1: hand Will the packaged app (it's at /Volumes/UnrealSSD/Builds/WhatWasOurs, signed); fold this file
   into HANDOFF.md.

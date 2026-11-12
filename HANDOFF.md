@@ -8,6 +8,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   Starts on `L_Arena`. Maps: `Content/WWO/Maps/L_Arena`, `L_ArenaLarge`, `L_TestRange`
   (switch in Settings -> Maps).
 - Standalone: `UnrealEditor WhatWasOurs.uproject /Game/WWO/Maps/L_Arena -game -windowed -ResX=1600 -ResY=900`
+- A packaged build, or `-game` with no map and no `-WWO...` switch, opens on the **launch screen**
+  (see "Launch screen" below). A map or any `-WWO` switch on the command line, and Play-in-Editor, go
+  straight into the game as before; `-WWOTitle` forces the launch screen.
 - Menus: Tab / Esc / Options open Settings; I / touchpad / Create open Character. In Play-in-Editor,
   Esc goes to the game while its viewport has focus (the editor would stop PIE): stop with the
   toolbar's Stop button.
@@ -235,6 +238,59 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   dithers in place (backs off, then walks back in).
 - Not yet checked hands-on with the DualSense.
 
+## Launch screen (2026-11-12)
+
+- `UI/WWOLaunchMenu`: in the character and settings menus' style, over the start map (`L_Arena`), paused.
+  Title: the name and one big **PLAY** (plus Loadout, Settings, Quit). PLAY opens the setup screen, one
+  choice at a time: **1 Connection** (Online host / Online join / Local), **2 Mode** for host and local
+  (PvP / PvE) or the list of games on the network for join (searched again every 4 s), **3 Map** (the ones
+  that suit the mode), then **START GAME** (JOIN GAME) appears bottom right. Circle / Esc goes back a step.
+- The maps and which modes each suits are one table, `UWWONetSubsystem::Maps()` (a new map goes there, and
+  in `MapsToCook`). Local PvP fills both teams with bots (`?bots=N` on the map's URL, from the map's team size).
+  Hosted PvP takes the host's Bots setting.
+- It shows when `UWWONetSubsystem::WantsTitle` says so: the first map load of a normal run, after
+  **Quit to the title screen** (Settings, Match, Multiplayer; `LeaveToTitle`), and after a lost connection
+  (the reason shows along the bottom). The player controller makes the widget in `BeginPlay`.
+- "Online" is the LAN play in NETWORKING_HANDOFF.md: games on the same network, no internet matchmaking.
+- Test: `-WWOAutoTestTitle` (no map on the command line) walks every step, plays a local PvP match, quits
+  to the title and hosts; `-WWOAutoTestTitleJoin` in a second copy finds that game in the list and joins
+  it. Shots `60_title` to `72_joiner_multiplayer`; lines `AutoTest title: ... ok|FAIL`. To keep the host up
+  for the joiner add `-WWOTitleHostTime=95` and start the joiner about 75 s after the host.
+
+## Settings online: the host's tuning, your own preferences (2026-11-12)
+
+- In someone else's game the Settings menu shows only a player's own settings: Camera (field of view,
+  reticle height, aimed gun size, mouse and stick sensitivity, rumble, punch, shake, flinch, head bob), HUD,
+  Audio, the key bindings, and Multiplayer's status line with Quit to the title screen and Switch team.
+  Everything else (movement, combat, enemies, waves, bots, items) is development tuning: the host's menu
+  and a solo player's have all of it.
+- `FWWOSettingRow::bPref` marks a player's own row; the list is `OwnSettings()` at the top of
+  `WWOSettingsMenu.cpp` (a page name, and the rows on it or none for the whole page). A new slider is
+  host-only unless it's added there. `UWWOSettingsMenu::bRestricted` is set in `Prepare` (`NM_Client`).
+- A joiner's Reset and Save touch only those rows; Save merges them into its file and leaves the rest.
+- Not done: the host's tuning isn't sent to joiners. Each machine still plays by its own saved values
+  (the same in practice: every build ships the same `Config/ShippedSettings.json`), except where the host
+  already overrides them (PvP movement, gun and melee checks).
+
+## Windows
+
+- Checked on the Mac first (2026-11-12): the Game target compiles, the cook takes the burst rifle, and the
+  staged app (`Saved/StagedBuilds/Mac`) opens on the launch screen and passes `-WWOAutoTestTitle`. The app in
+  `/Volumes/UnrealSSD/Builds` is older: run `Tools/package_mac.sh` for a new one.
+- Unreal can't build for Windows from a Mac: on a Windows PC with UE 5.8 and Visual Studio 2022 ("Game
+  development with C++"), run `Tools\package_win.bat` (output in `Builds\Windows`; `UE_ROOT` and `WWO_OUT`
+  override the folders). Not tried yet: no Windows build has been made.
+- Done ahead of it: `Config/Sounds.json` is staged (it wasn't: packaged builds were silent);
+  `Config/ShippedSettings.json` is in git now, so a Windows build starts from the same Settings values;
+  the Mac-only code is behind `PLATFORM_MAC` (the DualSense Create button poll); DX12 / SM6 is set in
+  `DefaultEngine.ini`; MSVC's shadow errors are off for this module on Windows (`WhatWasOurs.Build.cs`
+  says why).
+- Expect on the first try: MSVC is stricter than clang in places, so a few compile errors are likely;
+  the Fab character packs aren't in git (see "Character models": add them on the PC too, or bodies fall
+  back to the mannequin); Windows Firewall asks on the first host or join (allow private networks).
+- Mac and Windows copies of the same commit should see each other on a LAN (same engine, same network
+  version); untested.
+
 ## Settings menu groups
 Every header with sliders under it is a collapsible group (`UWWOSettingsMenu::BuildRows`): + to open, - to close. The first group of each section starts open, the rest closed, and each stays as you left it while the game runs. A header with no sliders under it stays a plain label. Each row is two lines: the label with its value on the right, then the slider at the panel's full width.
 
@@ -252,6 +308,7 @@ LAN multiplayer, phase 1 of 4: see NETWORKING_HANDOFF.md for what is done, how i
 - Hovering the flora, grenade, an ability, a trait or a weapon slot on the Loadout tab drops a row of the other choices under it (`UpdateHoverPicker` / `OpenHoverPicker`); clicking the tile itself opens its tab.
 - **Two weapon slots** (`UWWOLoadoutSubsystem::SetSlotConfig` / `SwapWeaponSlot`, saved as `WeaponSlots`): each holds a saved weapon config, any config in either slot. Weapon swap (scroll / Triangle) goes to the other slot's config; with that slot empty it steps through every weapon as before. The B / d-pad down key also goes to the other slot, and names the config it lands on.
 - A shell card offers that slot's other parts the same way. The part under the cursor shows on the four stat bars (`UpdateStatPreview`): one you could equip in green (gain) and red (loss); the one you have on in yellow (what it adds) and faint red (what it costs). Only shell parts move those bars.
+- **Weapon and Shell fit on one screen (2026-11-12):** neither tab scrolls. Weapon is four columns across the full width (`BuildWeaponRows` / `BuildModRows`; widths in `WWOCharacterMenu.h`): the five weapons, the frame's stat bars with the equipped perks under them, the six mod slots, and the saved configs; hovering a slot shows its mods where the configs were. Click a config to apply it; Save over and Delete sit beside it. Only the config list scrolls, inside its own box, past about eight. Shell is a row per slot (name at the left, the parts sharing the width) and the net effect. `-WWOAutoTestTabs` checks both at the fullest case (`AutoTest tabs: ... fits on one screen`, shots `80_tab_weapon`, `81_tab_weapon_mods`, `82_tab_shell`); passes at 1280x720, 1440x900, 1600x900 and 1920x1080.
 - Icons are stand-ins: the item's initials in a box, until there is art. The frame part cards have room above their text for it.
 - The character stands still. `UpdateTurn` turns it: right stick (the left one moves the menu cursor), A / D, or dragging it with the mouse or Cross.
 - The preview camera is 2.75 m away (it was Godot's 4.4 m) so the character fills the tall middle column; its backdrop is tuned to come out as the page color.
@@ -293,6 +350,7 @@ LAN multiplayer, phase 1 of 4: see NETWORKING_HANDOFF.md for what is done, how i
 
 - **PvP marking** (`UWWOHUDWidget`, `UWWOWeaponComponent::Marked`): a player is marked when the reticle comes over them (hip) or when they enter the marker range while aimed in (`HealthBarRadius`, times `HealthBarAdsScale` aimed in), and dropped on leaving the range. Enemies show bars while marked; teammates' bars (light grey health, 60% white shield) show whenever in sight. On being marked a player's outline flashes once (`AWWOCharacter::UpdateTeamTint`, `M_WWO_Highlight`'s `Rim`): red for foes, blue for teammates. The reticle is blue over a teammate. A diamond sits over foes in sight, a chevron over teammates (through walls).
 - **Your HUD:** vitals are top center; status chips (shield down, slowed, poisoned, in fog / veiled, entrenched, guard) sit under them with timers; a faint red spike (a long shaded pyramid drawn in perspective below your line of sight) points at where damage came from (`UWWOHealthComponent::DamageCameFrom` on the host, `DamageMarks` on the victim's machine).
+- **Low-health vignette (2026-11-12):** red creeps in from the screen's edges as your health and shield drop (together: nothing at full, faint with the shield gone, heavy near death) and fades as they come back; under the rest of the HUD. `FPainter::Vignette` in `WWOHUDWidget.cpp` (a vertex-colored grid, no material); the amount is `HurtShown`. Settings, HUD: "Red vignette as your health drops" (`AWWOCharacter::HealthVignette`, 0 = off; a player's own setting, so joiners have it). `-WWOAutoTestVignette` holds 100 / 75 / 50 / 25 / 8% and saves `83_vignette_*`.
 - **Looking at it:** `-WWOBotsIdle` makes the bots stand still; `-WWOStressShots` on a `-WWOStress` bot run turns the host to the nearest teammate or foe every 4 s, fakes a hit and a slow, and saves `41_pvp_view_*`.
 Settings, HUD (`AWWOCharacter` properties):
 - **Hover tint** (`TargetHighlight`, 0.12): the enemy under the reticle gets `M_WWO_Highlight` (made by `Tools/create_highlight_material.py`: unlit translucent red, a bit stronger at the outline) as its body mesh's overlay material (`UWWOBodyComponent::SetHighlight`, driven from `UWWOWeaponComponent::UpdateReticleTarget`).
@@ -317,8 +375,13 @@ Placeholder models from Fab (all free): VoltVine = Paragon Wraith, IronBark = Pa
 - **Not done:** the hit flash and region/frame-part colors only reach the mannequin, so models don't flash or recolor yet. The first-person arms are still the mannequin.
 
 ## Weapon mods (draft)
-A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). The rifle and the hand cannon have all six slots open: barrel, magazine, stock, sight, chambering, grip. A mod's `frame` is the weapon id, so a frame's slots only list its own mods.
-- **Mods:** 24 mods in `Config/WeaponMods.json` (12 per weapon), one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.
+A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & Mods — Design"). All five weapons are frames with all six slots open: barrel, magazine, stock, sight, chambering, grip. A mod's `frame` is the weapon id, so a frame's slots only list its own mods; a weapon is a frame as soon as the file has mods for it.
+- **Burst rifle (2026-11-12):** the fifth frame, `DA_Weapon_burstrifle`: 3-round bursts (`UWWOWeaponData::Burst`, `BurstRate` 900 rpm inside a burst; a burst gun's `FireRate` is bursts per minute, 150), 15 damage, 120 m range against the rifle's 80. Hold the trigger for burst after burst; a burst finishes once started (`UWWOWeaponComponent::UpdateFiring`, `FireRound`). Made by `Tools/create_burst_rifle.py` (a copy of the rifle's asset with the rifle's saved Settings values, then the burst rifle's own from `Tools/wwo_data.json`). Model: the Lyra rifle with a boxed barrel (`Config/WeaponModels.json`). The host's shot check allows a burst's rounds (`FWWOGunLimits::Burst`).
+- **Shotgun and sniper (2026-11-12):** frames now too, 12 mods each. New stats `pellet_spread` and `hip_spread`.
+- **Rifle and burst rifle sights (2026-11-12):** all four of their sight mods look like a holo sight: a base on the rail and an open square hood around the aim line, with the gun's own thin sight dot inside it. The hood stays while aiming (no `hide_ads`): you look through it. Both guns use `/Game/WWO/Meshes/SM_Rifle_NoSights`, Lyra's rifle with its iron sights pressed flat onto the rail (`Tools/create_rifle_nosights.py`; the Lyra mesh is one welded shell, so they can't be lifted off). The sniper keeps the original mesh under its scope. A cyan strip marks the plain mod, a red one the perk mod. The shapes are the mods' `parts` in `Config/WeaponMods.json`.
+- **New perks:** shotgun: Point Blank (+25% within 4 m), Slideshot (sliding: half the spread, +15% damage), Tighten (aiming tightens the spread 30%); sniper: Cold Bore (first shot after 4 s +25%), Marksman (a crit returns the round), Held Breath (aimed 1 s: no sway, -30% recoil), Long Shot (+20% beyond 30 m), Finisher (+30% to targets under half health); burst rifle: Full Burst (every round lands: next burst +20%), Fourth Round (4-round bursts). The rest reuse Scavenger, Final Round, Hammer, Adrenal, Brace, Hunter. Any frame can carry any perk: they're keyed by name, not by weapon.
+- **Test:** `-WWOAutoTestFrames` (on `L_TestRange`): each new frame's plain mods against the mod data, and the burst rifle's rounds per pull (3, 4 with Fourth Round, 15 in 1.9 s held). `-WWOAutoTestGuns` now shoots all five guns with both mod sets.
+- **Mods:** 60 mods in `Config/WeaponMods.json` (12 per weapon), one with a stat trade-off only and one with a perk per slot. Stats are percent changes. Edit the file and restart to retune; it isn't an asset yet. `UWWOModData` is in `WWOData.h`.
 - **Equipping and configs:** `UWWOLoadoutSubsystem`, under "Weapon mods". Mods are kept per frame, and configs are saved in the loadout save. Fixed weapon stats are scaled in `UWWOWeaponComponent::RefreshStats`, which rebuilds a copy of the weapon asset each frame, so `GetWeaponData()` returns the modded copy and Settings sliders still edit the asset. Reload, aim-in, swap and ready times go through `M()`, where `Apply` adds `ModPercent`.
 - **Perks:** in `UWWOWeaponComponent::RefreshStats`, `OnShotResult` and `PerkStatus`.
   - focus, brace and hunter: stat changes while they're active
@@ -334,6 +397,7 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **In game:** D-pad Down or B applies the next saved config (`EWWOAction::NextConfig`).
 - **Gun models and mod looks:** `Config/WeaponModels.json` gives each weapon a mesh from Epic's Lyra Starter Game (`Content/Weapons/`, copied from a Lyra project: pistol = hand cannon, rifle = rifle and sniper, shotgun), with its scale, rotation and offset from the sight point, the muzzle, and an anchor per mod slot. Each mod's `parts` in `WeaponMods.json` are simple shapes placed at its slot's anchor; `hide_ads` parts hide while aiming. `UWWOWeaponComponent::BuildModel` reads both on every rebuild (equip or mod change), so they retune with a restart. Without a model entry a weapon falls back to the Godot box model. Lyra content is under the Unreal Engine EULA (fine in an Unreal project).
 - **Gun kick:** each weapon's Settings has "Vertical kick" (0 to 20, 1 = about 3.4 degrees of tilt) and "Horizontal kick" (-5 to 5, + swings the muzzle right) instead of Godot's single gun_kick (`GunKick` only seeds `VerticalKick` now, and an old save's "GunKick" loads as the vertical one). Looks only; recoil is what moves the aim. The gun test's `38_gun_handcannon_kick_diagonal` shows a diagonal kick.
+- **Level top when aimed (2026-11-12):** aimed in, the gun tips down about its sight point until the plane of its top passes through your eye, so you look straight along the top (it shows as a level edge under the sight, with the back of the gun below it) instead of down a ramp running up to the sight. The angle is atan(sight line above the gun's top / eye-to-sight distance): `TopBelowSight` from the mesh's bounds in `BuildModel`, applied in `UpdatePose`. Settings, Camera: "Level the gun's top when aimed" (`UWWOWeaponComponent::AdsLevel`, 1 = fully, 0 = off). The sight stays on the reticle; shots are unaffected (looks only).
 - **ADS gun size:** Settings, Camera, "Gun size when aimed" (`UWWOWeaponComponent::AdsGunScale`, 1 = same as the hip), one for all weapons. The gun model scales around its sight point as you aim in, so the sight stays on the reticle.
 - **Sight height:** each weapon's Settings section has "Sight dot height above gun (cm)" (`UWWOWeaponData::SightHeight`). It moves the gun and its mod parts down while the sight dot stays put, rebuilt live when the slider moves; Save as defaults keeps it.
 - **Gun screenshots:** `-WWOAutoTestGuns` (best on `L_TestRange`, no enemies in the way) saves `38_gun_<weapon>_<hip|ads|plain|perk|perk_ads>`. Add `-WWOFxShots` and each gun also fires once from the hip in slow motion, with a second shot drawn across the view as another player's would be: `39_fx_<weapon>_flash` (muzzle flash) and `_trail` (the shots in the air a moment later). A third shot, `_burst`, catches a body hit, a headshot, a death burst and a soldier's bolt placed in front of you. The effects are `AWWOFXActor::BulletTrail`, `MuzzleFlash`, `HitSpark` and `DeathBurst`; your own gun's flash is the `MuzzleFlash*` parts built in `UWWOWeaponComponent::BuildModel`.

@@ -11,8 +11,9 @@
 // The editors, as before: three loadout tiles' contents (Flora, Weapons, Frame Parts).
 // - Flora (layout "B"): rows for Flora, Abilities (grenade + two abilities) and Traits.
 //   Clicking a slot opens a picker row; picking an ability in the other slot swaps them.
-// - Weapons: the equipped weapon and a 2-column picker with stats.
-// - Frame Parts: a row per slot and the net effect.
+// - Weapons: one screen, no scrolling: the weapons, the frame's stat bars and perks, its mod
+//   slots, and the saved configs (the hovered slot's mods take their place).
+// - Frame Parts: one screen too: a row per slot and the net effect.
 // Right: the character, rendered by a scene capture of a mannequin that follows the loadout,
 // framed like Godot's preview camera (45 degree vertical FOV, 4.4 m away, 1.1 m above the feet).
 // Circle / Esc closes a picker, then the tile, then the menu. Pauses the game.
@@ -87,6 +88,7 @@ public:
 	FString DebugState() const; // for the autotest
 	void AutoTestShow(const FString& Tile, const FString& PickerName); // for the autotest
 	void AutoTestScroll(float Offset);
+	float ScrollOverflow() const; // how far the open tab's page could scroll (0: it all fits), for the autotest
 	AWWOPreviewActor* GetPreviewActor() const { return PreviewActor; } // for the autotest
 
 private:
@@ -157,9 +159,13 @@ private:
 		const FLinearColor* Border = nullptr, float BorderWidth = 2.f, const FString& Tooltip = FString(), bool bWrap = false);
 	void BuildFloraRows();
 	void BuildWeaponRows();
-	void BuildModRows();
+	void BuildModRows(UHorizontalBox* Columns);
 	// Weapon mods (draft): the open slot's popup and the hover preview on the stat bars.
 	static constexpr float ModSlotHeight = 82.f; // Godot pixels per slot, padding included
+	// The Weapon tab's four columns (Godot pixels; with their gaps they fit the 1464 the panel has
+	// at 16:9): weapons, stat bars and perks, mod slots, configs or the open slot's mods.
+	static constexpr float WeaponColumn = 290.f, StatsColumn = 430.f, SlotColumn = 196.f, SideColumn = 440.f;
+	static constexpr float ConfigListHeight = 540.f; // the config list scrolls inside this, the page never
 	FName OpenSlot;
 	float PopupIdle = 0.f;
 	FName AutoTestPreview; // set by the autotest: a mod id to preview as if hovered

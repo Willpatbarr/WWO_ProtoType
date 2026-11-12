@@ -17,9 +17,7 @@ Content/Grave_Mercer/
 Content/Robot_scout_R_21/
 Content/ParagonKallari/
 
-# Made by Tools/package_mac.sh from Saved/WWO/SavedSettings.json
-Config/ShippedSettings.json
-
-# Packaging output (Tools/package_mac.sh)
+# Packaging output (Tools/package_mac.sh, Tools/package_win.bat)
+Builds/
 Build/Mac/FileOpenOrder/
 Build/Mac/*.PackageVersionCounter

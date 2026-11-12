@@ -44,6 +44,7 @@ namespace
 
 	// The most this gun can do with these mods (same data on every machine), perks at their best:
 	// Hammer's faster fire, Overpressure / Final Round on one shot, Focus, Hunter and Patience on crits.
+	// Cold Bore, Full Burst, Long Shot, Point Blank, Finisher and Slideshot on their shots.
 	// Mirrors UWWOWeaponComponent::RefreshStats and Shoot.
 	bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks)
 	{
@@ -65,11 +66,19 @@ namespace
 		if (Perks.Contains("overpressure")) ShotScale *= 1.5f;
 		if (Perks.Contains("final_round")) ShotScale *= 2.f;
 		if (Perks.Contains("focus")) ShotScale *= 1.15f;
+		if (Perks.Contains("cold_bore")) ShotScale *= 1.25f;
+		if (Perks.Contains("full_burst")) ShotScale *= 1.2f;
+		if (Perks.Contains("longshot")) ShotScale *= 1.2f;
+		if (Perks.Contains("point_blank")) ShotScale *= 1.25f;
+		if (Perks.Contains("executioner")) ShotScale *= 1.3f;
+		if (Perks.Contains("slide_shot")) ShotScale *= 1.15f;
 		float Crit = Scaled(Gun->CritMultiplier, "crit_multiplier");
 		if (Perks.Contains("hunter")) Crit += 0.3f;
 		if (Perks.Contains("patience")) Crit += 0.6f;
 		Out.Damage = Scaled(Gun->Damage, "damage") * FMath::Max(1.f, FMath::RoundToFloat(Gun->Pellets)) * ShotScale * FMath::Max(Crit, 1.f) * GunSlack;
-		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * (Perks.Contains("hammer") ? 1.25f : 1.f) * GunSlack;
+		// A burst gun's fire rate is bursts per minute; Fourth Round adds a round to each.
+		Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
+		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? 1.25f : 1.f) * GunSlack;
 		Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
 		return true;
 	}
@@ -96,7 +105,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 
 	// Fire rate: a budget that refills at the gun's rate, holding a few shots for bunched arrivals.
 	const double Now = GetWorld()->GetTimeSeconds();
-	ShotBudget = FMath::Min(BurstShots, ShotBudget + float(Now - ShotBudgetTime) * Limits.Rate);
+	ShotBudget = FMath::Min(FMath::Max(BurstShots, Limits.Burst + 1.f), ShotBudget + float(Now - ShotBudgetTime) * Limits.Rate);
 	ShotBudgetTime = Now;
 	if (ShotBudget < 1.f)
 	{

@@ -85,6 +85,10 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = FCString::Atof(*Value); // tests
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
 	if (bPvP && FParse::Value(FCommandLine::Get(), TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
+	// ?bots=N: the launch screen's count for this match (a local PvP match fills both teams).
+	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
+	OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
+	if (OptionBots >= 0) BotsWanted = FMath::Max(BotsWanted, OptionBots);
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
@@ -232,19 +236,20 @@ void AWWOGameMode::LoadMap(UObject* WorldContext, FName Level)
 	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	if (!World) return;
 	const AWWOGameMode* Mode = World->GetAuthGameMode<AWWOGameMode>();
-	const bool bStayPvP = Mode && Mode->bPvP; // a PvP match stays PvP across restarts and map changes
+	const bool bStayPvP = Mode && Mode->bPvP; // a PvP match stays PvP (with its bots) across restarts and map changes
+	const int32 StayBots = Mode ? Mode->OptionBots : -1;
 	switch (World->GetNetMode())
 	{
 	case NM_ListenServer:
 		UE_LOG(LogWWO, Display, TEXT("Net: host moving everyone to %s%s"), *Level.ToString(), bStayPvP ? TEXT(" (PvP)") : TEXT(""));
-		World->ServerTravel(Level.ToString() + TEXT("?listen") + (bStayPvP ? TEXT("?pvp") : TEXT("")));
+		World->ServerTravel(Level.ToString() + TEXT("?") + UWWONetSubsystem::MatchOptions(true, bStayPvP, StayBots));
 		break;
 	case NM_Client:
 		if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(World)) Net->Status = TEXT("Only the host can restart or change maps");
 		UE_LOG(LogWWO, Display, TEXT("Net: only the host changes maps (asked for %s)"), *Level.ToString());
 		break;
 	default:
-		UGameplayStatics::OpenLevel(World, Level);
+		UGameplayStatics::OpenLevel(World, Level, true, UWWONetSubsystem::MatchOptions(false, bStayPvP, StayBots));
 		break;
 	}
 }
@@ -286,6 +291,12 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 		if (BoundPlayers.Contains(P)) continue;
 		P->Health->OnDied.AddUObject(this, &AWWOGameMode::OnPlayerDied);
 		BoundPlayers.Add(P);
+	}
+	// Hosting: the game others see in their list follows this match (map, mode, players in it).
+	if (GetNetMode() == NM_ListenServer && (PublishLeft -= DeltaSeconds) <= 0.f)
+	{
+		PublishLeft = 2.f;
+		if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(this)) Net->PublishMatch(this);
 	}
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (bPvP) UpdateMatch(DeltaSeconds);

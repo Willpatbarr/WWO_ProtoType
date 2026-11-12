@@ -1321,44 +1321,38 @@ void UWWOCharacterMenu::BuildFloraRows()
 
 void UWWOCharacterMenu::BuildWeaponRows()
 {
+	// The whole Weapon tab on one screen, no scrolling: four columns across the full width.
+	// Weapons | the frame's stat bars, perks under them | its six mod slots | saved configs, or
+	// the hovered slot's mods in their place (BuildModRows fills the last three).
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L || !L->GetWeapon()) return;
 	UWidgetTree* Tree = Styler->WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	AddRowLabel(TEXT("Equipped"));
-	const FLinearColor CurrentEdge(0.85f, 0.85f, 0.9f);
-	{
-		UHorizontalBox* R = Tree->ConstructWidget<UHorizontalBox>();
-		R->AddChildToHorizontalBox(Slot(L->GetWeapon()->DisplayName + TEXT("\n") + L->GetWeapon()->Archetype, FVector2D(320, 110), FLinearColor(0.24f, 0.25f, 0.3f), 20.f,
-			[] {}, &CurrentEdge, 3.f));
-		AddContent(R);
-	}
-	AddRowLabel(TEXT("Choose a weapon"));
-	UUniformGridPanel* Grid = Tree->ConstructWidget<UUniformGridPanel>();
+	UHorizontalBox* Columns = Tree->ConstructWidget<UHorizontalBox>();
+	ModRowsStart = Columns;
+
+	UVerticalBox* Guns = Tree->ConstructWidget<UVerticalBox>();
+	Guns->AddChildToVerticalBox(Spaced(Styler, TEXT("Weapon"), 13.f, FLinearColor(1, 1, 1, 0.6f), 220))->SetPadding(FMargin(0, 0, 0, 12.f * K));
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
-	int32 Index = 0;
 	for (UWWOWeaponData* Option : L->Weapons)
 	{
 		if (!Option->bUnlocked) continue;
 		const bool bOn = Option == L->GetWeapon();
-		const FString Fire = Option->IsSemiAuto() ? TEXT("semi") : TEXT("auto");
+		const FString Fire = Option->BurstCount() > 1 ? FString::Printf(TEXT("%d-round burst"), Option->BurstCount()) : FString(Option->IsSemiAuto() ? TEXT("semi") : TEXT("auto"));
 		const FString Dmg = Option->Pellets > 1.f ? FString::Printf(TEXT("%d×%d dmg"), FMath::RoundToInt(Option->Pellets), FMath::RoundToInt(Option->Damage))
 			: FString::Printf(TEXT("%d dmg"), FMath::RoundToInt(Option->Damage));
-		const FString Stats = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->FireRate), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
-		UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(330, 90), FLinearColor(0.2f, 0.21f, 0.26f), 20.f,
-			[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f);
-		// Godot's GridContainer: 2 columns, 12 px apart.
-		UUniformGridSlot* GridSlot = Grid->AddChildToUniformGrid(B, Index / 4, Index % 4); // the tile is full width
-		GridSlot->SetHorizontalAlignment(HAlign_Fill);
-		GridSlot->SetVerticalAlignment(VAlign_Fill);
-		++Index;
+		const FString Stats = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->RoundsPerMinute()), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
+		UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(WeaponColumn, 62), bOn ? FLinearColor(0.24f, 0.25f, 0.3f) : FLinearColor(0.2f, 0.21f, 0.26f), 15.f,
+			[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 3.f);
+		Guns->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
-	Grid->SetSlotPadding(FMargin(0.f, 0.f, 12.f * K, 12.f * K));
-	UHorizontalBox* R = Tree->ConstructWidget<UHorizontalBox>();
-	R->AddChildToHorizontalBox(Grid);
-	AddContent(R);
-	BuildModRows();
+	USizeBox* GunsBox = Tree->ConstructWidget<USizeBox>();
+	GunsBox->SetWidthOverride(WeaponColumn * K);
+	GunsBox->AddChild(Guns);
+	Columns->AddChildToHorizontalBox(GunsBox);
+	BuildModRows(Columns);
+	AddContent(Columns);
 }
 
 namespace
@@ -1424,58 +1418,82 @@ namespace
 	}
 }
 
-void UWWOCharacterMenu::BuildModRows()
+void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 {
-	// Draft weapon mods: stat bars, every slot at once, and a popup of a slot's mods while the
-	// cursor is over it (see UpdateModHover). Then saved configs.
+	// Draft weapon mods: the stat bars with the equipped perks under them, every slot at once, and
+	// the saved configs. While the cursor is over a slot, that slot's mods take the configs' place
+	// (see UpdateModHover).
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	SlotButtons.Reset();
 	PopupButtons.Reset();
+	PopupPanel = nullptr;
 	if (!L || !L->HasMods(L->GetWeapon())) return;
 	UWidgetTree* Tree = Styler->WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
+	const FLinearColor LabelColor(1, 1, 1, 0.6f);
+	auto Column = [&](float Width, float Gap) -> UVerticalBox*
+	{
+		UVerticalBox* Box = Tree->ConstructWidget<UVerticalBox>();
+		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
+		Size->SetWidthOverride(Width * K);
+		Size->AddChild(Box);
+		Columns->AddChildToHorizontalBox(Size)->SetPadding(FMargin(Gap * K, 0, 0, 0));
+		return Box;
+	};
+	auto Label = [&](UVerticalBox* To, const FString& Text)
+	{
+		const float Above = To->GetChildrenCount() > 0 ? 18.f * K : 0.f; // read before the label is added
+		To->AddChildToVerticalBox(Spaced(Styler, Text, 13.f, LabelColor, 220))->SetPadding(FMargin(0, Above, 0, 12.f * K));
+	};
 
-	AddRowLabel(L->GetWeapon()->DisplayName + TEXT(" frame: stats and mod slots (hover a slot for its mods)"));
-	ModRowsStart = Content->GetChildAt(Content->GetChildrenCount() - 1);
-	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
-
-	// Stat bars.
+	// Stat bars, and what the equipped mods' perks do.
+	UVerticalBox* Stats = Column(StatsColumn, 24.f);
+	Label(Stats, L->GetWeapon()->DisplayName + TEXT(" frame"));
 	StatBars = Tree->ConstructWidget<UWWOStatBars>(UWWOStatBars::StaticClass());
 	USizeBox* BarsBox = Tree->ConstructWidget<USizeBox>();
-	BarsBox->SetWidthOverride(UWWOStatBars::Width * K);
+	BarsBox->SetWidthOverride(StatsColumn * K);
 	BarsBox->SetHeightOverride(UWWOStatBars::RowHeight * BarDefs().Num() * K);
 	BarsBox->AddChild(StatBars);
-	Row->AddChildToHorizontalBox(BarsBox)->SetVerticalAlignment(VAlign_Top);
+	Stats->AddChildToVerticalBox(BarsBox);
 	UpdateStatBars(nullptr, NAME_None, false);
+	Label(Stats, TEXT("Perks"));
+	TArray<FString> Perks;
+	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
+	{
+		const UWWOModData* Mod = L->GetMod(ModSlot);
+		if (Mod && !Mod->PerkText.IsEmpty()) Perks.Add(Mod->PerkText);
+	}
+	UTextBlock* PerkText = Styler->MakeText(Perks.Num() > 0 ? FString::Join(Perks, TEXT("\n")) : TEXT("No perks equipped"), 14.f, FLinearColor(0.6f, 0.85f, 1.f), true);
+	PerkText->SetWrapTextAt(StatsColumn * K);
+	Stats->AddChildToVerticalBox(PerkText);
 
 	// Every slot, one column.
-	UVerticalBox* Slots = Tree->ConstructWidget<UVerticalBox>();
+	UVerticalBox* Slots = Column(SlotColumn, 18.f);
+	Label(Slots, TEXT("Mods"));
 	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
 	{
 		const UWWOModData* Mod = L->GetMod(ModSlot);
 		const FLinearColor Edge = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
 		const bool bOpenSlot = OpenSlot == ModSlot;
 		UWidget* W = Slot(UWWOLoadoutSubsystem::ModSlotTitle(ModSlot) + TEXT("\n") + (Mod ? Mod->DisplayName : FString(TEXT("Empty"))),
-			FVector2D(210, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : FLinearColor(0.2f, 0.21f, 0.25f), 17.f,
+			FVector2D(SlotColumn, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : FLinearColor(0.2f, 0.21f, 0.25f), 16.f,
 			[WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); }, bOpenSlot ? &OnEdge : &Edge, bOpenSlot ? 5.f : 2.f);
 		if (USizeBox* Box = Cast<USizeBox>(W)) SlotButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), ModSlot });
 		Slots->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
-	Row->AddChildToHorizontalBox(Slots)->SetPadding(FMargin(28.f * K, 0, 0, 0));
 
-	// The popup: the open slot's mods, lined up with the slot.
-	PopupPanel = nullptr;
+	UVerticalBox* Side = Column(SideColumn, 22.f);
 	if (!OpenSlot.IsNone())
 	{
+		// The open slot's mods, lined up with the slot (a row up, and never past the column's foot).
 		const int32 SlotIndex = UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(OpenSlot);
+		Label(Side, UWWOLoadoutSubsystem::ModSlotTitle(OpenSlot) + TEXT(" mods"));
 		UBorder* Panel = Tree->ConstructWidget<UBorder>();
 		Panel->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0.12f, 0.13f, 0.16f), 8.f, FLinearColor(0.55f, 0.58f, 0.66f), 2.f));
-		Panel->SetPadding(FMargin(12.f * K));
+		Panel->SetPadding(FMargin(12.f * K, 12.f * K, 12.f * K, 4.f * K));
 		UVerticalBox* List = Tree->ConstructWidget<UVerticalBox>();
-		List->AddChildToVerticalBox(Styler->MakeText(UWWOLoadoutSubsystem::ModSlotTitle(OpenSlot) + TEXT(" mods"), 20.f, FLinearColor(1, 1, 1, 0.7f)))
-			->SetPadding(FMargin(0, 0, 0, 8.f * K));
 		const UWWOModData* Current = L->GetMod(OpenSlot);
 		const FName ThisSlot = OpenSlot;
 		TArray<UWWOModData*> Options = L->ModsFor(OpenSlot);
@@ -1486,7 +1504,7 @@ void UWWOCharacterMenu::BuildModRows()
 			const FLinearColor Base = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
 			const FString Title = (Mod ? Mod->DisplayName : FString(TEXT("Empty"))) + (bOn ? TEXT("   ✓ equipped") : TEXT(""));
 			const FString Body = Mod ? Mod->Summary() : FString(TEXT("No changes"));
-			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(470, 84), Mod ? WWO::Darkened(Base, 0.7f) : FLinearColor(0.2f, 0.21f, 0.25f), 15.f,
+			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(SideColumn - 28.f, 84), Mod ? WWO::Darkened(Base, 0.7f) : FLinearColor(0.2f, 0.21f, 0.25f), 15.f,
 				[WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); },
 				bOn ? &OnEdge : &Base, bOn ? 5.f : 2.f, FString(), true);
 			if (USizeBox* Box = Cast<USizeBox>(W)) PopupButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), Mod });
@@ -1494,43 +1512,40 @@ void UWWOCharacterMenu::BuildModRows()
 		}
 		Panel->SetContent(List);
 		PopupPanel = Panel;
-		UHorizontalBoxSlot* PopupSlot = Row->AddChildToHorizontalBox(Panel);
-		// Beside the slot, a row up, but never past the bottom of the slot column (3 options fit from row 1.6).
-		PopupSlot->SetPadding(FMargin(16.f * K, FMath::Clamp(SlotIndex - 1.f, 0.f, 1.6f) * ModSlotHeight * K, 0, 0));
-		PopupSlot->SetVerticalAlignment(VAlign_Top);
+		Side->AddChildToVerticalBox(Panel)->SetPadding(FMargin(0, FMath::Clamp(SlotIndex - 1.f, 0.f, 1.6f) * ModSlotHeight * K, 0, 0));
+		return;
 	}
-	AddContent(Row);
 
-	// Perks of the equipped mods.
-	TArray<FString> Perks;
-	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
-	{
-		const UWWOModData* Mod = L->GetMod(ModSlot);
-		if (Mod && !Mod->PerkText.IsEmpty()) Perks.Add(TEXT("Perk · ") + Mod->PerkText);
-	}
-	AddContent(Styler->MakeText(Perks.Num() > 0 ? FString::Join(Perks, TEXT("\n")) : TEXT("No perks equipped"), 17.f, FLinearColor(0.6f, 0.85f, 1.f), true));
-
-	// Saved configs: save the current mods, or apply / overwrite / delete a saved one.
-	AddRowLabel(TEXT("Configs  (in game: D-pad Down or B switches to the next one)"));
-	AddContent(Slot(TEXT("Save current as new config"), FVector2D(320, 56), FLinearColor(0.2f, 0.3f, 0.24f), 18.f,
+	// Saved configs: save the current mods as a new one; click one to apply it, or save over or
+	// delete it. The list alone scrolls if there are more than fit (about eight).
+	Label(Side, TEXT("Configs"));
+	Side->AddChildToVerticalBox(Slot(TEXT("Save current as new config"), FVector2D(SideColumn, 44), FLinearColor(0.2f, 0.3f, 0.24f), 16.f,
 		[WeakThis, WL] { if (WL.IsValid()) WL->SaveConfig(INDEX_NONE); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
+	UScrollBox* ConfigList = Tree->ConstructWidget<UScrollBox>();
 	const TArray<FWWOModConfig>& Configs = L->GetConfigs();
+	constexpr float SaveOverWidth = 92.f, DeleteWidth = 72.f, ButtonGap = 6.f;
 	for (int32 i = 0; i < Configs.Num(); ++i)
 	{
 		UHorizontalBox* CRow = Tree->ConstructWidget<UHorizontalBox>();
-		auto Add = [CRow](UWidget* W) { CRow->AddChildToHorizontalBox(W)->SetPadding(FMargin(CRow->GetChildrenCount() > 1 ? 10.f * K : 0.f, 0, 0, 0)); };
 		const bool bActive = L->GetActiveConfig() == i;
-		Add(Slot(Configs[i].Name + (bActive ? TEXT("  (last applied)") : TEXT("")) + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L), FVector2D(560, 70),
-			FLinearColor(0.2f, 0.21f, 0.26f), 15.f, [WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); },
+		const UWWOWeaponData* ConfigGun = nullptr;
+		for (const UWWOWeaponData* W : L->Weapons) if (W && W->Id == Configs[i].Weapon) ConfigGun = W;
+		const FString Name = Configs[i].Name + TEXT(" · ") + (ConfigGun ? ConfigGun->DisplayName : Configs[i].Weapon.ToString()) + (bActive ? TEXT("  ✓") : TEXT(""));
+		CRow->AddChildToHorizontalBox(Slot(Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
+			FVector2D(SideColumn - SaveOverWidth - DeleteWidth - ButtonGap * 2.f - 14.f, 58), FLinearColor(0.2f, 0.21f, 0.26f), 13.f,
+			[WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); },
 			bActive ? &OnEdge : nullptr, 2.f, TEXT("Apply"), true));
-		Add(Slot(TEXT("Apply"), FVector2D(110, 70), FLinearColor(0.2f, 0.3f, 0.24f), 18.f,
-			[WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		Add(Slot(TEXT("Overwrite"), FVector2D(130, 70), FLinearColor(0.3f, 0.27f, 0.18f), 18.f,
-			[WeakThis, WL, i] { if (WL.IsValid()) WL->SaveConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		Add(Slot(TEXT("Delete"), FVector2D(110, 70), FLinearColor(0.32f, 0.17f, 0.17f), 18.f,
-			[WeakThis, WL, i] { if (WL.IsValid()) WL->DeleteConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-		AddContent(CRow);
+		CRow->AddChildToHorizontalBox(Slot(TEXT("Save over"), FVector2D(SaveOverWidth, 58), FLinearColor(0.3f, 0.27f, 0.18f), 13.f,
+			[WeakThis, WL, i] { if (WL.IsValid()) WL->SaveConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }))->SetPadding(FMargin(ButtonGap * K, 0, 0, 0));
+		CRow->AddChildToHorizontalBox(Slot(TEXT("Delete"), FVector2D(DeleteWidth, 58), FLinearColor(0.32f, 0.17f, 0.17f), 13.f,
+			[WeakThis, WL, i] { if (WL.IsValid()) WL->DeleteConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }))->SetPadding(FMargin(ButtonGap * K, 0, 0, 0));
+		if (UScrollBoxSlot* RowSlot = Cast<UScrollBoxSlot>(ConfigList->AddChild(CRow))) RowSlot->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
+	USizeBox* ListBox = Tree->ConstructWidget<USizeBox>();
+	ListBox->SetMaxDesiredHeight(ConfigListHeight * K);
+	ListBox->AddChild(ConfigList);
+	Side->AddChildToVerticalBox(ListBox)->SetPadding(FMargin(0, 10.f * K, 0, 0));
+	Side->AddChildToVerticalBox(Spaced(Styler, TEXT("In game: D-pad Down or B swaps to your other weapon slot's config"), 10.f, FLinearColor(1, 1, 1, 0.4f), 80, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
 }
 
 void UWWOCharacterMenu::OpenModSlot(FName ModSlot)
@@ -1557,7 +1572,7 @@ void UWWOCharacterMenu::UpdateStatBars(const UWWOModData* PreviewMod, FName Prev
 	auto Base = [W, SwapBase](FName Stat) -> float
 	{
 		if (Stat == "damage") return W->Damage;
-		if (Stat == "fire_rate") return W->FireRate;
+		if (Stat == "fire_rate") return W->RoundsPerMinute();
 		if (Stat == "range") return W->FireRange;
 		if (Stat == "magazine_size") return W->MagazineSize;
 		if (Stat == "reload_time") return W->ReloadTime;
@@ -1669,6 +1684,8 @@ void UWWOCharacterMenu::UpdateModHover(float DeltaTime)
 
 void UWWOCharacterMenu::BuildFrameRows()
 {
+	// The whole Shell tab on one screen, no scrolling: a row per slot, its name at the left and its
+	// parts sharing the rest of the width, then the net effect.
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L) return;
 	UWidgetTree* Tree = Styler->WidgetTree;
@@ -1677,23 +1694,25 @@ void UWWOCharacterMenu::BuildFrameRows()
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
 	for (const FName& FrameSlot : UWWOLoadoutSubsystem::FrameSlots())
 	{
-		FString Title = FrameSlot.ToString();
-		Title = Title.Left(1).ToUpper() + Title.Mid(1);
-		AddRowLabel(Title);
-		UWrapBox* Row = Tree->ConstructWidget<UWrapBox>();
-		Row->SetInnerSlotPadding(FVector2D(10.f * K, 10.f * K));
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
+		USizeBox* Name = Tree->ConstructWidget<USizeBox>();
+		Name->SetWidthOverride(74.f * K);
+		Name->AddChild(Spaced(Styler, FrameSlot.ToString(), 13.f, FLinearColor(1, 1, 1, 0.6f), 220));
+		Row->AddChildToHorizontalBox(Name)->SetVerticalAlignment(VAlign_Center);
 		for (UWWOFramePartData* Part : L->FramePartsFor(FrameSlot))
 		{
 			if (!Part->bUnlocked) continue;
 			const bool bOn = Part == L->GetFramePart(FrameSlot);
-			Row->AddChild(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(200, 120), CardColor, 15.f,
+			UHorizontalBoxSlot* PartSlot = Row->AddChildToHorizontalBox(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(140, 104), CardColor, 15.f,
 				[WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f));
+			PartSlot->SetSize(WWOFillSize(1.f));
+			PartSlot->SetPadding(FMargin(10.f * K, 0, 0, 0));
 		}
 		AddContent(Row);
 	}
 	AddRowLabel(TEXT("Net effect"));
 	const TArray<FString> Lines = L->GroupSummary();
-	AddContent(Styler->MakeText(Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), 18.f));
+	AddContent(Styler->MakeText(Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), 16.f));
 }
 
 // --- Autotest hooks -------------------------------------------------------------------------
@@ -1721,6 +1740,11 @@ void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerN
 		Picker = Name;
 	}
 	Refresh();
+}
+
+float UWWOCharacterMenu::ScrollOverflow() const
+{
+	return ExpandedScroll ? ExpandedScroll->GetScrollOffsetOfEnd() : 0.f;
 }
 
 void UWWOCharacterMenu::AutoTestScroll(float Offset)

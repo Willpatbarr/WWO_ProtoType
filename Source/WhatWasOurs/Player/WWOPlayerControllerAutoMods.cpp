@@ -88,11 +88,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		IFileManager::Get().Delete(*BackupPath());
 		if (IFileManager::Get().FileExists(*SavePath())) IFileManager::Get().Copy(*BackupPath(), *SavePath());
 		P->Health->GodMode = 1.f;
-		Check(L->WeaponMods.Num() == 24, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
+		Check(L->WeaponMods.Num() == 60, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
 		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 		AutoGunIdx = AutoGunStage = 0;
-		Step(bAutoTestHiddenOnly ? 60 : bAutoTestGunsOnly ? 40 : 1);
+		Step(bAutoTestHiddenOnly ? 60 : bAutoTestGunsOnly ? 40 : FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestFrames")) ? 70 : 1);
 		break;
 	}
 	case 1:
@@ -298,7 +298,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	{
 		// -WWOAutoTestGuns: each gun at the hip and aimed, and the modded ones with each mod set.
 		// Screenshots 38_gun_<weapon>_<state>.
-		static const FName Ids[] = { "rifle", "handcannon", "shotgun", "sniper" };
+		static const FName Ids[] = { "rifle", "handcannon", "shotgun", "sniper", "burstrifle" };
 		// -WWOFxShots: each gun also fires once from the hip in slow motion, with a second shot drawn
 		// across the view as another player's would be. Screenshots 39_fx_<weapon>_flash (the muzzle
 		// flash) and _trail (the shots in the air a moment later).
@@ -328,9 +328,16 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			break;
 		}
 		const FName Id = Ids[AutoGunIdx];
-		const bool bModded = Id == "rifle" || Id == "handcannon";
-		const FName* PlainSet = Id == "rifle" ? Plain : CannonPlain;
-		const FName* PerkSet = Id == "rifle" ? Perky : CannonPerky;
+		// Every frame's two mod sets, from the mod data: the mod without a perk and the one with, per slot.
+		FName PlainSet[6], PerkSet[6];
+		bool bModded = false;
+		for (const UWWOModData* Mod : L->WeaponMods)
+		{
+			const int32 SlotIndex = Mod && Mod->Frame == Id ? UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(Mod->Slot) : INDEX_NONE;
+			if (SlotIndex < 0 || SlotIndex >= 6) continue;
+			(Mod->Perk.IsNone() ? PlainSet : PerkSet)[SlotIndex] = Mod->Id;
+			bModded = true;
+		}
 		const FString Tag = TEXT("38_gun_") + Id.ToString();
 		auto EquipSet = [&](const FName* Set)
 		{
@@ -407,6 +414,112 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 			++AutoGunIdx;
 			AutoGunStage = 0;
+		}
+		break;
+	}
+	// -WWOAutoTestFrames: the shotgun, sniper and burst rifle frames. Each one's plain mods change
+	// its stats by the mod data's percentages; then the burst rifle's bursts are counted (three
+	// rounds a pull, four with Fourth Round, and how many go out in 2 s of holding the trigger).
+	case 70:
+	case 71:
+	case 72:
+	case 73:
+	case 74:
+	case 75:
+	case 76:
+	case 77:
+	case 78:
+	{
+		static const FName Frames[] = { "shotgun", "sniper", "burstrifle" };
+		static int32 AmmoBefore = 0;
+		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Frames)) { Held[(int32)EWWOAction::Fire] = false; Step(8); break; }
+		const FName Id = Frames[AutoGunIdx];
+		FName PlainSet[6];
+		int32 PlainCount = 0, PerkCount = 0;
+		for (const UWWOModData* Mod : L->WeaponMods)
+		{
+			if (!Mod || Mod->Frame != Id) continue;
+			if (Mod->Perk.IsNone() && PlainCount < 6) PlainSet[PlainCount++] = Mod->Id;
+			else if (!Mod->Perk.IsNone()) ++PerkCount;
+		}
+		auto Bare = [&] { for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr); };
+		const UWWOWeaponData* W = Gun->GetWeaponData();
+		switch (AutoModStep)
+		{
+		case 70:
+			EquipWeaponId(Id);
+			Bare();
+			Step(71);
+			break;
+		case 71:
+			if (AutoModClock < 0.6f) break;
+			Check(L->HasMods(L->GetWeapon()) && PlainCount == 6 && PerkCount == 6, FString::Printf(TEXT("%s is a frame: %d plain mods, %d with perks"), *Id.ToString(), PlainCount, PerkCount));
+			AutoModBase = { W->Damage, W->FireRate, W->MagazineSize, W->FireRange, W->RecoilUp, W->RecoilSide, W->Zoom, W->Sway, W->AdsMoveSpeed, W->CritMultiplier, W->PelletSpread };
+			for (int32 i = 0; i < PlainCount; ++i) if (UWWOModData* Mod = ModById(L, PlainSet[i])) L->EquipMod(Mod->Slot, Mod);
+			Step(72);
+			break;
+		case 72:
+		{
+			if (AutoModClock < 0.4f) break;
+			const TArray<float>& B = AutoModBase;
+			auto Pct = [&](FName Stat) { return FMath::Max(1.f + Sum(PlainSet, PlainCount, Stat), 0.f); };
+			const bool bOk = Near(W->Damage, B[0] * Pct("damage")) && Near(W->FireRate, B[1] * Pct("fire_rate"))
+				&& Near(W->MagazineSize, FMath::Max(1.f, FMath::RoundToFloat(B[2] * Pct("magazine_size")))) && Near(W->FireRange, B[3] * Pct("range"))
+				&& Near(W->RecoilUp, B[4] * Pct("recoil_up")) && Near(W->RecoilSide, B[5] * Pct("recoil_side")) && Near(W->Zoom, 1.f + (B[6] - 1.f) * Pct("zoom"))
+				&& Near(W->Sway, B[7] * Pct("sway")) && Near(W->AdsMoveSpeed, B[8] * Pct("ads_move_speed")) && Near(W->CritMultiplier, B[9] * Pct("crit_multiplier"))
+				&& Near(W->PelletSpread, B[10] * Pct("pellet_spread"));
+			Check(bOk, FString::Printf(TEXT("%s plain mods: damage %.1f -> %.1f, rate %.0f -> %.0f, magazine %.0f -> %.0f, range %.0f -> %.0f, recoil %.2f -> %.2f, zoom %.2f -> %.2f, crit %.2f -> %.2f, spread %.2f -> %.2f"),
+				*Id.ToString(), B[0], W->Damage, B[1], W->FireRate, B[2], W->MagazineSize, B[3], W->FireRange, B[4], W->RecoilUp, B[6], W->Zoom, B[9], W->CritMultiplier, B[10], W->PelletSpread));
+			Check(Gun->Ammo == Gun->MagazineSize(), FString::Printf(TEXT("%s magazine refilled to %d"), *Id.ToString(), Gun->Ammo));
+			Bare();
+			if (Id == "burstrifle") Step(73);
+			else { ++AutoGunIdx; Step(70); }
+			break;
+		}
+		case 73:
+			// One pull of the trigger: a whole burst, though the trigger is let go at once.
+			if (AutoModClock < 0.8f) break;
+			Check(W->BurstCount() == 3 && !W->IsSemiAuto(), FString::Printf(TEXT("burst rifle fires %d-round bursts, %.0f a minute at %.0f rpm inside one, range %.0f m"), W->BurstCount(), W->FireRate, W->BurstRate, W->FireRange));
+			AmmoBefore = Gun->Ammo;
+			Held[(int32)EWWOAction::Fire] = true;
+			Step(74);
+			break;
+		case 74:
+			if (AutoModClock > 0.03f) Held[(int32)EWWOAction::Fire] = false;
+			if (AutoModClock < 0.35f) break;
+			Check(AmmoBefore - Gun->Ammo == 3, FString::Printf(TEXT("one pull fired %d rounds (3)"), AmmoBefore - Gun->Ammo));
+			if (UWWOModData* Mod = ModById(L, "fourth_round")) L->EquipMod(Mod->Slot, Mod);
+			Step(75);
+			break;
+		case 75:
+			if (AutoModClock < 0.8f) break;
+			AmmoBefore = Gun->Ammo;
+			Held[(int32)EWWOAction::Fire] = true;
+			Step(76);
+			break;
+		case 76:
+			if (AutoModClock > 0.03f) Held[(int32)EWWOAction::Fire] = false;
+			if (AutoModClock < 0.4f) break;
+			Check(AmmoBefore - Gun->Ammo == 4, FString::Printf(TEXT("with Fourth Round one pull fired %d rounds (4)"), AmmoBefore - Gun->Ammo));
+			Bare();
+			Step(77);
+			break;
+		case 77:
+			if (AutoModClock < 0.8f) break;
+			AmmoBefore = Gun->Ammo;
+			Held[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
+			Step(78);
+			break;
+		default:
+			if (AutoModClock < 1.9f) break; // bursts start at 0, 0.4, 0.8, 1.2 and 1.6 s
+			Held[(int32)EWWOAction::Fire] = false;
+			{
+				const int32 Fired = AmmoBefore - Gun->Ammo;
+				Check(Fired == 15, FString::Printf(TEXT("1.9 s of holding the trigger fired %d rounds (5 bursts of 3)"), Fired));
+			}
+			++AutoGunIdx;
+			Step(70);
+			break;
 		}
 		break;
 	}

@@ -551,6 +551,7 @@ namespace
 			{ "magazine_size", TEXT("Magazine size") }, { "ads_move_speed", TEXT("Move speed while aiming") },
 			{ "sway", TEXT("Sway") }, { "zoom", TEXT("Zoom") }, { "damage", TEXT("Damage") },
 			{ "fire_rate", TEXT("Fire rate") }, { "crit_multiplier", TEXT("Crit multiplier") },
+			{ "pellet_spread", TEXT("Pellet spread") }, { "hip_spread", TEXT("Hip-fire spread") },
 		};
 		return Names;
 	}

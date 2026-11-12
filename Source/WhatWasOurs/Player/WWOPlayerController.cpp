@@ -11,6 +11,7 @@
 #include "UI/WWOHUDWidget.h"
 #include "UI/WWOSettingsMenu.h"
 #include "UI/WWOCharacterMenu.h"
+#include "UI/WWOLaunchMenu.h"
 #include "UI/WWOMenuCursor.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -91,8 +92,17 @@ void AWWOPlayerController::BeginPlay()
 	CharacterMenu->AddToViewport(11);
 	CharacterMenu->SetVisibility(ESlateVisibility::Collapsed);
 
-	SetMenuMode(false);
-	if (UWWONetSubsystem* Net = UWWONetSubsystem::Get(this)) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
+	// The launch screen: over the start map, paused, when the game opens (and after leaving a game).
+	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+	if (Net && Net->WantsTitle(this))
+	{
+		LaunchMenu = CreateWidget<UWWOLaunchMenu>(this, UWWOLaunchMenu::StaticClass());
+		LaunchMenu->AddToViewport(5); // over the HUD, under the settings and character menus it can open
+		LaunchMenu->Open();
+		HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	SetMenuMode(IsMenuOpen());
+	if (Net) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
 	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
 	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
 	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
@@ -100,10 +110,13 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
 	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
 	bAutoTestNet = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestNet"));
+	bAutoTestTabs = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTabs")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"));
+	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"));
 	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
 	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
 	bAutoTestHiddenOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestHidden"));
-	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"));
+	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"))
+		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestFrames"));
 	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly || bAutoTestMapsOnly || bAutoTestModsOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
@@ -484,6 +497,8 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 	{
 		if (AWWOCharacter* P = GetWWOCharacter()) UpdatePerfTest(P, FApp::GetDeltaTime());
 	}
+	else if (bAutoTestTitle) { if (IsLocalController()) UpdateAutoTitleTest(FApp::GetDeltaTime()); }
+	else if (bAutoTestTabs) { if (IsLocalController()) UpdateAutoTabsTest(FApp::GetDeltaTime()); }
 	else if (bAutoTestPvP) UpdateAutoPvPTest(FApp::GetDeltaTime());
 	else if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogJoinerStress(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
@@ -572,7 +587,7 @@ void AWWOPlayerController::Hitstop(float Seconds)
 
 bool AWWOPlayerController::IsMenuOpen() const
 {
-	return (SettingsMenu && SettingsMenu->IsOpen()) || (CharacterMenu && CharacterMenu->IsOpen());
+	return (SettingsMenu && SettingsMenu->IsOpen()) || (CharacterMenu && CharacterMenu->IsOpen()) || (LaunchMenu && LaunchMenu->IsOpen());
 }
 
 void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
@@ -593,6 +608,12 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 		else if (Id == EWWOAction::TabPrev) SettingsMenu->CycleGlobalTab(-1);
 		return;
 	}
+	if (LaunchMenu && LaunchMenu->IsOpen())
+	{
+		// The launch screen: back one step (its own buttons open the other menus).
+		if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) LaunchMenu->Back();
+		return;
+	}
 	if (Id == EWWOAction::Menu) ToggleSettingsMenu();
 	else if (Id == EWWOAction::CharacterMenu) ToggleCharacterMenu();
 }
@@ -602,7 +623,7 @@ void AWWOPlayerController::ToggleSettingsMenu()
 	const bool bOpen = !SettingsMenu->IsOpen();
 	if (bOpen) SettingsMenu->Open();
 	else SettingsMenu->Close();
-	SetMenuMode(bOpen);
+	SetMenuMode(IsMenuOpen()); // the launch screen may still be up under it
 }
 
 void AWWOPlayerController::ToggleCharacterMenu()
@@ -610,14 +631,14 @@ void AWWOPlayerController::ToggleCharacterMenu()
 	const bool bOpen = !CharacterMenu->IsOpen();
 	if (bOpen) CharacterMenu->Open();
 	else CharacterMenu->Close();
-	SetMenuMode(bOpen);
+	SetMenuMode(IsMenuOpen());
 }
 
 void AWWOPlayerController::CloseMenus()
 {
 	if (SettingsMenu->IsOpen()) SettingsMenu->Close();
 	if (CharacterMenu->IsOpen()) CharacterMenu->Close();
-	SetMenuMode(false);
+	SetMenuMode(IsMenuOpen());
 }
 
 void AWWOPlayerController::OnMenuClosed()
@@ -637,13 +658,14 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
 		Mode.SetHideCursorDuringCapture(false);
 		SetInputMode(Mode);
+		const bool bNewCursor = !MenuCursor.IsValid();
 		if (!MenuCursor.IsValid() && FSlateApplication::IsInitialized())
 		{
 			MenuCursor = MakeShared<FWWOMenuCursor>();
 			FSlateApplication::Get().RegisterInputPreProcessor(MenuCursor);
 		}
 		if (MenuCursor.IsValid()) MenuCursor->SetViewport(GameViewportWidget());
-		if (MenuCursor.IsValid()) MenuCursor->CenterCursor();
+		if (MenuCursor.IsValid() && bNewCursor) MenuCursor->CenterCursor(); // not when a menu closes onto the launch screen
 	}
 	else
 	{

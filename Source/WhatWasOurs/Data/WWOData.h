@@ -53,6 +53,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float SemiAuto = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float FireRate = 600.f;
+	// Burst fire (not from Godot): rounds per trigger pull (1 = off). A burst gun's FireRate is
+	// bursts per minute; BurstRate is the rounds per minute inside a burst.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float Burst = 1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float BurstRate = 900.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float Damage = 20.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float CritMultiplier = 1.6f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float FireRange = 120.f;
@@ -114,6 +118,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float KickAdhesion = 0.3f;
 
 	bool IsSemiAuto() const { return SemiAuto >= 0.5f; }
+	int32 BurstCount() const { return FMath::Max(1, FMath::RoundToInt(Burst)); }
+	float RoundsPerMinute() const { return FireRate * BurstCount(); } // sustained, trigger held
 };
 
 UCLASS(BlueprintType)
@@ -213,7 +219,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Extra Grenade") float ExtraCharges = 1.f;
 };
 
-// A weapon mod (draft): fits one slot on one frame (the weapon with Id == Frame). Changes stats
+// A weapon mod (draft): fits one slot on one frame (the weapon with Id == Frame; every weapon with
+// mods in the file is a frame: rifle, hand cannon, shotgun, sniper, burst rifle). Changes stats
 // by percentages (PercentAdd modifiers) and may carry a perk, picked by Perk (see
 // UWWOWeaponComponent). Loaded from Config/WeaponMods.json, not an asset, while the design settles.
 UCLASS(BlueprintType)
@@ -226,7 +233,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Slot; // barrel, magazine, stock, sight, chambering, grip
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") int32 Rarity = 1; // 1 to 5
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mod") TArray<FWWOStatModifier> Mods;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Perk; // focus, scavenger, brace, hunter, static, adrenal
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FName Perk; // see UWWOWeaponComponent's "Mods and perks"
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mod") FString PerkText;
 
 	FString Summary() const; // "+25% Range, +15% Side recoil" and the perk on its own line

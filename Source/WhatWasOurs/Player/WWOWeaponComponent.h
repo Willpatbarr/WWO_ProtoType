@@ -65,6 +65,10 @@ public:
 	// How big every gun's model is when aimed down sights, against its hip size (1 = the same). It
 	// scales around the sight point, so the sight stays on the reticle. Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float AdsGunScale = 1.f;
+	// Aimed in, the gun tips down just enough that you look exactly along its top instead of down
+	// onto it: the top shows as a level edge under the sight, not a ramp running up to it
+	// (1 = fully level, 0 = the gun points straight at the reticle as at the hip). Not from Godot.
+	UPROPERTY(EditAnywhere, Category = "Camera") float AdsLevel = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeTime = 0.45f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeReach = 2.5f;
@@ -163,6 +167,17 @@ private:
 	bool bOverpressure = true; // Overpressure: the next shot is the first since a reload
 	float AimHeld = 0.f;       // Patience: seconds fully aimed in
 	float HammerLeft = 0.f;    // Hammer: seconds of faster fire left
+	float SinceShot = 100.f;   // Cold Bore: seconds since the last shot
+	int32 RefundRounds = 0;    // Marksman: rounds to put back after this shot (a crit)
+	// Burst fire (UWWOWeaponData::Burst): the rounds still to come in the burst under way, the
+	// time to the next one, and how many of its rounds have hit (Full Burst).
+	int32 BurstLeft = 0, BurstSize = 0, BurstHits = 0;
+	float BurstCooldown = 0.f;
+	bool bFullBurst = false;    // Full Burst: the last burst landed every round
+	bool bBurstBoosted = false; // ...so this one hits harder
+	void BeginBurst(int32 Rounds);
+	void EndBurst();
+	void FireRound(); // one round: the shot, the ammo, a refunded round
 	void RefreshStats();
 	bool IsAnchored() const;
 	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
@@ -181,6 +196,7 @@ private:
 	FVector TrailStart() const;      // where your own shot's trail starts, to look like it leaves the muzzle
 	TWeakObjectPtr<AActor> Highlighted; // the enemy tinted for being under the reticle
 	float BuiltSightHeight = 0.f; // the sight height the model was built with
+	float TopBelowSight = 0.f;    // cm from the sight line down to the gun's top, as built (0: no mesh model)
 	FVector ModelShift = FVector::ZeroVector; // from it: every part but the sight dot
 	UPROPERTY() FWWOFPArm MeleeArm;
 	UPROPERTY() FWWOFPArm ThrowArm;

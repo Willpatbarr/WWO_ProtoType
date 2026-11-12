@@ -89,6 +89,18 @@ namespace
 		return R;
 	}
 
+	// Which settings are a player's own, by page: the rows named, or with none named the whole page.
+	// Everything else is game tuning (movement, damage, enemies, items...), the host's online.
+	const TMap<FString, TArray<FName>>& OwnSettings()
+	{
+		static const TMap<FString, TArray<FName>> Own = {
+			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity" } },
+			{ TEXT("Audio"), {} },
+			{ TEXT("HUD"), {} },
+		};
+		return Own;
+	}
+
 	TFunction<FString(float)> Percent() { return [](float V) { return FString::Printf(TEXT("%d%%"), FMath::RoundToInt(V * 100.f)); }; }
 	TFunction<FString(float)> Times(int32 Digits = 2) { return [Digits](float V) { return Digits == 1 ? FString::Printf(TEXT("x%.1f"), V) : FString::Printf(TEXT("x%.2f"), V); }; }
 	TFunction<FString(float)> SignedPercent() { return [](float V) { return FString::Printf(TEXT("%+d%%"), FMath::RoundToInt(V * 100.f)); }; }
@@ -206,7 +218,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	AddGlobal(TEXT("Camera"), {
 		Row(G, "HipFov", TEXT("Field of view (horizontal)"), 55.f, 120.f, 1.f),
 		Row(P, "ReticleDrop", TEXT("Reticle below center (fraction of screen height)"), 0.f, 0.2f, 0.005f),
-		Row(G, "AdsGunScale", TEXT("Gun size when aimed, all weapons (1 = same as at the hip)"), 0.3f, 2.f, 0.05f),
+		Row(G, "AdsGunScale", TEXT("Gun and sight size when aimed, all weapons (1 = same as at the hip)"), 0.3f, 3.f, 0.05f),
+		Row(G, "AdsLevel", TEXT("Level the gun's top when aimed (1 = look straight along it, 0 = off)"), 0.f, 1.f, 0.05f),
 		Row(P, "MouseSensitivity", TEXT("Mouse sensitivity"), 0.1f, 10.f, 0.1f),
 		Row(P, "StickSensitivity", TEXT("Stick sensitivity"), 0.5f, 10.f, 0.1f),
 		Row(G, "RumbleScale", TEXT("Controller rumble strength (0 = off)"), 0.f, 2.f, 0.05f),
@@ -227,6 +240,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(P, "HealthBarRadius", TEXT("Show health bars of enemies this near the reticle (px; 0 = only the one under it)"), 0.f, 500.f, 5.f),
 		Row(P, "HealthBarAdsScale", TEXT("Marker range while aiming in (times the range above)"), 1.f, 4.f, 0.05f),
 		Row(P, "DamageNumberOffset", TEXT("Damage numbers this far to the side of the hit (px)"), 0.f, 200.f, 5.f),
+		Header(TEXT("Your health")),
+		Row(P, "HealthVignette", TEXT("Red vignette as your health drops (strength; 0 = off)"), 0.f, 2.f, 0.05f),
 	});
 	AddGlobal(TEXT("Jump"), {
 		Row(P, "JumpHeight1", TEXT("Jump 1 height (m)"), 0.2f, 5.f, 0.1f),
@@ -425,13 +440,15 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	FWWOSettingRow NetStatus;
 	NetStatus.Header = TEXT("Status");
 	NetStatus.LiveHeader = [WeakWorld, Net]() { UWWONetSubsystem* N = Net(); return N && WeakWorld.IsValid() ? N->DescribeStatus(WeakWorld.Get()) : FString(); };
+	NetStatus.bPref = true;
 	AddGlobal(TEXT("Multiplayer"), {
-		Header(TEXT("LAN play: one player hosts, others on the same network join (up to 6)")),
 		NetStatus,
+		Header(TEXT("The title screen starts and joins games. The host and join buttons here are shortcuts for testing.")),
 	}, {
 		{ TEXT("Host a LAN game (this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get()))); } },
 		{ TEXT("Host a PvP game (team deathmatch, this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get())), true); } },
-		{ TEXT("Switch team (PvP)"), [WeakWorld] { if (WeakWorld.IsValid()) if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakWorld->GetFirstPlayerController())) PC->ServerSwitchTeam(); } },
+		{ TEXT("Quit to the title screen"), [Net] { if (UWWONetSubsystem* N = Net()) N->LeaveToTitle(); }, true },
+		{ TEXT("Switch team (PvP)"), [WeakWorld] { if (WeakWorld.IsValid()) if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakWorld->GetFirstPlayerController())) PC->ServerSwitchTeam(); }, true },
 		{ TEXT("Find and join a LAN game"), [Net] { if (UWWONetSubsystem* N = Net()) N->FindAndJoin(); } },
 		{ TEXT("Join a game on this Mac (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
 		{ TEXT("Leave (play alone)"), [Net] { if (UWWONetSubsystem* N = Net()) N->Leave(); } },
@@ -518,7 +535,9 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "SightHeight", TEXT("Sight dot height above gun (cm)"), -6.f, 6.f, 0.1f),
 			Header(TEXT("Shooting")),
 			Row(W, "SemiAuto", TEXT("Semi-auto (0 = hold to fire)"), 0.f, 1.f, 1.f),
-			Row(W, "FireRate", TEXT("Fire rate (rounds/min)"), 20.f, 1200.f, 5.f),
+			Row(W, "FireRate", TEXT("Fire rate (rounds/min; bursts/min for a burst gun)"), 20.f, 1200.f, 5.f),
+			Row(W, "Burst", TEXT("Rounds per trigger pull (1 = no burst)"), 1.f, 6.f, 1.f),
+			Row(W, "BurstRate", TEXT("Fire rate inside a burst (rounds/min)"), 200.f, 1500.f, 10.f),
 			Row(W, "Damage", W->Pellets > 1.f ? TEXT("Damage (per pellet)") : TEXT("Damage"), 1.f, 400.f, 1.f),
 			Row(W, "CritMultiplier", TEXT("Critical hit multiplier"), 1.f, 4.f, 0.05f),
 			Row(W, "FireRange", TEXT("Range (m)"), 5.f, 400.f, 5.f),
@@ -692,6 +711,34 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 
 // --- Values, defaults, saving ----------------------------------------------------------------
 
+void UWWOSettingsMenu::MarkPreferences()
+{
+	for (FWWOSettingSection& S : Sections)
+	{
+		const TArray<FName>* Ids = S.Key.StartsWith(TEXT("global/")) ? OwnSettings().Find(S.Title) : nullptr;
+		if (!Ids) continue;
+		for (FWWOSettingRow& R : S.Rows)
+		{
+			if (R.Header.IsEmpty() && (Ids->Num() == 0 || Ids->Contains(R.Id))) R.bPref = true;
+		}
+	}
+}
+
+bool UWWOSettingsMenu::SectionAllowed(const FWWOSettingSection& S) const
+{
+	if (!bRestricted) return true;
+	for (const FWWOSettingRow& R : S.Rows) if (R.Header.IsEmpty() && R.bPref) return true;
+	for (const FWWOMenuButton& B : S.Buttons) if (B.bPref) return true;
+	return false;
+}
+
+int32 UWWOSettingsMenu::ShownPageCount() const
+{
+	int32 Count = 0;
+	for (const FPage& Page : Pages) if (Page.Label.IsValid()) ++Count;
+	return Count;
+}
+
 FWWOSettingSection* UWWOSettingsMenu::Find(const FString& Key)
 {
 	return Sections.FindByPredicate([&Key](const FWWOSettingSection& S) { return S.Key == Key; });
@@ -741,7 +788,7 @@ void UWWOSettingsMenu::ResetSection(const FString& Key)
 	{
 		for (const auto& Pair : *Values)
 		{
-			if (const FWWOSettingRow* R = RowFor(Key, Pair.Key)) R->Set(Pair.Value);
+			if (const FWWOSettingRow* R = RowFor(Key, Pair.Key); R && Allowed(*R)) R->Set(Pair.Value);
 		}
 	}
 	SyncSliders();
@@ -754,14 +801,27 @@ void UWWOSettingsMenu::ResetAll()
 
 bool UWWOSettingsMenu::SaveDefaults()
 {
-	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
+	if (bRestricted)
+	{
+		// In someone else's game only your own preferences are saved, into the file as it is: the
+		// tuning in memory may be the host's (movement in PvP), and it isn't yours to keep. With no
+		// file of your own yet, it starts as the build's shipped values (LoadSaved stops falling back
+		// to those once your file exists).
+		FString Old;
+		TSharedPtr<FJsonObject> Parsed;
+		if ((FFileHelper::LoadFileToString(Old, *SavePath()) || FFileHelper::LoadFileToString(Old, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json"))))
+			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Old), Parsed) && Parsed.IsValid()) Root = Parsed;
+	}
 	for (const FWWOSettingSection& S : Sections)
 	{
-		TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
+		if (!SectionAllowed(S)) continue;
+		const TSharedPtr<FJsonObject>* Existing = nullptr;
+		TSharedRef<FJsonObject> Values = bRestricted && Root->TryGetObjectField(S.Key, Existing) ? (*Existing).ToSharedRef() : MakeShared<FJsonObject>();
 		TMap<FName, float>& Recorded = Defaults.FindOrAdd(S.Key);
 		for (const FWWOSettingRow& R : S.Rows)
 		{
-			if (!R.Header.IsEmpty()) continue;
+			if (!R.Header.IsEmpty() || !Allowed(R)) continue;
 			const float V = R.Get();
 			Values->SetNumberField(R.Id.ToString(), V);
 			Recorded.Add(R.Id, V); // Reset now returns here
@@ -769,7 +829,7 @@ bool UWWOSettingsMenu::SaveDefaults()
 		Root->SetObjectField(S.Key, Values);
 	}
 	FString Text;
-	FJsonSerializer::Serialize(Root, TJsonWriterFactory<>::Create(&Text));
+	FJsonSerializer::Serialize(Root.ToSharedRef(), TJsonWriterFactory<>::Create(&Text));
 	return FFileHelper::SaveStringToFile(Text, *SavePath());
 }
 
@@ -879,7 +939,14 @@ void UWWOSettingsMenu::SelectGlobalTab(int32 Index)
 
 void UWWOSettingsMenu::CycleGlobalTab(int32 Step)
 {
-	SelectTopTab(TopTab + Step); // the bumpers and Q / E step through the five tabs
+	// The bumpers and Q / E step through the tabs (past any with no pages: a joiner's menu has fewer).
+	int32 Next = TopTab;
+	for (int32 Tries = 0; Tries < NumTopTabs; ++Tries)
+	{
+		Next = ((Next + Step) % NumTopTabs + NumTopTabs) % NumTopTabs;
+		if (LastPage.IsValidIndex(Next) && LastPage[Next] != INDEX_NONE) break;
+	}
+	SelectTopTab(Next);
 }
 
 FString UWWOSettingsMenu::ValueText(const FWWOSettingRow& Row, float V)
@@ -994,10 +1061,23 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 	// Each header with sliders under it is a collapsible group: click it to open (+) or close (-). The first
 	// group of a section starts open, the rest closed; what you open or close stays that way while
 	// the game runs. A header with no sliders under it (a weapon's archetype) stays a plain label.
+	// In someone else's game: only your own preferences, and the headers that still have some under them.
+	TArray<int32> Kept;
+	for (int32 i = 0; i < S->Rows.Num(); ++i)
+	{
+		const FWWOSettingRow& R = S->Rows[i];
+		bool bKeep = Allowed(R);
+		if (!bKeep && !R.Header.IsEmpty())
+		{
+			for (int32 j = i + 1; j < S->Rows.Num() && S->Rows[j].Header.IsEmpty(); ++j) bKeep |= S->Rows[j].bPref;
+		}
+		if (bKeep) Kept.Add(i);
+	}
 	int32 Count = 0;
 	UVerticalBox* Group = nullptr;
-	for (int32 i = 0; i < S->Rows.Num(); ++i, ++Count)
+	for (int32 k = 0; k < Kept.Num(); ++k, ++Count)
 	{
+		const int32 i = Kept[k];
 		const FWWOSettingRow& R = S->Rows[i];
 		if (R.Header.IsEmpty())
 		{
@@ -1006,7 +1086,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 			else Add(Row, Count == 0, false);
 			continue;
 		}
-		const bool bHasRows = S->Rows.IsValidIndex(i + 1) && S->Rows[i + 1].Header.IsEmpty();
+		const bool bHasRows = Kept.IsValidIndex(k + 1) && S->Rows[Kept[k + 1]].Header.IsEmpty();
 		if (R.LiveHeader)
 		{
 			UTextBlock* Text = MakeText(R.LiveHeader(), 20.f, FLinearColor(1, 1, 1, 0.9f), true);
@@ -1049,6 +1129,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 	}
 	for (const FWWOMenuButton& Button : S->Buttons)
 	{
+		if (bRestricted && !Button.bPref) continue;
 		Add(MakeButton(this, Button.Text, Button.Fn, 22.f), Count++ == 0, true);
 	}
 	if (UScrollBoxSlot* Last = Container->GetChildrenCount() > 0 ? Cast<UScrollBoxSlot>(Container->GetChildAt(Container->GetChildrenCount() - 1)->Slot) : nullptr)
@@ -1150,7 +1231,10 @@ void UWWOSettingsMenu::Prepare()
 	if (!bBuilt && P)
 	{
 		bBuilt = true;
+		// Someone else's game: the tuning is the host's (see the header). Your own menu, alone or hosting, has everything.
+		bRestricted = P->GetNetMode() == NM_Client;
 		RegisterSections(P);
+		MarkPreferences();
 		RecordDefaults();
 		LoadSaved();
 		UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
@@ -1208,7 +1292,10 @@ void UWWOSettingsMenu::Prepare()
 			Tab->AddChildToVerticalBox(LineBox);
 			TopLabels.Add(Label);
 			TopLines.Add(Line);
-			Tabs->AddChildToHorizontalBox(PlainButton(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SelectTopTab(i); }))->SetVerticalAlignment(VAlign_Center);
+			UButton* TabButton = PlainButton(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SelectTopTab(i); });
+			Tabs->AddChildToHorizontalBox(TabButton)->SetVerticalAlignment(VAlign_Center);
+			TopTabWidgets.Add(TabButton);
+			TopTabWidgets.Add(i > 0 ? Tabs->GetChildAt(Tabs->GetChildrenCount() - 2) : nullptr);
 		}
 		Header->AddChildToHorizontalBox(Tabs)->SetVerticalAlignment(VAlign_Center);
 		// Search: type part of a setting's name to list every match from every tab.
@@ -1348,6 +1435,8 @@ void UWWOSettingsMenu::Prepare()
 			for (int32 p = 0; p < Pages.Num(); ++p) if (Pages[p].Tab == Tab && !Order.Contains(p)) Order.Add(p);
 			for (const int32 p : Order)
 			{
+				// In someone else's game: only the pages with something of yours on them, and the key bindings.
+				if (bRestricted && p != BindsPage && !(GlobalKeys.IsValidIndex(p) && SectionAllowed(*Find(GlobalKeys[p])))) continue;
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UBorder* Mark = WidgetTree->ConstructWidget<UBorder>();
 				USizeBox* MarkBox = WidgetTree->ConstructWidget<USizeBox>();
@@ -1366,6 +1455,21 @@ void UWWOSettingsMenu::Prepare()
 			SideSwitcher->AddChild(List);
 		}
 		Side->AddChildToVerticalBox(SideSwitcher)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		if (bRestricted)
+		{
+			// The tabs with nothing left on them go, with the bar beside each.
+			bool bFirstShown = true;
+			for (int32 Tab = 0; Tab < NumTopTabs; ++Tab)
+			{
+				const bool bShown = LastPage[Tab] != INDEX_NONE;
+				if (UWidget* Button = TopTabWidgets[Tab * 2]) Button->SetVisibility(bShown ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+				if (UWidget* Bar = TopTabWidgets[Tab * 2 + 1]) Bar->SetVisibility(bShown && !bFirstShown ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+				bFirstShown &= !bShown;
+			}
+			UTextBlock* Note = Spaced(TEXT("You're in someone else's game: these are your own settings. The game's tuning is the host's."), 10.f, FLinearColor(1, 1, 1, 0.5f), 90);
+			Note->SetAutoWrapText(true);
+			Side->AddChildToVerticalBox(Note)->SetPadding(FMargin(2.f * K, 0, 0, 6.f * K));
+		}
 		auto SideButton = [&](const FString& Text, TFunction<void()> Fn) -> UButton*
 		{
 			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 8.f));
@@ -1421,7 +1525,10 @@ void UWWOSettingsMenu::Prepare()
 		Panel->SetContent(GlobalSwitcher);
 		Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Body->AddChildToHorizontalBox(Main)->SetSize(WWOFillSize(1.f));
-		SelectPage(0);
+		// The first page there is (in someone else's game the first of the ones left).
+		int32 First = 0;
+		for (int32 Tab = NumTopTabs - 1; Tab >= 0; --Tab) if (LastPage[Tab] != INDEX_NONE) First = LastPage[Tab];
+		SelectPage(First);
 	}
 }
 
@@ -1586,12 +1693,13 @@ void UWWOSettingsMenu::OnSearchChanged(const FText& Text)
 	constexpr int32 Most = 80;
 	for (const FWWOSettingSection& S : Sections)
 	{
+		if (!SectionAllowed(S)) continue;
 		const bool bWholeSection = S.Title.Contains(Query);
 		bool bNamed = false;
 		for (int32 i = 0; i < S.Rows.Num() && Found < Most; ++i)
 		{
 			const FWWOSettingRow& R = S.Rows[i];
-			if (!R.Header.IsEmpty() || R.LiveHeader || !(bWholeSection || R.Label.Contains(Query))) continue;
+			if (!R.Header.IsEmpty() || R.LiveHeader || !Allowed(R) || !(bWholeSection || R.Label.Contains(Query))) continue;
 			if (!bNamed)
 			{
 				bNamed = true;

@@ -10,6 +10,10 @@
 // Every slider binds to a float UPROPERTY by name through reflection. "Save as defaults"
 // writes every section to Saved/WWO/SavedSettings.json; the game loads it on startup and
 // Reset goes back to it. Tab / Esc / Options opens it; it pauses the game.
+// Online, the tuning is the host's to change: a joiner's menu (IsRestricted) shows only a
+// player's own preferences (FWWOSettingRow::bPref: field of view, sensitivity, rumble and camera
+// feel, volume, HUD) and the key bindings; the other pages, the Items tab, search results, Reset
+// and Save all leave the rest alone.
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -55,12 +59,16 @@ struct FWWOSettingRow
 	TFunction<void(float)> Set;
 	TFunction<FString(float)> Show;
 	TFunction<FString()> LiveHeader; // a header whose text is redrawn each frame while the menu is open
+	// A player's own preference (field of view, sensitivity, volume, HUD). Everything else is game
+	// tuning for development: in someone else's game only these show (see UWWOSettingsMenu::bRestricted).
+	bool bPref = false;
 };
 
 struct FWWOMenuButton
 {
 	FString Text;
 	TFunction<void()> Fn;
+	bool bPref = false; // shown to a joiner too
 };
 
 struct FWWOSettingSection
@@ -99,6 +107,8 @@ public:
 
 	bool IsOpen() const { return bOpen; }
 	bool IsPrepared() const { return bBuilt; }
+	bool IsRestricted() const { return bRestricted; }
+	int32 ShownPageCount() const; // the pages its sidebars list (for the autotest)
 	void Prepare();
 	void Open();
 	void Close();
@@ -139,6 +149,10 @@ private:
 
 	bool bOpen = false;
 	bool bBuilt = false;
+	bool bRestricted = false; // in someone else's game: only your own preferences (set in Prepare)
+	void MarkPreferences();
+	bool Allowed(const FWWOSettingRow& Row) const { return !bRestricted || Row.bPref; }
+	bool SectionAllowed(const FWWOSettingSection& S) const;
 	TArray<FWWOSettingSection> Sections;
 	TArray<FString> GlobalKeys;
 	TMap<FString, TMap<FName, float>> Defaults;
@@ -174,6 +188,7 @@ private:
 	static constexpr int32 NumTopTabs = 6, ItemsTab = 4, ControlsTab = 5;
 	static inline const TCHAR* const TopTabNames[NumTopTabs] = { TEXT("PLAYER"), TEXT("COMBAT"), TEXT("ENEMIES"), TEXT("MATCH"), TEXT("ITEMS"), TEXT("CONTROLS") };
 	struct FPage { FString Title; int32 Tab = 0; TWeakObjectPtr<UTextBlock> Label; TWeakObjectPtr<class UBorder> Mark; };
+	UPROPERTY() TArray<TObjectPtr<UWidget>> TopTabWidgets; // each tab's button, then the bar before it (null for the first)
 	TArray<FPage> Pages;
 	TArray<int32> LastPage; // per tab, the page it was last on
 	int32 CurrentPage = 0, TopTab = 0, SearchPage = 0;

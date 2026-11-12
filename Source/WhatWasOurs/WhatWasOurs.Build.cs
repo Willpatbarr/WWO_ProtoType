@@ -9,9 +9,16 @@ public class WhatWasOurs : ModuleRules
 		// Files the game reads at runtime from Config/ (not assets), staged into packaged builds.
 		// ShippedSettings.json is a copy of your saved Settings values (Tools/package_mac.sh makes it),
 		// the defaults a packaged build starts from.
-		foreach (string Name in new string[] { "WeaponModels.json", "WeaponMods.json", "CharacterModels.json", "DefaultLoadout.json", "ShippedSettings.json" })
+		foreach (string Name in new string[] { "WeaponModels.json", "WeaponMods.json", "CharacterModels.json", "DefaultLoadout.json", "Sounds.json", "ShippedSettings.json" })
 		{
 			RuntimeDependencies.Add("$(ProjectDir)/Config/" + Name, StagedFileType.UFS);
+		}
+		// Windows: MSVC's shadow checks (errors under these build settings) also count a local that
+		// has the name of a class member, which the UI code does all over (a "Slot" local in a
+		// widget, where UWidget has a Slot member). Clang's check doesn't, and stays on for Mac builds.
+		if (Target.Platform.IsInGroup(UnrealPlatformGroup.Windows))
+		{
+			CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Off;
 		}
 		bUseUnity = false; // files use same-named helpers in anonymous namespaces
 

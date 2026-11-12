@@ -99,7 +99,7 @@ struct FWWOGunShot
 };
 
 // The most a gun setup can do, for the host checking a joiner's shot (WWOCharacterGunNet.cpp).
-struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; }; // per hit, shots per s, cm
+struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; int32 Burst = 1; }; // per hit, shots per s, cm, rounds per trigger pull
 
 // A player. In PvP also a target for the other team (IWWOTargetable): shots hit its body and head
 // hitboxes (on only in PvP), damage goes to its health on the host.
@@ -167,6 +167,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Audio") float SoundVolume = 1.f; // every sound effect you hear, times this (0 = silent)
 	UPROPERTY(EditAnywhere, Category = "HUD") float HealthBarAdsScale = 1.75f; // the marker range grows by this while aimed in
 	UPROPERTY(EditAnywhere, Category = "HUD") float DamageNumberOffset = 55.f;
+	// The red vignette that grows around the screen as your health and shield drop (0 = off).
+	UPROPERTY(EditAnywhere, Category = "HUD") float HealthVignette = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Walk") float SprintSpeed = 10.f;

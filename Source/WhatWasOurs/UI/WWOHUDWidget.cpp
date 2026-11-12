@@ -84,6 +84,42 @@ namespace
 			for (const FVector2D& V : { A, B, C }) Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(V * S), FVector2f(0.5f, 0.5f), Packed));
 			FSlateDrawElement::MakeCustomVerts(Out, Layer, Handle, Verts, { 0, 1, 2 }, nullptr, 0, 0);
 		}
+		// A vignette: Color over the whole screen, clear inside the ellipse that is Inner of the way
+		// from the center to the edges and rising smoothly to Color's alpha at the corners. A grid of
+		// triangles with the fade in the vertex colors, so it needs no material.
+		void Vignette(const FLinearColor& Color, float Inner) const
+		{
+			if (Color.A <= 0.003f || !FSlateApplication::IsInitialized()) return;
+			constexpr int32 Nx = 32, Ny = 18;
+			const FSlateResourceHandle Handle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*White);
+			const FSlateRenderTransform& To = Geo.GetAccumulatedRenderTransform();
+			TArray<FSlateVertex> Verts;
+			TArray<SlateIndex> Indices;
+			Verts.Reserve((Nx + 1) * (Ny + 1));
+			Indices.Reserve(Nx * Ny * 6);
+			for (int32 y = 0; y <= Ny; ++y)
+			{
+				for (int32 x = 0; x <= Nx; ++x)
+				{
+					const FVector2D UV(float(x) / Nx, float(y) / Ny);
+					// 0 at the center, 1 at the middle of an edge, about 1.41 in a corner.
+					const float D = FVector2D((UV.X - 0.5f) * 2.f, (UV.Y - 0.5f) * 2.f).Size();
+					const float Fade = WWO::SmoothStep(Inner, 1.42f, D);
+					FLinearColor C = Color;
+					C.A *= Fade;
+					Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(UV * Size * S), FVector2f(0.5f, 0.5f), WWO::Lin(C).ToFColor(false)));
+				}
+			}
+			for (int32 y = 0; y < Ny; ++y)
+			{
+				for (int32 x = 0; x < Nx; ++x)
+				{
+					const SlateIndex A = SlateIndex(y * (Nx + 1) + x), B = A + 1, C2 = SlateIndex(A + Nx + 1), D2 = C2 + 1;
+					Indices.Append({ A, B, C2, B, D2, C2 });
+				}
+			}
+			FSlateDrawElement::MakeCustomVerts(Out, Layer - 1, Handle, Verts, Indices, nullptr, 0, 0); // a layer down: under the rest of the HUD
+		}
 		void Circle(FVector2D Center, float Radius, const FLinearColor& Color, float Width, int32 Segments = 48) const
 		{
 			TArray<FVector2f> Points;
@@ -175,6 +211,15 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (P && BoundPlayer.Get() != P) Bind(P);
 	HitTime -= GetWorld() ? GetWorld()->GetDeltaSeconds() : InDeltaTime; // game time, like Godot's _process (slows in a hit-stop)
 	DamageFlash = WWO::MoveToward(DamageFlash, 0.f, 1.2f * InDeltaTime);
+	// How hurt you are, 0 (full health and shield) to 1 (nothing left): the vignette follows it,
+	// quickly as damage lands and a little slower as you heal.
+	float Hurt = 0.f;
+	if (P && P->Health)
+	{
+		const float Most = P->Health->MaxHealth() + P->Health->MaxShield();
+		Hurt = Most > 0.f ? 1.f - FMath::Clamp((P->Health->Health + P->Health->Shield) / Most, 0.f, 1.f) : 0.f;
+	}
+	HurtShown = WWO::MoveToward(HurtShown, Hurt, (Hurt > HurtShown ? 6.f : 1.5f) * InDeltaTime);
 	FpsClock += FApp::GetDeltaTime(); // real time, so hit-stops and pauses don't skew it
 	++FpsFrames;
 	if (FpsClock >= 0.25f)
@@ -219,6 +264,13 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		return true;
 	};
 
+	// Low health: red creeps in from the edges, further and stronger the less you have left
+	// (under everything else on the HUD). Faint with the shield half gone, heavy near death.
+	if (HurtShown > 0.01f && Pl->HealthVignette > 0.f)
+	{
+		const float Amount = FMath::Pow(HurtShown, 1.6f);
+		P.Vignette(FLinearColor(0.75f, 0.03f, 0.02f, FMath::Clamp(0.9f * Amount * Pl->HealthVignette, 0.f, 0.95f)), FMath::Lerp(0.95f, 0.3f, Amount));
+	}
 	// ADS vignette and scope.
 	if (W && VignetteMat && W->AdsVignette * Aimed > 0.001f)
 	{

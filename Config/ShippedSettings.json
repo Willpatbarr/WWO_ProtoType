@@ -1,0 +1,805 @@
+{
+	"global/Walk / Sprint":
+	{
+		"WalkSpeed": 5,
+		"SprintSpeed": 10
+	},
+	"global/Camera":
+	{
+		"HipFov": 100,
+		"ReticleDrop": 0.059999998658895493,
+		"AdsGunScale": 0.90000003576278687,
+		"MouseSensitivity": 2,
+		"StickSensitivity": 4,
+		"RumbleScale": 1,
+		"PunchScale": 1.3000000715255737,
+		"BlastShake": 1.5,
+		"HitFlinch": 1.3000000715255737,
+		"BobIntensity": 1.5,
+		"WalkStride": 2.2999999523162842,
+		"SprintStride": 4.1999998092651367,
+		"LandingDip": 1
+	},
+	"global/Audio":
+	{
+		"SoundVolume": 1
+	},
+	"global/HUD":
+	{
+		"TargetHighlight": 0.099999994039535522,
+		"HealthBarRadius": 140,
+		"HealthBarAdsScale": 1.75,
+		"DamageNumberOffset": 55
+	},
+	"global/Jump":
+	{
+		"JumpHeight1": 2,
+		"JumpHeight2": 2.2999999523162842,
+		"AscentGravity": 20,
+		"DescentGravity": 32,
+		"AirControl": 5,
+		"ApexHang": 0.5,
+		"CoyoteTime": 0.11999999731779099,
+		"MantleReach": 2,
+		"MantleTime": 0.34999999403953552
+	},
+	"global/Crouch / Slide":
+	{
+		"CrouchSpeed": 2.5,
+		"SlideSpeed": 22,
+		"SlideDistance": 9.5
+	},
+	"global/Melee":
+	{
+		"MeleeTime": 0.55000001192092896,
+		"MeleeReach": 2.5,
+		"MeleeDamage": 80,
+		"LungeRange": 3.7000000476837158,
+		"LungeAngle": 20,
+		"LungeSpeed": 12,
+		"LungeVertical": 1,
+		"LungeAim": 0.5,
+		"MeleeHitstop": 0.014999999664723873,
+		"MeleeJolt": 2,
+		"MeleePunchFov": -4,
+		"MeleePunchRoll": 2.5,
+		"MeleePunchTime": 0.25,
+		"MeleeRumbleStrong": 0.75,
+		"MeleeRumbleWeak": 0.69999998807907104,
+		"MeleeRumbleTime": 0.10999999940395355,
+		"MeleeKnockback": 6,
+		"MeleeKillBoost": 1.3999999761581421,
+		"MeleeKillKnockback": 2,
+		"MeleeArmYaw": 16,
+		"MeleeArmPitch": 8,
+		"MeleeArmPush": 0.05000000074505806,
+		"MeleeArmFov": 90,
+		"MeleeArmHold": 0.0099999997764825821,
+		"MeleeArmRetract": 0.20000000298023224
+	},
+	"global/Grenades":
+	{
+		"ThrowDistance": 18,
+		"RechargeTime": 25,
+		"DetonationTime": 0.85000002384185791,
+		"ThrowRelease": 0.2199999988079071,
+		"ThrowFollow": 0.20000000298023224,
+		"ThrowArmYaw": -12,
+		"ThrowArmPitch": 8,
+		"ThrowArmPush": 0
+	},
+	"global/Player":
+	{
+		"BaseHealth": 150,
+		"BaseShield": 100,
+		"RechargeDelay": 4,
+		"HealthRegen": 40,
+		"ShieldRegen": 60,
+		"RespawnTime": 2,
+		"ReviveTime": 3,
+		"ReviveRange": 2.5,
+		"ReviveHealth": 0.5,
+		"GodMode": 0,
+		"SwapTime": 0.34999999403953552,
+		"ReadyTime": 0.070000000298023224,
+		"PointValue": 0.05000000074505806
+	},
+	"global/Targets":
+	{
+		"TargetHealth": 200,
+		"RespawnTime": 2
+	},
+	"global/Ult":
+	{
+		"ChargeTime": 240,
+		"Damage": 600,
+		"BlastRadius": 12,
+		"WindupTime": 0.40000000596046448,
+		"HoldTime": 0.40000000596046448,
+		"CameraBlend": 0.25,
+		"CameraDistance": 4,
+		"CameraHeight": 1,
+		"CameraSide": 0.60000002384185791,
+		"VeilTime": 12,
+		"VeilFogRadius": 7,
+		"VeilFogTime": 12,
+		"VeilMeleeMult": 3,
+		"VeilCameraBlend": 0.15000000596046448,
+		"VeilHold": 0.34999999403953552,
+		"EntrenchTime": 8.5,
+		"EntrenchGrenadeMult": 5
+	},
+	"global/Soldier":
+	{
+		"AiEnabled": 1,
+		"MaxHealth": 325,
+		"WalkSpeed": 4,
+		"MinRange": 15,
+		"MaxRange": 25,
+		"SightRange": 35,
+		"StrafeTime": 1.7999999523162842,
+		"TurnSpeed": 8,
+		"WindupTime": 0.5,
+		"BurstCount": 3,
+		"BurstInterval": 0.090000003576278687,
+		"BurstCooldown": 1.3999999761581421,
+		"GroupSpacing": 0.60000002384185791,
+		"ProjectileDamage": 10,
+		"ProjectileSpeed": 53,
+		"Spread": 1.5,
+		"CoverHealth": 0.34999999403953552
+	},
+	"global/Swarm":
+	{
+		"AiEnabled": 1,
+		"MaxHealth": 75,
+		"WalkSpeed": 6.25,
+		"SightRange": 30,
+		"TurnSpeed": 12,
+		"SpreadDistance": 2,
+		"LeapRange": 5.75,
+		"LeapSpeed": 11,
+		"LeapHeight": 1,
+		"LeapDamage": 15,
+		"LeapCooldown": 6.5999999046325684,
+		"BiteRange": 1.3999999761581421,
+		"BiteDamage": 10,
+		"BiteInterval": 0.80000001192092896
+	},
+	"global/Tank":
+	{
+		"AiEnabled": 1,
+		"MaxHealth": 1200,
+		"WalkSpeed": 3,
+		"SightRange": 40,
+		"TurnSpeed": 1.5,
+		"Shield": 300,
+		"ShieldRegenDelay": 6,
+		"ShieldRegenRate": 75,
+		"SlamRange": 4,
+		"SlamRadius": 4.5,
+		"SlamDamage": 40,
+		"SlamWindup": 0.69999998807907104,
+		"SlamRecover": 1.5,
+		"SlamCooldown": 4,
+		"SlowAmount": 0.5,
+		"SlowTime": 2.5,
+		"LobDamage": 35,
+		"LobRadius": 3,
+		"LobInterval": 3,
+		"LobFlightTime": 1.2000000476837158
+	},
+	"global/Maps":
+	{
+	},
+	"global/Multiplayer":
+	{
+	},
+	"global/PvP":
+	{
+		"KillTarget": 50,
+		"TimeLimit": 10,
+		"PvPRespawnTime": 3
+	},
+	"global/Bots":
+	{
+		"Bots": 3,
+		"BotReaction": 0.34999999403953552,
+		"BotAimError": 1.6000000238418579,
+		"BotTurnSpeed": 260,
+		"BotViewAngle": 120,
+		"BotSightRange": 60,
+		"BotMemory": 6,
+		"BotAggression": 0.34999999403953552,
+		"BotKitUse": 1,
+		"BotStickToPlayer": 0.30000001192092896,
+		"BotCalloutRange": 40
+	},
+	"global/Waves":
+	{
+		"Enabled": 1,
+		"WavesToWin": 8,
+		"StartDelay": 6,
+		"BreakTime": 2.5,
+		"SizeScale": 2,
+		"SpawnStagger": 0.34999999403953552
+	},
+	"global/Allies":
+	{
+		"AiEnabled": 1,
+		"MaxHealth": 100,
+		"MaxShield": 100,
+		"RechargeDelay": 4,
+		"ShieldRegen": 40,
+		"MoveSpeed": 6,
+		"FollowMin": 3,
+		"FollowMax": 7,
+		"Damage": 10,
+		"FireInterval": 0.34999999403953552,
+		"Spread": 2,
+		"SightRange": 35,
+		"RespawnTime": 8
+	},
+	"global/Aim Assist":
+	{
+		"MouseAssist": 0,
+		"ShowDebug": 0,
+		"HiddenAssist": 1,
+		"ShowHiddenAssist": 0
+	},
+	"weapon/rifle":
+	{
+		"Zoom": 1.5,
+		"AdsTime": 0.11999999731779099,
+		"AdsSensitivity": 1,
+		"AdsMoveSpeed": 0.64999997615814209,
+		"AdsVignette": 0.34999999403953552,
+		"ScopeOverlay": 0,
+		"SightHeight": 0.90000009536743164,
+		"SemiAuto": 0,
+		"FireRate": 600,
+		"Damage": 12,
+		"CritMultiplier": 1.6000000238418579,
+		"FireRange": 80,
+		"Pellets": 1,
+		"PelletSpread": 0,
+		"HipSpread": 0,
+		"RecoilUp": 0.80000001192092896,
+		"RecoilSide": 0.15000000596046448,
+		"RecoilKickTime": 0,
+		"RecoilRecovery": 0,
+		"RecoilRecoveryTime": 0.11999999731779099,
+		"RecoilRecoverySync": 0,
+		"RecoilRecoveryCurve": 2,
+		"RecoilRecoveryDelay": 0,
+		"VerticalKick": 1.8999999761581421,
+		"HorizontalKick": 0,
+		"MagazineSize": 30,
+		"ReloadTime": 2,
+		"RumbleStrong": 0.34999999403953552,
+		"RumbleWeak": 0.55000001192092896,
+		"RumbleTime": 0.049999997019767761,
+		"PunchFov": 0.5,
+		"PunchRoll": 0.25,
+		"PunchTime": 0.070000000298023224,
+		"ViewmodelFov": 65,
+		"Sway": 1,
+		"GunBob": 1,
+		"SlideTilt": 11,
+		"AimAssistance": 36,
+		"CritMagnetism": 0.34999999403953552,
+		"MagnetismAngle": 2,
+		"FrictionStrength": 0.44999998807907104,
+		"FrictionAngle": 3.7000000476837158,
+		"Adhesion": 0,
+		"AssistRange": 40,
+		"AdsBoost": 1.3999999761581421,
+		"KickSteer": 0.25,
+		"RecoverySteer": 0.30000001192092896,
+		"FollowupMagnetism": 1.25,
+		"KickFriction": 1.2999999523162842,
+		"KickAdhesion": 0.10000000149011612
+	},
+	"weapon/handcannon":
+	{
+		"Zoom": 1.1000000238418579,
+		"AdsTime": 0.15999999642372131,
+		"AdsSensitivity": 0.80000001192092896,
+		"AdsMoveSpeed": 0.75,
+		"AdsVignette": 0.30000001192092896,
+		"ScopeOverlay": 0,
+		"SightHeight": 0.90000009536743164,
+		"SemiAuto": 0,
+		"FireRate": 150,
+		"Damage": 55,
+		"CritMultiplier": 2,
+		"FireRange": 60,
+		"Pellets": 1,
+		"PelletSpread": 0,
+		"HipSpread": 0.80000001192092896,
+		"RecoilUp": 5.7000002861022949,
+		"RecoilSide": 2.2999999523162842,
+		"RecoilKickTime": 0.14999999105930328,
+		"RecoilRecovery": 0.90000003576278687,
+		"RecoilRecoveryTime": 0.52999997138977051,
+		"RecoilRecoverySync": 0,
+		"RecoilRecoveryCurve": 2,
+		"RecoilRecoveryDelay": 0.10499999672174454,
+		"VerticalKick": 20,
+		"HorizontalKick": 2.8000001907348633,
+		"MagazineSize": 15,
+		"ReloadTime": 1.1500000953674316,
+		"RumbleStrong": 0.89999997615814209,
+		"RumbleWeak": 0.44999998807907104,
+		"RumbleTime": 0.079999998211860657,
+		"PunchFov": 4.2000002861022949,
+		"PunchRoll": 1.2000000476837158,
+		"PunchTime": 0.15999999642372131,
+		"ViewmodelFov": 62,
+		"Sway": 1,
+		"GunBob": 1.1000000238418579,
+		"SlideTilt": 14,
+		"AimAssistance": 80,
+		"CritMagnetism": 0.25,
+		"MagnetismAngle": 1.5,
+		"FrictionStrength": 0.34999999403953552,
+		"FrictionAngle": 3.6000001430511475,
+		"Adhesion": 0.40000000596046448,
+		"AssistRange": 35,
+		"AdsBoost": 1.2000000476837158,
+		"KickSteer": 0.25,
+		"RecoverySteer": 0.80000001192092896,
+		"FollowupMagnetism": 1.2000000476837158,
+		"KickFriction": 1.1000000238418579,
+		"KickAdhesion": 0.05000000074505806
+	},
+	"weapon/shotgun":
+	{
+		"Zoom": 1.2000000476837158,
+		"AdsTime": 0.20000000298023224,
+		"AdsSensitivity": 1,
+		"AdsMoveSpeed": 0.80000001192092896,
+		"AdsVignette": 0.20000000298023224,
+		"ScopeOverlay": 0,
+		"SightHeight": 0,
+		"SemiAuto": 1,
+		"FireRate": 65,
+		"Damage": 18,
+		"CritMultiplier": 1.2000000476837158,
+		"FireRange": 15,
+		"Pellets": 8,
+		"PelletSpread": 4,
+		"HipSpread": 0,
+		"RecoilUp": 4,
+		"RecoilSide": 1,
+		"RecoilKickTime": 0,
+		"RecoilRecovery": 0,
+		"RecoilRecoveryTime": 0.11999999731779099,
+		"RecoilRecoverySync": 0,
+		"RecoilRecoveryCurve": 2,
+		"RecoilRecoveryDelay": 0,
+		"VerticalKick": 3,
+		"HorizontalKick": 0,
+		"MagazineSize": 5,
+		"ReloadTime": 2.5999999046325684,
+		"RumbleStrong": 1,
+		"RumbleWeak": 0.60000002384185791,
+		"RumbleTime": 0.14000000059604645,
+		"PunchFov": 3.5,
+		"PunchRoll": 1.5,
+		"PunchTime": 0.20000000298023224,
+		"ViewmodelFov": 62,
+		"Sway": 1.2999999523162842,
+		"GunBob": 1.2000000476837158,
+		"SlideTilt": 18,
+		"AimAssistance": 60,
+		"CritMagnetism": 0.40000000596046448,
+		"MagnetismAngle": 0,
+		"FrictionStrength": 0.30000001192092896,
+		"FrictionAngle": 6,
+		"Adhesion": 0,
+		"AssistRange": 12,
+		"AdsBoost": 1.2000000476837158,
+		"KickSteer": 0.60000002384185791,
+		"RecoverySteer": 0.60000002384185791,
+		"FollowupMagnetism": 1.5,
+		"KickFriction": 1.5,
+		"KickAdhesion": 0.30000001192092896
+	},
+	"weapon/sniper":
+	{
+		"Zoom": 6,
+		"AdsTime": 0.34999999403953552,
+		"AdsSensitivity": 1,
+		"AdsMoveSpeed": 0.5,
+		"AdsVignette": 0,
+		"ScopeOverlay": 1,
+		"SightHeight": 0,
+		"SemiAuto": 1,
+		"FireRate": 70,
+		"Damage": 160,
+		"CritMultiplier": 2.5,
+		"FireRange": 300,
+		"Pellets": 1,
+		"PelletSpread": 0,
+		"HipSpread": 3,
+		"RecoilUp": 4.5,
+		"RecoilSide": 0.80000001192092896,
+		"RecoilKickTime": 0,
+		"RecoilRecovery": 0,
+		"RecoilRecoveryTime": 0.11999999731779099,
+		"RecoilRecoverySync": 0,
+		"RecoilRecoveryCurve": 2,
+		"RecoilRecoveryDelay": 0,
+		"VerticalKick": 3,
+		"HorizontalKick": 0,
+		"MagazineSize": 4,
+		"ReloadTime": 2.9000000953674316,
+		"RumbleStrong": 1,
+		"RumbleWeak": 0.5,
+		"RumbleTime": 0.15999999642372131,
+		"PunchFov": 3,
+		"PunchRoll": 0.80000001192092896,
+		"PunchTime": 0.25,
+		"ViewmodelFov": 60,
+		"Sway": 1.5,
+		"GunBob": 1.2000000476837158,
+		"SlideTilt": 10,
+		"AimAssistance": 55,
+		"CritMagnetism": 0.15000000596046448,
+		"MagnetismAngle": 0.80000001192092896,
+		"FrictionStrength": 0.5,
+		"FrictionAngle": 2.5,
+		"Adhesion": 0,
+		"AssistRange": 150,
+		"AdsBoost": 1.1499999761581421,
+		"KickSteer": 0.60000002384185791,
+		"RecoverySteer": 0.60000002384185791,
+		"FollowupMagnetism": 1.5,
+		"KickFriction": 1.5,
+		"KickAdhesion": 0.30000001192092896
+	},
+	"frame/standard_head":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/focus_head":
+	{
+		"Agility": 0,
+		"Aerial": 1,
+		"Dexterity": 2,
+		"Durability": 0
+	},
+	"frame/guard_head":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 1,
+		"Durability": 2
+	},
+	"frame/scout_head":
+	{
+		"Agility": 0,
+		"Aerial": 2,
+		"Dexterity": 1,
+		"Durability": 0
+	},
+	"frame/standard_arms":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/quick_arms":
+	{
+		"Agility": 1,
+		"Aerial": 0,
+		"Dexterity": 2,
+		"Durability": 0
+	},
+	"frame/braced_arms":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 2,
+		"Durability": 1
+	},
+	"frame/strong_arms":
+	{
+		"Agility": 2,
+		"Aerial": 0,
+		"Dexterity": 1,
+		"Durability": 0
+	},
+	"frame/standard_legs":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/stride_legs":
+	{
+		"Agility": 2,
+		"Aerial": 1,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/spring_legs":
+	{
+		"Agility": 1,
+		"Aerial": 2,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/sturdy_legs":
+	{
+		"Agility": 1,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 2
+	},
+	"frame/standard_core":
+	{
+		"Agility": 0,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 0
+	},
+	"frame/light_core":
+	{
+		"Agility": 2,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 1
+	},
+	"frame/armored_core":
+	{
+		"Agility": 0,
+		"Aerial": 1,
+		"Dexterity": 0,
+		"Durability": 2
+	},
+	"frame/thruster_core":
+	{
+		"Agility": 0,
+		"Aerial": 2,
+		"Dexterity": 0,
+		"Durability": 1
+	},
+	"ability/overgrowth":
+	{
+		"SpeedMult": 1.1000000238418579,
+		"ExtraJumps": 1
+	},
+	"ability/thornfist":
+	{
+		"MeleeDamageMult": 2.5,
+		"Duration": 8,
+		"Cooldown": 20,
+		"DischargeArcs": 6,
+		"DischargeRadius": 1.2000000476837158,
+		"DischargeTime": 0.34999999403953552
+	},
+	"ability/melee_guard":
+	{
+		"GuardReduction": 0.75,
+		"Duration": 4
+	},
+	"ability/static_charge":
+	{
+		"ChargeDamage": 150,
+		"ChainDamage": 120,
+		"ChainJumps": 8,
+		"ChainRange": 8,
+		"ChainFalloff": 0.85000002384185791,
+		"ChainDelay": 0.05000000074505806
+	},
+	"ability/seedburst":
+	{
+		"SubCount": 3,
+		"SubScale": 0.5,
+		"SubSpread": 5,
+		"SubFuse": 0.60000002384185791
+	},
+	"ability/spore_fog_damage":
+	{
+		"FogDps": 12
+	},
+	"ability/spore_dash":
+	{
+		"Cooldown": 10,
+		"DashSpeed": 9.5,
+		"DashUp": 5,
+		"DashFogRadius": 3.5,
+		"DashFogTime": 6
+	},
+	"ability/spore_patches":
+	{
+		"PatchMax": 5,
+		"PatchRadius": 2,
+		"PatchTime": 6
+	},
+	"ability/root_bombs":
+	{
+		"Cooldown": 25,
+		"BombDamage": 150,
+		"BombRadius": 3.5,
+		"BombSpeed": 22
+	},
+	"ability/shield_share":
+	{
+		"ShieldAmount": 60
+	},
+	"ability/extra_grenade":
+	{
+		"ExtraCharges": 1
+	},
+	"trait/extra_speed":
+	{
+		"mod0": 0.10000000149011612,
+		"mod1": 0.10000000149011612,
+		"mod2": 0.10000000149011612
+	},
+	"trait/faster_grenade_recharge":
+	{
+		"mod0": -0.25
+	},
+	"trait/longer_fog":
+	{
+		"Amount": 0.5
+	},
+	"trait/faster_shield_recovery":
+	{
+		"mod0": -0.25,
+		"mod1": 0.5
+	},
+	"trait/no_radar":
+	{
+	},
+	"trait/longer_walls":
+	{
+		"Amount": 0.5
+	},
+	"trait/bouncier_grenades":
+	{
+		"Amount": 0.25
+	},
+	"trait/impact_grenades":
+	{
+		"Amount": 1
+	},
+	"trait/more_melee_damage":
+	{
+		"mod0": 0.15000000596046448
+	},
+	"trait/bigger_explosions":
+	{
+		"Amount": 0.25
+	},
+	"trait/faster_melee":
+	{
+		"mod0": -0.15000000596046448,
+		"mod1": 0.30000001192092896
+	},
+	"trait/longer_throws":
+	{
+		"mod0": 0.25
+	},
+	"trait/more_durability":
+	{
+		"mod0": 0.15000000596046448,
+		"mod1": 0.15000000596046448
+	},
+	"trait/longer_snare":
+	{
+		"Amount": 0.5
+	},
+	"trait/stronger_poison":
+	{
+		"Amount": 0.30000001192092896
+	},
+	"grenade/volt_grenade":
+	{
+		"Damage": 120,
+		"BlastRadius": 4.5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.34999999403953552
+	},
+	"grenade/shock_pool":
+	{
+		"Damage": 92,
+		"BlastRadius": 8.6000003814697266,
+		"ThrowDistanceMult": 0.55000001192092896,
+		"RechargeMult": 0.80000001192092896,
+		"FuseMult": 0.80000001192092896,
+		"Bounce": 0.20000000298023224,
+		"PoolDps": 40,
+		"PoolTime": 8
+	},
+	"grenade/snare_mine":
+	{
+		"Damage": 80,
+		"BlastRadius": 4,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0,
+		"ArmTime": 0.60000002384185791,
+		"TriggerRadius": 2.5,
+		"MineLife": 25,
+		"SlowAmount": 0.5,
+		"SlowTime": 3
+	},
+	"grenade/spore_pool":
+	{
+		"Damage": 40,
+		"BlastRadius": 5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 0.85000002384185791,
+		"Bounce": 0.34999999403953552,
+		"PoolDps": 50,
+		"PoolTime": 5
+	},
+	"grenade/poison_spike":
+	{
+		"Damage": 30,
+		"BlastRadius": 1.5,
+		"ThrowDistanceMult": 1.0499999523162842,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.94999998807907104,
+		"PoisonDps": 20,
+		"PoisonTime": 5,
+		"SpikeLife": 6,
+		"SeekRadius": 1,
+		"SeekStrength": 110
+	},
+	"grenade/spore_blast":
+	{
+		"Damage": 130,
+		"BlastRadius": 4.5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.34999999403953552
+	},
+	"grenade/wall_grenade":
+	{
+		"Damage": 60,
+		"BlastRadius": 2.5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.15000000596046448,
+		"WallWidth": 5,
+		"WallHeight": 2.5999999046325684,
+		"WallTime": 10
+	},
+	"grenade/iron_grenade":
+	{
+		"Damage": 130,
+		"BlastRadius": 4.5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.34999999403953552
+	},
+	"grenade/blinding_grenade":
+	{
+		"Damage": 40,
+		"BlastRadius": 5,
+		"ThrowDistanceMult": 1,
+		"RechargeMult": 1,
+		"FuseMult": 1,
+		"Bounce": 0.34999999403953552,
+		"BlindTime": 3
+	}
+}

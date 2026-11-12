@@ -63,6 +63,11 @@ namespace
 	const FVector MeleeGunDropOffset(0.03f, -0.3f, 0.12f);
 	const FVector MeleeGunDropRotation(-0.9f, 0.f, 0.25f);
 	constexpr float MuzzleFlashTime = 0.05f;
+	// Perk numbers (the host's GunLimits in WWOCharacterGunNet.cpp allows for each at its best).
+	constexpr float ColdBoreTime = 4.f;     // s without firing before Cold Bore's shot is ready
+	constexpr float LongShotRange = 30.f;   // m: Long Shot counts from here out
+	constexpr float PointBlankRange = 4.f;  // m: Point Blank counts up to here
+	constexpr float BreathTime = 1.f;       // s fully aimed in before Held Breath steadies the gun
 	const FLinearColor ShotColor(1.f, 0.8f, 0.45f); // trails and the flash's light
 	// The muzzle flash's parts on the first-person gun: the core, and the flares built around it.
 	const FName FlashCore("MuzzleFlash"), FlashTongue("MuzzleFlashTongue"), FlashCrossA("MuzzleFlashCrossA"), FlashCrossB("MuzzleFlashCrossB");
@@ -317,6 +322,10 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	HitStreak = StaticHits = 0;
 	bOverpressure = true;
 	AimHeld = 0.f;
+	SinceShot = 100.f;
+	RefundRounds = 0;
+	BurstLeft = BurstSize = BurstHits = 0;
+	bFullBurst = bBurstBoosted = false;
 	ModSignature.Reset();
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
@@ -468,8 +477,13 @@ void UWWOWeaponComponent::BuildModel()
 		AddFlare(FlashCrossB, FVector(0.7f, 0.7f, 2.2f), 0.4f, 0.6f);
 	}
 	TMap<FString, FVector> Anchors;
+	TopBelowSight = 0.f;
 	if (BodyMesh)
 	{
+		// How far the gun's top sits under the sight line (AdsLevel tips the gun by it when aimed).
+		const FBoxSphereBounds MeshBounds = BodyMesh->GetBounds();
+		const float MeshTop = (MeshBounds.Origin.Z + MeshBounds.BoxExtent.Z) * JsonVec(Model, TEXT("scale"), FVector(1.0)).Z;
+		TopBelowSight = FMath::Max(-(JsonVec(Model, TEXT("offset")).Z + MeshTop) + Weapon->SightHeight, 0.f);
 		const FVector Rot = JsonVec(Model, TEXT("rot"));
 		AddPart("Body", BodyMesh, JsonVec(Model, TEXT("scale"), FVector(1.0)), JsonVec(Model, TEXT("offset")), FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
 		const TArray<TSharedPtr<FJsonValue>>* Extras;
@@ -701,6 +715,7 @@ void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 	if (!Weapon) return;
 	AdrenalLeft = FMath::Max(AdrenalLeft - DeltaSeconds, 0.f);
 	HammerLeft = FMath::Max(HammerLeft - DeltaSeconds, 0.f);
+	SinceShot += DeltaSeconds;
 	RefreshStats();
 	if (!FMath::IsNearlyEqual(Weapon->SightHeight, BuiltSightHeight)) BuildModel(); // the slider moved
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
@@ -964,6 +979,27 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 	bFlashVisible = FlashTime > 0.f; // decided before this frame's shot, like Godot (a new flash shows from the next frame)
 
 	FireCooldown -= DeltaSeconds;
+	// A burst under way finishes on its own, trigger held or not (a reload, a punch or a swap cuts
+	// it short). FireCooldown keeps counting meanwhile: it times burst start to burst start.
+	if (BurstLeft > 0)
+	{
+		if (bReloading || bMeleeing || IsSwapping())
+		{
+			EndBurst();
+			return;
+		}
+		BurstCooldown -= DeltaSeconds;
+		while (BurstLeft > 0 && BurstCooldown <= 0.f)
+		{
+			if (Ammo <= 0) break;
+			FireRound();
+			--BurstLeft;
+			BurstCooldown += 60.f / FMath::Max(Weapon->BurstRate, 1.f);
+		}
+		if (BurstLeft == 0 || Ammo <= 0) EndBurst();
+		if (Ammo <= 0) StartReload();
+		return;
+	}
 	// Handling: the gun needs a moment to come up after a sprint or mantle. A trigger pull
 	// meanwhile fires as soon as it's up.
 	if (P->bSprinting || P->IsMantling()) ReadyLeft = M("ready_time", ReadyTime);
@@ -989,12 +1025,50 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 			StartReload(); // pulling the trigger on empty reloads
 			return;
 		}
-		Shoot();
-		Ammo -= 1;
+		const int32 Rounds = Weapon->BurstCount();
+		if (Rounds > 1) BeginBurst(Rounds);
+		FireRound();
 		FireCooldown += 60.f / FMath::Max(Weapon->FireRate, 1.f);
+		if (Rounds > 1)
+		{
+			// The rest of the burst follows at the burst's own rate (see the top of this function).
+			BurstLeft = Rounds - 1;
+			BurstCooldown = 60.f / FMath::Max(Weapon->BurstRate, 1.f);
+			FireCooldown = FMath::Max(FireCooldown, 0.f); // one burst per frame, however long the frame
+			break;
+		}
 		if (Weapon->IsSemiAuto()) break;
 	}
-	if (Ammo <= 0) StartReload(); // ran dry: reload automatically
+	if (Ammo <= 0)
+	{
+		if (BurstLeft > 0) EndBurst();
+		StartReload(); // ran dry: reload automatically
+	}
+}
+
+void UWWOWeaponComponent::FireRound()
+{
+	Shoot();
+	Ammo -= 1;
+	if (RefundRounds > 0) Ammo = FMath::Min(Ammo + RefundRounds, MagazineSize()); // Marksman: a crit's round comes back
+	RefundRounds = 0;
+}
+
+void UWWOWeaponComponent::BeginBurst(int32 Rounds)
+{
+	BurstSize = Rounds;
+	BurstHits = 0;
+	bBurstBoosted = bFullBurst; // Full Burst: earned by the last burst, spent on this one
+	bFullBurst = false;
+}
+
+void UWWOWeaponComponent::EndBurst()
+{
+	// Full Burst: every round of a finished burst hit.
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	bFullBurst = BurstLeft == 0 && BurstSize > 1 && BurstHits >= BurstSize && L && L->HasPerk("full_burst");
+	BurstLeft = 0;
+	bBurstBoosted = false;
 }
 
 void UWWOWeaponComponent::Shoot()
@@ -1010,12 +1084,19 @@ void UWWOWeaponComponent::Shoot()
 	TArray<FVector_NetQuantize> Ends; // every pellet's impact, for the other players' screens
 	// Perks that power up just this shot.
 	float ShotScale = 1.f, CritBonus = 0.f;
+	bool bLongShot = false, bPointBlank = false, bExecutioner = false; // perks that depend on what each pellet hits
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
 		if (L->HasPerk("overpressure") && bOverpressure) ShotScale *= 1.5f;
 		if (L->HasPerk("final_round") && Ammo == 1) ShotScale *= 2.f; // Ammo drops after the shot
 		if (L->HasPerk("patience") && AimHeld >= 0.6f) CritBonus = 0.6f;
+		if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) ShotScale *= 1.25f;
+		if (L->HasPerk("full_burst") && bBurstBoosted) ShotScale *= 1.2f;
+		bLongShot = L->HasPerk("longshot");
+		bPointBlank = L->HasPerk("point_blank");
+		bExecutioner = L->HasPerk("executioner");
 	}
+	SinceShot = 0.f;
 	for (int32 i = 0; i < PelletCount; ++i)
 	{
 		const FVector Dir = PelletCount > 1 ? WWO::RandomInCone(Aim, FMath::DegreesToRadians(Weapon->PelletSpread)) : Aim;
@@ -1043,7 +1124,13 @@ void UWWOWeaponComponent::Shoot()
 		if (P->IsLocallyControlled() && P->IsPlayerControlled()) AWWOFXActor::HitSpark(GetWorld(), Hit.ImpactPoint, -Dir, bCritical); // a bot's: ShowShotFromBody
 		FTotal& Entry = Totals.FindOrAdd(Hit.GetActor());
 		if (Entry.Damage == 0.f) Entry.Point = Hit.ImpactPoint;
-		Entry.Damage += Weapon->Damage * ShotScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
+		// Long Shot: far targets; Point Blank: close ones; Finisher: ones under half their health and shield.
+		float TargetScale = 1.f;
+		const float HitDist = FVector::Dist(P->EyeLocation(), Hit.ImpactPoint) / WWO::M;
+		if (bLongShot && HitDist >= LongShotRange) TargetScale *= 1.2f;
+		if (bPointBlank && HitDist <= PointBlankRange) TargetScale *= 1.25f;
+		if (bExecutioner && Target->GetHealth() + Target->GetShield() < 0.5f * (Target->GetMaxHealth() + Target->GetMaxShield())) TargetScale *= 1.3f;
+		Entry.Damage += Weapon->Damage * ShotScale * TargetScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
 		Entry.bCritical |= bCritical;
 	}
 	// The shot through the air, on this machine. Yours leaves from where your gun's muzzle shows on
@@ -1226,6 +1313,11 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	const float GunDrop = P->ReticleAngleForFov(Weapon->ViewmodelFov);
 	Rot.X -= GunDrop;
 	FVector Pos = FMath::Lerp(Weapon->HipPosition, Weapon->AdsPosition, AdsAmount) + Bob + AirOffset;
+	// Aimed in, level the top: the gun tips down about its sight point until its top's plane passes
+	// through your eye, so the top is seen edge-on (the sight stays on the reticle).
+	const float EyeToSight = FMath::Max(-Weapon->AdsPosition.Z * 100.f, 5.f); // cm
+	const float LevelAngle = FMath::Atan2(TopBelowSight * FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount), EyeToSight);
+	Rot.X -= FMath::Min(LevelAngle, FMath::DegreesToRadians(8.f)) * FMath::Clamp(AdsLevel, 0.f, 1.f) * AdsAmount; // muzzle down: the top's near end comes up to the eye line
 	Pos.Y -= -Pos.Z * FMath::Tan(GunDrop) * AdsAmount; // Godot: z is forward (negative), y up
 	Pos += SprintOffset * SprintAmount + SlideOffset * SlideAmount;
 	// Mantling: hands are busy, so the gun dips out of the way.
@@ -1391,6 +1483,8 @@ void UWWOWeaponComponent::RefreshStats()
 	Scale(Weapon->Damage, "damage");
 	Scale(Weapon->FireRate, "fire_rate");
 	Scale(Weapon->CritMultiplier, "crit_multiplier");
+	Scale(Weapon->PelletSpread, "pellet_spread");
+	Scale(Weapon->HipSpread, "hip_spread");
 	// Zoom is a magnification: +40% means 40% more of the zoom past 1x.
 	Weapon->Zoom = 1.f + (Weapon->Zoom - 1.f) * FMath::Max(1.f + L->ModPercent("zoom"), 0.f);
 	Weapon->MagazineSize = FMath::Max(1.f, FMath::RoundToFloat(Weapon->MagazineSize));
@@ -1410,6 +1504,19 @@ void UWWOWeaponComponent::RefreshStats()
 		Weapon->RecoilSide *= 0.5f;
 	}
 	if (L->HasPerk("hammer") && HammerLeft > 0.f) Weapon->FireRate *= 1.25f;
+	if (L->HasPerk("breath") && AimHeld >= BreathTime)
+	{
+		Weapon->Sway *= 0.1f;
+		Weapon->RecoilUp *= 0.7f;
+		Weapon->RecoilSide *= 0.7f;
+	}
+	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding)
+	{
+		Weapon->PelletSpread *= 0.5f;
+		Weapon->Damage *= 1.15f;
+	}
+	if (L->HasPerk("tighten")) Weapon->PelletSpread *= 1.f - 0.3f * AdsAmount;
+	if (L->HasPerk("fourth_round") && Weapon->BurstCount() > 1) Weapon->Burst = Weapon->BurstCount() + 1.f;
 }
 
 bool UWWOWeaponComponent::IsAnchored() const
@@ -1424,7 +1531,9 @@ void UWWOWeaponComponent::OnShotResult(AActor* FirstHit, int32 HitCount, int32 K
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L) return;
 	bOverpressure = false; // any shot uses it up, hit or miss
-	AimHeld = 0.f;         // Patience starts over
+	AimHeld = 0.f;         // Patience and Held Breath start over
+	if (HitCount > 0) ++BurstHits; // Full Burst
+	if (bCritical && L->HasPerk("refund")) ++RefundRounds; // Marksman
 	const bool bJoiner = GetNetMode() == NM_Client; // a joiner's arcs are the host's (ServerGunShot)
 	if (!bJoiner && bCritical && FirstHit && L->HasPerk("ricochet"))
 	{
@@ -1487,5 +1596,9 @@ FString UWWOWeaponComponent::PerkStatus() const
 	if (L->HasPerk("anchor") && IsAnchored()) Active.Add(TEXT("Anchored"));
 	if (L->HasPerk("patience") && AdsAmount > 0.5f) Active.Add(AimHeld >= 0.6f ? FString(TEXT("Patience READY")) : FString(TEXT("Patience")));
 	if (L->HasPerk("hammer") && HammerLeft > 0.f) Active.Add(FString::Printf(TEXT("Hammer %.1fs"), HammerLeft));
+	if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) Active.Add(TEXT("Cold Bore READY"));
+	if (L->HasPerk("breath") && AdsAmount > 0.5f) Active.Add(AimHeld >= BreathTime ? FString(TEXT("Breath HELD")) : FString(TEXT("Breath")));
+	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding) Active.Add(TEXT("Slideshot"));
+	if (L->HasPerk("full_burst") && (bFullBurst || bBurstBoosted)) Active.Add(TEXT("Full Burst READY"));
 	return FString::Join(Active, TEXT("  ·  "));
 }

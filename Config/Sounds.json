@@ -53,6 +53,19 @@
    ],
    "range": 90
   },
+  "fire_burstrifle": {
+   "sounds": [
+    "S_laserSmall_000",
+    "S_laserSmall_002",
+    "S_laserSmall_004"
+   ],
+   "volume": 0.65,
+   "pitch": [
+    0.78,
+    0.86
+   ],
+   "range": 70
+  },
   "fire": {
    "sounds": [
     "S_laserRetro_000",
