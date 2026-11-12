@@ -1462,6 +1462,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	// centred on rest instead, so the sight rides evenly above and below the aim point.
 	const FVector AimedSwing = Swing + FVector(0.f, 0.5f * AdsAmount, 0.f);
 	FVector Bob = AimedSwing * FVector(0.012f, 0.01f, 0.f) * Weapon->GunBob * FMath::Lerp(1.f, FMath::Clamp(Weapon->AdsGunBob, 0.f, 1.f), AdsAmount); // (the one bodily move kept when aimed, with the strafe shift)
+	Bob.X *= HipOnly; // aimed in the bob is up and down only: sideways the gun is where the strafe shift puts it
 	Bob += Swing * FVector(0.03f, 0.025f, 0.f) * Weapon->GunBob * SprintAmount;
 	Bob *= P->BobWeight;
 	const float BobRoll = FMath::Cos(P->BobTime * 0.5f) * 0.08f * Weapon->GunBob * SprintAmount * P->BobWeight;
@@ -1470,7 +1471,10 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Rot += SprintRotation * SprintAmount + FVector(FMath::DegreesToRadians(Weapon->SlideTilt), 0.f, 0.f) * SlideAmount;
 	// Strafing: the gun trails the way you move and rolls with it.
 	const float SideSpeed = FVector::DotProduct(P->GetVelocity(), P->GetActorRightVector()) / WWO::M;
-	StrafeLean = FMath::Lerp(StrafeLean, FMath::Clamp(SideSpeed / 6.f, -1.f, 1.f), FMath::Min(8.f * DeltaSeconds, 1.f));
+	// (Against the speed you can go right now, so a full strafe is the whole of the sliders' amounts
+	// aimed in too, where you move slower.)
+	const float TopSpeed = FMath::Max(P->M("walk_speed", P->WalkSpeed) * FMath::Lerp(1.f, Weapon->AdsMoveSpeed, AdsAmount), 1.f);
+	StrafeLean = FMath::Lerp(StrafeLean, FMath::Clamp(SideSpeed / TopSpeed, -1.f, 1.f), FMath::Min(8.f * DeltaSeconds, 1.f));
 	Rot.Z += FMath::DegreesToRadians(Weapon->StrafeRoll) * StrafeLean;
 	const float KickNow = Kick * 0.06f * FMath::Lerp(1.f, FMath::Clamp(Weapon->AdsKick, 0.f, 1.f), AdsAmount); // how much is left aimed in is the frame's
 	Rot.X += KickNow * FMath::Max(Weapon->VerticalKick, 0.f);
