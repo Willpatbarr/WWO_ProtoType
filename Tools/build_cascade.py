@@ -19,9 +19,16 @@ Tools/create_kit_concrete.py and Tools/import_flora.py to have run.
   trunk, crown and petals, the crown recolored red) on the rock islets, green ferns (the tropical
   plants with Recolor 0).
 - Waterfalls: translucent sheets (M_WWO_Waterfall, made here on first use: falling streaks from
-  UV and time in a Custom node, as M_WWO_Ground does) from top_z to the water. No mist sprite yet.
+  UV and time in a Custom node, as M_WWO_Ground does) from top_z to the water, with mist puffs
+  (M_WWO_SoftAlpha instances on spheres) where they land and spill.
 - Chasm: a dark teal water plane at z -10 (no collision). Falling kills at z -9: a TargetPoint
   tagged KillZ, which UWWOHealthComponent reads (the default is -30 m).
+- Looks pass (2026-11-11): the sky light is movable (stationary gave no light without a bake, which
+  left every shaded face black) and tinted warm against the blue it captures; the sun is turned 35
+  degrees off the axes; the concrete is lighter, the far arches and mesas pale and clean; the water is
+  a lit glossy teal plane 6 km across (no visible edge); each waterfall has three soft mist puffs; the
+  room lights are brighter and pulled toward white; the spawn pads are muted; the post process adds
+  bloom, a vignette, contact shade and a little saturation and contrast.
 - Lighting: lighting()'s setup with the sun at -38 degrees, warm white, a bluish height fog, and its
   own sky (M_WWO_Sky_Cascade, made here: M_WWO_Sky's Godot shader with the concept's bright blue
   instead of Godot's gray-blue, so the other maps' sky is untouched).
@@ -47,9 +54,13 @@ CAS_NO_SHADOW = ("trim", "ivy", "ramp", "giant_arch", "mesa", "tunnel_roof", "ga
 FLORA = "/Game/WWO/Flora/Meshes/SM_"
 FERNS = ["Tropical_Plant_3", "Tropical_Plant_2_1", "Tropical_Plant_6", "Tropical_Plant_1_1", "Tropical_Plant_9", "Tropical_Plant_2_2"]
 SUN_PITCH = -38.0
+SUN_YAW = 35.0            # off the map's axes, so walls and arches throw slanted shadows
+SKY_LIGHT = 0.8           # the sky's fill: with no bounce light, this is all that reaches the shade
 SUN_COLOR = (1.0, 0.93, 0.82)
-FOG_COLOR = (0.55, 0.68, 0.82)
-LIGHT_CANDELAS = 120.0
+FOG_COLOR = (0.62, 0.74, 0.86)
+LIGHT_CANDELAS = 200.0
+MIST_COLOR = (0.86, 0.93, 1.0)
+WATER_COLOR = (0.008, 0.045, 0.06)   # linear: deep teal (the sky's sheen on it brightens it a lot)
 KILL_Z = -9.0
 WATERFALL_COLOR = (0.55, 0.78, 0.86)
 
@@ -192,11 +203,49 @@ def sky_instance(ns):
     return mi
 
 
+def soft_instance(ns, name, color, alpha):
+    """A soft-edged see-through ball (M_WWO_SoftAlpha, the effects' material) as a fixed instance: mist."""
+    eal, tools, mel = ns.eal, ns.tools, ns.mel
+    path = "/Game/WWO/Materials/Map/" + name
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
+        name, "/Game/WWO/Materials/Map", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    mi.set_editor_property("parent", unreal.load_asset("/Game/WWO/Materials/M_WWO_SoftAlpha"))
+    mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(color[0], color[1], color[2], 1.0))
+    for k, v in (("Alpha", alpha), ("Edge", 1.0), ("Rim", 0.0), ("Core", 0.0)):
+        mel.set_material_instance_scalar_parameter_value(mi, k, v)
+    eal.save_loaded_asset(mi)
+    return mi
+
+
+def water_material(ns):
+    """M_WWO_CascadeWater: lit, dark teal and glossy, so the sky and the sun's glare sit on it. Remade each build."""
+    eal, tools, mel = ns.eal, ns.tools, ns.mel
+    path = "/Game/WWO/Materials/M_WWO_CascadeWater"
+    m = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
+        "M_WWO_CascadeWater", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    mel.delete_all_material_expressions(m)
+    color = mel.create_material_expression(m, unreal.MaterialExpressionConstant3Vector, -400, 0)
+    color.set_editor_property("constant", unreal.LinearColor(WATER_COLOR[0], WATER_COLOR[1], WATER_COLOR[2], 1.0))
+    mel.connect_material_property(color, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    for value, prop, y in ((0.4, unreal.MaterialProperty.MP_ROUGHNESS, 150), (0.4, unreal.MaterialProperty.MP_SPECULAR, 300)):   # a sheen, not a mirror (sharp screen reflections broke into blocks)
+        k = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -400, y)
+        k.set_editor_property("r", value)
+        mel.connect_material_property(k, "", prop)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
 def lighting(ns):
     """build_maps.lighting() with Cascade's sun, sky and haze."""
     actors = ns.actors
-    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1000.0), unreal.Rotator(0.0, SUN_PITCH, 0.0))
+    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1000.0), unreal.Rotator(0.0, SUN_PITCH, SUN_YAW))
     sun.light_component.set_editor_property("intensity", ns.SUN_LUX)
+    for k, v in (("enable_light_shaft_bloom", True), ("bloom_scale", 0.12), ("bloom_threshold", 0.2)):   # a soft glare around the sun
+        try:
+            sun.light_component.set_editor_property(k, v)
+        except Exception as e:
+            ns.log("cascade: sun %s not set (%s)" % (k, e))
     sun.light_component.set_light_color(unreal.LinearColor(SUN_COLOR[0], SUN_COLOR[1], SUN_COLOR[2], 1.0))
     sun.set_actor_label("Sun")
     dome = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0))
@@ -213,14 +262,16 @@ def lighting(ns):
     sc = sky.light_component
     sc.set_editor_property("real_time_capture", True)
     sc.set_editor_property("lower_hemisphere_is_black", False)
-    sc.set_editor_property("intensity", 1.0)
+    sc.set_mobility(unreal.ComponentMobility.MOVABLE)   # a stationary sky light gives nothing until lighting is built, and it never is
+    sc.set_editor_property("intensity", SKY_LIGHT)
+    sc.set_light_color(unreal.LinearColor(1.0, 0.8, 0.6, 1.0))   # against the clear blue it captures: the shade comes out cool gray, not blue
     sky.set_actor_label("SkyLight")
     # Bluish haze that hides the far arches and mesas, thicker below the decks (the fog's base is at z 0).
     fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0.0))
     fc = fog.component
-    fc.set_editor_property("fog_density", 0.004)
+    fc.set_editor_property("fog_density", 0.006)
     fc.set_editor_property("fog_height_falloff", 0.2)
-    fc.set_editor_property("start_distance", 3000.0)
+    fc.set_editor_property("start_distance", 2000.0)
     fc.set_editor_property("fog_max_opacity", 0.75)
     fc.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(*(c * ns.SKY_ENERGY for c in FOG_COLOR), 1.0))
     fog.set_actor_label("HeightFog")
@@ -231,6 +282,15 @@ def lighting(ns):
                  ("auto_exposure_max_brightness", ns.EXPOSURE_MAX_EV), ("auto_exposure_bias", ns.EXPOSURE_BIAS)):
         s.set_editor_property("override_" + k, True)
         s.set_editor_property(k, v)
+    # The grade: a little glow off the trims and the water, corners drawn in, color and contrast up a touch,
+    # contact shade under the decks and in the corners.
+    for k, v in (("bloom_intensity", 0.55), ("vignette_intensity", 0.28), ("ambient_occlusion_intensity", 0.6), ("ambient_occlusion_radius", 120.0),
+                 ("color_saturation", unreal.Vector4(1.08, 1.08, 1.08, 1.0)), ("color_contrast", unreal.Vector4(1.05, 1.05, 1.05, 1.0))):
+        try:
+            s.set_editor_property("override_" + k, True)
+            s.set_editor_property(k, v)
+        except Exception as e:
+            ns.log("cascade: post process %s not set (%s)" % (k, e))
     ppv.set_editor_property("settings", s)
     ppv.set_actor_label("PostProcess")
 
@@ -271,18 +331,21 @@ def build(ns):
     rng = random.Random(13)
     lighting(ns)
     ci = ns.concrete_instance
-    floor = ci("Cas_Floor", (0.30, 0.31, 0.32), KitContrast=0.0, DirtStrength=0.85)
-    moss = ci("Cas_Moss", (0.26, 0.30, 0.24), KitContrast=0.0, DirtStrength=1.0)
-    wall = ci("Cas_Wall", (0.28, 0.29, 0.31))
-    roof = ci("Cas_Roof", (0.25, 0.27, 0.26), KitContrast=0.0, Grime=0.6)
-    stone = ci("Cas_Stone", (0.22, 0.23, 0.24), KitContrast=0.0, DirtStrength=0.9)
-    cover = ci("Cas_Cover", (0.33, 0.34, 0.35), KitContrast=0.0, BaseStrength=0.3, BaseHeight=30.0, StreakStrength=0.6)
+    # Lighter than the first build (it read as near-black in shade): warm pale floors, cooler walls, darker
+    # stone for the piers, and the far arches and mesas pale and clean so they sit back in the haze.
+    floor = ci("Cas_Floor", (0.47, 0.46, 0.44), KitContrast=0.0, DirtStrength=0.75)
+    moss = ci("Cas_Moss", (0.33, 0.42, 0.28), KitContrast=0.0, DirtStrength=1.0)
+    wall = ci("Cas_Wall", (0.40, 0.42, 0.46))
+    roof = ci("Cas_Roof", (0.36, 0.39, 0.38), KitContrast=0.0, Grime=0.6)
+    stone = ci("Cas_Stone", (0.33, 0.34, 0.36), KitContrast=0.0, DirtStrength=0.8)
+    far = ci("Cas_Far", (0.50, 0.53, 0.58), KitContrast=0.0, DirtStrength=0.2)
+    cover = ci("Cas_Cover", (0.52, 0.50, 0.46), KitContrast=0.0, BaseStrength=0.3, BaseHeight=30.0, StreakStrength=0.6)
     dark = ns.solid_material("CasRail", (0.08, 0.08, 0.09))
     mats = {"floor": floor, "floor_z3": floor, "floor_z5": floor, "dais": floor, "landing": floor, "bridge": floor, "plinth": floor,
             "steps": floor, "balcony": moss, "hall_wall": wall, "body": wall, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
             "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "pier": stone, "islet": stone, "arch": stone, "bracket": stone,
-            "giant_arch": stone, "mesa": stone, "low_cover": cover, "block": cover, "pillar": cover, "monolith": stone, "column": stone,
-            "rail": dark, "trim": ns.lamp_instance("Orange", (1.0, 0.5, 0.15), 6.0), "ivy": ns.solid_material("CasIvy", (0.1, 0.2, 0.07)),
+            "giant_arch": far, "mesa": far, "low_cover": cover, "block": cover, "pillar": cover, "monolith": stone, "column": stone,
+            "rail": dark, "trim": ns.lamp_instance("CasTrim", (1.0, 0.42, 0.1), 4.5), "ivy": ns.solid_material("CasIvy", (0.1, 0.2, 0.07)),
             "ramp": None}
     crate_meshes = [ns.kit_mesh("Prop_Crate3"), ns.kit_mesh("Prop_Crate4")]
     groups = {}
@@ -341,6 +404,8 @@ def build(ns):
 
     # Waterfalls: a translucent sheet from top_z down to the water, facing out of the map.
     falls = waterfall_material(ns)
+    mist = soft_instance(ns, "MI_Cascade_Mist", MIST_COLOR, 0.30)
+    mist_thin = soft_instance(ns, "MI_Cascade_MistThin", MIST_COLOR, 0.16)
     for i, w in enumerate(layout["waterfalls"]):
         x, y = w["at"]
         z0, z1 = cascade_layout.WATER_Z, w["top_z"]
@@ -348,9 +413,21 @@ def build(ns):
         a.static_mesh_component.set_collision_profile_name("NoCollision")
         a.static_mesh_component.set_editor_property("cast_shadow", False)
         a.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
+        # Mist: soft pale puffs where it lands (wider than the sheet) and a thin one where it spills over.
+        for j, (dz, across, tall, alpha_mat) in enumerate(((1.2, 1.9, 4.5, mist), (3.2, 1.3, 5.5, mist_thin), (z1 - z0 - 0.4, 1.15, 1.6, mist_thin))):
+            puff = actors.spawn_actor_from_class(unreal.StaticMeshActor, mu(x, y, z0 + dz), unreal.Rotator(0.0, 0.0, 90.0 - w["facing_deg"]))
+            pc = puff.static_mesh_component
+            pc.set_mobility(unreal.ComponentMobility.STATIC)
+            pc.set_static_mesh(ns.SPHERE)
+            pc.set_material(0, alpha_mat)
+            pc.set_collision_profile_name("NoCollision")
+            pc.set_editor_property("cast_shadow", False)
+            pc.set_editor_property("can_ever_affect_navigation", False)
+            puff.set_actor_scale3d(unreal.Vector(w["width"] * across * 0.6, w["width"] * across, tall))
+            puff.set_actor_label("Cas_mist_%d_%d" % (i, j))
 
     # The chasm's water (no collision: falling through it reaches the kill height).
-    water = b.box(unreal.Vector(0, 0, cascade_layout.WATER_Z * 100.0 - 5.0), (400.0, 400.0, 0.1), ns.solid_material("CasWater", (0.03, 0.17, 0.2)), "Cas_water")
+    water = b.box(unreal.Vector(0, 0, cascade_layout.WATER_Z * 100.0 - 5.0), (6000.0, 6000.0, 0.1), water_material(ns), "Cas_water")   # out past the haze: no edge to see
     water.static_mesh_component.set_collision_profile_name("NoCollision")
     water.static_mesh_component.set_editor_property("cast_shadow", False)
     water.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
@@ -362,7 +439,8 @@ def build(ns):
         c.set_mobility(unreal.ComponentMobility.MOVABLE)
         c.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
         c.set_intensity(LIGHT_CANDELAS)
-        c.set_light_color(unreal.LinearColor(color[0], color[1], color[2], 1.0))
+        # The layout's warm colors pulled a third of the way to white, so the rooms aren't all one orange-brown.
+        c.set_light_color(unreal.LinearColor(*(k + (1.0 - k) * 0.35 for k in color), 1.0))
         c.set_editor_property("attenuation_radius", radius * 100.0)
         c.set_editor_property("cast_shadows", False)
         a.set_actor_label("Cas_light_%s_%d" % (name, i))
@@ -371,8 +449,8 @@ def build(ns):
     # spawn, facing the middle, on a team-colored pad.
     px, py, pz, _ = layout["pve"]["player"]
     ns.place(unreal.PlayerStart, mu(px, py, pz + 1.05), mu(0, 0, pz + 1.05), 0.0, "PlayerStart_PvE")
-    for team, color in (("blue", (0.2, 0.4, 0.9)), ("orange", (0.95, 0.5, 0.15))):
-        mat = ns.solid_material("Team" + team.capitalize(), color)
+    for team, color in (("blue", (0.16, 0.25, 0.46)), ("orange", (0.5, 0.29, 0.13))):   # muted: a mark on the floor, not a beacon
+        mat = ns.solid_material("CasPad" + team.capitalize(), color)
         for i, (x, y, z, _) in enumerate(layout["spawns"][team]):
             b.box(mu(x, y, z + 0.02), (2.2, 2.2, 0.04), mat, "SpawnPad", mesh=ns.CYLINDER)
             ns.place(unreal.PlayerStart, mu(x, y, z + 1.05), mu(0, 0, z + 1.05), 0.0, "PlayerStart_%s%d" % (team.capitalize(), i + 1))

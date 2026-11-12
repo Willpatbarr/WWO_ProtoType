@@ -155,8 +155,16 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Built and played (2026-11-11): solo and a 6v6 bot match run at about 87 fps. Cascade has its own sky,
   `M_WWO_Sky_Cascade` (M_WWO_Sky's shader with a clear blue; `SKY_TOP`/`SKY_HORIZON` in build_cascade.py,
   remade every build), and tints its waterfalls through `MI_Waterfall_Cascade` (`WATERFALL_COLOR`).
-- Not done yet: no mist sprites at the waterfalls; the bridge undersides are very dark in shade. Plants are
-  actors, not instances (about 150).
+- Looks pass (2026-11-11, all in `build_cascade.py`, constants at its top): the sky light is **movable** and
+  tinted warm (`SKY_LIGHT`; as a stationary light it gave nothing without built lighting, so every shaded
+  face was black); the sun is turned `SUN_YAW` off the axes; lighter concrete, the far arches and mesas pale
+  (`Cas_Far`); a lit glossy teal water plane 6 km across (`M_WWO_CascadeWater`, `WATER_COLOR`); three mist
+  puffs per waterfall (`MI_Cascade_Mist*`, spheres in `M_WWO_SoftAlpha`); room lights at `LIGHT_CANDELAS`
+  200, pulled toward white; muted spawn pads; bloom, vignette, contact shade, a little saturation and
+  contrast in the post process. Frame time with 12 players went from about 10.2 to about 10.7 ms.
+- Still rough: shadows on the floors are strongly blue (sky-lit only: no bounce light in this project);
+  the mist puffs read as soft balls from above; interiors are evenly lit by the sky light (nothing shades
+  it indoors). Plants are actors, not instances (about 150).
 
 ## Differences from the Godot version
 - Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and
