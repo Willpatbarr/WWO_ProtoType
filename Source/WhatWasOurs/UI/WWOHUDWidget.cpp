@@ -36,6 +36,11 @@ namespace
 {
 	const FLinearColor ReticleColor(1, 1, 1, 0.9f);
 	const FLinearColor ReticleOnTarget(1.f, 0.25f, 0.2f, 0.95f);
+	// One red for the radar's lit sections and enemies' health bars. Triangles (FPainter::Tri) come
+	// out darker on screen than boxes given the same colour, so each has the value that lands on the
+	// same shade (about 205, 46, 41 of 255).
+	const FLinearColor FoeRed(0.92f, 0.45f, 0.41f);      // for Tri
+	const FLinearColor FoeRedBox(0.8f, 0.18f, 0.16f);    // for Box
 	const FLinearColor ReticleOnFriend(0.25f, 1.f, 0.35f, 0.95f); // over someone you can't hurt (a teammate)
 	const FLinearColor CritColor(1.f, 0.85f, 0.2f);
 	const FLinearColor KillColor(1.f, 0.25f, 0.2f);
@@ -456,27 +461,27 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			Y += 17.f;
 		}
 	}
-	// Health bars (and the Tank's shield above): the target under the reticle, and every other
-	// visible enemy whose middle is within HealthBarRadius of the reticle on screen.
-	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FLinearColor(0.9f, 0.2f, 0.15f), const FLinearColor& BarShieldColor = ShieldColor)
+	// Health bars: the target under the reticle, and every other visible enemy whose middle is
+	// within HealthBarRadius of the reticle on screen. A thin shield bar sits right on top of the
+	// health bar (no gap, one dark backing), and the pair floats a little clear of the head.
+	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = ShieldColor)
 	{
 		FVector2D Top;
 		if (!ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top)) return;
-		const FVector2D Bar(110, 10);
-		FVector2D Pos = Top - FVector2D(Bar.X * 0.5f, Bar.Y);
+		constexpr float Wide = 126.f, HealthTall = 7.f, ShieldTall = 3.f, Lift = 16.f;
+		const bool bShield = Target->GetMaxShield() > 0.f;
+		const FVector2D Pos = Top - FVector2D(Wide * 0.5f, HealthTall + Lift); // the health bar's top left
+		const FVector2D TopLeft = Pos - FVector2D(0.f, bShield ? ShieldTall : 0.f);
 		const float Fraction = FMath::Clamp(Target->GetHealth() / FMath::Max(Target->GetMaxHealth(), 1.f), 0.f, 1.f);
-		P.Box(Pos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-		P.Box(Pos, FVector2D(Bar.X * Fraction, Bar.Y), BarHealthColor);
+		P.Box(TopLeft - FVector2D(2, 2), FVector2D(Wide + 4.f, HealthTall + (bShield ? ShieldTall : 0.f) + 4.f), FLinearColor(0, 0, 0, 0.6f));
+		P.Box(Pos, FVector2D(Wide * Fraction, HealthTall), BarHealthColor);
 		FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
-		if (Target->GetMaxShield() > 0.f)
+		if (bShield)
 		{
-			const FVector2D ShieldPos = Pos - FVector2D(0, Bar.Y + 4);
-			P.Box(ShieldPos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-			P.Box(ShieldPos, FVector2D(Bar.X * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), Bar.Y), BarShieldColor);
+			P.Box(TopLeft, FVector2D(Wide * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), ShieldTall), BarShieldColor);
 			if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
-			Pos = ShieldPos;
 		}
-		P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
+		P.Text(Label, TopLeft + FVector2D(Wide * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
 	};
 	// Who is marked: a target is picked up when the reticle comes over it (at the hip) or as soon as
 	// it is inside the marker range (aimed in: within HealthBarRadius of the reticle on screen, and
@@ -558,7 +563,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		const int32 Steps = Radar(Pl, Lit);
 		const float R = Pl->RadarSize, Hub = R * 0.2f;
 		const FVector2D Mid(24.f + R, 24.f + R);
-		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(0.92f, 0.45f, 0.41f), You(0.68f, 0.83f, 1.f); // pale (these darken a good deal on the way to the screen)
+		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe = FoeRed, You(0.68f, 0.83f, 1.f); // pale (these darken a good deal on the way to the screen)
 		constexpr float Gap = 0.035f; // radians left clear each side of a section
 		constexpr int32 Slices = 6;
 		// A piece of a ring: between two radii, across one section (less the gaps).
