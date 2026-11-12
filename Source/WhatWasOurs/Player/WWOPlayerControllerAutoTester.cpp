@@ -62,7 +62,8 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 		static bool bStrafeToo = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterStrafe"));
 		static bool bNoShot = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterNoShot"));
 		if (Crossed(6.f)) { FiringTester->ResetPlayer(); if (bStrafeToo) FiringTester->SetStrafe(true); }
-		ScriptHold(EWWOAction::Aim, TesterClock >= 6.2f);
+		static bool bHip = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterHip")); // from the hip instead of aimed in
+		ScriptHold(EWWOAction::Aim, !bHip && TesterClock >= 6.2f);
 		static bool bFired = false;
 		if (TesterClock >= 7.f)
 		{

@@ -1462,6 +1462,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	const float EyeToSight = FMath::Max(-Weapon->AdsPosition.Z * 100.f, 5.f); // cm
 	const float LevelAngle = FMath::Atan2(TopBelowSight * FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount), EyeToSight);
 	Rot.X -= FMath::Min(LevelAngle, FMath::DegreesToRadians(8.f)) * FMath::Clamp(AdsLevel, 0.f, 1.f) * AdsAmount; // muzzle down: the top's near end comes up to the eye line
+	Rot.X -= FMath::DegreesToRadians(Weapon->AdsTilt) * AdsAmount; // the gun's own aimed-in angle, also about the sight point
 	Pos.Y -= -Pos.Z * FMath::Tan(GunDrop) * AdsAmount; // Godot: z is forward (negative), y up
 	Pos += SprintOffset * SprintAmount + SlideOffset * SlideShift;
 	Pos.X -= StrafeLean * Weapon->StrafeShift * 0.01f;

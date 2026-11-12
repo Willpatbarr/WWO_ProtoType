@@ -89,7 +89,8 @@ public:
 	// KickPush how far (cm) the gun comes back toward you at the peak. (-1: set by sight kind, PostLoad.)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickHold = -1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickReturn = -1.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float AdsKick = -1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float AdsTilt = 0.f; // degrees the gun tips muzzle-down about its sight point when aimed in (negative: muzzle up)
+	UPROPERTY(EditAnywhere, Category = "Kick") float AdsKick = -1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float KickPush = 1.f;
 	// The kick turns the gun about a point below and ahead of the sight (cm; the wrist, more or
 	// less), so the rear of the gun drops as the muzzle comes up. 0, 0: about the sight itself.
