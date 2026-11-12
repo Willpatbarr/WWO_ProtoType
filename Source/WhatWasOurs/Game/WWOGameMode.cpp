@@ -108,6 +108,19 @@ void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 }
 
+void AWWOGameMode::Logout(AController* Exiting)
+{
+	// A person leaving a PvP match (Quit to main menu, or a dropped connection): a bot fills their
+	// place, so the teams stay the size they were. UpdateBots spawns it and puts it on the smaller team.
+	const APlayerController* Person = Cast<APlayerController>(Exiting);
+	if (bPvP && Person && !Person->IsLocalController() && State == EWWOWaveState::Match)
+	{
+		BotsWanted = FMath::Min(FMath::Max3(BotsWanted, FMath::RoundToInt(Bots), BotsSpawned) + 1, 11);
+		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place (%d bots wanted)"), *GetNameSafe(Exiting->PlayerState), BotsWanted);
+	}
+	Super::Logout(Exiting);
+}
+
 void AWWOGameMode::BalanceTeam(AController* Player)
 {
 	AWWOPlayerState* Mine = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
@@ -301,6 +314,21 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (bPvP) UpdateMatch(DeltaSeconds);
 	if (bPvP) UpdateBots();
+	if (bPvP)
+	{
+		// Bots' health and shield follow the Bots settings (a player's own are on the Player page).
+		for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())
+		{
+			if (!P->GetBot() || (P->Health->BaseHealth == BotHealth && P->Health->BaseShield == BotShield)) continue;
+			P->Health->BaseHealth = BotHealth;
+			P->Health->BaseShield = BotShield;
+			if (!P->Health->bDead)
+			{
+				P->Health->Health = P->Health->MaxHealth();
+				P->Health->Shield = P->Health->MaxShield();
+			}
+		}
+	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogStress(DeltaSeconds);
 	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
 	{

@@ -303,6 +303,8 @@ A read-through of the whole codebase found about 100 issues (the report is the d
 - **PvP:** a dead player's capsule no longer blocks shots; poison credits whoever applied it (`UWWODamageOverTime::By`) and damage from nobody doesn't erase the last attacker; Shield Share skips the other team.
 - **Swaps and death:** each gun keeps the rounds and perk state it was put away with (`GunStates`; a swap is not a reload, and Overpressure and Cold Bore don't re-arm); a change of mods on the same gun takes a swap and keeps a part-used magazine; dying or starting an ult stops a burst, reload or punch (`Interrupt`), and a respawn starts every gun full (`ResetForRespawn`).
 
+Also 2026-11-12: **Quit to main menu** is a button in the Settings sidebar on every tab (and on Match, Multiplayer); it calls `LeaveToTitle`. Hosting, that ends the match for everyone; a person leaving a PvP match is replaced by a bot on the host (`AWWOGameMode::Logout`; co-op has no bots, so nobody replaces a leaver there); alone it just ends. **Bot health and shields** are on Settings, Enemies, Bots (`AWWOGameMode::BotHealth` / `BotShield`, applied to every bot each tick; a change refills them); a player's own stay on Player, "Health and shields".
+
 The rest of the report is open: the host's trust of joiners' shots, what joiners see of Soldiers' guns and allies, session failure paths, tests that can't fail, and the stale parts of this file and NETWORKING_HANDOFF.md.
 
 ## Settings menu groups

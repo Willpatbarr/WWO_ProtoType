@@ -447,7 +447,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	}, {
 		{ TEXT("Host a LAN game (this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get()))); } },
 		{ TEXT("Host a PvP game (team deathmatch, this map)"), [WeakWorld, Net] { if (UWWONetSubsystem* N = Net(); N && WeakWorld.IsValid()) N->Host(FName(*UGameplayStatics::GetCurrentLevelName(WeakWorld.Get())), true); } },
-		{ TEXT("Quit to the title screen"), [Net] { if (UWWONetSubsystem* N = Net()) N->LeaveToTitle(); }, true },
+		{ TEXT("Quit to main menu"), [Net] { if (UWWONetSubsystem* N = Net()) N->LeaveToTitle(); }, true },
 		{ TEXT("Switch team (PvP)"), [WeakWorld] { if (WeakWorld.IsValid()) if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakWorld->GetFirstPlayerController())) PC->ServerSwitchTeam(); }, true },
 		{ TEXT("Find and join a LAN game"), [Net] { if (UWWONetSubsystem* N = Net()) N->FindAndJoin(); } },
 		{ TEXT("Join a game on this Mac (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
@@ -463,6 +463,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	AddGlobal(TEXT("Bots"), {
 		Header(TEXT("Bot players in PvP (the host's settings count)")),
 		Row(Mode, "Bots", TEXT("Bots in the match (raising it adds them now)"), 0.f, 11.f, 1.f),
+		Row(Mode, "BotHealth", TEXT("Bot health (yours is on the Player page)"), 10.f, 500.f, 5.f),
+		Row(Mode, "BotShield", TEXT("Bot shields"), 0.f, 500.f, 5.f),
 		Row(Mode, "BotReaction", TEXT("Reaction time (s)"), 0.f, 1.5f, 0.05f),
 		Row(Mode, "BotAimError", TEXT("Aim error (degrees; 0 = perfect)"), 0.f, 8.f, 0.1f),
 		Row(Mode, "BotTurnSpeed", TEXT("Turn speed (degrees per second)"), 60.f, 720.f, 10.f),
@@ -1505,6 +1507,16 @@ void UWWOSettingsMenu::Prepare()
 			WeakThis->SaveRevertAt = FPlatformTime::Seconds() + 1.5; // Godot's 1.5 s timer (real time: the game is paused)
 		});
 		TWeakObjectPtr<APlayerController> WeakPC = GetOwningPlayer();
+		// Out of the match, back to the launch screen: hosting, that ends it for everyone; in someone
+		// else's PvP game a bot takes your place there; alone it just ends. (Not on the launch screen itself.)
+		const AWWOPlayerController* OwnPC = Cast<AWWOPlayerController>(GetOwningPlayer());
+		if (!OwnPC || !OwnPC->GetLaunchMenu())
+		{
+			SideButton(TEXT("Quit to main menu"), [WeakPC]
+			{
+				if (UWWONetSubsystem* N = WeakPC.IsValid() ? UWWONetSubsystem::Get(WeakPC.Get()) : nullptr) N->LeaveToTitle();
+			});
+		}
 		SideButton(TEXT("Close"), [WeakPC]
 		{
 			if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu();

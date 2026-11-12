@@ -29,6 +29,7 @@ public:
 	AWWOGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
+	virtual void Logout(AController* Exiting) override; // PvP: a bot takes a leaving player's place
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	// Every map has one Player Start. Online, each player arriving takes the first free spot in
@@ -48,6 +49,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
 	// Bot players (PvP; AWWOBotController reads these, the host's values count).
 	UPROPERTY(EditAnywhere, Category = "Bots") float Bots = 0.f;            // how many join (more can be added mid-match; -WWOBots=N too)
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotHealth = 100.f;     // every bot's health and shield, before its own shell parts and traits
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotShield = 100.f;     // (a change refills them at once)
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotReaction = 0.35f;   // s before a bot acts on an enemy it just noticed
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotTurnSpeed = 260.f;  // degrees per second, the fastest it turns
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotAimError = 1.6f;    // degrees its aim wanders off the target (0 = perfect)
