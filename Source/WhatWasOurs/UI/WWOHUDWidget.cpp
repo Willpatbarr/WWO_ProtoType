@@ -38,9 +38,9 @@ namespace
 	const FLinearColor ReticleOnTarget(1.f, 0.25f, 0.2f, 0.95f);
 	// One red for the radar's lit sections and enemies' health bars. Triangles (FPainter::Tri) come
 	// out darker on screen than boxes given the same colour, so each has the value that lands on the
-	// same shade (about 205, 46, 41 of 255).
-	const FLinearColor FoeRed(0.92f, 0.45f, 0.41f);      // for Tri
-	const FLinearColor FoeRedBox(0.8f, 0.18f, 0.16f);    // for Box
+	// same shade (about 198, 57, 52 of 255).
+	const FLinearColor FoeRed(0.89f, 0.508f, 0.487f);      // for Tri
+	const FLinearColor FoeRedBox(0.775f, 0.225f, 0.205f);    // for Box
 	const FLinearColor ReticleOnFriend(0.25f, 1.f, 0.35f, 0.95f); // over someone you can't hurt (a teammate)
 	const FLinearColor CritColor(1.f, 0.85f, 0.2f);
 	const FLinearColor KillColor(1.f, 0.25f, 0.2f);
@@ -464,7 +464,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	// Health bars: the target under the reticle, and every other visible enemy whose middle is
 	// within HealthBarRadius of the reticle on screen. A thin shield bar sits right on top of the
 	// health bar (no gap, no border), and the pair floats a little clear of the head.
-	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = ShieldColor)
+	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = FLinearColor(0.9f, 0.9f, 0.92f)) // an enemy's shield: a very light grey
 	{
 		FVector2D Top;
 		if (!ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top)) return;
