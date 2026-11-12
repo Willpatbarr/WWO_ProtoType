@@ -123,6 +123,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float SightHeight = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float Sway = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float GunBob = 1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float AdsGunBob = 0.5f; // how much of the walking bob the gun keeps when aimed in (0-1)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float SlideTilt = 11.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim assist") float AimAssistance = 70.f;

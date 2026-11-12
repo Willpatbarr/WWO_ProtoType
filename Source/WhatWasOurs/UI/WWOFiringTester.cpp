@@ -48,14 +48,14 @@ namespace
 			{ TEXT("Aiming in"), { "AdsTime", "Zoom", "ViewmodelFov", "SightHeight", "AdsTilt" } },
 			{ TEXT("Recoil: the view (where shots go)"), { "RecoilUp", "RecoilSide", "RecoilKickTime", "RecoilRecovery", "RecoilRecoveryTime", "RecoilShape", "HipSpread" } },
 			{ TEXT("Kick: the gun model (looks only)"), { "VerticalKick", "HorizontalKick", "KickHold", "KickReturn", "AdsKick", "KickPush", "KickPivotDown", "KickPivotAhead", "KickSide" } },
-			{ TEXT("Movement: the gun model"), { "Sway", "GunBob", "StrafeShift", "StrafeRoll", "SlideTilt" } },
+			{ TEXT("Movement: the gun model"), { "Sway", "GunBob", "AdsGunBob", "StrafeShift", "StrafeRoll", "SlideTilt" } },
 			{ TEXT("Firing"), { "FireRate", "SemiAuto", "Burst", "BurstRate" } },
 		};
 		return Groups;
 	}
 	const TArray<FName>& CameraIds()
 	{
-		static const TArray<FName> Ids = { "ReticleDrop", "AdsGunScale", "PunchScale" };
+		static const TArray<FName> Ids = { "ReticleDrop", "AdsGunScale", "PunchScale", "BobIntensity", "AdsBob" };
 		return Ids;
 	}
 

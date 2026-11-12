@@ -1458,7 +1458,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 
 	// Bob: follows the player's step timing. Sprinting swings it much harder.
 	const FVector Swing(FMath::Cos(P->BobTime * 0.5f), -FMath::Abs(FMath::Sin(P->BobTime)), 0.f);
-	FVector Bob = Swing * FVector(0.012f, 0.01f, 0.f) * Weapon->GunBob * HipOnly;
+	FVector Bob = Swing * FVector(0.012f, 0.01f, 0.f) * Weapon->GunBob * FMath::Lerp(1.f, FMath::Clamp(Weapon->AdsGunBob, 0.f, 1.f), AdsAmount); // (the one bodily move kept when aimed, with the strafe shift)
 	Bob += Swing * FVector(0.03f, 0.025f, 0.f) * Weapon->GunBob * SprintAmount;
 	Bob *= P->BobWeight;
 	const float BobRoll = FMath::Cos(P->BobTime * 0.5f) * 0.08f * Weapon->GunBob * SprintAmount * P->BobWeight;

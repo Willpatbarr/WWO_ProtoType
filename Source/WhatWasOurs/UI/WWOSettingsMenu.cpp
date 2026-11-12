@@ -94,7 +94,7 @@ namespace
 	const TMap<FString, TArray<FName>>& OwnSettings()
 	{
 		static const TMap<FString, TArray<FName>> Own = {
-			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsDotSize", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity" } },
+			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsDotSize", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity", "AdsBob" } },
 			{ TEXT("Audio"), {} },
 			{ TEXT("HUD"), {} },
 		};
@@ -229,6 +229,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(G, "BlastShake", TEXT("Shake from explosions near you (0 = off)"), 0.f, 2.f, 0.05f),
 		Row(G, "HitFlinch", TEXT("Jolt when you take damage (0 = off; never moves your aim)"), 0.f, 2.f, 0.05f),
 		Row(P, "BobIntensity", TEXT("Head bob intensity"), 0.f, 3.f, 0.1f),
+		Row(P, "AdsBob", TEXT("Head bob left when aimed in (0-1)"), 0.f, 1.f, 0.05f),
 		Row(P, "WalkStride", TEXT("Walk stride length (m)"), 0.5f, 5.f, 0.1f),
 		Row(P, "SprintStride", TEXT("Sprint stride length (m)"), 0.5f, 6.f, 0.1f),
 		Row(P, "LandingDip", TEXT("Landing dip"), 0.f, 3.f, 0.1f),
@@ -579,6 +580,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "ViewmodelFov", TEXT("Gun FOV"), 40.f, 100.f, 1.f),
 			Row(W, "Sway", TEXT("Gun sway"), 0.f, 3.f, 0.1f),
 			Row(W, "GunBob", TEXT("Gun bob"), 0.f, 3.f, 0.1f),
+			Row(W, "AdsGunBob", TEXT("Gun bob left when aimed in (0-1)"), 0.f, 1.f, 0.05f),
 			Row(W, "StrafeShift", TEXT("Strafe: gun shifts sideways (cm)"), -3.f, 3.f, 0.05f),
 			Row(W, "StrafeRoll", TEXT("Strafe: gun rolls (degrees)"), -8.f, 8.f, 0.1f),
 			Row(W, "AdsMark", TEXT("Aimed-in mark (0 none, 1 dot, 2 iron-sight marks)"), 0.f, 2.f, 1.f),

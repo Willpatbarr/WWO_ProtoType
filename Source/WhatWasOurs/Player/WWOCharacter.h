@@ -190,6 +190,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Jump") float AscentGravity = 20.f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float DescentGravity = 32.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float BobIntensity = 1.5f;
+	UPROPERTY(EditAnywhere, Category = "Camera") float AdsBob = 0.5f; // how much of the head bob is left when aimed in (0-1)
 	UPROPERTY(EditAnywhere, Category = "Jump") float AirControl = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float ApexHang = 0.5f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float CoyoteTime = 0.12f;
