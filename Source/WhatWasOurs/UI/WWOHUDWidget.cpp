@@ -463,7 +463,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	}
 	// Health bars: the target under the reticle, and every other visible enemy whose middle is
 	// within HealthBarRadius of the reticle on screen. A thin shield bar sits right on top of the
-	// health bar (no gap, one dark backing), and the pair floats a little clear of the head.
+	// health bar (no gap, no border), and the pair floats a little clear of the head.
 	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = ShieldColor)
 	{
 		FVector2D Top;
@@ -473,7 +473,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		const FVector2D Pos = Top - FVector2D(Wide * 0.5f, HealthTall + Lift); // the health bar's top left
 		const FVector2D TopLeft = Pos - FVector2D(0.f, bShield ? ShieldTall : 0.f);
 		const float Fraction = FMath::Clamp(Target->GetHealth() / FMath::Max(Target->GetMaxHealth(), 1.f), 0.f, 1.f);
-		P.Box(TopLeft - FVector2D(2, 2), FVector2D(Wide + 4.f, HealthTall + (bShield ? ShieldTall : 0.f) + 4.f), FLinearColor(0, 0, 0, 0.6f));
+		// No border: just a faint dark track the size of the bars, so the part that is gone still reads.
+		P.Box(TopLeft, FVector2D(Wide, HealthTall + (bShield ? ShieldTall : 0.f)), FLinearColor(0, 0, 0, 0.35f));
 		P.Box(Pos, FVector2D(Wide * Fraction, HealthTall), BarHealthColor);
 		FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
 		if (bShield)
