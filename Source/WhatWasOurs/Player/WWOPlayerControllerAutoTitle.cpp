@@ -10,6 +10,7 @@
 // Logs `AutoTest title: ... ok|FAIL`.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "UI/WWOLaunchMenu.h"
@@ -45,7 +46,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	auto Next = [](int32 Stage = -1) { TitleStage = Stage < 0 ? TitleStage + 1 : Stage; TitleClock = 0.f; };
 	UWWOLaunchMenu* Launch = LaunchMenu && LaunchMenu->IsOpen() ? LaunchMenu.Get() : nullptr;
 	const FString Level = UGameplayStatics::GetCurrentLevelName(this);
-	auto Quit = [] { UE_LOG(LogWWO, Display, TEXT("AutoTest title: done")); FPlatformMisc::RequestExit(false); };
+	auto Quit = [] { UE_LOG(LogWWO, Display, TEXT("AutoTest title: done")); WWOTest::Exit(); };
 
 	// -WWOAutoTestTitleJoinFail: from the title, join an address nobody is hosting at. When the
 	// connection gives up, the game must be back on the launch screen (a freshly loaded start map)

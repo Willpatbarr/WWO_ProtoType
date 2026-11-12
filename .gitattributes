@@ -1,0 +1,15 @@
+# Line endings: the Windows script needs CRLF on any checkout, the shell and Python ones LF.
+*.bat text eol=crlf
+*.sh text eol=lf
+*.py text eol=lf
+*.json text
+*.md text
+*.ini text
+*.cs text
+*.h text
+*.cpp text
+# Unreal assets are binary.
+*.uasset binary
+*.umap binary
+*.wav binary
+*.png binary

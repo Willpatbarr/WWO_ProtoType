@@ -528,14 +528,13 @@ void AWWOParticles::Tick(float DeltaSeconds)
 			EmitAccumulator -= 1.f;
 		}
 	}
-	const FVector Move = bLocalSpace ? GetActorLocation() - GetRootComponent()->GetComponentLocation() : FVector::ZeroVector;
 	for (FParticle& P : Particles)
 	{
 		P.Age += DeltaSeconds;
 		P.Vel += Gravity * WWO::M * DeltaSeconds;
 		const float Speed = P.Vel.Size();
 		if (Speed > 0.f) P.Vel *= FMath::Max(Speed - P.Damping * DeltaSeconds, 0.f) / Speed;
-		P.Pos += P.Vel * DeltaSeconds + Move;
+		P.Pos += P.Vel * DeltaSeconds;
 		if (P.Spin != 0.f) P.Rot = FQuat(FVector::UpVector, FMath::DegreesToRadians(P.Spin) * DeltaSeconds) * P.Rot;
 	}
 	Particles.RemoveAll([](const FParticle& P) { return P.Age >= P.Life; });

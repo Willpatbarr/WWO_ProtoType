@@ -37,7 +37,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   Last, the level from fixed cameras (spawn, overview, platforms and ramps, halls, top), 36_map_*.
   `-WWOAutoTestMenus` runs only the menu steps (about 30 s), `-WWOAutoTestBody` only the body steps
   (about 1 minute), `-WWOAutoTestGrafts` only the graft steps (about 25 s), `-WWOAutoTestMaps` only the
-  map views (about 25 s; works on all three maps).
+  map views (about 25 s; works on every map).
 - `-WWOWaveTest` plays all 8 waves with god mode on (about 4.5 minutes): it moves you to a random
   reachable spot at the start and middle of each wave, lets each wave fight for 28 s (the teammates
   shoot back), then kills the rest. It logs a navmesh reachability map, every enemy's and teammate's
@@ -133,7 +133,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   UAL bone's world rotation change after a fixed rest alignment, the pelvis moves scaled by the pelvis
   heights, and Manny keeps its own bone lengths.
 
-## Cascade map (L_Cascade, 6v6 PvP + PvE): written, not yet built
+## Cascade map (L_Cascade, 6v6 PvP + PvE): built and played
 - Design and source of truth: `~/Documents/WWO_PvP_Mockups/HANDOFF_Cascade.md` and
   `cascade_map_geometry.json` (made by `cascade_map.py` there; change the layout in that script and re-run it,
   never hand-edit the JSON). `Cascade_Plan.png` shows it. The layout is at 1.25x plan scale (`S` in `cascade_map.py`; heights
@@ -195,7 +195,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   rests on the floor, higher if it goes off mid-bounce. Probably a Godot bug; not copied.
 - Arenas are built from the same Quaternius kit pieces, placed as build_scifi_map.gd places them, each
   colliding as its own mesh. Lighting: Godot's sun (-60 degrees, white, shadows) and its default
-  procedural sky, here on a sky dome the sky light captures (Lumen GI and reflections, so shade and metal
+  procedural sky, here on a sky dome the sky light captures (no Lumen, see Performance: sky light ambient and screen-space reflections, so shade and metal
   floors come out darker than Godot's unshadowed ambient). Godot has no fog; a thin height fog in the
   horizon color only softens the far walls. Godot's exposure is fixed and its tonemap linear; here auto
   exposure is held to EV100 0.5 to 1.5 around the Godot look (about 0.9) with the filmic tonemapper.
@@ -313,13 +313,21 @@ Second batch (2026-11-12): the report's co-op and combat groups.
 - **PvP rules:** the launch screen's bot count is exact (a local 4 v 4 is 7 bots whatever the Bots slider says); a person who leaves is replaced by a bot and a person who joins mid-match takes a bot's place and spawns away from the other team (`BotsExtra`, `RetireBotFor`). Respawns pick among the three best free spots. The time limit runs on time played, so it can be changed mid-match. Kill credit lasts 10 s. A match starts with ults empty. Dying ends an ult or a wound-up grenade. Snare Mines slow, and Blinding Grenades white out, the other team's players (`AWWOCharacter::ApplyBlind`; a blinded bot sees nobody).
 - **Feel:** looking straight up no longer tips past vertical; the ground stop, eye-height and landing-dip easing and damage-over-time ticks are frame-rate independent; six more perks show on the HUD; Held Breath's text says what it does (recoil; a scoped sniper has no sway to remove).
 
-The rest of the report is open: the host's trust of joiners' shots, session failure paths, menu and HUD performance, the Windows-day items, tests that can't fail, and the stale parts of this file and NETWORKING_HANDOFF.md.
+### Third batch (2026-11-12): the rest of the report
+
+- **What the host believes from a joiner:** a shot may carry at most the gun's pellets, one hit per target, and not from a gun that is locked; each gun has its own fire-rate budget (`ShotBudgets`), so swapping guns doesn't refill it. The damage cap is worked out per hit from what the host can check itself: range (Long Shot, Point Blank), the target's health (Finisher), time since the last shot (Cold Bore) and whether the hit is near the head (`CheckGunHit`). In PvP a punch is capped from the host's own numbers and needs a swing within 2 s; a lunge needs a swing within 1.5 s and a launch a ready ability (`MoveAutonomous`); frozen states (ult, Entrench) come from the host; `ServerSetMoveStats` is clamped. A loadout sent up always has a flora and an unlocked weapon (`ApplyNet`). The perk numbers live in one place (`Weapons/WWOPerks.h`).
+- **Sessions:** a full game refuses the join with a message (`PreLogin`: 6 in co-op, 12 in PvP) and shows as "full" in the list; the search is cancelled when you host, join or leave; a failed host no longer opens the map twice; the status line counts people, not bots; in co-op a leaver who was the last one standing ends the run. Switching teams goes to the smaller team only, at most every 10 s, and respawns you at that team's spawn.
+- **Menus and saves:** the loadout is written once when the menu closes (and on quit), not on every click, and never when the weapon or mod files failed to load; the join list redraws only when it changes; the world isn't drawn behind the launch screen; rebinding a key swaps every row that had it; the Maps page comes from the one map table (`UWWONetSubsystem::Maps`); click handlers of rebuilt pages are dropped; model and weapon-model JSON is read once.
+- **Repository and packaging:** the three parked hero packs are out of the cook list; the unused Android file-server block (it held a token) is out of `DefaultEngine.ini`; `package_mac.sh` no longer blanks `ShippedSettings.json` on a fresh clone; `package_win.bat` stops if the Fab packs are missing (`WWO_SKIP_PACKS=1` to go on) and says where the exe lands; `.gitattributes` fixes line endings; Python bytecode and tool logs are ignored; the map geometry JSONs have a copy in `Tools/geometry` for machines without the mockups folder.
+- **Tests:** every scripted run ends with `AutoTest result: PASS` or `FAIL (n)` and exit code 1 on a failure (`Player/WWOTestRun`); the net and PvP runs now fail if a forged shot, a throw with no grenade, extra punches or friendly fire get through; the graft run keeps a copy of the saved loadout.
+- **Not done, on purpose:** one shared base class for the three menus and splitting the 300 to 500 line functions (a refactor best done by itself, with the menus' screenshots compared before and after); moving HUD marking out of paint and caching the vignette and stat bars; rebinding the alternate keyboard keys.
+- **DualSense on Windows:** untested. The Create-button poll is Mac-only code; on Windows the pad arrives through Unreal's own input, where touchpad and Create may map differently.
 
 ## Settings menu groups
 Every header with sliders under it is a collapsible group (`UWWOSettingsMenu::BuildRows`): + to open, - to close. The first group of each section starts open, the rest closed, and each stays as you left it while the game runs. A header with no sliders under it stays a plain label. Each row is two lines: the label with its value on the right, then the slider at the panel's full width.
 
-## Networking (in progress)
-LAN multiplayer, phase 1 of 4: see NETWORKING_HANDOFF.md for what is done, how it works and what is next.
+## Networking
+LAN multiplayer, co-op waves and PvP, hosted and joined from the launch screen: see NETWORKING_HANDOFF.md (its "Status" section first) for what is done, how it works and what is next.
 
 ## Reticle and input latency
 - **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height), at the hip and aimed in. The camera looks up by the matching angle (`ReticleAngleForFov`, recomputed for the zoomed FOV so the point keeps its place on screen) while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle; the HUD draws the reticle, hit marker and assist cones there. The gun, drawn with its own FOV, tips down to point at it, and aimed in its sight point (the model's origin) moves down onto it; the sniper's scope overlay is drawn shifted down onto it with the strip above filled black.
@@ -339,7 +347,7 @@ LAN multiplayer, phase 1 of 4: see NETWORKING_HANDOFF.md for what is done, how i
 
 ## Settings menu
 
-- Fills the window in the character menu's style (`UWWOSettingsMenu`), 95% opaque so the game behind can still be watched. Five tabs across the top (bumpers or Q / E): Player, Combat, Enemies, Match, Items. Each lists its pages down the left (`Pages`; the `Layout` table in `Prepare` says which global section goes under which tab, and a new section not named there lands under Player). The open page fills one column on the right.
+- Fills the window in the character menu's style (`UWWOSettingsMenu`), 95% opaque so the game behind can still be watched. Six tabs across the top (bumpers or Q / E): Player, Combat, Enemies, Match, Items, Controls (the key bindings). Each lists its pages down the left (`Pages`; the `Layout` table in `Prepare` says which global section goes under which tab, and a new section not named there lands under Player). The open page fills one column on the right.
 - Items' pages (Equipped, Grenade Types, Abilities, Traits, Weapons, Shell) are the item browsers: a list, then the picked item's sliders.
 - The search box lists every slider whose name, page or item matches (`OnSearchChanged`, up to 80), under where each lives. Enter, Esc or a click elsewhere gives the keyboard back to the game.
 - **Key bindings** (the Controls tab, `BuildBinds`): one line per action with a keyboard / mouse key and a controller button; click one, then press the new key (`AWWOPlayerController::BeginKeyCapture`, taken by `FWWOMenuCursor::Capture` before the menu sees it). `AWWOPlayerController::BindRows` is the list; changes are kept in `Saved/WWO/Keybinds.json` and `MapKeys` rebuilds the Enhanced Input mappings. A key already on another line swaps with it. The menu's own keys and the sticks aren't rebindable. Test runs (`-WWOAutoTest*`, `-WWOStress`) ignore and never write the saved bindings.
@@ -392,7 +400,7 @@ Extra controller assist that only works while a shot's recoil plays out, so it h
 - **Test:** `-WWOAutoTestHidden` (on `L_TestRange`) fires the rifle 2 degrees off a head with it off, then on, and logs where the aim ends and the damage done; `39_hidden_assist_markers` shows the markers. It logs the sideways and vertical parts: with assist on the climb matches (3.90 degrees both) and the sideways drift closes (1.76 to 0.03).
 
 ## Character models (prototype)
-Placeholder models from Fab (all free): VoltVine = Paragon Wraith, IronBark = Paragon Murdock, VeilSpore = Paragon Kallari (her trailing cloth tentacles and daggers hidden), Soldier = Robot scout R21, Swarm = Paragon Minions (Dusk melee), Tank = Paragon Steel. The links are in the LaminarFlow doc "Model Assets (for now)". The packs are about 11 GB and are not in git (`.gitignore`): on a fresh checkout add each to your Fab library and "Add to Project" (the robot needs "Show all projects" and version 5.4), then run `Tools/build_retargeters.py`. Paragon content may not use the PARAGON name to advertise the game.
+Placeholder models from Fab (all free). In use: Soldier = Robot scout R21, Swarm = Paragon Minions (Dusk melee), Tank = Paragon Steel. Parked (`models_off` in `Config/CharacterModels.json`, not cooked, players use the mannequin with grafts): VoltVine = Paragon Wraith, IronBark = Paragon Murdock, VeilSpore = Paragon Kallari. The links are in the LaminarFlow doc "Model Assets (for now)". The packs are about 11 GB and are not in git (`.gitignore`): on a fresh checkout add each to your Fab library and "Add to Project" (the robot needs "Show all projects" and version 5.4), then run `Tools/build_retargeters.py`. Paragon content may not use the PARAGON name to advertise the game.
 - **How it works:** every body keeps the mannequin as an invisible animation driver, so all clips, layers, the hunch, hitboxes and grafts work as before. `UWWOBodyComponent::SetModel` adds the model as a second skeletal mesh whose `UWWOModelAnimInstance` copies the mannequin's pose through `FAnimNode_RetargetPoseFromMesh` and `RTG_Manny_<key>` (`/Game/WWO/Retarget`).
 - **Config:** `Config/CharacterModels.json` (mesh, scale, hidden material slots, whether grafts or plain AttachBox boxes stay). Enemies set `Body->ModelKey`; the player and the menu preview use their flora's model. Allies stay on the mannequin. The flora models keep the flora grafts ("grafts": true; pinned to the mannequin's bones, so they sit where its body would be). On the Tank's model the plain armor boxes hide and the glowing weak spot stays.
 - **Tools/build_retargeters.py** turns on the skeletal-mesh usage flags the models' materials need (the Mercenary ships without them and renders grey), then builds `IK_<key>` rigs (auto-generated chains) and `RTG_Manny_<key>` retargeters (auto-mapped and auto-aligned). Rerun it after adding a model.
@@ -418,7 +426,7 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
   - **Slots:** all six are shown in one column. Hovering a slot opens a popup beside it listing Empty and that slot's mods, with the equipped one marked. The popup closes 0.35 s after the cursor leaves both the slots and the popup.
   - **Preview:** hovering a mod in the popup shows on the bars what it would add (green) or remove (red). Clicking it equips it.
   - **Configs:** listed under the slots, with save new, apply, overwrite and delete. Hover is polled in `NativeTick` (`UpdateModHover`).
-- **In game:** D-pad Down or B applies the next saved config (`EWWOAction::NextConfig`).
+- **In game:** D-pad Down or B (the keyboard key; rebindable under Controls, and the menu and HUD hints show whatever it is bound to) applies the next saved config (`EWWOAction::NextConfig`).
 - **Gun models and mod looks:** `Config/WeaponModels.json` gives each weapon a mesh from Epic's Lyra Starter Game (`Content/Weapons/`, copied from a Lyra project: pistol = hand cannon, rifle = rifle and sniper, shotgun), with its scale, rotation and offset from the sight point, the muzzle, and an anchor per mod slot. Each mod's `parts` in `WeaponMods.json` are simple shapes placed at its slot's anchor; `hide_ads` parts hide while aiming. `UWWOWeaponComponent::BuildModel` reads both on every rebuild (equip or mod change), so they retune with a restart. Without a model entry a weapon falls back to the Godot box model. Lyra content is under the Unreal Engine EULA (fine in an Unreal project).
 - **Gun kick:** each weapon's Settings has "Vertical kick" (0 to 20, 1 = about 3.4 degrees of tilt) and "Horizontal kick" (-5 to 5, + swings the muzzle right) instead of Godot's single gun_kick (`GunKick` only seeds `VerticalKick` now, and an old save's "GunKick" loads as the vertical one). Looks only; recoil is what moves the aim. The gun test's `38_gun_handcannon_kick_diagonal` shows a diagonal kick.
 - **Level top when aimed (2026-11-12):** aimed in, the gun tips down about its sight point until the plane of its top passes through your eye, so you look straight along the top (it shows as a level edge under the sight, with the back of the gun below it) instead of down a ramp running up to the sight. The angle is atan(sight line above the gun's top / eye-to-sight distance): `TopBelowSight` from the mesh's bounds in `BuildModel`, applied in `UpdatePose`. Settings, Camera: "Level the gun's top when aimed" (`UWWOWeaponComponent::AdsLevel`, 1 = fully, 0 = off). The sight stays on the reticle; shots are unaffected (looks only).

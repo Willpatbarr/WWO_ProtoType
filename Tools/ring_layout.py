@@ -14,7 +14,15 @@ import json
 import math
 import os
 
-RING_JSON = os.environ.get("WWO_RING_JSON", os.path.expanduser("~/Documents/WWO_PvP_Mockups/ring_map_geometry.json"))
+
+def _geometry(name):
+    # The mockups folder is where the layout is made (the source of truth); Tools/geometry holds a
+    # copy for machines without it. Copy the file there again after changing a layout.
+    made = os.path.expanduser("~/Documents/WWO_PvP_Mockups/" + name)
+    return made if os.path.exists(made) else os.path.join(os.path.dirname(os.path.abspath(__file__)), "geometry", name)
+
+
+RING_JSON = os.environ.get("WWO_RING_JSON", _geometry("ring_map_geometry.json"))
 FLOOR2 = 4.0
 WALL_TOP = 16.0     # floor-2 walls are 12 m (three times floor 1's 4 m)
 SLAB = 0.3

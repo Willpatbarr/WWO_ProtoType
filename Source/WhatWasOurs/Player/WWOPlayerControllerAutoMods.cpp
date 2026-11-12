@@ -481,9 +481,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 73:
 			// One pull of the trigger: a whole burst, though the trigger is let go at once.
 			if (AutoModClock < 0.8f) break;
-			Check(W->BurstCount() == 3 && !W->IsSemiAuto(), FString::Printf(TEXT("burst rifle fires %d-round bursts, %.0f a minute at %.0f rpm inside one, range %.0f m"), W->BurstCount(), W->FireRate, W->BurstRate, W->FireRange));
+			// The frame may be tuned either way in Settings: trigger held for burst after burst, or one
+			// burst a pull (SemiAuto). The pulls below press and hold, so both fire.
+			Check(W->BurstCount() == 3, FString::Printf(TEXT("burst rifle fires %d-round bursts, %.0f a minute at %.0f rpm inside one, range %.0f m"), W->BurstCount(), W->FireRate, W->BurstRate, W->FireRange));
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = true;
+			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true;
 			Step(74);
 			break;
 		case 74:
@@ -496,7 +498,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 75:
 			if (AutoModClock < 0.8f) break;
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = true;
+			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true;
 			Step(76);
 			break;
 		case 76:
@@ -509,7 +511,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 77:
 			if (AutoModClock < 0.8f) break;
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
+			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
 			Step(78);
 			break;
 		case 78:
@@ -517,7 +519,9 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			Held[(int32)EWWOAction::Fire] = false;
 			{
 				const int32 Fired = AmmoBefore - Gun->Ammo;
-				Check(Fired == 15, FString::Printf(TEXT("1.9 s of holding the trigger fired %d rounds (5 bursts of 3)"), Fired));
+				// Held: a burst every 60 / fire rate seconds; one burst a pull: just the one.
+				const int32 Want = W->IsSemiAuto() ? 3 : 3 * (1 + FMath::FloorToInt(1.9f / (60.f / FMath::Max(W->FireRate, 1.f)) - 0.02f));
+				Check(Fired == Want, FString::Printf(TEXT("1.9 s of holding the trigger fired %d rounds (%d: %s)"), Fired, Want, W->IsSemiAuto() ? TEXT("one burst a pull") : TEXT("burst after burst")));
 			}
 			// Swapping away and back is not a reload: the part-used magazine comes back as it was.
 			AmmoBefore = Gun->Ammo;

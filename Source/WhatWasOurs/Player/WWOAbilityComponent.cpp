@@ -85,6 +85,14 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	}
 }
 
+bool UWWOAbilityComponent::CanLaunchNow() const
+{
+	// Its use reaches the host on another channel than the move that carries the launch, so either
+	// order is fine: still charged (the use is on its way) or just spent (it came first).
+	const UWWOAbilityData* Dash = Equipped("spore_dash");
+	return Dash && (Charge(Dash) >= 0.9f || Charge(Dash) * FMath::Max(Dash->Cooldown, 0.1f) < 1.5f);
+}
+
 void UWWOAbilityComponent::UndoUse(int32 Slot)
 {
 	// The host refused it: what this machine started is taken back and the charge returned.

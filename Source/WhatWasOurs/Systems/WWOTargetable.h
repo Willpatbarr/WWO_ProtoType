@@ -1,6 +1,6 @@
 #pragma once
 
-// Anything shootable (target dummies and enemies). Replaces Godot's "targets" group and
+// Anything shootable (target dummies, enemies and, in PvP, other players). Replaces Godot's "targets" group and
 // the shared hit / aim_parts / is_critical_shape duck typing.
 
 #include "CoreMinimal.h"

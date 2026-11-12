@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "Weapons/WWOPerks.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
@@ -63,11 +64,7 @@ namespace
 	const FVector MeleeGunDropOffset(0.03f, -0.3f, 0.12f);
 	const FVector MeleeGunDropRotation(-0.9f, 0.f, 0.25f);
 	constexpr float MuzzleFlashTime = 0.05f;
-	// Perk numbers (the host's GunLimits in WWOCharacterGunNet.cpp allows for each at its best).
-	constexpr float ColdBoreTime = 4.f;     // s without firing before Cold Bore's shot is ready
-	constexpr float LongShotRange = 30.f;   // m: Long Shot counts from here out
-	constexpr float PointBlankRange = 4.f;  // m: Point Blank counts up to here
-	constexpr float BreathTime = 1.f;       // s fully aimed in before Held Breath steadies the gun
+	using namespace WWOPerk; // the perks' numbers (Weapons/WWOPerks.h, shared with the host's checks)
 	const FLinearColor ShotColor(1.f, 0.8f, 0.45f); // trails and the flash's light
 	// The muzzle flash's parts on the first-person gun: the core, and the flares built around it.
 	const FName FlashCore("MuzzleFlash"), FlashTongue("MuzzleFlashTongue"), FlashCrossA("MuzzleFlashCrossA"), FlashCrossB("MuzzleFlashCrossB");
@@ -86,14 +83,20 @@ namespace
 	const FLinearColor Dark(0.12f, 0.12f, 0.13f), Steel(0.22f, 0.24f, 0.28f), Orange(0.95f, 0.5f, 0.1f), Wood(0.38f, 0.22f, 0.12f),
 		Bronze(0.48f, 0.34f, 0.2f), Gold(0.78f, 0.6f, 0.25f), Olive(0.22f, 0.27f, 0.2f), Flash(1.f, 0.75f, 0.3f), White(0.95f, 0.95f, 0.95f), LensBlue(0.3f, 0.6f, 0.9f);
 
-	// Config/WeaponModels.json: which mesh each weapon uses and where its mod parts attach. Read
-	// on every rebuild, so it can be retuned with a restart and no build.
+	// Config/WeaponModels.json: which mesh each weapon uses and where its mod parts attach.
+	// Retuned with a restart and no build.
 	TSharedPtr<FJsonObject> ModelConfig(FName WeaponId)
 	{
-		FString Text;
-		if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponModels.json")))) return nullptr;
-		TSharedPtr<FJsonObject> Json;
-		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return nullptr;
+		// Read and parsed once a run (every equip, every bot's gun swap and every hand-held gun asks).
+		static TSharedPtr<FJsonObject> Json;
+		static bool bRead = false;
+		if (!bRead)
+		{
+			bRead = true;
+			FString Text;
+			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
+		}
+		if (!Json.IsValid()) return nullptr;
 		const TSharedPtr<FJsonObject>* Weapons;
 		const TSharedPtr<FJsonObject>* Model;
 		if (Json->TryGetObjectField(TEXT("weapons"), Weapons) && (*Weapons)->TryGetObjectField(WeaponId.ToString(), Model)) return *Model;
@@ -308,7 +311,9 @@ UStaticMeshComponent* UWWOWeaponComponent::Part(FName Name) const
 
 void UWWOWeaponComponent::SetFirstPersonHidden(bool bHidden)
 {
+	const bool bWas = bFirstPersonHidden;
 	bFirstPersonHidden = bHidden;
+	if (bWas != bHidden && Weapon && ModelRoot) BuildModel(); // built only while shown
 	if (ModelRoot) ModelRoot->SetVisibility(!bHidden, true);
 	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
 	{
@@ -452,6 +457,8 @@ void UWWOWeaponComponent::BuildModel()
 	Parts.Reset();
 	AdsHiddenParts.Reset();
 	FlareSizes.Reset();
+	TopBelowSight = 0.f;
+	if (bFirstPersonHidden) return; // someone else's character or a bot: nobody sees a first-person gun on it (SetFirstPersonHidden builds it if that changes)
 	// One part. Pos and Rot are in the model's space: cm, x forward, y right, z up, origin at the sight.
 	auto AddPart = [this](FName Name, UStaticMesh* Mesh, const FVector& Scale, const FVector& Pos, const FRotator& Rot,
 		const FLinearColor* Color, float Glow) -> UStaticMeshComponent*
@@ -1185,11 +1192,11 @@ void UWWOWeaponComponent::Shoot()
 	bool bLongShot = false, bPointBlank = false, bExecutioner = false; // perks that depend on what each pellet hits
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
-		if (L->HasPerk("overpressure") && bOverpressure) ShotScale *= 1.5f;
-		if (L->HasPerk("final_round") && Ammo == 1) ShotScale *= 2.f; // Ammo drops after the shot
-		if (L->HasPerk("patience") && AimHeld >= 0.6f) CritBonus = 0.6f;
-		if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) ShotScale *= 1.25f;
-		if (L->HasPerk("full_burst") && bBurstBoosted) ShotScale *= 1.2f;
+		if (L->HasPerk("overpressure") && bOverpressure) ShotScale *= Overpressure;
+		if (L->HasPerk("final_round") && Ammo == 1) ShotScale *= FinalRound; // Ammo drops after the shot
+		if (L->HasPerk("patience") && AimHeld >= PatienceTime) CritBonus = PatienceCrit;
+		if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) ShotScale *= ColdBore;
+		if (L->HasPerk("full_burst") && bBurstBoosted) ShotScale *= FullBurst;
 		bLongShot = L->HasPerk("longshot");
 		bPointBlank = L->HasPerk("point_blank");
 		bExecutioner = L->HasPerk("executioner");
@@ -1225,9 +1232,9 @@ void UWWOWeaponComponent::Shoot()
 		// Long Shot: far targets; Point Blank: close ones; Finisher: ones under half their health and shield.
 		float TargetScale = 1.f;
 		const float HitDist = FVector::Dist(P->EyeLocation(), Hit.ImpactPoint) / WWO::M;
-		if (bLongShot && HitDist >= LongShotRange) TargetScale *= 1.2f;
-		if (bPointBlank && HitDist <= PointBlankRange) TargetScale *= 1.25f;
-		if (bExecutioner && Target->GetHealth() + Target->GetShield() < 0.5f * (Target->GetMaxHealth() + Target->GetMaxShield())) TargetScale *= 1.3f;
+		if (bLongShot && HitDist >= LongShotRange) TargetScale *= LongShot;
+		if (bPointBlank && HitDist <= PointBlankRange) TargetScale *= PointBlank;
+		if (bExecutioner && Target->GetHealth() + Target->GetShield() < 0.5f * (Target->GetMaxHealth() + Target->GetMaxShield())) TargetScale *= Finisher;
 		Entry.Damage += Weapon->Damage * ShotScale * TargetScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
 		Entry.bCritical |= bCritical;
 	}
@@ -1589,19 +1596,19 @@ void UWWOWeaponComponent::RefreshStats()
 
 	// Perks that change stats while they're active.
 	const AWWOCharacter* Pl = GetPlayer();
-	if (L->HasPerk("focus") && HitStreak >= 5) Weapon->Damage *= 1.15f;
+	if (L->HasPerk("focus") && HitStreak >= 5) Weapon->Damage *= Focus;
 	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding))
 	{
 		Weapon->RecoilUp *= 0.6f;
 		Weapon->RecoilSide *= 0.6f;
 	}
-	if (L->HasPerk("hunter")) Weapon->CritMultiplier += 0.3f * AdsAmount;
+	if (L->HasPerk("hunter")) Weapon->CritMultiplier += HunterCrit * AdsAmount;
 	if (L->HasPerk("anchor") && IsAnchored())
 	{
 		Weapon->RecoilUp *= 0.5f;
 		Weapon->RecoilSide *= 0.5f;
 	}
-	if (L->HasPerk("hammer") && HammerLeft > 0.f) Weapon->FireRate *= 1.25f;
+	if (L->HasPerk("hammer") && HammerLeft > 0.f) Weapon->FireRate *= HammerRate;
 	if (L->HasPerk("breath") && AimHeld >= BreathTime)
 	{
 		Weapon->Sway *= 0.1f;
@@ -1611,7 +1618,7 @@ void UWWOWeaponComponent::RefreshStats()
 	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding)
 	{
 		Weapon->PelletSpread *= 0.5f;
-		Weapon->Damage *= 1.15f;
+		Weapon->Damage *= SlideShot;
 	}
 	if (L->HasPerk("tighten")) Weapon->PelletSpread *= 1.f - 0.3f * AdsAmount;
 	if (L->HasPerk("fourth_round") && Weapon->BurstCount() > 1) Weapon->Burst = Weapon->BurstCount() + 1.f;
@@ -1692,7 +1699,7 @@ FString UWWOWeaponComponent::PerkStatus() const
 	if (L->HasPerk("overpressure") && bOverpressure) Active.Add(TEXT("Overpressure READY"));
 	if (L->HasPerk("final_round") && Ammo == 1) Active.Add(TEXT("Final Round"));
 	if (L->HasPerk("anchor") && IsAnchored()) Active.Add(TEXT("Anchored"));
-	if (L->HasPerk("patience") && AdsAmount > 0.5f) Active.Add(AimHeld >= 0.6f ? FString(TEXT("Patience READY")) : FString(TEXT("Patience")));
+	if (L->HasPerk("patience") && AdsAmount > 0.5f) Active.Add(AimHeld >= PatienceTime ? FString(TEXT("Patience READY")) : FString(TEXT("Patience")));
 	if (L->HasPerk("hammer") && HammerLeft > 0.f) Active.Add(FString::Printf(TEXT("Hammer %.1fs"), HammerLeft));
 	if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) Active.Add(TEXT("Cold Bore READY"));
 	if (L->HasPerk("tighten") && AdsAmount > 0.5f) Active.Add(TEXT("Tightened"));

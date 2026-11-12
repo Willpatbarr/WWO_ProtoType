@@ -33,10 +33,16 @@ namespace
 	// One entry of Config/CharacterModels.json (read each time a model is set: retune with a restart).
 	TSharedPtr<FJsonObject> ModelConfig(FName Key)
 	{
-		FString Text;
-		if (Key.IsNone() || !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))) return nullptr;
-		TSharedPtr<FJsonObject> Json;
-		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return nullptr;
+		// Read and parsed once a run (every body that spawns asks).
+		static TSharedPtr<FJsonObject> Json;
+		static bool bRead = false;
+		if (!bRead)
+		{
+			bRead = true;
+			FString Text;
+			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
+		}
+		if (Key.IsNone() || !Json.IsValid()) return nullptr;
 		const TSharedPtr<FJsonObject>* Models;
 		const TSharedPtr<FJsonObject>* Model;
 		if (Json->TryGetObjectField(TEXT("models"), Models) && (*Models)->TryGetObjectField(Key.ToString(), Model)) return *Model;

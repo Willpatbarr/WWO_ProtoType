@@ -105,6 +105,7 @@ private:
 	// from Search, which a newer search may already be refilling in another order.
 	TArray<FOnlineSessionSearchResult> FoundResults;
 	bool IsHosting() const;
+	void CancelSearch(); // a game is starting: the list's search has nothing more to say
 	FDelegateHandle CreateHandle, DestroyHandle, FindHandle, JoinHandle;
 	bool bCommandLineDone = false;
 	FDelegateHandle NetFailureHandle, TravelFailureHandle;

@@ -1,4 +1,12 @@
-# Networking: phase 1 handoff
+# Networking handoff
+
+## Status (2026-11-12): read this first
+The phases below are a log, written as each was done; where an older line disagrees with this list, this list is right.
+- Co-op waves (up to 6) and PvP team deathmatch (up to 12, bots fill in) both work on a LAN. Hosting and joining are on the launch screen (HANDOFF.md, "Launch screen"); `-WWOHost` / `-WWOJoin` still work for tests.
+- The host knows every joiner's loadout, mods and perks (`NetLoadout`), and checks their shots, punches, throws and movement against it (HANDOFF.md, "Review fixes", third batch). There is no `MoveClientAuth` any more: lunges and dashes are simulated on the host.
+- Enemy and ally projectiles, health, glow and animation show on every machine (they were host-only at first).
+- `Config/ShippedSettings.json` is tracked in git, not ignored.
+- Never tried: two real machines, and Mac with Windows.
 
 Goal: LAN multiplayer. Up to 6 players in wave survival now; PvP (up to 12) later, so everything is
 host-authoritative (listen server) with client prediction, not client trust. Second player plays a
@@ -18,15 +26,14 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   Mac, so the script copies `Saved/StagedBuilds/Mac/WhatWasOurs.app` instead). Verified: the
   packaged build runs, loads the Lyra guns, Paragon models and configs, and passes the gun test.
   Config JSONs and `Config/ShippedSettings.json` (a copy of Saved/WWO/SavedSettings.json, made by
-  the script, git-ignored) are staged via `RuntimeDependencies` in `WhatWasOurs.Build.cs`; the
+  the script; tracked in git) are staged via `RuntimeDependencies` in `WhatWasOurs.Build.cs`; the
   Settings menu falls back to ShippedSettings when a build has no saved settings. Cook list in
   `Config/DefaultGame.ini` (Paragon mesh folders only, not their demo maps). The last packaged app
   predates the networking code: **re-run the script.**
 - **Sessions:** `Net/WWONetSubsystem` (LAN via OnlineSubsystemNull, `DefaultPlatformService=Null`):
   `Host(Map)` (create LAN session, reopen map `?listen`), `FindAndJoin()`, `JoinAddress(ip)`,
   `Leave()`. Command line: `-WWOHost`, `-WWOJoin` (LAN search), `-WWOJoin=<ip>`; handled once from
-  `AWWOPlayerController::BeginPlay`. **No menu buttons yet** (add Host / Join to the Settings menu,
-  e.g. a "Multiplayer" global tab).
+  `AWWOPlayerController::BeginPlay`. The launch screen has the buttons now (and Settings > Multiplayer).
 - **Game state:** `Game/WWOGameState` replicates the wave line; the HUD reads it. Game mode binds
   every player's death, loses only when nobody is up, spawns enemies away from all players.
   `UWWOWorldSubsystem::GetPlayers()` (all characters) vs `GetPlayer()` (this machine's).

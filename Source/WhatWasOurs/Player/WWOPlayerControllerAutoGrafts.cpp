@@ -15,6 +15,7 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "HAL/FileManager.h"
 
 namespace
 {
@@ -48,6 +49,14 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	if (!Loadout || !CharacterMenu) return true;
 	const float Before = AutoGraftClock;
+	// The saved loadout is copied aside first and put back at the end, so a run that stops half way
+	// can't leave a test loadout as yours (the next run puts a left-over copy back before it starts).
+	const FString SaveFile = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.sav"), Backup = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.grafts-backup");
+	if (Before <= 0.f)
+	{
+		if (IFileManager::Get().FileExists(*Backup)) IFileManager::Get().Copy(*SaveFile, *Backup);
+		else if (IFileManager::Get().FileExists(*SaveFile)) IFileManager::Get().Copy(*Backup, *SaveFile);
+	}
 	AutoGraftClock += DeltaTime;
 	auto Crossed = [&](float T) { return Before < T && AutoGraftClock >= T; };
 	auto Equip = [&](const FGraftLoadout& L)
@@ -122,6 +131,8 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	for (UWWOFramePartData* Part : AutoGraftFrame) if (Part) Loadout->EquipFramePart(Part);
 	Zoom(false);
 	if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
+	Loadout->FlushSave();
+	if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
 	UE_LOG(LogWWO, Display, TEXT("AutoTest grafts: loadout restored (%s)"), Loadout->GetFlora() ? *Loadout->GetFlora()->Id.ToString() : TEXT("none"));
 	return true;
 }

@@ -4,7 +4,7 @@
 // pops a damage number. Can strafe side to side to test tracking and aim assist. At zero
 // health it shrinks away until revived (Settings -> Targets, or the auto respawn timer).
 // Online the host owns it: its health, death and strafing replicate. A joiner's hit flashes it and
-// shows the number there, but only the host's damage counts (phase 2 sends hits to the host).
+// shows the number there, but only the host's damage counts (the joiner's shots go to the host, which checks them).
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"

@@ -154,6 +154,52 @@ void AWWOGameMode::Logout(AController* Exiting)
 		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place"), *GetNameSafe(Exiting->PlayerState));
 	}
 	Super::Logout(Exiting);
+	// Co-op: if the last player standing leaves, those who are down have nobody to revive them.
+	// (Checked a moment later, once the leaver's character is gone.)
+	if (!bPvP) GetWorldTimerManager().SetTimerForNextTick(this, &AWWOGameMode::OnPlayerDied);
+}
+
+int32 AWWOGameMode::People() const
+{
+	int32 Count = 0;
+	if (GameState) for (const APlayerState* PS : GameState->PlayerArray) if (PS && !PS->IsABot()) ++Count;
+	return Count;
+}
+
+void AWWOGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	// The advertised places are a promise nothing else keeps: a full game says so here.
+	const int32 Most = bPvP ? UWWONetSubsystem::MaxPvPPlayers : UWWONetSubsystem::MaxPlayers;
+	if (ErrorMessage.IsEmpty() && People() >= Most) ErrorMessage = FString::Printf(TEXT("The game is full (%d players)"), Most);
+}
+
+void AWWOGameMode::SwitchTeam(AController* Player)
+{
+	AWWOPlayerState* PS = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
+	if (!bPvP || !PS || State != EWWOWaveState::Match) return;
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - PS->LastSwitch < 10.0) return;
+	int32 Count[2] = { 0, 0 };
+	for (const APlayerState* Other : GameState->PlayerArray)
+	{
+		if (const AWWOPlayerState* O = Cast<AWWOPlayerState>(Other); O && O->Team >= 0 && O->Team <= 1) ++Count[O->Team];
+	}
+	const int32 To = 1 - PS->Team;
+	if (Count[To] + 1 > Count[PS->Team]) return; // it would leave the other side the bigger one
+	PS->LastSwitch = Now;
+	SetTeam(PS, To);
+	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Player->GetPawn()); Body && !Body->Health->bDead)
+	{
+		const FTransform Spot = PvPSpawnFor(Body);
+		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
+		Body->Health->Health = Body->Health->MaxHealth();
+		Body->Health->Shield = Body->Health->MaxShield();
+		Body->Health->LastAttacker = nullptr;
+		Body->Health->SpawnYaw = Spot.Rotator().Yaw;
+		Player->ClientSetRotation(Spot.Rotator());
+		Body->SetViewRotation(0.f, Spot.Rotator().Yaw);
+	}
 }
 
 void AWWOGameMode::BalanceTeam(AController* Player)
@@ -667,8 +713,11 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 
 void AWWOGameMode::UpdateBots()
 {
+	// The diagnostics below (bot states, sight lines, test shots at every head) are for the stress
+	// runs only: a normal match doesn't pay for them or fill its log with them.
+	static const bool bStressRun = FCString::Stristr(FCommandLine::Get(), TEXT("WWOStress")) != nullptr;
 	// One a frame, once the host's own player is in.
-	if (BotsSpawned > 0 && (BotLogClock += GetWorld()->GetDeltaSeconds()) >= BotLogNext)
+	if (bStressRun && BotsSpawned > 0 && (BotLogClock += GetWorld()->GetDeltaSeconds()) >= BotLogNext)
 	{
 		// How the bots are getting on (every 10 s).
 		BotLogNext += FParse::Param(FCommandLine::Get(), TEXT("WWOStressShots")) ? 4.f : 10.f;

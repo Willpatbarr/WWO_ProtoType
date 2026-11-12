@@ -99,7 +99,17 @@ struct FWWOGunShot
 };
 
 // The most a gun setup can do, for the host checking a joiner's shot (WWOCharacterGunNet.cpp).
-struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; int32 Burst = 1; float Round = 0.f; }; // per hit, shots per s, cm, rounds per trigger pull, one round's modded damage
+// Damage: per hit at the very most. Rate: shots per s. Range: cm. Burst: rounds per trigger pull.
+// Round: one round's modded damage. Pellets: per shot. Always: the perks the host can't check
+// (Overpressure, Final Round, Focus, Full Burst, Slideshot) at their best. Crit: the crit
+// multiplier with its perks. The rest say which checkable perks the gun carries; SinceShot is how
+// long before this shot that gun last fired (Cold Bore).
+struct FWWOGunLimits
+{
+	float Damage = 0.f, Rate = 0.f, Range = 0.f, Round = 0.f, Always = 1.f, Crit = 1.f, SinceShot = 100.f;
+	int32 Burst = 1, Pellets = 1;
+	bool bLongShot = false, bPointBlank = false, bFinisher = false, bColdBore = false;
+};
 
 // A player. In PvP also a target for the other team (IWWOTargetable): shots hit its body and head
 // hitboxes (on only in PvP), damage goes to its health on the host.
@@ -345,8 +355,15 @@ private:
 	void SendPose(float DeltaSeconds);
 	void RemoteFootsteps(float DeltaSeconds);
 	bool bWeaponSawDead = false; // the weapon has been told of the death (or the respawn) it last saw
-	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
-	double ShotBudgetTime = 0.0; // when it was last refilled
+	// Host: per gun (by id), the shots this player may fire right now (refills at that gun's own
+	// rate, so naming a fast gun doesn't pay for a slow one's shots) and when it last fired.
+	struct FShotBudget { float Shots = 3.f; double Time = 0.0; double LastShot = -1000.0; };
+	TMap<FName, FShotBudget> ShotBudgets;
+public:
+	double LastSwingTime = -100.0;  // host: this player's last melee swing (a hit, or a lunge, needs one)
+	double LastLaunchTime = -100.0; // host: the last launch (Spore Dash) it let this player's moves make
+	float LungeOnCredit = 0.f;      // host: seconds of lunging moves taken before their swing arrived
+private:
 	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const struct FWWOGunLimits& Limits, FString& Why) const;
 	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
 	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight

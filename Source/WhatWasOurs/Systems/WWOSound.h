@@ -49,6 +49,9 @@ private:
 	UPROPERTY() TMap<int32, TObjectPtr<USoundAttenuation>> Falloffs; // one per range (m)
 
 	void Load();
+public:
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override; // loads here, so the first shot of a match doesn't hitch
+private:
 	void PlayEvent(FName Event, const FVector* At, float Volume);
 	float PlayerVolume() const;
 	USoundAttenuation* FalloffFor(float RangeM);

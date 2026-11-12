@@ -37,6 +37,7 @@ class UWWOClickHandler : public UObject
 	GENERATED_BODY()
 public:
 	TFunction<void()> Fn;
+	TWeakObjectPtr<class UWidget> For; // the button it serves (when that's off the page, it can go)
 	UFUNCTION() void Handle() { if (Fn) Fn(); }
 };
 
@@ -46,6 +47,7 @@ class UWWOSliderHandler : public UObject
 	GENERATED_BODY()
 public:
 	TFunction<void(float)> Fn;
+	TWeakObjectPtr<class UWidget> For;
 	UFUNCTION() void Handle(float Value) { if (Fn) Fn(Value); }
 };
 
@@ -115,7 +117,6 @@ public:
 	void Back();
 	void CycleGlobalTab(int32 Step);
 	int32 GetGlobalTab() const { return GlobalTab; }
-	bool ShowGlobalTab(const FString& Title); // the same as ShowPage
 	bool ShowPage(const FString& Title);      // opens the page with that title, on whichever tab it's under (false: none)
 	int32 GetTopTab() const { return TopTab; }
 	void AutoTestSearch(const FString& Text); // for the autotest: as if typed into the search box ("" clears it)
@@ -162,8 +163,9 @@ private:
 	TArray<FLiveText> LiveTexts;
 	TArray<FWWOBrowser> Browsers;
 	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers;
+	int32 PruneAt = 512;
+	void KeepHandler(UObject* Handler); // adds it, and now and then drops those whose widget has left the page
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> GlobalSwitcher;
-	UPROPERTY() TArray<TObjectPtr<UButton>> GlobalTabButtons;
 	UPROPERTY() TObjectPtr<UButton> SaveButton;
 	double SaveRevertAt = 0.0; // real time the "Saved ✓" label goes back to "Save as defaults"
 	int32 GlobalTab = 0;
@@ -178,7 +180,6 @@ private:
 	void BuildRows(UPanelWidget* Container, const FString& Key);
 	UWidget* MakeRow(const FString& Key, int32 RowIndex);
 	void SyncSliders();
-	void SelectGlobalTab(int32 Index);
 	UWidget* MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Provider);
 	void ShowList(int32 BrowserIndex);
 	void OpenItem(int32 BrowserIndex, const FString& Key);

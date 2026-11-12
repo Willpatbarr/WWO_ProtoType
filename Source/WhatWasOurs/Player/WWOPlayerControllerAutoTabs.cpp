@@ -6,6 +6,7 @@
 // Run it at a few window sizes (-ResX / -ResY): the menus scale with the window.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "UI/WWOCharacterMenu.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -59,7 +60,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 		const int32 Index = TabsStage - 1;
 		if (Index >= (int32)UE_ARRAY_COUNT(Names))
 		{
-			if (TabsClock > 0.5f) { FPlatformMisc::RequestExit(false); TabsClock = -100.f; }
+			if (TabsClock > 0.5f) { WWOTest::Exit(); TabsClock = -100.f; }
 			return;
 		}
 		Held[(int32)EWWOAction::Aim] = Index > 0;
@@ -88,7 +89,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 			{
 				UE_LOG(LogWWO, Display, TEXT("AutoTest vignette: healed back to %.0f + %.0f"), P->Health->Health, P->Health->Shield);
 				Shot(TEXT("83_vignette_healed"));
-				FPlatformMisc::RequestExit(false);
+				WWOTest::Exit();
 				TabsClock = -100.f;
 			}
 			return;
@@ -142,7 +143,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 		}
 		else IFileManager::Get().Delete(*SavePath());
 		UE_LOG(LogWWO, Display, TEXT("AutoTest tabs: done (saved loadout restored)"));
-		FPlatformMisc::RequestExit(false);
+		WWOTest::Exit();
 		Next();
 		break;
 	default: break;

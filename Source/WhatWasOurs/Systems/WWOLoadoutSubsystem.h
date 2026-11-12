@@ -88,6 +88,8 @@ public:
 	bool IsCopy() const { return bCopy; }
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+	void FlushSave(); // writes the loadout if it changed since the last write
 
 	FWWOOnLoadoutChanged OnChanged;
 
@@ -187,6 +189,7 @@ private:
 	int32 ActiveSlot = 0;
 
 	bool bCopy = false; // a joiner's loadout on the host
+	bool bSaveDue = false;
 	void LoadMods();
 	TMap<FName, FName> ModIds(FName WeaponId) const;
 	void SetModIds(FName WeaponId, const TMap<FName, FName>& Ids);

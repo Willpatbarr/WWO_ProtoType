@@ -9,6 +9,7 @@
 //   match; the match restarts (still PvP) and both arrive on the fresh map: round 2.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Engine/NetConnection.h"
 #include "Player/WWOCharacterMovement.h"
@@ -38,7 +39,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	AutoNetWait += DeltaTime;
 	if (Mode == NM_Standalone || !P)
 	{
-		if (AutoNetWait > PvPWaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL never went online")); FPlatformMisc::RequestExit(false); }
+		if (AutoNetWait > PvPWaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL never went online")); WWOTest::Exit(); }
 		return;
 	}
 	AWWOCharacter* Other = nullptr;
@@ -47,7 +48,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	{
 		if (!Other)
 		{
-			if (AutoNetWait > PvPWaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL no other player after %.0f s"), AutoNetWait); FPlatformMisc::RequestExit(false); }
+			if (AutoNetWait > PvPWaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL no other player after %.0f s"), AutoNetWait); WWOTest::Exit(); }
 			return;
 		}
 		AutoNetClock = -PvPSettle;
@@ -63,11 +64,11 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	if (bHost && GPvPRound1.Get() == this) return;
 	if (GPvPRound > 0 && GPvPRound1.Get() != this)
 	{
-		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: round 2 done (PvP %d), joiner leaving"), UWWOWorldSubsystem::IsPvP(this)); FPlatformMisc::RequestExit(false); }
-		if (bHost && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: host done, the joiner left after the restart")); FPlatformMisc::RequestExit(false); }
+		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: round 2 done (PvP %d), joiner leaving"), UWWOWorldSubsystem::IsPvP(this)); WWOTest::Exit(); }
+		if (bHost && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: host done, the joiner left after the restart")); WWOTest::Exit(); }
 		return;
 	}
-	if (T > 90.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL the match never ended")); FPlatformMisc::RequestExit(false); return; }
+	if (T > 90.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL the match never ended")); WWOTest::Exit(); return; }
 	if (!Other) return;
 
 	const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
@@ -132,6 +133,8 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: friendly fire: same team %d, host health %.0f -> %.0f, teammate hits refused %d"),
 				MyPS && OtherPS && MyPS->Team == OtherPS->Team, AutoPvPHostHealth, P->Health->Health + P->Health->Shield, AWWOCharacter::NetHitsRejected - AutoPvPRejected);
+			const bool bSameTeam = MyPS && OtherPS && MyPS->Team == OtherPS->Team;
+			if (!bSameTeam || P->Health->Health + P->Health->Shield < AutoPvPHostHealth - 0.5f) UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL a teammate's shots hurt the host"));
 		}
 		else
 		{
@@ -185,6 +188,6 @@ void AWWOPlayerController::LogJoinerStress(float DeltaTime)
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
 	{
 		UE_LOG(LogWWO, Display, TEXT("Stress joiner: done"));
-		FPlatformMisc::RequestExit(false);
+		WWOTest::Exit();
 	}
 }

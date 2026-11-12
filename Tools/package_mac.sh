@@ -1,7 +1,8 @@
 #!/bin/bash
 # Packages a Mac build of What Was Ours (Development) as /Volumes/UnrealSSD/Builds/WhatWasOurs/WhatWasOurs.app
 # (one app with everything in it; copy it to another Mac to play there).
-# Ships your current Settings values (Saved/WWO/SavedSettings.json) as the build's starting defaults.
+# Ships your current Settings values (Saved/WWO/SavedSettings.json) as the build's starting defaults
+# (it copies them over Config/ShippedSettings.json, which is tracked: commit that change or not as you mean to).
 # Close any running game first (it competes for memory and CPU). Takes a while the first time
 # (shaders); later runs reuse the derived data cache.
 set -e
@@ -9,10 +10,10 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENGINE="/Volumes/UnrealSSD/Epic Games/UE_5.8/Engine"
 OUT="/Volumes/UnrealSSD/Builds/WhatWasOurs"
 pkill -f "WhatWasOurs.uproject.*-game" || true
+# Config/ShippedSettings.json is in git (the tuning every build starts from). This Mac's saved
+# Settings values replace it when there are any; on a fresh clone the one in git ships as it is.
 if [ -f "$PROJECT_DIR/Saved/WWO/SavedSettings.json" ]; then
   cp "$PROJECT_DIR/Saved/WWO/SavedSettings.json" "$PROJECT_DIR/Config/ShippedSettings.json"
-else
-  echo "{}" > "$PROJECT_DIR/Config/ShippedSettings.json"
 fi
 "$ENGINE/Build/BatchFiles/RunUAT.sh" BuildCookRun -project="$PROJECT_DIR/WhatWasOurs.uproject" \
   -platform=Mac -clientconfig=Development -build -cook -stage -pak \

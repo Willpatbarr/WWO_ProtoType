@@ -14,6 +14,7 @@ class WHATWASOURS_API AWWOPlayerState : public APlayerState
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	double LastSwitch = -100.0; // host: when this player last changed teams
 	UPROPERTY(Replicated) int32 Team = 0; // PvP: 0 = Blue, 1 = Orange
 	UPROPERTY(Replicated) int32 Kills = 0;
 	UPROPERTY(Replicated) int32 Deaths = 0;

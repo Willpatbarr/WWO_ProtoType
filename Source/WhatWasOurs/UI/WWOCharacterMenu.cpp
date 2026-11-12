@@ -391,6 +391,7 @@ void UWWOCharacterMenu::Close()
 	bOpen = false;
 	SetVisibility(ESlateVisibility::Collapsed);
 	SetPreviewLive(false);
+	if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this)) L->FlushSave();
 }
 
 void UWWOCharacterMenu::SetPreviewLive(bool bLive)
@@ -1557,7 +1558,8 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	ListBox->SetMaxDesiredHeight(ConfigListHeight * K);
 	ListBox->AddChild(ConfigList);
 	Side->AddChildToVerticalBox(ListBox)->SetPadding(FMargin(0, 10.f * K, 0, 0));
-	Side->AddChildToVerticalBox(Spaced(Styler, TEXT("In game: D-pad Down or B swaps to your other weapon slot's config"), 10.f, FLinearColor(1, 1, 1, 0.4f), 80, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+	Side->AddChildToVerticalBox(Spaced(Styler, FString::Printf(TEXT("In game: %s swaps to your other weapon slot's config"),
+		Cast<AWWOPlayerController>(GetOwningPlayer()) ? *Cast<AWWOPlayerController>(GetOwningPlayer())->BindHint("next_config") : TEXT("the swap key")), 10.f, FLinearColor(1, 1, 1, 0.4f), 80, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
 }
 
 void UWWOCharacterMenu::OpenModSlot(FName ModSlot)

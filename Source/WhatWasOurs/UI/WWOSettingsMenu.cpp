@@ -182,7 +182,8 @@ UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunc
 	UWWOClickHandler* H = NewObject<UWWOClickHandler>(Outer ? Outer : this);
 	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
 	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	Handlers.Add(H);
+	H->For = B;
+	KeepHandler(H);
 	return B;
 }
 
@@ -425,16 +426,15 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	auto MapButton = [WeakWorld](const TCHAR* Text, const TCHAR* Level) -> FWWOMenuButton
 	{
 		const FName LevelName(Level);
-		return { Text, [WeakWorld, LevelName] { if (WeakWorld.IsValid()) AWWOGameMode::LoadMap(WeakWorld.Get(), LevelName); } };
+		return { FString(Text), [WeakWorld, LevelName] { if (WeakWorld.IsValid()) AWWOGameMode::LoadMap(WeakWorld.Get(), LevelName); } };
 	};
-	AddGlobal(TEXT("Maps"), { Header(TEXT("Switch maps (restarts the run on that map)")) }, {
-		MapButton(TEXT("Small arena"), TEXT("L_Arena")),
-		MapButton(TEXT("Large arena (two levels)"), TEXT("L_ArenaLarge")),
-		MapButton(TEXT("Ring (4v4 PvP)"), TEXT("L_ArenaRing")),
-		MapButton(TEXT("Arboretum (4v4 PvP)"), TEXT("L_Arboretum")),
-		MapButton(TEXT("Test range (gray box)"), TEXT("L_TestRange")),
-		MapButton(TEXT("Cascade (6v6 PvP)"), TEXT("L_Cascade")),
-	});
+	// The same table the launch screen offers (UWWONetSubsystem::Maps): a new map goes there once.
+	TArray<FWWOMenuButton> MapButtons;
+	for (const FWWOMapInfo& Info : UWWONetSubsystem::Maps())
+	{
+		MapButtons.Add(MapButton(*FString::Printf(TEXT("%s (%s)"), *Info.Title, *Info.Blurb), *Info.Level.ToString()));
+	}
+	AddGlobal(TEXT("Maps"), { Header(TEXT("Switch maps (restarts the run on that map)")) }, MapButtons);
 	// LAN play (UWWONetSubsystem). Hosting reopens this map for others to join; joining loads the host's.
 	auto Net = [WeakWorld]() { return WeakWorld.IsValid() ? UWWONetSubsystem::Get(WeakWorld.Get()) : nullptr; };
 	FWWOSettingRow NetStatus;
@@ -450,8 +450,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		{ TEXT("Quit to main menu"), [Net] { if (UWWONetSubsystem* N = Net()) N->LeaveToTitle(); }, true },
 		{ TEXT("Switch team (PvP)"), [WeakWorld] { if (WeakWorld.IsValid()) if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakWorld->GetFirstPlayerController())) PC->ServerSwitchTeam(); }, true },
 		{ TEXT("Find and join a LAN game"), [Net] { if (UWWONetSubsystem* N = Net()) N->FindAndJoin(); } },
-		{ TEXT("Join a game on this Mac (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
-		{ TEXT("Leave (play alone)"), [Net] { if (UWWONetSubsystem* N = Net()) N->Leave(); } },
+		{ TEXT("Join a game on this machine (testing)"), [Net] { if (UWWONetSubsystem* N = Net()) N->JoinAddress(TEXT("127.0.0.1")); } },
 	});
 	TWeakObjectPtr<AWWOGameMode> WeakMode = Mode;
 	AddGlobal(TEXT("PvP"), {
@@ -713,6 +712,29 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 
 // --- Values, defaults, saving ----------------------------------------------------------------
 
+void UWWOSettingsMenu::KeepHandler(UObject* Handler)
+{
+	// Lists, pages and search results are rebuilt often, each time with new buttons and sliders and
+	// a handler apiece. A handler whose widget is no longer under a menu's root is done with.
+	Handlers.Add(Handler);
+	if (Handlers.Num() < PruneAt) return;
+	auto OnPage = [](const UWidget* W)
+	{
+		if (!W) return false;
+		const UWidget* Top = W;
+		while (Top->GetParent()) Top = Top->GetParent();
+		const UWidgetTree* Tree = Cast<UWidgetTree>(Top->GetOuter());
+		return Tree && Tree->RootWidget == Top;
+	};
+	Handlers.RemoveAll([&OnPage](const TObjectPtr<UObject>& H)
+	{
+		if (const UWWOClickHandler* Click = Cast<UWWOClickHandler>(H)) return !OnPage(Click->For.Get());
+		if (const UWWOSliderHandler* Slide = Cast<UWWOSliderHandler>(H)) return !OnPage(Slide->For.Get());
+		return false;
+	});
+	PruneAt = Handlers.Num() * 2 + 256;
+}
+
 void UWWOSettingsMenu::MarkPreferences()
 {
 	for (FWWOSettingSection& S : Sections)
@@ -930,15 +952,6 @@ FString UWWOSettingsMenu::OpenItemKey() const
 	return FString();
 }
 
-bool UWWOSettingsMenu::ShowGlobalTab(const FString& Title)
-{
-	return ShowPage(Title);
-}
-
-void UWWOSettingsMenu::SelectGlobalTab(int32 Index)
-{
-	SelectPage((Index + GlobalKeys.Num()) % FMath::Max(GlobalKeys.Num(), 1));
-}
 
 void UWWOSettingsMenu::CycleGlobalTab(int32 Step)
 {
@@ -1042,7 +1055,8 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 		if (WeakFill.IsValid()) WeakFill->SetPercent(FMath::GetRangePct(RowCopy.Min, RowCopy.Max, V));
 	};
 	Slider->OnValueChanged.AddDynamic(H, &UWWOSliderHandler::Handle);
-	Handlers.Add(H);
+	H->For = Slider;
+	KeepHandler(H);
 	Live.Add({ Slider, Value, Fill, Key, RowIndex });
 	return Root;
 }
@@ -1578,7 +1592,8 @@ UButton* UWWOSettingsMenu::PlainButton(UWidget* Inside, TFunction<void()> Fn)
 	UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
 	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
 	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	Handlers.Add(H);
+	H->For = B;
+	KeepHandler(H);
 	return B;
 }
 
@@ -1683,7 +1698,8 @@ bool UWWOSettingsMenu::ShowPage(const FString& Title)
 {
 	for (int32 i = 0; i < Pages.Num(); ++i)
 	{
-		if (Pages[i].Title == Title) { SelectPage(i); return true; }
+		// (A page a joiner's menu doesn't list has no label: it can't be opened this way either.)
+		if (Pages[i].Title == Title && (!bRestricted || Pages[i].Label.IsValid())) { SelectPage(i); return true; }
 	}
 	return false;
 }

@@ -1,4 +1,5 @@
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Systems/WWOSound.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameMode.h"
@@ -60,7 +61,7 @@ void AWWOPlayerController::ServerSwitchTeam_Implementation()
 {
 	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
 	AWWOPlayerState* PS = GetPlayerState<AWWOPlayerState>();
-	if (GM && GM->bPvP && PS) GM->SetTeam(PS, 1 - PS->Team);
+	if (GM && GM->bPvP && PS) GM->SwitchTeam(this);
 }
 
 AWWOPlayerController::AWWOPlayerController()
@@ -103,6 +104,7 @@ void AWWOPlayerController::BeginPlay()
 	}
 	SetMenuMode(IsMenuOpen());
 	if (Net) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
+	if (FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest"))) WWOTest::Watch(); // count the FAIL lines of a test run
 	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
 	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
 	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
@@ -140,6 +142,7 @@ TSharedPtr<SWidget> AWWOPlayerController::GameViewportWidget() const
 
 void AWWOPlayerController::EndPlay(const EEndPlayReason::Type Reason)
 {
+	if (IsLocalController()) if (const UGameInstance* GI = GetGameInstance()) if (UWWOLoadoutSubsystem* L = GI->GetSubsystem<UWWOLoadoutSubsystem>()) L->FlushSave(); // a map change or quit
 	if (MenuCursor.IsValid() && FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().UnregisterInputPreProcessor(MenuCursor);
@@ -197,6 +200,21 @@ const TArray<FWWOBindRow>& AWWOPlayerController::BindRows()
 	return Rows;
 }
 
+FString AWWOPlayerController::BindHint(FName Row) const
+{
+	TArray<FString> Keys;
+	for (const bool bPad : { false, true })
+	{
+		if (const FKey Key = GetBind(Row, bPad); Key.IsValid()) Keys.Add(KeyName(Key));
+	}
+	return FString::Join(Keys, TEXT(" / "));
+}
+
+bool AWWOPlayerController::IsCharacterMenuOpen() const
+{
+	return CharacterMenu && CharacterMenu->IsOpen();
+}
+
 FKey AWWOPlayerController::GetBind(FName Row, bool bPad) const
 {
 	if (const FKey* Changed = Binds.Find(FName(*(Row.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))))) return *Changed;
@@ -231,8 +249,7 @@ void AWWOPlayerController::SetBind(FName Row, bool bPad, const FKey& Key)
 	{
 		if (R.Id != Row && GetBind(R.Id, bPad) == Key && (bPad ? R.PadKey : R.KbmKey).IsValid())
 		{
-			Binds.Add(FName(*(R.Id.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))), Old);
-			break;
+			Binds.Add(FName(*(R.Id.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))), Old); // every line that had it (Reload and Revive share Square)
 		}
 	}
 	Binds.Add(FName(*(Row.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))), Key);
@@ -291,9 +308,11 @@ void AWWOPlayerController::BeginKeyCapture(FName Row, bool bPad, TFunction<void(
 	MenuCursor->Capture = [WeakThis, Row, bPad, OnDone](const FKey& Key)
 	{
 		if (!WeakThis.IsValid()) return true;
-		const bool bCancel = Key == EKeys::Escape;
+		// Esc cancels, and so does Options (the menu button, never bindable): with only a controller
+		// in hand there has to be a way out of a keyboard line clicked by mistake.
+		const bool bCancel = Key == EKeys::Escape || Key == EKeys::Gamepad_Special_Right;
 		// Not the menu's own keys, and only this line's device.
-		if (!bCancel && (Key == EKeys::Tab || Key == EKeys::Gamepad_Special_Right || Key.IsGamepadKey() != bPad)) return false;
+		if (!bCancel && (Key == EKeys::Tab || Key.IsGamepadKey() != bPad)) return false;
 		WeakThis->CaptureRow = NAME_None;
 		if (!bCancel) WeakThis->SetBind(Row, bPad, Key);
 		if (OnDone) OnDone();
@@ -525,7 +544,7 @@ void AWWOPlayerController::UpdateDevice()
 			bool bPad = false;
 			for (const FKey Key : { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left,
 				EKeys::Gamepad_FaceButton_Top, EKeys::Gamepad_LeftShoulder, EKeys::Gamepad_RightShoulder, EKeys::Gamepad_LeftTrigger,
-				EKeys::Gamepad_RightTrigger, EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_LeftThumbstick,
+				EKeys::Gamepad_RightTrigger, EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down, EKeys::Gamepad_LeftThumbstick,
 				EKeys::Gamepad_RightThumbstick, EKeys::Gamepad_Special_Left, EKeys::Gamepad_Special_Right })
 			{
 				if (IsInputKeyDown(Key)) { bPad = true; break; }
@@ -650,11 +669,6 @@ void AWWOPlayerController::CloseMenus()
 	SetMenuMode(IsMenuOpen());
 }
 
-void AWWOPlayerController::OnMenuClosed()
-{
-	if (!IsMenuOpen()) SetMenuMode(false);
-}
-
 void AWWOPlayerController::SetMenuMode(bool bOpen)
 {
 	// Alone, a menu pauses the game. Online the match keeps running (the host's pause would freeze
@@ -680,6 +694,7 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 	{
 		SetInputMode(FInputModeGameOnly());
 		MouseRecaptureTime = GetWorld()->GetRealTimeSeconds();
+		CaptureRow = NAME_None; // a key capture left waiting doesn't outlive the menu
 		if (MenuCursor.IsValid() && FSlateApplication::IsInitialized())
 		{
 			FSlateApplication::Get().UnregisterInputPreProcessor(MenuCursor);
@@ -999,7 +1014,7 @@ void AWWOPlayerController::UpdateAutoTest(float DeltaTime)
 	else if (At(45.6f)) { if (UpdateAutoMapTest(P, DeltaTime)) Next(bAutoTestMapsOnly ? 45.8f : 45.7f); }
 	// Weapon mods (draft): stat changes, saved configs and quick swap, perks firing, the menu.
 	else if (At(45.7f)) { if (UpdateAutoModTest(P, DeltaTime)) Next(45.8f); }
-	else if (At(45.8f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); FPlatformMisc::RequestExit(false); }
+	else if (At(45.8f)) { P->Health->GodMode = 0.f; UE_LOG(LogWWO, Display, TEXT("AutoTest done")); WWOTest::Exit(); }
 }
 
 bool AWWOPlayerController::PlaceForAutoTest(AWWOCharacter* P, AActor* Target, float DistanceM, float YawOffset, bool bMove)

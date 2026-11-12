@@ -6,14 +6,24 @@ rem with the "Game development with C++" workload. The first run also builds the
 rem every shader, so it takes a while.
 rem The build starts from Config\ShippedSettings.json: the Settings values in git (saved on the Mac),
 rem or this PC's own if "Save as defaults" has been used here.
-rem The Fab character packs aren't in git (see HANDOFF.md, "Character models"): add them to the
-rem project first, or bodies fall back to the mannequin.
 setlocal
 set "PROJECT_DIR=%~dp0.."
 if "%UE_ROOT%"=="" set "UE_ROOT=C:\Program Files\Epic Games\UE_5.8"
 if "%WWO_OUT%"=="" set "WWO_OUT=%PROJECT_DIR%\Builds\Windows"
 if not exist "%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat" (
   echo Unreal Engine 5.8 not found at "%UE_ROOT%". Set UE_ROOT to its folder and run this again.
+  exit /b 1
+)
+rem The enemy models come from three Fab packs that are not in git. Without them the cook has
+rem retargeters and config pointing at meshes that aren't there: stop here unless told to go on.
+set "MISSING="
+if not exist "%PROJECT_DIR%\Content\ParagonSteel" set "MISSING=%MISSING% ParagonSteel"
+if not exist "%PROJECT_DIR%\Content\ParagonMinions" set "MISSING=%MISSING% ParagonMinions"
+if not exist "%PROJECT_DIR%\Content\Robot_scout_R_21" set "MISSING=%MISSING% Robot_scout_R_21"
+if not "%MISSING%"=="" if not "%WWO_SKIP_PACKS%"=="1" (
+  echo Missing Fab packs in Content:%MISSING%
+  echo Add them to the project from your Fab library ^(HANDOFF.md, "Character models"^), or set WWO_SKIP_PACKS=1
+  echo to try without them ^(enemies fall back to the mannequin; the cook may log errors^).
   exit /b 1
 )
 if exist "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" copy /Y "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" "%PROJECT_DIR%\Config\ShippedSettings.json" >nul
@@ -24,5 +34,6 @@ if errorlevel 1 (
   echo Packaging failed: the first error above is the one to read.
   exit /b 1
 )
-echo Packaged to "%WWO_OUT%". Copy that folder to another PC to play there; start WhatWasOurs.exe.
+echo Packaged under "%WWO_OUT%" ^(UAT adds a Windows folder inside it^). Copy that folder to another PC to play
+echo there; start WhatWasOurs.exe in it.
 endlocal

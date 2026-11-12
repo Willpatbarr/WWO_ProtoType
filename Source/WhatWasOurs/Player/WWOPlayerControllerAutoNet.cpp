@@ -9,6 +9,7 @@
 // together (`AutoTest net: round 2 ...`). The joiner then quits; the host quits once the joiner has left.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOGrenadeComponent.h"
@@ -70,7 +71,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	// Before the host reopens the map as a listen server, or before the joiner arrives: wait.
 	if (Mode == NM_Standalone || !P)
 	{
-		if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL never went online")); FPlatformMisc::RequestExit(false); }
+		if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL never went online")); WWOTest::Exit(); }
 		return;
 	}
 	TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(this)->GetPlayers();
@@ -86,7 +87,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	{
 		if (!Other)
 		{
-			if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL no other player after %.0f s"), AutoNetWait); FPlatformMisc::RequestExit(false); }
+			if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL no other player after %.0f s"), AutoNetWait); WWOTest::Exit(); }
 			return;
 		}
 		AutoNetClock = -SettleSeconds; // counts up to 0, then the steps start
@@ -102,8 +103,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (bHost && GAutoNetRound1.Get() == this) return; // restarting: this controller's world is on its way out
 	if (GAutoNetRound > 0 && GAutoNetRound1.Get() != this)
 	{
-		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: round 2 done, joiner leaving")); FPlatformMisc::RequestExit(false); }
-		if (bHost && bAutoNetSawOther && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left after the restart")); FPlatformMisc::RequestExit(false); }
+		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: round 2 done, joiner leaving")); WWOTest::Exit(); }
+		if (bHost && bAutoNetSawOther && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left after the restart")); WWOTest::Exit(); }
 		return;
 	}
 
@@ -150,7 +151,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (Crossed(2.0f))
 	{
 		ToggleSettingsMenu();
-		const bool bTab = SettingsMenu && SettingsMenu->ShowGlobalTab(TEXT("Multiplayer"));
+		const bool bTab = SettingsMenu && SettingsMenu->ShowPage(TEXT("Multiplayer"));
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s opened Settings, Multiplayer tab %d"), bHost ? TEXT("host") : TEXT("joiner"), bTab);
 	}
 	if (Crossed(2.5f))
@@ -204,6 +205,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		Held[(int32)EWWOAction::Fire] = false;
 		Held[(int32)EWWOAction::Aim] = false;
 		// A forged shot the host must refuse: far more damage than the gun can do.
+		// (If the real shots already killed the dummy, any other one does.)
+		if (!bHost && !AutoNetShootTarget.IsValid()) { if (TActorIterator<AWWOTarget> It(World); It) AutoNetShootTarget = *It; }
 		if (!bHost && AutoNetShootTarget.IsValid())
 		{
 			FWWOGunShot Fake;
@@ -226,6 +229,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host fired %d times at %s; joiner shots taken %d, hits applied %d, rejected %d"), AutoNetShotPulls,
 				*GetNameSafe(Dummy), AWWOCharacter::NetShotsTaken, AWWOCharacter::NetHitsApplied, AWWOCharacter::NetHitsRejected);
+			// The forged 99999 hit and the made-up mod are two shots the host must have turned down.
+			if (AWWOCharacter::NetHitsRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host rejected %d forged shots, not both"), AWWOCharacter::NetHitsRejected);
 		}
 		else
 		{
@@ -249,8 +254,10 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	}
 	if (!bHost && Crossed(9.8f))
 	{
+		// Two more at once: with the Extra Grenade ability one of them may be real, never both.
 		P->ServerThrowGrenade(P->EyeLocation(), P->AimForward());
-		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a second throw with no grenade ready (the host should refuse it)"));
+		P->ServerThrowGrenade(P->EyeLocation(), P->AimForward());
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent two more throws than it has grenades for (the host should refuse at least one)"));
 	}
 	// Ability: the joiner switches on Thornfist (whichever slot has it); the host's copy should have it on too.
 	if (!bHost && Crossed(10.3f))
@@ -290,6 +297,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host threw %d joiner grenades, refused %d; %d pools now (owner %s)"),
 				UWWOGrenadeComponent::NetThrows, UWWOGrenadeComponent::NetThrowsRejected, Pools, *PoolOwner);
+			if (UWWOGrenadeComponent::NetThrowsRejected < 1) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host threw the grenade the joiner didn't have"));
 		}
 		else
 		{
@@ -352,6 +360,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d; kills credited to the joiner %d"),
 				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected, AWWOCharacter::NetKillsCredited);
+			// Of the three punches sent at once (one forged), at most one may land.
+			if (AWWOCharacter::NetMeleeRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host took more than one of three punches sent at once (rejected %d)"), AWWOCharacter::NetMeleeRejected);
 		}
 		else
 		{
@@ -451,12 +461,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		if (bAutoNetSawOther && !Other)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left at %.1f s"), T);
-			FPlatformMisc::RequestExit(false);
+			WWOTest::Exit();
 		}
 		else if (T > HostLimit)
 		{
 			UE_LOG(LogWWO, Warning, TEXT("AutoTest net: host gave up at %.0f s (the joiner never left)"), T);
-			FPlatformMisc::RequestExit(false);
+			WWOTest::Exit();
 		}
 		return;
 	}
@@ -615,5 +625,5 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		GAutoNetRound1 = this;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner waiting for the host's restart"));
 	}
-	if (T > RestartAt + 30.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host's restart never arrived")); FPlatformMisc::RequestExit(false); }
+	if (T > RestartAt + 30.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host's restart never arrived")); WWOTest::Exit(); }
 }

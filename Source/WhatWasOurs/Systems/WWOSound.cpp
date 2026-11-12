@@ -17,6 +17,12 @@
 
 TMap<FName, int32> UWWOSound::Played;
 
+void UWWOSound::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (!bLoaded) Load();
+}
+
 void UWWOSound::Load()
 {
 	bLoaded = true;

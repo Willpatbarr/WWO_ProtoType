@@ -1064,9 +1064,12 @@ void AWWOCharacter::ServerSetMoveStats_Implementation(const TArray<float>& V)
 {
 	if (UWWOWorldSubsystem::IsPvP(this)) return; // PvP: the host's settings and the player's loadout, not their word
 	if (V.Num() < 14) return;
-	WalkSpeed = V[0]; SprintSpeed = V[1]; CrouchSpeed = V[2]; SlideSpeed = V[3];
-	SlideDistance = V[4]; JumpHeight1 = V[5]; JumpHeight2 = V[6]; AirControl = V[7];
-	AscentGravity = V[8]; DescentGravity = V[9]; ApexHang = V[10]; CoyoteTime = V[11]; MantleReach = V[12]; MantleTime = V[13];
+	// As sent, but sane: finite and inside twice the Settings sliders' ranges (loadout bonuses go over them).
+	static const float Low[14] = { 0.5f, 0.5f, 0.25f, 0.5f, 0.5f, 0.1f, 0.f, 0.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.05f };
+	static const float High[14] = { 30.f, 50.f, 20.f, 60.f, 40.f, 10.f, 10.f, 80.f, 160.f, 160.f, 0.95f, 0.6f, 7.f, 2.f };
+	TArray<float> Safe;
+	for (int32 i = 0; i < 14; ++i) Safe.Add(FMath::IsFinite(V[i]) ? FMath::Clamp(V[i], Low[i], High[i]) : Low[i]);
+	ApplyMoveBase(Safe);
 	bNetStats = true; // M() now returns these as they are
 }
 

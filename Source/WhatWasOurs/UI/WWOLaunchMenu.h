@@ -30,6 +30,7 @@ public:
 	enum { ModeNone = -1, ModePvP, ModePvE };
 
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
@@ -56,6 +57,9 @@ private:
 	FName Map;
 	FString GameKey;        // the picked game (host and map), to keep it picked across refreshes
 	int32 SeenGames = -1;   // UWWONetSubsystem::GamesSerial the list was built from
+	FString ShownGames;     // what that list said (a search that finds the same games redraws nothing)
+	FString GamesSignature() const;
+	void SetWorldHidden(bool bHidden); // nothing renders behind this opaque screen
 	bool bSeenSearching = false;
 	double NextSearch = 0.0; // real time of the next automatic search (Join)
 	double StartedAt = 0.0;  // real time START was pressed (0: not starting)

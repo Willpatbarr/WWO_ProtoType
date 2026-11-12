@@ -68,6 +68,11 @@ public:
 	FTransform PvPSpawnFor(const class AWWOCharacter* Player) const; // away from the other team
 	void SetTeam(class AWWOPlayerState* PS, int32 Team);
 	void BalanceTeam(AController* Player); // the smaller team
+	// A player asks to change sides: only onto a team no bigger than theirs would become, at most
+	// every 10 s, and they start over at a spawn spot (no switching mid-fight to dodge a shot).
+	void SwitchTeam(AController* Player);
+	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+	int32 People() const; // players who aren't bots
 	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
 	// -WWOBots=N (PvP): N bot players join the match (AWWOBotController). -WWOStress logs the load.
 	int32 BotsWanted = 0, BotsSpawned = 0;

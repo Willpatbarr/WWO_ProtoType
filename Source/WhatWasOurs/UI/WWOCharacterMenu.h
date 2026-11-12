@@ -6,9 +6,9 @@
 // - Loadout: the frame's four stat bars and the build list on the left, the character in the
 //   middle, and on the right the flora, grenade, abilities, traits, weapon and frame parts as
 //   cards. Clicking a card opens the tab that edits it.
-// - Frame, Flora, Weapon: the editors below, beside the character (Weapon takes the full width).
+// - Flora, Weapon, Shell: the editors below, beside the character (Weapon takes the full width).
 // The character stands still; the right stick, A / D or dragging it with the mouse turns it.
-// The editors, as before: three loadout tiles' contents (Flora, Weapons, Frame Parts).
+// The editors:
 // - Flora (layout "B"): rows for Flora, Abilities (grenade + two abilities) and Traits.
 //   Clicking a slot opens a picker row; picking an ability in the other slot swaps them.
 // - Weapons: one screen, no scrolling: the weapons, the frame's stat bars and perks, its mod

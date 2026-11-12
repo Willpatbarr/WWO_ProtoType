@@ -20,6 +20,8 @@
 #include "Systems/WWOTargetable.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
+#include "Weapons/WWOPerks.h"
+#include "Player/WWOAbilityComponent.h"
 #include "WhatWasOurs.h"
 #include "Engine/World.h"
 
@@ -62,23 +64,28 @@ namespace
 			if (!Mod->Perk.IsNone()) Perks.Add(Mod->Perk);
 		}
 		auto Scaled = [&Percent](float Value, FName Stat) { return Value * FMath::Max(1.f + Percent.FindRef(Stat), 0.f); };
+		// The perks the host has no way to check stay at their best in every shot's allowance...
 		float ShotScale = 1.f;
-		if (Perks.Contains("overpressure")) ShotScale *= 1.5f;
-		if (Perks.Contains("final_round")) ShotScale *= 2.f;
-		if (Perks.Contains("focus")) ShotScale *= 1.15f;
-		if (Perks.Contains("cold_bore")) ShotScale *= 1.25f;
-		if (Perks.Contains("full_burst")) ShotScale *= 1.2f;
-		if (Perks.Contains("longshot")) ShotScale *= 1.2f;
-		if (Perks.Contains("point_blank")) ShotScale *= 1.25f;
-		if (Perks.Contains("executioner")) ShotScale *= 1.3f;
-		if (Perks.Contains("slide_shot")) ShotScale *= 1.15f;
+		if (Perks.Contains("overpressure")) ShotScale *= WWOPerk::Overpressure;
+		if (Perks.Contains("final_round")) ShotScale *= WWOPerk::FinalRound;
+		if (Perks.Contains("focus")) ShotScale *= WWOPerk::Focus;
+		if (Perks.Contains("full_burst")) ShotScale *= WWOPerk::FullBurst;
+		if (Perks.Contains("slide_shot")) ShotScale *= WWOPerk::SlideShot;
+		// ...and the ones it can (range, the target's health, time since the last shot) count per hit, in CheckGunHit.
+		Out.bLongShot = Perks.Contains("longshot");
+		Out.bPointBlank = Perks.Contains("point_blank");
+		Out.bFinisher = Perks.Contains("executioner");
+		Out.bColdBore = Perks.Contains("cold_bore");
 		float Crit = Scaled(Gun->CritMultiplier, "crit_multiplier");
-		if (Perks.Contains("hunter")) Crit += 0.3f;
-		if (Perks.Contains("patience")) Crit += 0.6f;
-		Out.Damage = Scaled(Gun->Damage, "damage") * FMath::Max(1.f, FMath::RoundToFloat(Gun->Pellets)) * ShotScale * FMath::Max(Crit, 1.f) * GunSlack;
+		if (Perks.Contains("hunter")) Crit += WWOPerk::HunterCrit;
+		if (Perks.Contains("patience")) Crit += WWOPerk::PatienceCrit;
+		Out.Always = ShotScale;
+		Out.Crit = FMath::Max(Crit, 1.f);
+		Out.Pellets = FMath::Max(1, FMath::RoundToInt(Gun->Pellets));
+		Out.Damage = Scaled(Gun->Damage, "damage") * Out.Pellets * ShotScale * WWOPerk::LongShot * WWOPerk::PointBlank * WWOPerk::Finisher * WWOPerk::ColdBore * Out.Crit * GunSlack;
 		// A burst gun's fire rate is bursts per minute; Fourth Round adds a round to each.
 		Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
-		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? 1.25f : 1.f) * GunSlack;
+		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? WWOPerk::HammerRate : 1.f) * GunSlack;
 		Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
 		Out.Round = Scaled(Gun->Damage, "damage"); // what the arc perks scale from, as on the shooter's machine
 		return true;
@@ -104,17 +111,35 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		return;
 	}
 
-	// Fire rate: a budget that refills at the gun's rate, holding a few shots for bunched arrivals.
+	if (!Gun->bUnlocked)
+	{
+		NetHitsRejected += Shot.Hits.Num();
+		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %s is locked"), *GetName(), *Gun->Id.ToString());
+		return;
+	}
+	// One shot hits each target once and can't hit more targets than it has pellets.
+	TSet<const AActor*> Struck;
+	for (const FWWOGunHit& Hit : Shot.Hits) Struck.Add(Hit.Target);
+	if (Shot.Hits.Num() > Limits.Pellets || Struck.Num() != Shot.Hits.Num() || Shot.Ends.Num() > Limits.Pellets)
+	{
+		NetHitsRejected += Shot.Hits.Num();
+		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %d hits and %d impacts from one shot of %d pellet(s)"), *GetName(), Shot.Hits.Num(), Shot.Ends.Num(), Limits.Pellets);
+		return;
+	}
+	// Fire rate: a budget per gun that refills at that gun's rate, holding a few shots for bunched arrivals.
 	const double Now = GetWorld()->GetTimeSeconds();
-	ShotBudget = FMath::Min(FMath::Max(BurstShots, Limits.Burst + 1.f), ShotBudget + float(Now - ShotBudgetTime) * Limits.Rate);
-	ShotBudgetTime = Now;
-	if (ShotBudget < 1.f)
+	FShotBudget& Budget = ShotBudgets.FindOrAdd(Gun->Id);
+	Budget.Shots = FMath::Min(FMath::Max(BurstShots, Limits.Burst + 1.f), Budget.Shots + float(Now - Budget.Time) * Limits.Rate);
+	Budget.Time = Now;
+	if (Budget.Shots < 1.f)
 	{
 		NetHitsRejected += Shot.Hits.Num();
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: faster than %s fires"), *GetName(), *Gun->Id.ToString());
 		return;
 	}
-	ShotBudget -= 1.f;
+	Budget.Shots -= 1.f;
+	Limits.SinceShot = float(Now - Budget.LastShot);
+	Budget.LastShot = Now;
 	++NetShotsTaken;
 	int32 Kills = 0;
 	FWWODamageBy By(this); // PvP kill credit
@@ -164,10 +189,26 @@ bool AWWOCharacter::CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, 
 	if (!IsValid(Hit.Target) || !Target) { Why = TEXT("not a target"); return false; }
 	if (Target->IsDead()) { Why = TEXT("already dead"); return false; }
 	if (!UWWOWorldSubsystem::CanHurt(this, Hit.Target)) { Why = TEXT("can't hurt it (teammate)"); return false; }
-	if (Hit.Damage <= 0.f || Hit.Damage > Limits.Damage) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Hit.Damage, Limits.Damage); return false; }
 	if (FVector::Dist(Shot.Origin, EyeLocation()) > OriginSlack) { Why = TEXT("shot from somewhere else"); return false; }
 	const float Range = FVector::Dist(Shot.Origin, FVector(Hit.Point));
 	if (Range > Limits.Range) { Why = FString::Printf(TEXT("out of range (%.0f m)"), Range / WWO::M); return false; }
+	// The most this hit could be: every pellet on it, the unchecked perks at their best, and each
+	// perk the host can check only where its own numbers agree (with room for what moved since).
+	float Most = Limits.Round * Limits.Pellets * Limits.Always;
+	const float Meters = Range / WWO::M;
+	if (Limits.bLongShot && Meters >= WWOPerk::LongShotRange - 3.f) Most *= WWOPerk::LongShot;
+	if (Limits.bPointBlank && Meters <= WWOPerk::PointBlankRange + 2.f) Most *= WWOPerk::PointBlank;
+	if (Limits.bFinisher && Target->GetHealth() + Target->GetShield() < 0.65f * (Target->GetMaxHealth() + Target->GetMaxShield())) Most *= WWOPerk::Finisher;
+	if (Limits.bColdBore && Limits.SinceShot >= WWOPerk::ColdBoreTime - 0.5f) Most *= WWOPerk::ColdBore;
+	if (Hit.bCritical)
+	{
+		// A crit lands by the crit spot (a head): within arm's reach of it, give or take its movement.
+		bool bNearCrit = false;
+		for (const FWWOAimPart& Part : Target->GetAimParts()) bNearCrit |= Part.bCritical && FVector::Dist(Part.Position, FVector(Hit.Point)) <= Part.Radius + PointSlack;
+		if (bNearCrit) Most *= Limits.Crit;
+	}
+	Most *= GunSlack;
+	if (Hit.Damage <= 0.f || Hit.Damage > Most) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Hit.Damage, Most); return false; }
 	return CheckReach(Hit.Target, Shot.Origin, Hit.Point, Why);
 }
 
@@ -239,6 +280,7 @@ void AWWOCharacter::PlaySwingOnBody()
 void AWWOCharacter::ServerMeleeSwing_Implementation()
 {
 	if (Health->bDead) return;
+	LastSwingTime = GetWorld()->GetTimeSeconds();
 	++NetMeleeSwings;
 	PlaySwingOnBody(); // replicates to everyone but the joiner (it plays its own)
 }
@@ -290,8 +332,18 @@ bool AWWOCharacter::CheckMeleeHit(AActor* Target, float Damage, const FVector& O
 	if (T->IsDead()) { Why = TEXT("already dead"); return false; }
 	if (!UWWOWorldSubsystem::CanHurt(this, Target)) { Why = TEXT("can't hurt it (teammate)"); return false; }
 
-	const float MaxDamage = Weapon->MeleeDamage * MeleeDamageSlack;
+	// PvP: what the host's own copy of this player says a punch can do (its loadout, Thornfist when
+	// it has it on, the veil), with a little room. Co-op keeps the loose cap: there the joiner's own
+	// Melee damage slider counts, and the host doesn't know it.
+	float MaxDamage = Weapon->MeleeDamage * MeleeDamageSlack;
+	if (UWWOWorldSubsystem::IsPvP(this))
+	{
+		const UWWOAbilityData* Thornfist = Abilities->Equipped("thornfist");
+		const float Fist = FMath::Max(Abilities->MeleeMultiplier(), Thornfist ? Thornfist->MeleeDamageMult : 1.f); // on here, or about to be (its use is on the way)
+		MaxDamage = M("melee_damage", Weapon->MeleeDamage) * Fist * FMath::Max(VeilMeleeMultiplier(), 1.f) * 1.15f;
+	}
 	if (Damage <= 0.f || Damage > MaxDamage) { Why = FString::Printf(TEXT("damage %.0f over %.0f"), Damage, MaxDamage); return false; }
+	if (GetWorld()->GetTimeSeconds() - LastSwingTime > 2.0) { Why = TEXT("no swing came before it"); return false; }
 
 	const double Since = GetWorld()->GetTimeSeconds() - LastMeleeHitTime;
 	if (Since < Weapon->MeleeSwingTime() * MeleeRateSlack) { Why = FString::Printf(TEXT("%.2f s after the last hit"), Since); return false; }

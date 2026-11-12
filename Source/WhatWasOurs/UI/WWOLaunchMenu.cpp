@@ -24,6 +24,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "HAL/PlatformTime.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -161,6 +163,23 @@ UWidget* UWWOLaunchMenu::StepLabel(int32 Number, const FString& Text) const
 	return Row;
 }
 
+FString UWWOLaunchMenu::GamesSignature() const
+{
+	FString Text;
+	if (const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this))
+	{
+		for (const FWWOGameInfo& G : Net->Games) Text += FString::Printf(TEXT("%s|%s|%d|%d|%d;"), *G.Host, *G.Map.ToString(), G.bPvP, G.Players, G.MaxPlayers);
+	}
+	return Text;
+}
+
+void UWWOLaunchMenu::SetWorldHidden(bool bHidden)
+{
+	// The page is opaque: the paused arena behind it needn't be drawn. (The character menu's
+	// preview is a scene capture of its own and still renders.)
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr) Viewport->bDisableWorldRendering = bHidden;
+}
+
 FString UWWOLaunchMenu::StatusLine() const
 {
 	// The network's last word: on the title (a lost connection), while looking for games, and
@@ -183,11 +202,19 @@ void UWWOLaunchMenu::Open()
 	Game = INDEX_NONE;
 	StartedAt = 0.0;
 	SetVisibility(ESlateVisibility::Visible);
+	SetWorldHidden(true);
 	Rebuild();
+}
+
+void UWWOLaunchMenu::NativeDestruct()
+{
+	SetWorldHidden(false); // the map it started is loading: that one is drawn
+	Super::NativeDestruct();
 }
 
 void UWWOLaunchMenu::Close()
 {
+	SetWorldHidden(false);
 	bOpen = false;
 	SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -251,6 +278,7 @@ void UWWOLaunchMenu::ChooseGame(int32 Index)
 {
 	const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
 	if (StartedAt > 0.0 || Connection != ConnJoin || !Net || !Net->Games.IsValidIndex(Index)) return;
+	if (Net->Games[Index].Players >= Net->Games[Index].MaxPlayers) return; // full
 	Game = Index;
 	GameKey = Net->Games[Index].Host + TEXT("|") + Net->Games[Index].Map.ToString();
 	Rebuild();
@@ -297,6 +325,11 @@ void UWWOLaunchMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (!bOpen) return;
 	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
 	if (StatusText) StatusText->SetText(FText::FromString(StatusLine().ToUpper()));
+	// Settings is see-through and the character menu has its preview: with either up, the world draws.
+	if (const AWWOPlayerController* PC = Cast<AWWOPlayerController>(GetOwningPlayer()))
+	{
+		SetWorldHidden(!(PC->IsCharacterMenuOpen() || (PC->GetSettingsMenu() && PC->GetSettingsMenu()->IsOpen())));
+	}
 	const double Now = FPlatformTime::Seconds();
 	if (StartedAt > 0.0 && Now - StartedAt > StartGiveUp)
 	{
@@ -310,7 +343,15 @@ void UWWOLaunchMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		Net->FindGames();
 		NextSearch = Now + SearchEvery;
 	}
-	if (Net->GamesSerial != SeenGames)
+	if (Net->GamesSerial != SeenGames && GamesSignature() == ShownGames)
+	{
+		SeenGames = Net->GamesSerial; // the same games as are showing: leave the list alone (no dropped click, no jump to the top)
+		for (int32 i = 0; i < Net->Games.Num(); ++i)
+		{
+			if (!GameKey.IsEmpty() && Net->Games[i].Host + TEXT("|") + Net->Games[i].Map.ToString() == GameKey) Game = i;
+		}
+	}
+	else if (Net->GamesSerial != SeenGames)
 	{
 		// Keep the picked game picked if it's still there.
 		Game = INDEX_NONE;
@@ -338,6 +379,7 @@ void UWWOLaunchMenu::Rebuild()
 		SeenGames = Net->GamesSerial;
 		bSeenSearching = Net->bSearching;
 	}
+	ShownGames = GamesSignature();
 	UBorder* Page = Styler->WidgetTree->ConstructWidget<UBorder>();
 	Page->SetBrushColor(WWO::Lin(PageColor));
 	Page->SetPadding(FMargin(40.f * K, 12.f * K, 40.f * K, 28.f * K));
@@ -501,7 +543,8 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 		for (int32 i = 0; i < Count; ++i)
 		{
 			const FWWOGameInfo& G = Net->Games[i];
-			const FString Sub = FString::Printf(TEXT("%s  ·  %d of %d players"), *G.MapTitle, G.Players, G.MaxPlayers);
+			const bool bFull = G.Players >= G.MaxPlayers;
+			const FString Sub = FString::Printf(TEXT("%s  ·  %d of %d players%s"), *G.MapTitle, G.Players, G.MaxPlayers, bFull ? TEXT("  ·  full") : TEXT(""));
 			AddToList(Choice(G.Host.IsEmpty() ? FString(TEXT("A game")) : G.Host + TEXT("'s game"), Sub, Game == i,
 				[WeakThis, i] { if (WeakThis.IsValid()) WeakThis->ChooseGame(i); }, 19.f, G.bPvP ? TEXT("PvP") : TEXT("PvE")), 74.f);
 		}

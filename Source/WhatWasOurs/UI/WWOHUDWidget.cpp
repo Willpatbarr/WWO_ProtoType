@@ -715,7 +715,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		else if (const AWWOCharacter* Downed = H->FindReviveTarget())
 		{
 			// Next to a downed teammate: how to revive them, and how far along you are.
-			P.Text(TEXT("Hold E / Square to revive"), Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
+			const AWWOPlayerController* Keys = Cast<AWWOPlayerController>(PC);
+			P.Text(FString::Printf(TEXT("Hold %s to revive"), Keys ? *Keys->BindHint("revive") : TEXT("Revive")), Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
 			if (Downed->Health->BeingRevived > 0.f) ReviveBar(Downed->Health->BeingRevived, Center.Y + 125.f);
 		}
 	}

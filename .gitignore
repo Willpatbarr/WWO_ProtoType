@@ -21,3 +21,8 @@ Content/ParagonKallari/
 Builds/
 Build/Mac/FileOpenOrder/
 Build/Mac/*.PackageVersionCounter
+
+# Python bytecode and tool logs (every tool run rewrote these)
+__pycache__/
+*.pyc
+Tools/*.log

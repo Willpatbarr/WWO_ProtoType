@@ -143,6 +143,25 @@ void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTim
 			Owner->MoveIn.SpeedScale = FMath::Min(Owner->MoveIn.SpeedScale, Owner->Abilities->SpeedMultiplier() + 0.01f);
 			Owner->MoveIn.ExtraJumps = (uint8)FMath::Min<int32>(Owner->MoveIn.ExtraJumps, Owner->Abilities->ExtraJumps());
 		}
+		// PvP: a lunge follows a melee swing the host heard of (with a little credit, since the
+		// swing and the first lunging moves arrive on different channels); a launch is Spore Dash's,
+		// once per use; and a player the host has frozen (its ult, Entrench) is frozen whatever its moves say.
+		if (UWWOWorldSubsystem::IsPvP(Owner))
+		{
+			const double Now = GetWorld()->GetTimeSeconds();
+			if (Owner->MoveIn.Held & MoveLunge)
+			{
+				const bool bSwung = Now - Owner->LastSwingTime < 1.5;
+				Owner->LungeOnCredit = bSwung ? 0.f : Owner->LungeOnCredit + DeltaTime;
+				if (!bSwung && Owner->LungeOnCredit > 0.4f) Owner->MoveIn.Held &= ~MoveLunge;
+			}
+			if (Owner->MoveIn.Pressed & MoveLaunch)
+			{
+				if (Now - Owner->LastLaunchTime < 1.0 || !Owner->Abilities->CanLaunchNow()) Owner->MoveIn.Pressed &= ~MoveLaunch;
+				else Owner->LastLaunchTime = Now;
+			}
+			if (Owner->bUlting || Owner->EntrenchLeft > 0.f) Owner->MoveIn.Held |= MoveFrozen;
+		}
 		if (Owner->MoveIn.HasPush())
 		{
 			const float Cap = (Owner->MoveIn.Held & MoveLunge) ? Owner->Weapon->LungeSpeed * WWO::M * 1.05f : 30.f * WWO::M;

@@ -1,4 +1,5 @@
 #include "Systems/WWOLoadoutSubsystem.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "WhatWasOurs.h"
 #include "Player/WWOCharacter.h"
 #include "Components/ActorComponent.h"
@@ -40,26 +41,9 @@ namespace
 	}
 }
 
-namespace
-{
-	// The character a context belongs to: itself, the owner of a component, or the owner (or
-	// instigator) of an actor it spawned, a few levels up.
-	const AWWOCharacter* OwningCharacter(const UObject* Context)
-	{
-		for (int32 i = 0; i < 5 && Context; ++i)
-		{
-			if (const AWWOCharacter* C = Cast<AWWOCharacter>(Context)) return C;
-			if (const UActorComponent* Comp = Cast<UActorComponent>(Context)) Context = Comp->GetOwner();
-			else if (const AActor* A = Cast<AActor>(Context)) Context = A->GetOwner() ? static_cast<const UObject*>(A->GetOwner()) : A->GetInstigator();
-			else return nullptr;
-		}
-		return nullptr;
-	}
-}
-
 UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::Get(const UObject* WorldContext)
 {
-	if (const AWWOCharacter* C = OwningCharacter(WorldContext))
+	if (const AWWOCharacter* C = UWWOWorldSubsystem::PlayerOf(WorldContext))
 	{
 		// A copy kept for someone else's character: a joiner's or a bot's on the host, anyone else's on a
 		// joiner (AWWOCharacter::OnRep_NetLook). Never your own character on your own machine.
@@ -331,8 +315,23 @@ void UWWOLoadoutSubsystem::FillFloraSlots()
 
 void UWWOLoadoutSubsystem::Changed()
 {
-	Save();
+	// Written to disk later (FlushSave: when the character menu closes, on a map change and at
+	// exit), not on every change: a weapon swap mid-fight is a change too.
+	bSaveDue = true;
 	OnChanged.Broadcast();
+}
+
+void UWWOLoadoutSubsystem::FlushSave()
+{
+	if (!bSaveDue) return;
+	bSaveDue = false;
+	Save();
+}
+
+void UWWOLoadoutSubsystem::Deinitialize()
+{
+	FlushSave();
+	Super::Deinitialize();
 }
 
 // --- Saving -------------------------------------------------------------------------------
@@ -340,6 +339,13 @@ void UWWOLoadoutSubsystem::Changed()
 void UWWOLoadoutSubsystem::Save() const
 {
 	if (bCopy) return; // a joiner's copy: their own machine saves theirs
+	if (WeaponMods.Num() == 0 || Weapons.Num() == 0)
+	{
+		// The mod file didn't load (a slip in a hand edit) or no assets did: what's equipped now is
+		// missing things the save still has. Keep the save.
+		UE_LOG(LogWWO, Warning, TEXT("Loadout not saved: the mods or weapons didn't load, and saving would drop what's equipped"));
+		return;
+	}
 	UWWOLoadoutSave* Data = Cast<UWWOLoadoutSave>(UGameplayStatics::CreateSaveGameObject(UWWOLoadoutSave::StaticClass()));
 	Data->Flora = Flora ? Flora->Id : NAME_None;
 	Data->Weapon = Weapon ? Weapon->Id : NAME_None;
@@ -472,6 +478,14 @@ void UWWOLoadoutSubsystem::ApplyNet(const FWWONetLoadout& Net)
 	for (int32 i = 0; i < FMath::Min(Net.FrameSlots.Num(), Net.FrameParts.Num()); ++i) Data->Frame.Add(Net.FrameSlots[i], Net.FrameParts[i]);
 	for (int32 i = 0; i < FMath::Min(Net.ModKeys.Num(), Net.ModIds.Num()); ++i) Data->WeaponMods.Add(Net.ModKeys[i], Net.ModIds[i]);
 	ApplySave(Data);
+	// A loadout always has a flora (without one the one-flora-kit rule below would pass anything)
+	// and an unlocked gun.
+	if (!Flora && Floras.Num() > 0) Flora = Floras[0];
+	if (Weapon && !Weapon->bUnlocked)
+	{
+		Weapon = nullptr;
+		for (UWWOWeaponData* W : Weapons) if (W && W->bUnlocked) { Weapon = W; break; }
+	}
 	FitFlora(); // a grenade, ability or trait from another flora doesn't count
 	OnChanged.Broadcast();
 }

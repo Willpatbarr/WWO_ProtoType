@@ -45,10 +45,18 @@ import math
 import os
 import sys
 
+
+def _geometry(name):
+    # The mockups folder is where the layout is made (the source of truth); Tools/geometry holds a
+    # copy for machines without it. Copy the file there again after changing a layout.
+    made = os.path.expanduser("~/Documents/WWO_PvP_Mockups/" + name)
+    return made if os.path.exists(made) else os.path.join(os.path.dirname(os.path.abspath(__file__)), "geometry", name)
+
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ring_layout import Box, arc, standing  # noqa: E402
 
-CASCADE_JSON = os.environ.get("WWO_CASCADE_JSON", os.path.expanduser("~/Documents/WWO_PvP_Mockups/cascade_map_geometry.json"))
+CASCADE_JSON = os.environ.get("WWO_CASCADE_JSON", _geometry("cascade_map_geometry.json"))
 DECK_KIND = {"Ground": "floor", "NorthSouthArmsAndTerminals": "floor_z3", "HighNodes": "floor_z5", "Balcony": "balcony",
              "NodeDaisLow": "dais", "NodeDaisHigh": "dais"}
 COARSE, FINE, STRIP = 4.0, 1.0, 1.6     # deck cells and the edge strip (STRIP > FINE * sqrt(2), so they meet)

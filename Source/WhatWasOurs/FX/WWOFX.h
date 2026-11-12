@@ -151,7 +151,6 @@ public:
 	FVector BoxExtent = FVector::ZeroVector; // meters (box)
 	bool bOneShot = true;      // false: keeps emitting Amount per lifetime while bEmitting
 	bool bEmitting = false;
-	bool bLocalSpace = false;  // particles move with the actor
 
 	void Start();
 	void StopAndFade(); // stop emitting; destroy once the last particle is gone

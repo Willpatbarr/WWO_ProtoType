@@ -81,7 +81,6 @@ public:
 	void ToggleSettingsMenu();
 	void ToggleCharacterMenu();
 	void CloseMenus();
-	void OnMenuClosed();
 	UWWOSettingsMenu* GetSettingsMenu() const { return SettingsMenu; }
 	UWWOLaunchMenu* GetLaunchMenu() const { return LaunchMenu; } // the launch screen, when this map opened on it
 
@@ -90,6 +89,8 @@ public:
 	static const TArray<FWWOBindRow>& BindRows();
 	static FString KeyName(const FKey& Key);
 	FKey GetBind(FName Row, bool bPad) const;
+	FString BindHint(FName Row) const; // "E / Square": that line's keys as bound now, for on-screen hints
+	bool IsCharacterMenuOpen() const;
 	void SetBind(FName Row, bool bPad, const FKey& Key);
 	void ResetBinds();
 	void BeginKeyCapture(FName Row, bool bPad, TFunction<void()> OnDone); // the next press becomes that binding

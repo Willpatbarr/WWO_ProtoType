@@ -31,10 +31,18 @@ import math
 import os
 import random
 
+
+def _geometry(name):
+    # The mockups folder is where the layout is made (the source of truth); Tools/geometry holds a
+    # copy for machines without it. Copy the file there again after changing a layout.
+    made = os.path.expanduser("~/Documents/WWO_PvP_Mockups/" + name)
+    return made if os.path.exists(made) else os.path.join(os.path.dirname(os.path.abspath(__file__)), "geometry", name)
+
+
 import ring_layout as RL
 from ring_layout import Box, arc, in_rect, standing
 
-ARBORETUM_JSON = os.environ.get("WWO_ARBORETUM_JSON", os.path.expanduser("~/Documents/WWO_PvP_Mockups/arboretum_map_geometry.json"))
+ARBORETUM_JSON = os.environ.get("WWO_ARBORETUM_JSON", _geometry("arboretum_map_geometry.json"))
 SLAB = 0.5
 RAIL_H, RAIL_T = 1.1, 0.15
 STAIR_HOLE = 6.5      # of a straight stair's 8 m run, the part open to the room (the rest is under the floor)

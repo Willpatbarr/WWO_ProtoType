@@ -84,6 +84,7 @@ void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = FString();
 	bShowTitle = false;
+	CancelSearch();
 	UE_LOG(LogWWO, Display, TEXT("Net: playing %s alone (%s)"), *Map.ToString(), bPvP ? TEXT("PvP against bots") : TEXT("waves"));
 	UGameplayStatics::OpenLevel(GetWorld(), Map, true, MatchOptions(false, bPvP, Bots));
 }
@@ -93,6 +94,7 @@ void UWWONetSubsystem::LeaveToTitle()
 	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = FString();
 	bShowTitle = true;
+	CancelSearch();
 	UE_LOG(LogWWO, Display, TEXT("Net: back to the launch screen"));
 	UGameplayStatics::OpenLevel(GetWorld(), StartMap, true);
 }
@@ -141,6 +143,18 @@ void UWWONetSubsystem::Deinitialize()
 		GEngine->OnTravelFailure().Remove(TravelFailureHandle);
 	}
 	Super::Deinitialize();
+}
+
+void UWWONetSubsystem::CancelSearch()
+{
+	bJoinFirst = false;
+	if (!bSearching) return;
+	bSearching = false;
+	if (const IOnlineSessionPtr S = Sessions())
+	{
+		S->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle); // its late answer mustn't touch the status of the game that started
+		S->CancelFindSessions();
+	}
 }
 
 bool UWWONetSubsystem::IsHosting() const
@@ -193,7 +207,9 @@ FString UWWONetSubsystem::DescribeStatus(const UObject* WorldContext) const
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	if (!World) return Status;
 	const AGameStateBase* GS = World->GetGameState();
-	const int32 Players = GS ? GS->PlayerArray.Num() : 1;
+	int32 Players = 0; // people: a bot has a player state too
+	if (GS) for (const APlayerState* PS : GS->PlayerArray) if (PS && !PS->IsABot()) ++Players;
+	Players = FMath::Max(Players, 1);
 	FString Line;
 	const bool bPvP = UWWOWorldSubsystem::IsPvP(World);
 	switch (World->GetNetMode())
@@ -238,6 +254,7 @@ void UWWONetSubsystem::Host(FName Map, bool bPvP, int32 Bots)
 	bPendingPvP = bPvP;
 	PendingBots = Bots;
 	bShowTitle = false;
+	CancelSearch(); // (a LAN search still running would also hold off the advertising)
 	Status = TEXT("Starting a LAN game...");
 	const IOnlineSessionPtr S = Sessions();
 	if (!S.IsValid())
@@ -278,8 +295,15 @@ void UWWONetSubsystem::CreateSession()
 	CreateHandle = S->AddOnCreateSessionCompleteDelegate_Handle(FOnCreateSessionCompleteDelegate::CreateUObject(this, &UWWONetSubsystem::OnCreated));
 	if (!S->CreateSession(0, SessionName, Settings))
 	{
+		// It couldn't advertise. The completion callback has usually run already (and opened the
+		// map, clearing PendingMap); if not, host anyway: others can still join by address.
 		S->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
-		UGameplayStatics::OpenLevel(GetWorld(), PendingMap, true, HostOptions());
+		if (!PendingMap.IsNone())
+		{
+			const FName Map = PendingMap;
+			PendingMap = NAME_None;
+			UGameplayStatics::OpenLevel(GetWorld(), Map, true, HostOptions());
+		}
 	}
 }
 
@@ -288,6 +312,7 @@ void UWWONetSubsystem::OnCreated(FName Name, bool bOk)
 	if (const IOnlineSessionPtr S = Sessions()) S->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
 	UE_LOG(LogWWO, Display, TEXT("Net: LAN session %s, hosting %s"), bOk ? TEXT("created") : TEXT("failed"), *PendingMap.ToString());
 	Status = FString();
+	if (PendingMap.IsNone()) return;
 	const FName Map = PendingMap;
 	PendingMap = NAME_None;
 	UGameplayStatics::OpenLevel(GetWorld(), Map, true, HostOptions()); // the same map, now accepting players
@@ -370,6 +395,7 @@ void UWWONetSubsystem::JoinGame(int32 Index)
 		Status = TEXT("That game is gone: search again");
 		return;
 	}
+	CancelSearch();
 	// An old session (a game you hosted or joined earlier this run) would refuse the new one.
 	if (S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 	Status = TEXT("Joining...");
@@ -414,7 +440,8 @@ void UWWONetSubsystem::Leave()
 	}
 	Status = FString();
 	const UWorld* World = GetWorld();
-	if (World) UGameplayStatics::OpenLevel(GetWorld(), FName(*UGameplayStatics::GetCurrentLevelName(World)), true);
+	// The same map alone, in the mode it was (a PvP map's spawn points aren't for waves).
+	if (World) UGameplayStatics::OpenLevel(GetWorld(), FName(*UGameplayStatics::GetCurrentLevelName(World)), true, MatchOptions(false, UWWOWorldSubsystem::IsPvP(World), -1));
 }
 
 void UWWONetSubsystem::HandleCommandLine(const UObject* WorldContext)
