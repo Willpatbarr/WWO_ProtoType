@@ -251,6 +251,21 @@ int32 UWWOHUDWidget::RadarBands(float Distance, float Range, float FullRange, in
 	return FMath::Clamp(1 + FMath::FloorToInt(In * (Steps - 1)), 1, Steps - 1);
 }
 
+void UWWOHUDWidget::RadarMates(const AWWOCharacter* Viewer, TArray<FVector2D>& Out)
+{
+	Out.Reset();
+	const UWWOWorldSubsystem* WS = Viewer ? UWWOWorldSubsystem::Get(Viewer) : nullptr;
+	if (!WS || !Viewer->Camera) return;
+	const float Yaw = Viewer->Camera->GetComponentRotation().Yaw;
+	for (const AWWOCharacter* Mate : WS->GetPlayers())
+	{
+		if (!Mate || Mate == Viewer || Mate->Health->bDead || UWWOWorldSubsystem::CanHurt(Viewer, Mate)) continue;
+		const FVector To = Mate->FeetLocation() - Viewer->FeetLocation();
+		Out.Add(FVector2D(FMath::FindDeltaAngleDegrees(Yaw, FMath::RadiansToDegrees(FMath::Atan2(To.Y, To.X))),
+			FVector2D(To.X, To.Y).Size() / WWO::M / FMath::Max(Viewer->RadarRange, 1.f)));
+	}
+}
+
 int32 UWWOHUDWidget::Radar(const AWWOCharacter* Viewer, TArray<float>& Out)
 {
 	const int32 Steps = Viewer ? FMath::Clamp(FMath::RoundToInt(Viewer->RadarSteps), 1, 12) : 1;
@@ -596,6 +611,31 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			P.Line(Mid + D * Hub, Mid + D * R, Split, 1.f);
 		}
 		P.Circle(Mid, R, Rim, 1.f, 64);
+		// Teammates, in your own blue: a dot where they are when in range, else an arrow on the rim
+		// pointing out their way.
+		TArray<FVector2D> Mates;
+		RadarMates(Pl, Mates);
+		for (const FVector2D& Mate : Mates)
+		{
+			const float A = FMath::DegreesToRadians(Mate.X);
+			const FVector2D Out2(FMath::Sin(A), -FMath::Cos(A)), Side(-Out2.Y, Out2.X);
+			if (Mate.Y <= 1.f)
+			{
+				const FVector2D At = Mid + Out2 * FMath::Max(Mate.Y * R, Hub * 1.2f); // (clear of your own triangle)
+				constexpr int32 Sides = 10;
+				const float Dot = FMath::Max(R * 0.055f, 2.5f);
+				for (int32 i = 0; i < Sides; ++i)
+				{
+					const float B0 = UE_TWO_PI * i / Sides, B1 = UE_TWO_PI * (i + 1) / Sides;
+					P.Tri(At, At + FVector2D(FMath::Cos(B0), FMath::Sin(B0)) * Dot, At + FVector2D(FMath::Cos(B1), FMath::Sin(B1)) * Dot, You);
+				}
+			}
+			else
+			{
+				const float Long = R * 0.17f, Wide = R * 0.09f;
+				P.Tri(Mid + Out2 * (R + 2.f + Long), Mid + Out2 * (R + 2.f) + Side * Wide, Mid + Out2 * (R + 2.f) - Side * Wide, You);
+			}
+		}
 		// You: a small triangle in the middle, pointing the way you look (it never moves).
 		P.Tri(Mid + FVector2D(0.f, -Hub * 0.8f), Mid + FVector2D(Hub * 0.5f, Hub * 0.55f), Mid + FVector2D(-Hub * 0.5f, Hub * 0.55f), You);
 	}

@@ -32,6 +32,10 @@ public:
 	// 0 for an unlit band, else how solid, which drops the more the enemy is above or below you.
 	// Returns Steps.
 	static int32 Radar(const class AWWOCharacter* Viewer, TArray<float>& Out);
+	// Your living teammates for the radar (everyone you can't hurt: your team in PvP, every other
+	// player in co-op). Each is X: the bearing from the way Viewer looks (degrees, 0 ahead, 90 right),
+	// Y: how far, as a share of RadarRange (over 1: out of range, shown as an arrow on the rim).
+	static void RadarMates(const class AWWOCharacter* Viewer, TArray<FVector2D>& Out);
 	static int32 RadarBands(float Distance, float Range, float FullRange, int32 Steps); // how many bands an enemy this far lights (0: out of range)
 
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;

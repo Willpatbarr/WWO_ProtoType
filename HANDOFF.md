@@ -461,5 +461,6 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Who shows**: everything in `UWWOWorldSubsystem::LivingTargets` (PvE enemies, target dummies, and in PvP the other team). Always, whether or not they are moving or in sight.
 - **Settings** (Settings, HUD, Radar; on `AWWOCharacter`): `RadarSize` (0 = off), `RadarRange` 30 m, `RadarFullRange` 4 m, `RadarSteps` 4, `RadarHeightFade` 6 m, `RadarMinAlpha` 0.2.
 - **Gone**: the diamond over the other team's heads in PvP. Teammates keep their chevron.
+- **Teammates** (`RadarMates`): in the centre triangle's blue, a dot at their place when inside the range, else an arrow on the rim pointing their way. Everyone you can't hurt counts (your team in PvP, all players in co-op).
 - **Enemy bars**: health in the radar's red, 126 x 7 px, with a 3 px shield bar directly on top (one backing, no gap), 16 px clear of the head. `FPainter::Tri` shows a colour darker than `Box` does, hence `FoeRed` and `FoeRedBox`.
 - **Not done**: the `no_radar` trait still does nothing. Only checked with one dummy at one height (the tester autotest).
