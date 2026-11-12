@@ -1,0 +1,3 @@
+Placeholder sound effects from Kenney (www.kenney.nl): Sci-Fi Sounds, Impact Sounds and Interface Sounds.
+License: Creative Commons Zero (CC0), http://creativecommons.org/publicdomain/zero/1.0/
+Converted from .ogg to mono 44.1 kHz .wav and renamed with an S_ prefix.

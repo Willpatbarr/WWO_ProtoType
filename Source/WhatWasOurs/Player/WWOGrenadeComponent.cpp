@@ -1,4 +1,5 @@
 #include "Player/WWOGrenadeComponent.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -124,6 +125,7 @@ void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	UWWOGrenadeData* Data = Loadout ? Loadout->GetGrenade() : nullptr;
 	if (!Data) return;
+	UWWOSound::PlayFor(P, "grenade_throw");
 	const float Gravity = 9.8f;
 	const float Speed = FMath::Sqrt(EffectiveThrowDistance() * Gravity / FMath::Sin(FMath::DegreesToRadians(2.f * LaunchAngle)));
 

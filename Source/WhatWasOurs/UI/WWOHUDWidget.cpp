@@ -7,6 +7,8 @@
 #include "Player/WWOAimAssistComponent.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOAbilityComponent.h"
+#include "Flora/WWOSporeFog.h"
+#include "Flora/WWOFloraEffects.h"
 #include "Player/WWOGrenadeComponent.h"
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
@@ -70,6 +72,17 @@ namespace
 		{
 			TArray<FVector2f> Points = { FVector2f(A * S), FVector2f(B * S) };
 			FSlateDrawElement::MakeLines(Out, Layer, Geo.ToPaintGeometry(), Points, ESlateDrawEffect::None, WWO::Lin(Color), true, Width * S);
+		}
+		// A filled triangle (Slate has no call for one: it goes in as custom vertices on the white brush).
+		void Tri(FVector2D A, FVector2D B, FVector2D C, const FLinearColor& Color) const
+		{
+			if (Color.A <= 0.001f || !FSlateApplication::IsInitialized()) return;
+			const FSlateResourceHandle Handle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*White);
+			const FColor Packed = WWO::Lin(Color).ToFColor(false);
+			const FSlateRenderTransform& To = Geo.GetAccumulatedRenderTransform();
+			TArray<FSlateVertex> Verts;
+			for (const FVector2D& V : { A, B, C }) Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(V * S), FVector2f(0.5f, 0.5f), Packed));
+			FSlateDrawElement::MakeCustomVerts(Out, Layer, Handle, Verts, { 0, 1, 2 }, nullptr, 0, 0);
 		}
 		void Circle(FVector2D Center, float Radius, const FLinearColor& Color, float Width, int32 Segments = 48) const
 		{
@@ -250,6 +263,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	// Where shots go: ReticleDrop below center (Destiny-style), hip and aimed.
 	// Reticle: fades out early as you aim in, red over a target. None in third person.
 	FLinearColor Ret = Gun->bTargetUnderReticle ? ReticleOnTarget : ReticleColor;
+	// Over a teammate (PvP: someone you can't hurt) it turns blue, not the on-target red.
+	if (const AActor* OverNow = Gun->ReticleTarget.Get(); OverNow && !UWWOWorldSubsystem::CanHurt(Pl, OverNow)) Ret = FLinearColor(0.3f, 0.6f, 1.f);
 	Ret.A *= FMath::Clamp(1.f - Aimed * 2.5f, 0.f, 1.f);
 	if (Pl->Ult->bActive) Ret.A = 0.f;
 	if (Ret.A > 0.f)
@@ -315,7 +330,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	}
 	// Health bars (and the Tank's shield above): the target under the reticle, and every other
 	// visible enemy whose middle is within HealthBarRadius of the reticle on screen.
-	auto HealthBar = [&](const IWWOTargetable* Target)
+	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FLinearColor(0.9f, 0.2f, 0.15f), const FLinearColor& BarShieldColor = ShieldColor)
 	{
 		FVector2D Top;
 		if (!ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top)) return;
@@ -323,37 +338,71 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		FVector2D Pos = Top - FVector2D(Bar.X * 0.5f, Bar.Y);
 		const float Fraction = FMath::Clamp(Target->GetHealth() / FMath::Max(Target->GetMaxHealth(), 1.f), 0.f, 1.f);
 		P.Box(Pos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-		P.Box(Pos, FVector2D(Bar.X * Fraction, Bar.Y), FLinearColor(0.9f, 0.2f, 0.15f));
+		P.Box(Pos, FVector2D(Bar.X * Fraction, Bar.Y), BarHealthColor);
 		FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
 		if (Target->GetMaxShield() > 0.f)
 		{
 			const FVector2D ShieldPos = Pos - FVector2D(0, Bar.Y + 4);
 			P.Box(ShieldPos - FVector2D(2, 2), Bar + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.6f));
-			P.Box(ShieldPos, FVector2D(Bar.X * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), Bar.Y), ShieldColor);
+			P.Box(ShieldPos, FVector2D(Bar.X * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), Bar.Y), BarShieldColor);
 			if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
 			Pos = ShieldPos;
 		}
 		P.Text(Label, Pos + FVector2D(Bar.X * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
 	};
+	// Who is marked: a target is picked up when the reticle comes over it (at the hip) or as soon as
+	// it is inside the marker range (aimed in: within HealthBarRadius of the reticle on screen, and
+	// in sight), and dropped when it leaves the marker range. Enemies show their bars while marked.
+	// A PvP player's outline flashes once at the moment they're picked up (Gun->Marked holds when;
+	// AWWOCharacter::UpdateTeamTint plays it). Teammates' bars show whenever they're in sight, in
+	// near-white (light grey health, a see-through white shield) so the only red bars are the
+	// other team's.
 	const AActor* Under = Gun->ReticleTarget.Get();
-	if (const IWWOTargetable* Target = Cast<IWWOTargetable>(Under)) HealthBar(Target);
-	if (Pl->HealthBarRadius > 0.f && !Pl->Ult->bActive)
+	const bool bAimedIn = Gun->AdsAmount > 0.5f;
+	const double MarkNow = Pl->GetWorld()->GetTimeSeconds();
+	// The range widens as you aim in (eased with the aim, so it doesn't jump).
+	const float MarkRange = Pl->HealthBarRadius * FMath::Lerp(1.f, FMath::Max(Pl->HealthBarAdsScale, 1.f), Gun->AdsAmount);
+	TMap<TWeakObjectPtr<const AActor>, double> StillMarked;
+	auto Track = [&](const AActor* Actor, const IWWOTargetable* Target, bool& bInSight) -> bool
+	{
+		const FVector Middle = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.5f);
+		FVector2D At;
+		FHitResult Hit;
+		bInSight = Actor == Under || !Gun->CastRayTo(Middle, Hit) || Hit.GetActor() == Actor;
+		const bool bInRange = Actor == Under
+			|| (MarkRange > 0.f && bInSight && ToScreen(Middle, At) && FVector2D::Distance(At, AimAt) <= MarkRange);
+		const double* Since = Gun->Marked.Find(Actor);
+		if (Since ? bInRange : (Actor == Under || (bAimedIn && bInRange)))
+		{
+			StillMarked.Add(Actor, Since ? *Since : MarkNow);
+			return true;
+		}
+		return false;
+	};
+	if (!Pl->Ult->bActive)
 	{
 		for (AActor* Actor : WS->LivingTargets(Pl))
 		{
 			const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-			if (!Target || Actor == Under || Target->IsDead()) continue;
-			const FVector Middle = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.5f);
-			FVector2D At;
-			if (!ToScreen(Middle, At) || FVector2D::Distance(At, AimAt) > Pl->HealthBarRadius) continue;
-			FHitResult Hit;
-			if (!Gun->CastRayTo(Middle, Hit) || Hit.GetActor() != Actor) continue; // in sight only
-			HealthBar(Target);
+			bool bInSight = false;
+			if (Target && !Target->IsDead() && Track(Actor, Target, bInSight)) HealthBar(Target);
+		}
+		if (UWWOWorldSubsystem::IsPvP(Pl))
+		{
+			for (AWWOCharacter* Mate : WS->GetPlayers())
+			{
+				if (Mate == Pl || Mate->Health->bDead || UWWOWorldSubsystem::CanHurt(Pl, Mate)) continue;
+				bool bInSight = false;
+				Track(Mate, Mate, bInSight);
+				if (bInSight) HealthBar(Mate, FLinearColor(0.82f, 0.83f, 0.85f), FLinearColor(1.f, 1.f, 1.f, 0.6f));
+			}
 		}
 	}
+	Gun->Marked = MoveTemp(StillMarked);
 
-	// PvP: a team-colored marker over every other player you can see (yours: a small dot; the other
-	// team: a bigger one), so friend and foe read at a glance.
+	// PvP: a team-colored marker over every other player's head, so friend and foe read at a glance.
+	// The other team: a solid diamond, only while in sight. Your team: an open chevron, kept (fainter)
+	// through walls so you know where your side is.
 	if (UWWOWorldSubsystem::IsPvP(Pl))
 	{
 		const int32 MyTeam = UWWOWorldSubsystem::TeamOf(Pl);
@@ -363,14 +412,32 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			const int32 Team = UWWOWorldSubsystem::TeamOf(Other);
 			if (Team < 0) continue;
 			FVector2D At;
-			if (!ToScreen(Other->EyeLocation() + FVector(0, 0, 85.f), At)) continue; // above the health bar
-			FHitResult Hit;
-			if (Gun->CastRayTo(Other->EyeLocation(), Hit) && Hit.GetActor() != Other) continue; // in sight only
+			const FVector Head = Other->GetAimParts()[0].Position;
 			const bool bFoe = Team != MyTeam;
-			const float D = bFoe ? 12.f : 8.f;
-			const FLinearColor C = AWWOPlayerState::TeamColor(Team);
-			P.Box(At - FVector2D(D * 0.5f + 2.f, D * 0.5f + 2.f), FVector2D(D + 4.f, D + 4.f), FLinearColor(0, 0, 0, 0.6f));
-			P.Box(At - FVector2D(D * 0.5f, D * 0.5f), FVector2D(D, D), C);
+			// Over the top of the body, a fixed way up the screen: clear of a foe's health and shield
+			// bars and their label at any distance.
+			if (!ToScreen(Other->FeetLocation() + FVector(0, 0, Other->GetBodyHeight()), At)) continue;
+			At.Y -= 66.f;
+			FHitResult Hit;
+			const bool bInSight = !Gun->CastRayTo(Head, Hit) || Hit.GetActor() == Other;
+			if (bFoe && !bInSight) continue;
+			const FLinearColor C = WWO::WithAlpha(AWWOPlayerState::TeamColor(Team), bInSight ? 1.f : 0.45f);
+			const FLinearColor Back(0, 0, 0, bInSight ? 0.7f : 0.3f);
+			if (bFoe)
+			{
+				// A diamond: stacked rows, widest in the middle.
+				const float R = 9.f;
+				for (float Y = -R - 2.f; Y <= R + 2.f; Y += 1.f) P.Box(At + FVector2D(-(R + 2.f - FMath::Abs(Y)), Y), FVector2D((R + 2.f - FMath::Abs(Y)) * 2.f, 1.f), Back);
+				for (float Y = -R; Y <= R; Y += 1.f) P.Box(At + FVector2D(-(R - FMath::Abs(Y)), Y), FVector2D((R - FMath::Abs(Y)) * 2.f, 1.f), C);
+			}
+			else
+			{
+				const FVector2D L(-8.f, -6.f), M(0.f, 4.f), R(8.f, -6.f);
+				P.Line(At + L, At + M, Back, 6.f);
+				P.Line(At + M, At + R, Back, 6.f);
+				P.Line(At + L, At + M, C, 3.f);
+				P.Line(At + M, At + R, C, 3.f);
+			}
 		}
 	}
 
@@ -473,36 +540,101 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		P.Text(TEXT("Ult"), Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
 	}
 
-	// Vitals (bottom center): shield bar over health bar. Each bar's width is its max against
-	// the default 100, so Durability points make them longer.
+	// Vitals (top center, under the match line): shield bar over health bar. Each bar's width is
+	// its max against the default 100, so Durability points make them longer.
 	{
 		const UWWOHealthComponent* H = Pl->Health;
-		const FVector2D Box(360, 30);
-		const FVector2D Origin(Center.X - Box.X * 0.5f, Size.Y - Box.Y - 50.f);
-		const float Unit = Box.X / 200.f;
+		const FVector2D Box(620, 30);
+		const FVector2D Origin(Center.X - Box.X * 0.5f, 78.f);
+		const float Unit = Box.X / 150.f;
 		if (H->MaxShield() > 0.f)
 		{
 			const float Full = FMath::Min(H->MaxShield() * Unit, Box.X);
 			const FVector2D At(Origin.X + (Box.X - Full) * 0.5f, Origin.Y);
-			P.Box(At, FVector2D(Full, 8), FLinearColor(0, 0, 0, 0.45f));
-			P.Box(At, FVector2D(Full * H->Shield / H->MaxShield(), 8), ShieldColor);
+			P.Box(At, FVector2D(Full, 10), FLinearColor(0, 0, 0, 0.45f));
+			P.Box(At, FVector2D(Full * H->Shield / H->MaxShield(), 10), ShieldColor);
 		}
 		const float FullH = FMath::Min(H->MaxHealth() * Unit, Box.X);
-		const FVector2D HAt(Origin.X + (Box.X - FullH) * 0.5f, Origin.Y + 12.f);
+		const FVector2D HAt(Origin.X + (Box.X - FullH) * 0.5f, Origin.Y + 14.f);
 		const float Frac = H->Health / H->MaxHealth();
-		P.Box(HAt, FVector2D(FullH, 14), FLinearColor(0, 0, 0, 0.45f));
-		P.Box(HAt, FVector2D(FullH * Frac, 14), Frac < 0.35f ? HealthLowColor : HealthColor);
-		P.Outline(HAt, FVector2D(FullH, 14), FLinearColor(1, 1, 1, 0.5f), 1.f);
-		// Status tags above the vitals, each on its own line (Godot's labels have fixed spots:
-		// VEILED 28 px and ENTRENCHED 56 px above SLOWED, shown or not).
-		const float TagY = Origin.Y - 50.f;
-		auto Tag = [&](bool bOn, int32 Line, const TCHAR* Text, const FLinearColor& Color)
+		P.Box(HAt, FVector2D(FullH, 16), FLinearColor(0, 0, 0, 0.45f));
+		P.Box(HAt, FVector2D(FullH * Frac, 16), Frac < 0.35f ? HealthLowColor : HealthColor);
+		P.Outline(HAt, FVector2D(FullH, 16), FLinearColor(1, 1, 1, 0.5f), 1.f);
+
+		// What's on you right now: a row of chips under the vitals, each with its name, the seconds
+		// left where it has a timer, and a bar that drains with it.
+		struct FChip { FString Label; FLinearColor Color; float Left; float Of; };
+		TArray<FChip> Chips;
+		if (!H->bDead)
 		{
-			if (bOn) P.Text(Text, FVector2D(Center.X, TagY - 28.f * Line), 20.f, Color, 0.5f);
-		};
-		Tag(Pl->SlowLeft > 0.f, 0, TEXT("SLOWED"), FLinearColor(0.6f, 0.85f, 1.f));
-		Tag(Pl->IsInvisible(), 1, TEXT("VEILED"), FLinearColor(0.8f, 0.65f, 1.f));
-		Tag(Pl->EntrenchLeft > 0.f, 2, TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f));
+			if (Pl->SlowLeft > 0.f) Chips.Add({ FString::Printf(TEXT("SLOWED %d%%"), FMath::RoundToInt(Pl->SlowAmount * 100.f)), FLinearColor(0.6f, 0.85f, 1.f), Pl->SlowLeft, 0.f });
+			if (const UWWODamageOverTime* Dot = Pl->FindComponentByClass<UWWODamageOverTime>()) Chips.Add({ TEXT("POISONED"), UWWODamageOverTime::Color(), Dot->TimeLeft, 0.f });
+			if (AWWOSporeFog::Contains(Pl->GetWorld(), Pl->GetActorLocation())) Chips.Add({ Pl->IsInvisible() ? TEXT("VEILED") : TEXT("IN FOG"), FLinearColor(0.8f, 0.65f, 1.f), Pl->IsInvisible() ? Pl->VeilLeft : 0.f, 0.f });
+			if (Pl->EntrenchLeft > 0.f) Chips.Add({ TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f), Pl->EntrenchLeft, 0.f });
+			if (Pl->Abilities->GuardTimeLeft() > 0.f) Chips.Add({ TEXT("GUARD"), FLinearColor(0.75f, 0.9f, 0.6f), Pl->Abilities->GuardTimeLeft(), 0.f });
+		}
+		// A chip's bar drains against the longest time it has shown (Of 0 = not known up front).
+		TMap<FString, float> Seen;
+		const FVector2D ChipSize(128.f, 26.f);
+		const float Gap = 8.f;
+		float X = Center.X - (Chips.Num() * ChipSize.X + FMath::Max(Chips.Num() - 1, 0) * Gap) * 0.5f;
+		for (const FChip& Chip : Chips)
+		{
+			const FString Key = Chip.Label.Left(6);
+			const float Of = Chip.Of > 0.f ? Chip.Of : FMath::Max(ChipPeak.FindRef(Key), Chip.Left);
+			Seen.Add(Key, Of);
+			const FVector2D At(X, Origin.Y + 40.f);
+			P.Box(At, ChipSize, FLinearColor(0, 0, 0, 0.55f));
+			P.Box(At, FVector2D(4.f, ChipSize.Y), Chip.Color);
+			if (Chip.Left > 0.f && Of > 0.f) P.Box(At + FVector2D(4.f, ChipSize.Y - 3.f), FVector2D((ChipSize.X - 4.f) * FMath::Clamp(Chip.Left / Of, 0.f, 1.f), 3.f), Chip.Color);
+			const FString Text = Chip.Left > 0.f ? FString::Printf(TEXT("%s  %.1f"), *Chip.Label, Chip.Left) : Chip.Label;
+			P.Text(Text, At + FVector2D(ChipSize.X * 0.5f + 2.f, 3.f), 14.f, Chip.Color, 0.5f);
+			X += ChipSize.X + Gap;
+		}
+		ChipPeak = MoveTemp(Seen);
+
+		// Where damage is coming from: a faint red spike, a long four-sided pyramid whose point aims at
+		// the source in the world (left and right, ahead and behind, up and down), drawn in
+		// perspective as if it floated just below your line of sight, its faces shaded so it reads as
+		// a solid. A point aimed away from you is someone ahead; one coming at you is someone behind.
+		// It turns with you and fades over a second and a half.
+		if (!H->bDead)
+		{
+			const double MarkTime = Pl->GetWorld()->GetTimeSeconds();
+			const FTransform View = Pl->Camera->GetComponentTransform();
+			const FVector Anchor(120.f, 0.f, -40.f); // in view space (x ahead, y right, z up)
+			constexpr float Focal = 420.f, BaseAt = 14.f, PointAt = 64.f, HalfBase = 7.5f;
+			const FVector Light = FVector(-0.45f, -0.35f, 0.82f).GetSafeNormal(); // from above, toward you
+			auto Project = [&](const FVector& V) { return Center + FVector2D(V.Y, -V.Z) * (Focal / FMath::Max(V.X, 20.f)); };
+			for (const UWWOHealthComponent::FDamageMark& Mark : H->DamageMarks)
+			{
+				const float Age = (float)(MarkTime - Mark.Time);
+				if (Age > 1.5f) continue;
+				const FVector Dir = View.InverseTransformVectorNoScale(Mark.From - View.GetLocation()).GetSafeNormal();
+				if (Dir.IsNearlyZero()) continue;
+				const float Fade = Age < 0.9f ? 1.f : 1.f - (Age - 0.9f) / 0.6f;
+				FVector Side = FVector::CrossProduct(FVector::UpVector, Dir).GetSafeNormal();
+				if (Side.IsNearlyZero()) Side = FVector::RightVector; // straight up or down
+				const FVector Over = FVector::CrossProduct(Dir, Side);
+				const FVector Base = Anchor + Dir * BaseAt, Point = Anchor + Dir * PointAt;
+				const FVector Corners[4] = { Base + (Side + Over) * HalfBase, Base + (Over - Side) * HalfBase, Base - (Side + Over) * HalfBase, Base + (Side - Over) * HalfBase };
+				// Only the faces turned toward the eye (at the origin) are drawn, so none show through
+				// another and the opacity stays even.
+				auto Face = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& Inside)
+				{
+					FVector Normal = FVector::CrossProduct(B - A, C - A).GetSafeNormal();
+					const FVector Middle = (A + B + C) / 3.f;
+					if (FVector::DotProduct(Normal, Middle - Inside) < 0.f) Normal = -Normal; // outward
+					if (FVector::DotProduct(Normal, Middle) >= 0.f) return;                    // turned away
+					const float Lit = FMath::Max(FVector::DotProduct(Normal, Light), 0.f);
+					P.Tri(Project(A), Project(B), Project(C), FLinearColor(1.f, 0.12f + 0.2f * Lit, 0.08f + 0.14f * Lit, (0.24f + 0.2f * Lit) * Fade));
+				};
+				const FVector Inside = Anchor + Dir * (BaseAt + (PointAt - BaseAt) * 0.25f);
+				for (int32 i = 0; i < 4; ++i) Face(Corners[i], Corners[(i + 1) % 4], Point, Inside);
+				Face(Corners[0], Corners[1], Corners[2], Inside); // the base, seen when it points away from you
+				Face(Corners[0], Corners[2], Corners[3], Inside);
+			}
+		}
 		// Damage flash and death screen.
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.8f, 0.05f, 0.02f, DamageFlash));
 		auto ReviveBar = [&](float Frac, float Y)
@@ -512,7 +644,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			P.Box(BarAt, FVector2D(BarSize.X * FMath::Clamp(Frac, 0.f, 1.f), BarSize.Y), FLinearColor(0.45f, 1.f, 0.55f));
 			P.Outline(BarAt, BarSize, FLinearColor(1, 1, 1, 0.6f), 1.f);
 		};
-		if (H->bDead && H->IsOnline())
+		if (H->bDead && H->IsOnline() && !UWWOWorldSubsystem::IsPvP(Pl))
 		{
 			// Down: a teammate can bring you back.
 			P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.05f, 0.f, 0.f, 0.45f));

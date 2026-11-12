@@ -1,6 +1,9 @@
 #include "Player/WWOCharacter.h"
+#include "Systems/WWOSound.h"
+#include "FX/WWOFX.h"
 #include "Player/WWOBotController.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Game/WWOPlayerState.h"
 #include "Components/SphereComponent.h"
 #include "Flora/WWOFloraEffects.h"
 #include "WhatWasOurs.h"
@@ -24,6 +27,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "AnimationRuntime.h"
+#include "Engine/SkeletalMesh.h"
 
 namespace
 {
@@ -48,6 +53,10 @@ namespace
 	constexpr float MantleMinHeight = 0.3f;
 	constexpr float StandHalfHeight = 100.f;
 	constexpr float CapsuleRadius = 50.f;
+	constexpr float HeadHitRadius = 15.f;     // PvP head hitbox (cm), centered on the skull
+	constexpr float HeadHitUp = 10.f;         // skull center above the head bone, as on the enemies
+	constexpr float HeadHitForward = 2.f;
+	constexpr float HeadShotThrough = 60.f;   // a shot that lands this close in front of the head still counts
 }
 
 AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
@@ -61,7 +70,7 @@ AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
 	BodyHitbox->InitCapsuleSize(35.f, 80.f);
 	BodyHitbox->SetRelativeLocation(FVector(0, 0, -15.f));
 	HeadHitbox = CreateDefaultSubobject<USphereComponent>(TEXT("HeadHitbox"));
-	HeadHitbox->InitSphereRadius(16.f);
+	HeadHitbox->InitSphereRadius(HeadHitRadius);
 	for (UPrimitiveComponent* Hitbox : { (UPrimitiveComponent*)BodyHitbox, (UPrimitiveComponent*)HeadHitbox })
 	{
 		Hitbox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -77,7 +86,7 @@ AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
-	HeadHitbox->SetupAttachment(Camera); // the head goes where the eyes go (crouching, sliding)
+	HeadHitbox->SetupAttachment(Camera); // until BeginPlay pins it to the body's head (PinHeadHitbox)
 	Camera->SetRelativeLocation(FVector(0, 0, StandCameraZ));
 	Camera->bUsePawnControlRotation = false; // pitch and roll are set directly (see UpdateCamera)
 	Camera->bEnableFirstPersonFieldOfView = true;
@@ -110,6 +119,7 @@ AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
 void AWWOCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	PinHeadHitbox(); // the body component has picked its mesh by now
 	if (Controller) Pitch = FMath::DegreesToRadians(Controller->GetControlRotation().Pitch);
 	Pitch = FMath::Clamp(FRotator::NormalizeAxis(FMath::RadiansToDegrees(Pitch)), -89.f, 89.f) * UE_PI / 180.f;
 	// Someone else's until a controller on this machine takes it (NotifyControllerChanged).
@@ -117,6 +127,26 @@ void AWWOCharacter::BeginPlay()
 	// Online, a joiner's damage happens on the host (which charges its copy's Static Charge); the
 	// joiner's own copy charges from the damage it's told about, so both agree on when it's ready.
 	Health->OnDamaged.AddWeakLambda(this, [this](float Amount) { if (!HasAuthority()) Abilities->OnDamageTaken(Amount); });
+	// Taking damage jolts your own view and controller a little, more for a bigger hit. (A punch, not
+	// recoil: your aim stays where it was.)
+	Health->OnDamaged.AddWeakLambda(this, [this](float Amount)
+	{
+		if (IsLocallyControlled() && IsPlayerControlled())
+		{
+			Weapon->Shake(Weapon->HitFlinch * FMath::Clamp(Amount / 60.f, 0.2f, 1.f) * 0.6f, 0.2f);
+			UWWOSound::PlayFlat(this, "hurt", FMath::Clamp(Amount / 40.f, 0.4f, 1.f));
+		}
+	});
+	// Someone else going down goes out with a burst, in their team's color in PvP (not your own
+	// death: you're looking out from inside it).
+	Health->OnDied.AddWeakLambda(this, [this]
+	{
+		UWWOSound::PlayFor(this, bLocalVisuals ? "death_own" : "death");
+		if (bLocalVisuals) return;
+		const AWWOPlayerState* PS = GetPlayerState<AWWOPlayerState>();
+		const FLinearColor Color = PS && UWWOWorldSubsystem::IsPvP(this) ? AWWOPlayerState::TeamColor(PS->Team) : FLinearColor(0.6f, 0.85f, 1.f);
+		AWWOFXActor::DeathBurst(GetWorld(), GetActorLocation(), Color);
+	});
 }
 
 void AWWOCharacter::NotifyControllerChanged()
@@ -139,6 +169,28 @@ void AWWOCharacter::RefreshLocalVisuals()
 	if (bMine != bLocalVisuals) SetupVisuals(bMine);
 }
 
+void AWWOCharacter::UpdateTeamTint()
+{
+	// PvP, on each machine: when the one playing here marks a player (the reticle comes over them,
+	// or they enter the marker range while aimed in; the HUD decides, UWWOWeaponComponent::Marked),
+	// that player's outline flashes once: a strong outline over a faint tint, fading out. Red for
+	// the other team, blue for theirs, whichever team that is. Nobody is tinted otherwise.
+	static constexpr float Fill = 0.1f, Rim = 1.7f; // the outline saturates well in from the edge
+	static constexpr float FlashHold = 0.25f, FlashFade = 0.55f; // seconds at full strength, then fading
+	static const FLinearColor Foe(1.f, 0.1f, 0.06f), Mate(0.2f, 0.5f, 1.f);
+	const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	const AWWOCharacter* Watcher = PC ? Cast<AWWOCharacter>(PC->GetPawn()) : nullptr;
+	const double* Since = Watcher && Watcher != this ? Watcher->Weapon->Marked.Find(this) : nullptr;
+	const float Age = Since ? (float)(GetWorld()->GetTimeSeconds() - *Since) : 99.f;
+	const float Strength = 1.f - FMath::Clamp((Age - FlashHold) / FlashFade, 0.f, 1.f);
+	if (bLocalVisuals || Health->bDead || !UWWOWorldSubsystem::IsPvP(this) || Strength <= 0.f)
+	{
+		Body->SetTeamTint(FLinearColor::Black, 0.f, 0.f);
+		return;
+	}
+	Body->SetTeamTint(UWWOWorldSubsystem::CanHurt(Watcher, this) ? Foe : Mate, Fill * Strength, Rim * Strength);
+}
+
 void AWWOCharacter::SetupVisuals(bool bLocal)
 {
 	// Yours: the first-person gun and arms, and only your body's shadow (with your flora's grafts and
@@ -148,12 +200,21 @@ void AWWOCharacter::SetupVisuals(bool bLocal)
 	Weapon->SetFirstPersonHidden(!bLocal);
 	if (bLocal)
 	{
+		// A joiner's own character can be set up as someone else's for a moment before it's known to
+		// be theirs: drop the copy of the loadout it was given then, so it reads their real one.
+		if (!HasAuthority() && NetLoadout)
+		{
+			NetLoadout = nullptr;
+			if (HasActorBegunPlay()) Weapon->RebindLoadout();
+		}
 		Body->FollowLoadout(true);
 	}
 	else
 	{
 		Body->SetShadowOnly(false);
 		if (!NetFlora.IsNone()) Body->SetModel(NetFlora);
+		ShownLook.Reset();
+		ShowLook(); // their grafts, if what they have on is known yet (else when it arrives: OnRep_NetLook)
 	}
 }
 
@@ -161,11 +222,48 @@ void AWWOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AWWOCharacter, NetFlora);
+	DOREPLIFETIME(AWWOCharacter, NetLook);
+	DOREPLIFETIME(AWWOCharacter, NetFists);
 }
 
 void AWWOCharacter::OnRep_NetFlora()
 {
 	if (!bLocalVisuals && !NetFlora.IsNone()) Body->SetModel(NetFlora);
+}
+
+void AWWOCharacter::OnRep_NetLook()
+{
+	// A joiner keeps a copy of everyone else's loadout (as the host does for joiners and bots), so
+	// whatever belongs to that character reads what they have on, not what you do.
+	if (IsLocallyControlled() && IsPlayerControlled()) return; // your own comes from your own loadout
+	if (!HasAuthority())
+	{
+		if (!NetLoadout) NetLoadout = UWWOLoadoutSubsystem::NewCopy(UWWOLoadoutSubsystem::Get(GetWorld()));
+		if (NetLoadout) NetLoadout->ApplyNet(NetLook);
+	}
+	if (HasActorBegunPlay() && !bLocalVisuals) ShowLook();
+}
+
+void AWWOCharacter::OnRep_NetFists()
+{
+	// Someone else's fists, as the host says (your own are lit from your own ability state).
+	if (IsLocallyControlled() && IsPlayerControlled()) return;
+	const UWWOLoadoutSubsystem* Data = UWWOLoadoutSubsystem::Get(GetWorld());
+	const UWWOAbilityData* Lit = nullptr;
+	if (Data && !NetFists.IsNone()) for (const UWWOAbilityData* A : Data->Abilities) if (A && A->Id == NetFists) Lit = A;
+	Body->SetHandGlow(Lit ? Lit->Color : FLinearColor::Black, Lit ? 0.85f : 0.f);
+}
+
+void AWWOCharacter::ShowLook()
+{
+	// Rebuilt only when something you can see changed (not for a swapped gun or its mods).
+	FString Look = NetLook.Flora.ToString() + TEXT("|") + NetLook.Grenade.ToString();
+	for (const FName& Id : NetLook.Abilities) Look += TEXT("|") + Id.ToString();
+	for (const FName& Id : NetLook.FrameParts) Look += TEXT("|") + Id.ToString();
+	if (NetLook.Flora.IsNone() || Look == ShownLook) return;
+	ShownLook = Look;
+	Body->FollowLoadout(false); // their flora's grafts and their shell's colors, from their loadout
+	UE_LOG(LogWWO, Display, TEXT("Net visuals: %s shows %s"), *GetName(), *Look);
 }
 
 void AWWOCharacter::ServerSetFlora_Implementation(FName Flora)
@@ -178,6 +276,9 @@ void AWWOCharacter::ServerSetLoadout_Implementation(const FWWONetLoadout& Loadou
 {
 	if (!NetLoadout) NetLoadout = UWWOLoadoutSubsystem::NewCopy(UWWOLoadoutSubsystem::Get(GetWorld()));
 	if (NetLoadout) NetLoadout->ApplyNet(Loadout);
+	// Every machine gets it straight away (a joiner standing still sends no moves for the per-frame check to ride on).
+	NetLook = Loadout;
+	OnRep_NetLook();
 	UE_LOG(LogWWO, Display, TEXT("Net: %s's loadout: flora %s, grenade %s, abilities %s, %d traits, weapon %s with %d mods"), *GetName(),
 		*Loadout.Flora.ToString(), *Loadout.Grenade.ToString(), *FString::JoinBy(Loadout.Abilities, TEXT("+"), [](const FName& N) { return N.ToString(); }),
 		Loadout.Traits.Num(), *Loadout.Weapon.ToString(), Loadout.ModIds.Num());
@@ -233,6 +334,11 @@ void AWWOCharacter::ServerActivateUlt_Implementation()
 	const bool bCast = Ult->ActivateUlt();
 	NetUltsCast += bCast ? 1 : 0;
 	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), bCast ? TEXT("cast") : TEXT("refused"));
+}
+
+void AWWOCharacter::ClientDamageFrom_Implementation(FVector_NetQuantize From)
+{
+	Health->AddDamageMark(From);
 }
 
 void AWWOCharacter::ClientApplySlow_Implementation(float Amount, float Seconds)
@@ -354,12 +460,87 @@ bool AWWOCharacter::IsCriticalComponent(const UPrimitiveComponent* Component) co
 	return Component == HeadHitbox;
 }
 
+bool AWWOCharacter::IsCriticalHit(const FHitResult& Hit, const FVector& From) const
+{
+	// The body hitbox is a loose capsule around the whole character, so a shot aimed at the head
+	// often meets it first (a head leaning into a run, a shot from above or behind). What counts is
+	// whether the shot's line goes through the head.
+	if (Hit.GetComponent() == HeadHitbox) return true;
+	if (!HeadHitbox->IsCollisionEnabled()) return false;
+	const FVector Dir = (Hit.ImpactPoint - From).GetSafeNormal();
+	if (Dir.IsNearlyZero()) return false;
+	FHitResult Through;
+	return HeadHitbox->LineTraceComponent(Through, Hit.ImpactPoint - Dir, Hit.ImpactPoint + Dir * HeadShotThrough,
+		FCollisionQueryParams(SCENE_QUERY_STAT(WWOHeadShot), false));
+}
+
+void AWWOCharacter::PinHeadHitbox()
+{
+	// The head hitbox rides the body's head bone, like the enemies' crit boxes, so it is where the
+	// head is drawn in every pose (running lean, crouch, slide, hit reactions) and not at the eye
+	// point on the capsule's axis. Placed from the reference pose, so it doesn't depend on the pose
+	// the body happens to be in right now.
+	static const FName HeadBone("head");
+	USkeletalMeshComponent* BodyMesh = GetMesh();
+	const USkeletalMesh* Asset = BodyMesh ? BodyMesh->GetSkeletalMeshAsset() : nullptr;
+	const int32 Bone = Asset ? Asset->GetRefSkeleton().FindBoneIndex(HeadBone) : INDEX_NONE;
+	if (Bone == INDEX_NONE)
+	{
+		UE_LOG(LogWWO, Warning, TEXT("%s: no head bone, the head hitbox stays at the eyes"), *GetName());
+		return;
+	}
+	// The mesh faces +Y in its own space (it's turned -90 on the capsule) with Z up.
+	const FTransform Ref = FAnimationRuntime::GetComponentSpaceTransformRefPose(Asset->GetRefSkeleton(), Bone);
+	const FVector Local = Ref.InverseTransformPosition(Ref.GetLocation() + FVector(0, HeadHitForward, HeadHitUp));
+	HeadHitbox->AttachToComponent(BodyMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HeadBone);
+	HeadHitbox->SetRelativeLocation(Local);
+}
+
+void AWWOCharacter::ProbeHeadShots(int32& Shots, int32& Crits, int32& OldCrits, float& HeadOffEyes) const
+{
+	if (!bHitboxesOn) return;
+	const FVector Head = GetMesh()->GetSocketLocation("head") + FVector(0, 0, HeadHitUp) + GetActorForwardVector() * HeadHitForward;
+	const FVector Eyes = Camera->GetComponentLocation();
+	HeadOffEyes = FMath::Max(HeadOffEyes, FVector::Dist(Head, Eyes));
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOHeadProbe), false);
+	for (int32 Side = 0; Side < 8; ++Side)
+	{
+		for (const float Up : { 0.f, 20.f })
+		{
+			const FVector Away = FRotator(Up, GetActorRotation().Yaw + Side * 45.f, 0.f).Vector();
+			const FVector From = Head + Away * 1500.f;
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Away).GetSafeNormal();
+			for (const FVector2D& Off : { FVector2D(0, 0), FVector2D(6, 0), FVector2D(-6, 0), FVector2D(0, 6), FVector2D(0, -6) })
+			{
+				const FVector At = Head + Right * Off.X + FVector::UpVector * Off.Y;
+				const FVector To = From + (At - From).GetSafeNormal() * 2000.f;
+				FHitResult BodyHit, HeadHit;
+				const bool bBody = BodyHitbox->LineTraceComponent(BodyHit, From, To, Params);
+				const bool bHead = HeadHitbox->LineTraceComponent(HeadHit, From, To, Params);
+				++Shots;
+				if (bBody || bHead)
+				{
+					const FHitResult& First = bHead && (!bBody || HeadHit.Distance <= BodyHit.Distance) ? HeadHit : BodyHit;
+					Crits += IsCriticalHit(First, From) ? 1 : 0;
+				}
+				// Before: a 16 cm sphere at the eyes, and only if the shot met it before the body.
+				const FVector Dir = (To - From).GetSafeNormal();
+				const float Along = FVector::DotProduct(Eyes - From, Dir);
+				const float OffSq = FVector::DistSquared(From + Dir * Along, Eyes);
+				if (OffSq <= 256.f && (!bBody || Along - FMath::Sqrt(256.f - OffSq) <= BodyHit.Distance)) ++OldCrits;
+			}
+		}
+	}
+}
+
 bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
 	if (Health->bDead) return false;
 	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
 	if (!HasAuthority()) return false; // a joiner's hit: the number now; the host applies it (health replicates)
 	Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker;
+	const AActor* By = UWWOWorldSubsystem::CurrentAttacker.Get();
+	Health->DamageCameFrom(By && By != this ? By->GetActorLocation() : Point); // whoever did it, else where it landed
 	Health->TakeDamage(Damage);
 	return Health->bDead;
 }
@@ -480,6 +661,16 @@ void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 				ServerSetLoadout(Net);
 			}
 		}
+		// The host keeps everyone's look current for every machine (its own, the joiners', the bots').
+		if (Loadout && HasAuthority())
+		{
+			const FWWONetLoadout Now = Loadout->ToNet();
+			if (Now != NetLook)
+			{
+				NetLook = Now;
+				OnRep_NetLook(); // the host shows it too
+			}
+		}
 		const FName Flora = Loadout && Loadout->GetFlora() ? Loadout->GetFlora()->Id : NAME_None;
 		if (Flora != NetFlora)
 		{
@@ -493,6 +684,7 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateHitboxes(); // PvP hitboxes on or off, on every machine
+	UpdateTeamTint();
 	// The movement component has already run PrepareMovement and moved (it ticks first);
 	// this runs the rest in Godot's order: camera (after the move), gun, abilities, grenades, ult.
 	if (!IsLocallyControlled())
@@ -922,6 +1114,7 @@ void AWWOCharacter::HandleJump(const FVector& WishDir)
 	Move->Velocity.Z = LaunchSpeed(Height) * WWO::M;
 	Move->SetMovementMode(MOVE_Falling);
 	JumpsUsed += 1;
+	UWWOSound::PlayFor(this, "jump");
 	float AirSpeed = FVector2D(Move->Velocity.X, Move->Velocity.Y).Size() / WWO::M;
 	if (JumpsUsed > 1 && !WishDir.IsNearlyZero())
 	{
@@ -980,6 +1173,7 @@ void AWWOCharacter::Landed(const FHitResult& Hit)
 	Super::Landed(Hit);
 	const float FallSpeed = FMath::Max(-GetCharacterMovement()->Velocity.Z / WWO::M, LastFallSpeed);
 	LastFallSpeed = 0.f;
+	UWWOSound::PlayFor(this, "land", FMath::Clamp(FallSpeed / 8.f, 0.3f, 1.2f));
 	Land(FallSpeed);
 }
 
@@ -1036,7 +1230,9 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 	const bool bWalking = IsOnFloor() && !bSliding && Speed > 0.5f;
 	SprintBlend = WWO::MoveToward(SprintBlend, bSprinting ? 1.f : 0.f, 3.f * BobDelta);
 	const float Stride = FMath::Max(FMath::Lerp(WalkStride, SprintStride, SprintBlend), 0.1f);
+	const int32 StepBefore = FMath::FloorToInt(BobTime / UE_PI);
 	if (bWalking) BobTime += Speed / Stride * UE_PI * BobDelta; // one step = half a sine wave
+	if (FMath::FloorToInt(BobTime / UE_PI) != StepBefore && !bCrouching) UWWOSound::PlayFor(this, "footstep", bSprinting ? 1.f : 0.75f); // a foot comes down (yours flat, anyone else's from where they are)
 	BobWeight = WWO::MoveToward(BobWeight, bWalking ? 1.f : 0.f, 4.f * BobDelta);
 	const float Amount = BobIntensity * BobWeight * (1.f - 0.75f * Weapon->AdsAmount); // steadier when aimed
 	const float Up = FMath::Lerp(WalkBobUp, SprintBobUp, SprintBlend) * Amount;

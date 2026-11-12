@@ -1,0 +1,414 @@
+{
+ "_comment": "Sound effects. Each event names the sounds it picks from at random (assets in /Game/WWO/Audio, imported from Tools/audio_src by Tools/import_sounds.py), its volume, the pitch range each play picks from, and how far it carries in meters (0 = heard only by the player it's for). The game plays an event by name (WWOSound::Play); an event that isn't listed here, or lists no sounds, is silent. Edit and restart; rerun the import script only after adding files. The placeholder sounds are Kenney's Sci-Fi Sounds, Impact Sounds and Interface Sounds packs (kenney.nl, CC0).",
+ "events": {
+  "fire_rifle": {
+   "sounds": [
+    "S_laserSmall_000",
+    "S_laserSmall_001",
+    "S_laserSmall_002",
+    "S_laserSmall_003",
+    "S_laserSmall_004"
+   ],
+   "volume": 0.6,
+   "pitch": [
+    0.92,
+    1.08
+   ],
+   "range": 60
+  },
+  "fire_handcannon": {
+   "sounds": [
+    "S_laserLarge_000",
+    "S_laserLarge_001",
+    "S_laserLarge_002"
+   ],
+   "volume": 0.75,
+   "pitch": [
+    0.95,
+    1.05
+   ],
+   "range": 70
+  },
+  "fire_shotgun": {
+   "sounds": [
+    "S_explosionCrunch_000",
+    "S_explosionCrunch_001"
+   ],
+   "volume": 0.7,
+   "pitch": [
+    1.35,
+    1.55
+   ],
+   "range": 70
+  },
+  "fire_sniper": {
+   "sounds": [
+    "S_laserLarge_003",
+    "S_laserLarge_004"
+   ],
+   "volume": 0.85,
+   "pitch": [
+    0.7,
+    0.78
+   ],
+   "range": 90
+  },
+  "fire": {
+   "sounds": [
+    "S_laserRetro_000",
+    "S_laserRetro_001",
+    "S_laserRetro_002"
+   ],
+   "volume": 0.6,
+   "pitch": [
+    0.95,
+    1.05
+   ],
+   "range": 60
+  },
+  "soldier_shot": {
+   "sounds": [
+    "S_laserRetro_003",
+    "S_laserRetro_004"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.75,
+    0.9
+   ],
+   "range": 50
+  },
+  "reload_start": {
+   "sounds": [
+    "S_doorOpen_000",
+    "S_doorOpen_001",
+    "S_doorOpen_002"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.2,
+    1.35
+   ],
+   "range": 15
+  },
+  "reload_done": {
+   "sounds": [
+    "S_doorClose_000",
+    "S_doorClose_001",
+    "S_doorClose_002"
+   ],
+   "volume": 0.55,
+   "pitch": [
+    1.2,
+    1.35
+   ],
+   "range": 15
+  },
+  "weapon_swap": {
+   "sounds": [
+    "S_switch_002",
+    "S_switch_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.95,
+    1.05
+   ],
+   "range": 12
+  },
+  "hit": {
+   "sounds": [
+    "S_impactGeneric_light_000",
+    "S_impactGeneric_light_001",
+    "S_impactGeneric_light_002",
+    "S_impactGeneric_light_003",
+    "S_impactGeneric_light_004"
+   ],
+   "volume": 0.45,
+   "pitch": [
+    1.0,
+    1.15
+   ],
+   "range": 0
+  },
+  "hit_crit": {
+   "sounds": [
+    "S_impactBell_heavy_000",
+    "S_impactBell_heavy_001",
+    "S_impactBell_heavy_002"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.25,
+    1.4
+   ],
+   "range": 0
+  },
+  "kill": {
+   "sounds": [
+    "S_confirmation_001",
+    "S_confirmation_002"
+   ],
+   "volume": 0.55,
+   "pitch": [
+    0.98,
+    1.02
+   ],
+   "range": 0
+  },
+  "melee_swing": {
+   "sounds": [
+    "S_minimize_006",
+    "S_minimize_007"
+   ],
+   "volume": 0.4,
+   "pitch": [
+    0.8,
+    0.95
+   ],
+   "range": 12
+  },
+  "melee_hit": {
+   "sounds": [
+    "S_impactPunch_heavy_000",
+    "S_impactPunch_heavy_001",
+    "S_impactPunch_heavy_002",
+    "S_impactPunch_heavy_003",
+    "S_impactPunch_heavy_004"
+   ],
+   "volume": 0.8,
+   "pitch": [
+    0.9,
+    1.05
+   ],
+   "range": 25
+  },
+  "grenade_throw": {
+   "sounds": [
+    "S_maximize_003",
+    "S_maximize_004"
+   ],
+   "volume": 0.4,
+   "pitch": [
+    0.9,
+    1.05
+   ],
+   "range": 15
+  },
+  "grenade_bounce": {
+   "sounds": [
+    "S_impactMetal_light_000",
+    "S_impactMetal_light_001",
+    "S_impactMetal_light_002",
+    "S_impactMetal_light_003",
+    "S_impactMetal_light_004"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.9,
+    1.1
+   ],
+   "range": 30
+  },
+  "explosion": {
+   "sounds": [
+    "S_explosionCrunch_002",
+    "S_explosionCrunch_003",
+    "S_explosionCrunch_004",
+    "S_lowFrequency_explosion_000",
+    "S_lowFrequency_explosion_001"
+   ],
+   "volume": 1.0,
+   "pitch": [
+    0.85,
+    1.05
+   ],
+   "range": 120
+  },
+  "ability": {
+   "sounds": [
+    "S_forceField_000",
+    "S_forceField_001",
+    "S_forceField_002"
+   ],
+   "volume": 0.6,
+   "pitch": [
+    0.95,
+    1.1
+   ],
+   "range": 30
+  },
+  "ult": {
+   "sounds": [
+    "S_forceField_003",
+    "S_forceField_004"
+   ],
+   "volume": 0.9,
+   "pitch": [
+    0.55,
+    0.65
+   ],
+   "range": 80
+  },
+  "jump": {
+   "sounds": [
+    "S_impactSoft_medium_000",
+    "S_impactSoft_medium_001"
+   ],
+   "volume": 0.25,
+   "pitch": [
+    1.25,
+    1.4
+   ],
+   "range": 12
+  },
+  "land": {
+   "sounds": [
+    "S_impactSoft_heavy_000",
+    "S_impactSoft_heavy_001",
+    "S_impactSoft_heavy_002"
+   ],
+   "volume": 0.4,
+   "pitch": [
+    0.9,
+    1.05
+   ],
+   "range": 15
+  },
+  "footstep": {
+   "sounds": [
+    "S_footstep_concrete_000",
+    "S_footstep_concrete_001",
+    "S_footstep_concrete_002",
+    "S_footstep_concrete_003",
+    "S_footstep_concrete_004"
+   ],
+   "volume": 0.3,
+   "pitch": [
+    0.92,
+    1.08
+   ],
+   "range": 14
+  },
+  "hurt": {
+   "sounds": [
+    "S_impactPlate_medium_000",
+    "S_impactPlate_medium_001",
+    "S_impactPlate_medium_002"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.9,
+    1.05
+   ],
+   "range": 0
+  },
+  "death": {
+   "sounds": [
+    "S_impactMetal_heavy_000",
+    "S_impactMetal_heavy_001",
+    "S_impactMetal_heavy_002"
+   ],
+   "volume": 0.8,
+   "pitch": [
+    0.7,
+    0.85
+   ],
+   "range": 50
+  },
+  "death_own": {
+   "sounds": [
+    "S_glitch_001",
+    "S_glitch_002"
+   ],
+   "volume": 0.6,
+   "pitch": [
+    0.95,
+    1.05
+   ],
+   "range": 0
+  },
+  "enemy_death": {
+   "sounds": [
+    "S_impactMetal_heavy_003",
+    "S_impactMetal_heavy_004",
+    "S_impactMining_000"
+   ],
+   "volume": 0.7,
+   "pitch": [
+    0.9,
+    1.1
+   ],
+   "range": 50
+  },
+  "ui_click": {
+   "sounds": [
+    "S_click_001",
+    "S_click_002",
+    "S_click_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.98,
+    1.04
+   ],
+   "range": 0
+  },
+  "ui_tab": {
+   "sounds": [
+    "S_switch_001"
+   ],
+   "volume": 0.45,
+   "pitch": [
+    1.0,
+    1.0
+   ],
+   "range": 0
+  },
+  "ui_open": {
+   "sounds": [
+    "S_open_001"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.0,
+    1.0
+   ],
+   "range": 0
+  },
+  "ui_close": {
+   "sounds": [
+    "S_close_001"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.0,
+    1.0
+   ],
+   "range": 0
+  },
+  "ui_equip": {
+   "sounds": [
+    "S_select_001",
+    "S_select_002"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.0,
+    1.0
+   ],
+   "range": 0
+  },
+  "ui_bind": {
+   "sounds": [
+    "S_confirmation_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    1.0,
+    1.0
+   ],
+   "range": 0
+  }
+ }
+}

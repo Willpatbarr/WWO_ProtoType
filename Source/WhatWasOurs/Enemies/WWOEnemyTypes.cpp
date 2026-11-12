@@ -591,6 +591,7 @@ void AWWOTank::Slam()
 	{
 		if (InRange(P))
 		{
+			P->Health->DamageCameFrom(GetActorLocation());
 			P->Health->TakeDamage(T->SlamDamage, true);
 			P->ApplySlow(T->SlowAmount, T->SlowTime);
 		}

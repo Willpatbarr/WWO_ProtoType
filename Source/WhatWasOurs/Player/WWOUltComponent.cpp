@@ -1,4 +1,5 @@
 #include "Player/WWOUltComponent.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOBotController.h"
 #include "Player/WWOPlayerController.h"
@@ -86,6 +87,7 @@ FTransform UWWOUltComponent::ThirdPersonTransform() const
 void UWWOUltComponent::Begin()
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	UWWOSound::PlayFor(P, "ult");
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const UWWOFloraData* Flora = Loadout ? Loadout->GetFlora() : nullptr;
 	Kind = !Flora ? EKind::Blast : (Flora->Ult == EWWOUltKind::Veil ? EKind::Veil : (Flora->Ult == EWWOUltKind::Entrench ? EKind::Entrench : EKind::Blast));

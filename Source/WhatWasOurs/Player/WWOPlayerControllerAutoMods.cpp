@@ -20,6 +20,10 @@
 #include "WhatWasOurs.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
+#include "FX/WWOFX.h"
+#include "Enemies/WWOEnemyProjectile.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace
 {
@@ -295,7 +299,27 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		// -WWOAutoTestGuns: each gun at the hip and aimed, and the modded ones with each mod set.
 		// Screenshots 38_gun_<weapon>_<state>.
 		static const FName Ids[] = { "rifle", "handcannon", "shotgun", "sniper" };
-		if (AutoModClock < 0.9f) break;
+		// -WWOFxShots: each gun also fires once from the hip in slow motion, with a second shot drawn
+		// across the view as another player's would be. Screenshots 39_fx_<weapon>_flash (the muzzle
+		// flash) and _trail (the shots in the air a moment later).
+		static const bool bFxShots = FParse::Param(FCommandLine::Get(), TEXT("WWOFxShots"));
+		static int32 FxFrames = -1;
+		if (bFxShots && FxFrames >= 0 && AutoGunIdx < (int32)UE_ARRAY_COUNT(Ids))
+		{
+			++FxFrames;
+			if (FxFrames == 5) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_flash")));
+			if (FxFrames == 70) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_trail")));
+			// Then a little faster, to catch the sparks and the death burst mid-flight (_burst).
+			if (FxFrames == 71) UGameplayStatics::SetGlobalTimeDilation(this, 0.15f);
+			if (FxFrames == 95) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_burst")));
+		}
+		if (AutoModClock < (bFxShots && FxFrames >= 0 ? 2.f : 0.9f)) break;
+		if (bFxShots && FxFrames >= 0)
+		{
+			FxFrames = -1;
+			UGameplayStatics::SetGlobalTimeDilation(this, 1.f);
+			Held[(int32)EWWOAction::Fire] = false;
+		}
 		AutoModClock = 0.f;
 		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Ids))
 		{
@@ -318,7 +342,28 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		switch (AutoGunStage++)
 		{
 		case 0: EquipWeaponId(Id); for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr); break;
-		case 1: Shot(*(Tag + TEXT("_hip"))); break;
+		case 1:
+			Shot(*(Tag + TEXT("_hip")));
+			if (bFxShots)
+			{
+				FxFrames = 0;
+				UGameplayStatics::SetGlobalTimeDilation(this, 0.02f);
+				JustPressed[(int32)EWWOAction::Fire] = Held[(int32)EWWOAction::Fire] = true;
+				const FVector Side = P->EyeLocation() + P->AimForward() * 350.f - P->GetActorRightVector() * 150.f;
+				AWWOFXActor::MuzzleFlash(GetWorld(), Side, P->GetActorRightVector(), FLinearColor(1.f, 0.8f, 0.45f));
+				AWWOFXActor::BulletTrail(GetWorld(), Side, Side + P->GetActorRightVector() * 3000.f, FLinearColor(1.f, 0.8f, 0.45f));
+				// A body hit, a headshot, a death and a soldier's bolt, in a row in front of you.
+				const FVector Ahead = P->EyeLocation() + P->AimForward() * 400.f;
+				const FVector Right = P->GetActorRightVector();
+				AWWOFXActor::HitSpark(GetWorld(), Ahead - Right * 120.f, -P->AimForward(), false);
+				AWWOFXActor::HitSpark(GetWorld(), Ahead - Right * 40.f, -P->AimForward(), true);
+				AWWOFXActor::DeathBurst(GetWorld(), Ahead + Right * 110.f + P->AimForward() * 200.f - FVector(0, 0, 60.f), FLinearColor(1.f, 0.55f, 0.2f));
+				AWWOEnemyProjectile::Fire(GetWorld(), Ahead - Right * 200.f + FVector(0, 0, 60.f), Right * 5300.f, 0.f, 0.5f);
+				// The mark a blast leaves.
+				const FVector Floor = P->GetActorLocation() - FVector(0, 0, P->GetSimpleCollisionHalfHeight()) + P->AimForward().GetSafeNormal2D() * 450.f;
+				AWWOFXActor::Scorch(GetWorld(), Floor + Right * 250.f, 2.5f);
+			}
+			break;
 		case 2: Held[(int32)EWWOAction::Aim] = true; break;
 		case 3: Shot(*(Tag + TEXT("_ads"))); break;
 		case 4: Held[(int32)EWWOAction::Aim] = false; if (bModded) EquipSet(PlainSet); else AutoGunStage = 99; break;

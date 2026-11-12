@@ -44,6 +44,8 @@ private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Material;
 	TArray<FVector> Sizes;
 	TWeakObjectPtr<AWWOParticles> Motes;
+	TWeakObjectPtr<AWWOParticles> Smoke; // wisps rising inside it
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Edge; // its outline on the floor
 	float Age = 0.f;
 	float TickLeft = 0.f;
 };

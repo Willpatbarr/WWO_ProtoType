@@ -58,6 +58,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Camera") float HipFov = 100.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float RumbleScale = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float PunchScale = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Feel") float BlastShake = 1.f; // how hard a nearby explosion shakes the view and the controller (0 = off)
+	UPROPERTY(EditAnywhere, Category = "Feel") float HitFlinch = 1.f;  // how hard taking damage jolts the view and the controller (0 = off); it doesn't move your aim
+	// A jolt from outside (an explosion nearby, a hit taken): a camera punch and a rumble, by Strength.
+	void Shake(float Strength, float Seconds);
 	// How big every gun's model is when aimed down sights, against its hip size (1 = the same). It
 	// scales around the sight point, so the sight stays on the reticle. Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float AdsGunScale = 1.f;
@@ -167,6 +171,14 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> ModelRoot;
 	UPROPERTY() TMap<FName, TObjectPtr<UStaticMeshComponent>> Parts;
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming
+public:
+	// The targets you have marked (picked up under the reticle, or inside the marker range while
+	// aimed in; dropped on leaving the range) and the world time each was picked up. The HUD keeps
+	// it as it draws; AWWOCharacter::UpdateTeamTint flashes a player's outline from that time.
+	mutable TMap<TWeakObjectPtr<const AActor>, double> Marked;
+private:
+	TMap<FName, FVector> FlareSizes; // the muzzle flash flares' built sizes (each shot varies them)
+	FVector TrailStart() const;      // where your own shot's trail starts, to look like it leaves the muzzle
 	TWeakObjectPtr<AActor> Highlighted; // the enemy tinted for being under the reticle
 	float BuiltSightHeight = 0.f; // the sight height the model was built with
 	FVector ModelShift = FVector::ZeroVector; // from it: every part but the sight dot

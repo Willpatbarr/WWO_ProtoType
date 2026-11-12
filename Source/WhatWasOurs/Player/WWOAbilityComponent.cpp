@@ -1,4 +1,6 @@
 #include "Player/WWOAbilityComponent.h"
+#include "Characters/WWOBodyComponent.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
@@ -40,6 +42,21 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	GuardLeft = FMath::Max(GuardLeft - DeltaSeconds, 0.f);
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	// While Thornfist is up (or Static Charge is armed) the fists glow in its color, so whoever is
+	// about to be hit can see it coming.
+	// It's known on the host (for everyone) and on your own machine (for you); the host passes it on
+	// to the rest (AWWOCharacter::NetFists).
+	if (P && (P->HasAuthority() || (P->IsLocallyControlled() && P->IsPlayerControlled())))
+	{
+		const UWWOAbilityData* Lit = ThornfistActive();
+		if (!Lit) { if (const UWWOAbilityData* Charge = Equipped("static_charge")) if (Armed.FindRef(Charge->Id)) Lit = Charge; }
+		if (Lit != FistsLit.Get())
+		{
+			FistsLit = Lit;
+			P->Body->SetHandGlow(Lit ? Lit->Color : FLinearColor::Black, Lit ? 0.85f : 0.f);
+			if (P->HasAuthority()) const_cast<AWWOCharacter*>(P)->NetFists = Lit ? Lit->Id : NAME_None;
+		}
+	}
 	const AWWOPlayerController* PC = P ? P->GetWWOController() : nullptr;
 	const AWWOBotController* Bot = P ? P->GetBot() : nullptr; // a bot presses its own buttons
 	if (!Loadout || (!PC && !Bot)) return;
@@ -53,6 +70,7 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 			if (bPressed && !PlayerBusy() && Charge(A) >= 1.f)
 			{
 				Armed.Add(A->Id, true); // the next melee hit discharges it
+				UWWOSound::PlayFor(P, "ability");
 				if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner()); Me && GetNetMode() == NM_Client) Me->ServerUseAbility(Slot);
 			}
 			continue;
@@ -93,6 +111,7 @@ bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
 	if (A->Kind != EWWOAbilityKind::Active || Charge(A) < Ready) return false;
 	ChargeById.Add(A->Id, 0.f);
 	ActiveLeft.Add(A->Id, A->Duration);
+	UWWOSound::PlayFor(GetOwner(), "ability");
 	if (A->Id == "spore_dash") SporeDash(A);
 	if (A->Id == "root_bombs") RootBombs(A);
 	return true;

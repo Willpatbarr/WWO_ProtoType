@@ -61,7 +61,10 @@ UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::Get(const UObject* WorldContext)
 {
 	if (const AWWOCharacter* C = OwningCharacter(WorldContext))
 	{
-		if (C->NetLoadout) return C->NetLoadout; // a joiner's, on the host
+		// A copy kept for someone else's character: a joiner's or a bot's on the host, anyone else's on a
+		// joiner (AWWOCharacter::OnRep_NetLook). Never your own character on your own machine.
+		const bool bMine = C->IsLocallyControlled() && C->IsPlayerControlled();
+		if (C->NetLoadout && !bMine) return C->NetLoadout;
 	}
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
 	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
@@ -352,6 +355,7 @@ void UWWOLoadoutSubsystem::Save() const
 		}
 	}
 	Data->ModConfigs = Configs;
+	Data->WeaponSlots = SlotConfigs;
 	UGameplayStatics::SaveGameToSlot(Data, SaveSlot, 0);
 }
 
@@ -387,6 +391,13 @@ void UWWOLoadoutSubsystem::ApplySave(const UWWOLoadoutSave* Data)
 		if (Mod && Mod->Frame == FName(WeaponId) && Mod->Slot == FName(ModSlot)) EquippedMods.FindOrAdd(Mod->Frame).Add(Mod->Slot, Mod);
 	}
 	Configs = Data->ModConfigs;
+	// The two weapon slots: as saved, else the first two saved configs.
+	SlotConfigs = { INDEX_NONE, INDEX_NONE };
+	for (int32 Slot = 0; Slot < WeaponSlotCount; ++Slot)
+	{
+		if (Data->WeaponSlots.IsValidIndex(Slot) && Configs.IsValidIndex(Data->WeaponSlots[Slot])) SlotConfigs[Slot] = Data->WeaponSlots[Slot];
+		else if (Data->WeaponSlots.Num() == 0 && Configs.IsValidIndex(Slot)) SlotConfigs[Slot] = Slot;
+	}
 	for (int32 Slot = 0; Slot < FMath::Min(Data->Abilities.Num(), AbilitySlots); ++Slot)
 	{
 		UWWOAbilityData* A = FindById(Abilities, Data->Abilities[Slot]);
@@ -827,6 +838,23 @@ void UWWOLoadoutSubsystem::ApplyConfig(int32 Index)
 	Changed();
 }
 
+void UWWOLoadoutSubsystem::SetSlotConfig(int32 Slot, int32 ConfigIndex)
+{
+	if (!SlotConfigs.IsValidIndex(Slot) || !Configs.IsValidIndex(ConfigIndex)) return;
+	SlotConfigs[Slot] = ConfigIndex;
+	if (Slot == ActiveSlot) ApplyConfig(ConfigIndex); // it's the one in your hands
+	else Changed();
+}
+
+bool UWWOLoadoutSubsystem::SwapWeaponSlot()
+{
+	const int32 Other = (ActiveSlot + 1) % WeaponSlotCount;
+	if (GetSlotConfig(Other) == INDEX_NONE) return false;
+	ActiveSlot = Other;
+	ApplyConfig(SlotConfigs[Other]);
+	return true;
+}
+
 int32 UWWOLoadoutSubsystem::CycleConfig()
 {
 	if (Configs.Num() == 0) return INDEX_NONE;
@@ -841,6 +869,11 @@ void UWWOLoadoutSubsystem::DeleteConfig(int32 Index)
 	Configs.RemoveAt(Index);
 	if (ActiveConfig == Index) ActiveConfig = INDEX_NONE;
 	else if (ActiveConfig > Index) --ActiveConfig;
+	for (int32& InSlot : SlotConfigs)
+	{
+		if (InSlot == Index) InSlot = INDEX_NONE;
+		else if (InSlot > Index) --InSlot;
+	}
 	Changed();
 }
 

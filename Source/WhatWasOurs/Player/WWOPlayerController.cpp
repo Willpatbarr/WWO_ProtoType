@@ -1,4 +1,5 @@
 #include "Player/WWOPlayerController.h"
+#include "Systems/WWOSound.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameMode.h"
 #include "Net/WWONetSubsystem.h"
@@ -13,6 +14,12 @@
 #include "UI/WWOMenuCursor.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Serialization/JsonReader.h"
+#include "Dom/JsonObject.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
@@ -144,76 +151,216 @@ UInputAction* AWWOPlayerController::MakeAction(EWWOAction Id, bool bWhenPaused)
 	return Action;
 }
 
+const TArray<FWWOBindRow>& AWWOPlayerController::BindRows()
+{
+	// What the Controls page lists: one line per thing you do, with its keyboard / mouse key and its
+	// controller button. (Melee and the grenade are two actions each, one per device, because the
+	// bumpers also chord into the ult.) The menu's own keys aren't here: they stay put.
+	const FKey None = EKeys::Invalid;
+	static const TArray<FWWOBindRow> Rows = {
+		{ "move_forward", TEXT("Move forward"), EWWOAction::Count, EKeys::W, None, EWWOAction::Count, None, 0 },
+		{ "move_back", TEXT("Move back"), EWWOAction::Count, EKeys::S, None, EWWOAction::Count, None, 1 },
+		{ "move_left", TEXT("Move left"), EWWOAction::Count, EKeys::A, None, EWWOAction::Count, None, 2 },
+		{ "move_right", TEXT("Move right"), EWWOAction::Count, EKeys::D, None, EWWOAction::Count, None, 3 },
+		{ "jump", TEXT("Jump"), EWWOAction::Jump, EKeys::SpaceBar, None, EWWOAction::Jump, EKeys::Gamepad_FaceButton_Bottom },
+		{ "sprint", TEXT("Sprint"), EWWOAction::Sprint, EKeys::LeftShift, None, EWWOAction::Sprint, EKeys::Gamepad_LeftThumbstick },
+		{ "crouch", TEXT("Crouch / slide"), EWWOAction::Crouch, EKeys::C, EKeys::LeftControl, EWWOAction::Crouch, EKeys::Gamepad_FaceButton_Right },
+		{ "aim", TEXT("Aim"), EWWOAction::Aim, EKeys::RightMouseButton, None, EWWOAction::Aim, EKeys::Gamepad_LeftTrigger },
+		{ "fire", TEXT("Fire"), EWWOAction::Fire, EKeys::LeftMouseButton, None, EWWOAction::Fire, EKeys::Gamepad_RightTrigger },
+		{ "reload", TEXT("Reload"), EWWOAction::Reload, EKeys::R, None, EWWOAction::Reload, EKeys::Gamepad_FaceButton_Left },
+		{ "melee", TEXT("Melee"), EWWOAction::Melee, EKeys::V, None, EWWOAction::MeleePad, EKeys::Gamepad_RightShoulder },
+		{ "grenade", TEXT("Grenade"), EWWOAction::Grenade, EKeys::G, None, EWWOAction::GrenadePad, EKeys::Gamepad_LeftShoulder },
+		{ "ult", TEXT("Ult (controller: melee + grenade together)"), EWWOAction::Ult, EKeys::F, None, EWWOAction::Count, None },
+		{ "ability1", TEXT("Ability 1"), EWWOAction::Ability1, EKeys::One, None, EWWOAction::Ability1, EKeys::Gamepad_DPad_Left },
+		{ "ability2", TEXT("Ability 2"), EWWOAction::Ability2, EKeys::Two, None, EWWOAction::Ability2, EKeys::Gamepad_DPad_Right },
+		{ "weapon_next", TEXT("Swap weapon"), EWWOAction::WeaponNext, EKeys::MouseScrollUp, None, EWWOAction::WeaponNext, EKeys::Gamepad_FaceButton_Top },
+		{ "weapon_prev", TEXT("Swap weapon (other way)"), EWWOAction::WeaponPrev, EKeys::MouseScrollDown, None, EWWOAction::Count, None },
+		{ "next_config", TEXT("Other weapon slot (names it)"), EWWOAction::NextConfig, EKeys::B, None, EWWOAction::NextConfig, EKeys::Gamepad_DPad_Down },
+		{ "revive", TEXT("Revive (hold)"), EWWOAction::Revive, EKeys::E, None, EWWOAction::Revive, EKeys::Gamepad_FaceButton_Left },
+		{ "character_menu", TEXT("Character menu"), EWWOAction::CharacterMenu, EKeys::I, None, EWWOAction::CharacterMenu, EKeys::Gamepad_Special_Left },
+	};
+	return Rows;
+}
+
+FKey AWWOPlayerController::GetBind(FName Row, bool bPad) const
+{
+	if (const FKey* Changed = Binds.Find(FName(*(Row.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))))) return *Changed;
+	for (const FWWOBindRow& R : BindRows()) if (R.Id == Row) return bPad ? R.PadKey : R.KbmKey;
+	return EKeys::Invalid;
+}
+
+FString AWWOPlayerController::KeyName(const FKey& Key)
+{
+	// Controller buttons by what's printed on them (PlayStation / Xbox); everything else by its own name.
+	static const TMap<FKey, FString> Pad = {
+		{ EKeys::Gamepad_FaceButton_Bottom, TEXT("Cross / A") }, { EKeys::Gamepad_FaceButton_Right, TEXT("Circle / B") },
+		{ EKeys::Gamepad_FaceButton_Left, TEXT("Square / X") }, { EKeys::Gamepad_FaceButton_Top, TEXT("Triangle / Y") },
+		{ EKeys::Gamepad_LeftShoulder, TEXT("L1 / LB") }, { EKeys::Gamepad_RightShoulder, TEXT("R1 / RB") },
+		{ EKeys::Gamepad_LeftTrigger, TEXT("L2 / LT") }, { EKeys::Gamepad_RightTrigger, TEXT("R2 / RT") },
+		{ EKeys::Gamepad_LeftThumbstick, TEXT("L3 (stick click)") }, { EKeys::Gamepad_RightThumbstick, TEXT("R3 (stick click)") },
+		{ EKeys::Gamepad_DPad_Up, TEXT("D-pad up") }, { EKeys::Gamepad_DPad_Down, TEXT("D-pad down") },
+		{ EKeys::Gamepad_DPad_Left, TEXT("D-pad left") }, { EKeys::Gamepad_DPad_Right, TEXT("D-pad right") },
+		{ EKeys::Gamepad_Special_Left, TEXT("Touchpad / View") }, { EKeys::Gamepad_Special_Right, TEXT("Options / Menu") },
+	};
+	if (!Key.IsValid()) return TEXT("—");
+	if (const FString* Name = Pad.Find(Key)) return *Name;
+	return Key.GetDisplayName(false).ToString();
+}
+
+void AWWOPlayerController::SetBind(FName Row, bool bPad, const FKey& Key)
+{
+	// A key already on another line of the same device changes places with this one.
+	const FKey Old = GetBind(Row, bPad);
+	if (Old == Key) return;
+	for (const FWWOBindRow& R : BindRows())
+	{
+		if (R.Id != Row && GetBind(R.Id, bPad) == Key && (bPad ? R.PadKey : R.KbmKey).IsValid())
+		{
+			Binds.Add(FName(*(R.Id.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))), Old);
+			break;
+		}
+	}
+	Binds.Add(FName(*(Row.ToString() + (bPad ? TEXT("/pad") : TEXT("/kbm")))), Key);
+	UWWOSound::PlayFlat(this, "ui_bind");
+	SaveBinds();
+	MapKeys();
+}
+
+void AWWOPlayerController::ResetBinds()
+{
+	Binds.Reset();
+	SaveBinds();
+	MapKeys();
+}
+
+namespace
+{
+	FString BindsPath() { return FPaths::ProjectSavedDir() / TEXT("WWO/Keybinds.json"); }
+	// Test runs press the default keys: they neither read nor write anyone's saved bindings.
+	bool BindsTestRun() { return FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) || FParse::Param(FCommandLine::Get(), TEXT("WWOStress")); }
+}
+
+void AWWOPlayerController::SaveBinds() const
+{
+	if (BindsTestRun()) return;
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	for (const auto& Pair : Binds) Json->SetStringField(Pair.Key.ToString(), Pair.Value.GetFName().ToString());
+	FString Text;
+	FJsonSerializer::Serialize(Json, TJsonWriterFactory<>::Create(&Text));
+	FFileHelper::SaveStringToFile(Text, *BindsPath());
+}
+
+void AWWOPlayerController::LoadBinds()
+{
+	Binds.Reset();
+	if (BindsTestRun()) return;
+	FString Text;
+	TSharedPtr<FJsonObject> Json;
+	if (!FFileHelper::LoadFileToString(Text, *BindsPath()) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return;
+	for (const auto& Pair : Json->Values)
+	{
+		const FKey Key(FName(*Pair.Value->AsString()));
+		if (Key.IsValid()) Binds.Add(FName(*Pair.Key), Key);
+	}
+}
+
+void AWWOPlayerController::BeginKeyCapture(FName Row, bool bPad, TFunction<void()> OnDone)
+{
+	// The next key, mouse button or controller button pressed becomes this line's (of the matching
+	// device; the other device's presses are ignored). Esc cancels. The menu cursor's input hook
+	// sees every press first, so the press doesn't also click or type.
+	CaptureRow = Row;
+	bCapturePad = bPad;
+	if (!MenuCursor.IsValid()) return;
+	TWeakObjectPtr<AWWOPlayerController> WeakThis = this;
+	MenuCursor->Capture = [WeakThis, Row, bPad, OnDone](const FKey& Key)
+	{
+		if (!WeakThis.IsValid()) return true;
+		const bool bCancel = Key == EKeys::Escape;
+		// Not the menu's own keys, and only this line's device.
+		if (!bCancel && (Key == EKeys::Tab || Key == EKeys::Gamepad_Special_Right || Key.IsGamepadKey() != bPad)) return false;
+		WeakThis->CaptureRow = NAME_None;
+		if (!bCancel) WeakThis->SetBind(Row, bPad, Key);
+		if (OnDone) OnDone();
+		return true;
+	};
+}
+
 void AWWOPlayerController::BuildInput()
 {
-	// The controls from the Godot handoff (keyboard/mouse and DualSense).
+	// The controls from the Godot handoff (keyboard/mouse and DualSense), with whatever the player
+	// has rebound on the settings menu's Controls page (Saved/WWO/Keybinds.json) on top.
 	GameContext = NewObject<UInputMappingContext>(this);
-	auto Map = [this](UInputAction* Action, std::initializer_list<FKey> Keys)
+	for (int32 Id = 0; Id < (int32)EWWOAction::Count; ++Id)
 	{
-		for (const FKey& Key : Keys) GameContext->MapKey(Action, Key);
-	};
-
-	Map(MakeAction(EWWOAction::Jump), { EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Bottom });
-	Map(MakeAction(EWWOAction::Sprint), { EKeys::LeftShift, EKeys::Gamepad_LeftThumbstick });
-	Map(MakeAction(EWWOAction::Crouch), { EKeys::C, EKeys::LeftControl, EKeys::Gamepad_FaceButton_Right });
-	Map(MakeAction(EWWOAction::Aim), { EKeys::RightMouseButton, EKeys::Gamepad_LeftTrigger });
-	Map(MakeAction(EWWOAction::Fire), { EKeys::LeftMouseButton, EKeys::Gamepad_RightTrigger });
-	Map(MakeAction(EWWOAction::Reload), { EKeys::R, EKeys::Gamepad_FaceButton_Left });
-	Map(MakeAction(EWWOAction::Melee), { EKeys::V });
-	Map(MakeAction(EWWOAction::MeleePad), { EKeys::Gamepad_RightShoulder });
-	Map(MakeAction(EWWOAction::Grenade), { EKeys::G });
-	Map(MakeAction(EWWOAction::GrenadePad), { EKeys::Gamepad_LeftShoulder });
-	Map(MakeAction(EWWOAction::Ult), { EKeys::F });
-	Map(MakeAction(EWWOAction::Ability1), { EKeys::One, EKeys::Gamepad_DPad_Left });
-	Map(MakeAction(EWWOAction::Ability2), { EKeys::Two, EKeys::Gamepad_DPad_Right });
-	Map(MakeAction(EWWOAction::WeaponNext), { EKeys::MouseScrollUp, EKeys::Gamepad_FaceButton_Top });
-	Map(MakeAction(EWWOAction::WeaponPrev), { EKeys::MouseScrollDown });
-	Map(MakeAction(EWWOAction::NextConfig), { EKeys::B, EKeys::Gamepad_DPad_Down });
-	Map(MakeAction(EWWOAction::Revive), { EKeys::E, EKeys::Gamepad_FaceButton_Left }); // Square also reloads, unless someone's down beside you
-	// Menu keys work while paused (the menus pause the game).
-	Map(MakeAction(EWWOAction::Menu, true), { EKeys::Tab, EKeys::Escape, EKeys::Gamepad_Special_Right });
-	Map(MakeAction(EWWOAction::MenuBack, true), { EKeys::Gamepad_FaceButton_Right }); // Esc is Menu, which also backs out (one step per press)
-	Map(MakeAction(EWWOAction::TabNext, true), { EKeys::E, EKeys::Gamepad_RightShoulder });
-	Map(MakeAction(EWWOAction::TabPrev, true), { EKeys::Q, EKeys::Gamepad_LeftShoulder });
-	// Gamepad_Special_Left is the DualSense touchpad click on Mac (Godot's button too). The Create
-	// button isn't a key in Unreal's Apple controller code; Tick polls it (FWWOMenuKeys).
-	Map(MakeAction(EWWOAction::CharacterMenu, true), { EKeys::I, EKeys::Gamepad_Special_Left });
-
-	// Movement: WASD and the left stick (dead zone 0.2).
+		const EWWOAction A = (EWWOAction)Id;
+		// Menu keys work while paused (the menus pause the game).
+		const bool bMenu = A == EWWOAction::Menu || A == EWWOAction::MenuBack || A == EWWOAction::TabNext || A == EWWOAction::TabPrev || A == EWWOAction::CharacterMenu;
+		ActionFor.Add(A, MakeAction(A, bMenu));
+	}
 	MoveAction = NewObject<UInputAction>(this);
 	MoveAction->ValueType = EInputActionValueType::Axis2D;
-	{
-		UInputModifierSwizzleAxis* ToY = NewObject<UInputModifierSwizzleAxis>(this); // X -> Y
-		UInputModifierNegate* Negate = NewObject<UInputModifierNegate>(this);
-		GameContext->MapKey(MoveAction, EKeys::W).Modifiers.Add(ToY);
-		FEnhancedActionKeyMapping& S = GameContext->MapKey(MoveAction, EKeys::S);
-		S.Modifiers.Add(ToY);
-		S.Modifiers.Add(Negate);
-		GameContext->MapKey(MoveAction, EKeys::A).Modifiers.Add(Negate);
-		GameContext->MapKey(MoveAction, EKeys::D);
-		UInputModifierDeadZone* Dead = NewObject<UInputModifierDeadZone>(this);
-		Dead->LowerThreshold = 0.2f;
-		Dead->Type = EDeadZoneType::Radial;
-		GameContext->MapKey(MoveAction, EKeys::Gamepad_Left2D).Modifiers.Add(Dead);
-	}
-	// Looking: right stick (dead zone 0.15) and the mouse.
 	LookAction = NewObject<UInputAction>(this);
 	LookAction->ValueType = EInputActionValueType::Axis2D;
-	{
-		UInputModifierDeadZone* Dead = NewObject<UInputModifierDeadZone>(this);
-		Dead->LowerThreshold = 0.15f;
-		Dead->Type = EDeadZoneType::Radial;
-		// The stick's Y came out inverted compared to the Godot build: flip it.
-		UInputModifierNegate* FlipY = NewObject<UInputModifierNegate>(this);
-		FlipY->bX = false;
-		FlipY->bZ = false;
-		FEnhancedActionKeyMapping& Stick = GameContext->MapKey(LookAction, EKeys::Gamepad_Right2D);
-		Stick.Modifiers.Add(Dead);
-		Stick.Modifiers.Add(FlipY);
-	}
 	MouseLookAction = NewObject<UInputAction>(this);
 	MouseLookAction->ValueType = EInputActionValueType::Axis2D;
+	LoadBinds();
+	MapKeys();
+}
+
+void AWWOPlayerController::MapKeys()
+{
+	// Every key onto its action, from scratch (at startup, and again whenever a binding changes).
+	GameContext->UnmapAll();
+	auto Map = [this](EWWOAction Action, const FKey& Key)
+	{
+		if (Key.IsValid() && ActionFor.Contains(Action)) GameContext->MapKey(ActionFor[Action], Key);
+	};
+	UInputModifierSwizzleAxis* ToY = NewObject<UInputModifierSwizzleAxis>(this); // X -> Y
+	UInputModifierNegate* Negate = NewObject<UInputModifierNegate>(this);
+	for (const FWWOBindRow& R : BindRows())
+	{
+		const FKey Kbm = GetBind(R.Id, false);
+		if (R.MoveDir >= 0)
+		{
+			// Movement: forward and back go onto Y, back and left are negative.
+			if (!Kbm.IsValid()) continue;
+			FEnhancedActionKeyMapping& M = GameContext->MapKey(MoveAction, Kbm);
+			if (R.MoveDir <= 1) M.Modifiers.Add(ToY);
+			if (R.MoveDir == 1 || R.MoveDir == 2) M.Modifiers.Add(Negate);
+			continue;
+		}
+		Map(R.Kbm, Kbm);
+		if (Kbm == R.KbmKey) Map(R.Kbm, R.KbmAlt); // the default's second key (Ctrl also crouches) goes with the default
+		Map(R.Pad, GetBind(R.Id, true));
+	}
+	// The menu's own keys. (Gamepad_Special_Left is the DualSense touchpad click on Mac, Godot's
+	// button too. The Create button isn't a key in Unreal's Apple controller code; Tick polls it.)
+	for (const FKey& Key : { EKeys::Tab, EKeys::Escape, EKeys::Gamepad_Special_Right }) Map(EWWOAction::Menu, Key);
+	Map(EWWOAction::MenuBack, EKeys::Gamepad_FaceButton_Right); // Esc is Menu, which also backs out (one step per press)
+	for (const FKey& Key : { EKeys::E, EKeys::Gamepad_RightShoulder }) Map(EWWOAction::TabNext, Key);
+	for (const FKey& Key : { EKeys::Q, EKeys::Gamepad_LeftShoulder }) Map(EWWOAction::TabPrev, Key);
+
+	// The sticks and the mouse: the left stick moves (dead zone 0.2), the right one looks (0.15).
+	UInputModifierDeadZone* MoveDead = NewObject<UInputModifierDeadZone>(this);
+	MoveDead->LowerThreshold = 0.2f;
+	MoveDead->Type = EDeadZoneType::Radial;
+	GameContext->MapKey(MoveAction, EKeys::Gamepad_Left2D).Modifiers.Add(MoveDead);
+	UInputModifierDeadZone* LookDead = NewObject<UInputModifierDeadZone>(this);
+	LookDead->LowerThreshold = 0.15f;
+	LookDead->Type = EDeadZoneType::Radial;
+	// The stick's Y came out inverted compared to the Godot build: flip it.
+	UInputModifierNegate* FlipY = NewObject<UInputModifierNegate>(this);
+	FlipY->bX = false;
+	FlipY->bZ = false;
+	FEnhancedActionKeyMapping& Stick = GameContext->MapKey(LookAction, EKeys::Gamepad_Right2D);
+	Stick.Modifiers.Add(LookDead);
+	Stick.Modifiers.Add(FlipY);
 	GameContext->MapKey(MouseLookAction, EKeys::Mouse2D);
+	if (UEnhancedInputLocalPlayerSubsystem* Input = GetLocalPlayer() ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()) : nullptr)
+	{
+		Input->RequestRebuildControlMappings();
+	}
 }
 
 void AWWOPlayerController::SetupInputComponent()
@@ -435,6 +582,8 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 	{
 		if (Id == EWWOAction::CharacterMenu) ToggleCharacterMenu();
 		else if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) CharacterMenu->Back();
+		else if (Id == EWWOAction::TabNext) CharacterMenu->CycleTab(1);
+		else if (Id == EWWOAction::TabPrev) CharacterMenu->CycleTab(-1);
 		return;
 	}
 	if (SettingsMenu->IsOpen())

@@ -225,13 +225,66 @@ void UWWOBodyComponent::SetModel(FName Key)
 	}
 	ApplyShadowOnly(Model);
 	UpdateModelExtras();
+	RefreshOverlay(); // a tint moves onto the new body
 }
 
 void UWWOBodyComponent::SetHighlight(float Alpha)
 {
-	USkeletalMeshComponent* Mesh = Model ? Model.Get() : GetMesh();
+	HighlightAlpha = FMath::Max(Alpha, 0.f);
+	RefreshOverlay();
+}
+
+void UWWOBodyComponent::SetHandGlow(const FLinearColor& Color, float Alpha)
+{
+	USkeletalMeshComponent* Mesh = GetMesh();
 	if (!Mesh) return;
-	if (Alpha <= 0.f)
+	if (HandGlows.Num() == 0 && Alpha > 0.f)
+	{
+		for (const FName Hand : { FName("hand_l"), FName("hand_r") })
+		{
+			UStaticMeshComponent* Glow = WWOFX::AddSoftSphere(GetOwner(), Mesh, Color, Alpha, 1.2f, true, false, 0.7f);
+			Glow->AttachToComponent(Mesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, Hand);
+			Glow->SetWorldScale3D(FVector(0.34f)); // a 34 cm ball around the fist
+			Glow->SetOwnerNoSee(true);             // not in your own first-person view
+			HandGlows.Add(Glow);
+		}
+	}
+	for (UStaticMeshComponent* Glow : HandGlows)
+	{
+		if (!Glow) continue;
+		Glow->SetVisibility(Alpha > 0.f);
+		if (UMaterialInstanceDynamic* M = WWOFX::MID(Glow))
+		{
+			M->SetVectorParameterValue("Color", Color);
+			M->SetScalarParameterValue("Alpha", Alpha);
+		}
+	}
+}
+
+void UWWOBodyComponent::SetTeamTint(const FLinearColor& Color, float Fill, float Rim)
+{
+	Fill = FMath::Max(Fill, 0.f);
+	Rim = FMath::Max(Rim, 0.f);
+	if (FMath::IsNearlyEqual(Fill, TeamTintAlpha) && FMath::IsNearlyEqual(Rim, TeamTintRim) && Color.Equals(TeamTint)) return;
+	TeamTint = Color;
+	TeamTintAlpha = Fill;
+	TeamTintRim = Rim;
+	RefreshOverlay();
+}
+
+void UWWOBodyComponent::RefreshOverlay()
+{
+	// One overlay over the visible body (the model, else the mannequin): the PvP marker tint (a faint
+	// fill, a strong outline), else the reticle highlight in the material's own red (half fill, half
+	// outline, as it always looked).
+	USkeletalMeshComponent* Driver = GetMesh();
+	USkeletalMeshComponent* Mesh = Model ? Model.Get() : Driver;
+	if (Model && Driver && Driver->GetOverlayMaterial()) Driver->SetOverlayMaterial(nullptr); // the model took over
+	if (!Mesh) return;
+	const bool bTeam = TeamTintAlpha > 0.f || TeamTintRim > 0.f;
+	const float Alpha = bTeam ? TeamTintAlpha : HighlightAlpha * 0.5f;
+	const float Rim = bTeam ? TeamTintRim : HighlightAlpha * 0.5f;
+	if (Alpha <= 0.f && Rim <= 0.f)
 	{
 		if (Mesh->GetOverlayMaterial()) Mesh->SetOverlayMaterial(nullptr);
 		return;
@@ -243,6 +296,8 @@ void UWWOBodyComponent::SetHighlight(float Alpha)
 		HighlightMat = UMaterialInstanceDynamic::Create(Base, this);
 	}
 	HighlightMat->SetScalarParameterValue("Alpha", Alpha);
+	HighlightMat->SetScalarParameterValue("Rim", Rim);
+	HighlightMat->SetVectorParameterValue("Color", bTeam ? TeamTint : FLinearColor(1.f, 0.15f, 0.1f)); // the material's default red
 	if (Mesh->GetOverlayMaterial() != HighlightMat) Mesh->SetOverlayMaterial(HighlightMat);
 }
 

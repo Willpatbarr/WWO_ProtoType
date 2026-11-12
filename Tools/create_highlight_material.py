@@ -1,6 +1,7 @@
 # Creates /Game/WWO/Materials/M_WWO_Highlight: the faint tint laid over the enemy under the reticle
 # (UWWOBodyComponent::SetHighlight sets it as the body mesh's overlay material). Unlit translucent,
-# Color tinted by Alpha, stronger toward the outline (fresnel), allowed on skeletal meshes.
+# Color at opacity Alpha all over plus Rim toward the outline (fresnel), allowed on skeletal meshes.
+# Also the PvP marker tint (UWWOBodyComponent::SetTeamTint): a faint fill with a strong outline.
 #
 # Run headless:
 #   UnrealEditor-Cmd <uproject> -run=pythonscript -script=<abs path to this file> -unattended -nullrhi
@@ -27,17 +28,22 @@ alpha = mel.create_material_expression(m, unreal.MaterialExpressionScalarParamet
 alpha.set_editor_property("parameter_name", "Alpha")
 alpha.set_editor_property("default_value", 0.15)
 
-# Opacity = Alpha * lerp(0.5, 1, fresnel): a light tint all over, a bit more at the outline.
+# Opacity = Alpha (a light tint over the whole body) + Rim * fresnel (a strong band where the body
+# turns away from the eye, which reads as an outline around its silhouette).
+rim = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -600, 400)
+rim.set_editor_property("parameter_name", "Rim")
+rim.set_editor_property("default_value", 0.08)
 fresnel = mel.create_material_expression(m, unreal.MaterialExpressionFresnel, -600, 250)
-fresnel.set_editor_property("exponent", 2.0)
+fresnel.set_editor_property("exponent", 2.2)
 fresnel.set_editor_property("base_reflect_fraction", 0.0)
-lerp = mel.create_material_expression(m, unreal.MaterialExpressionLinearInterpolate, -350, 250)
-lerp.set_editor_property("const_a", 0.5)
-lerp.set_editor_property("const_b", 1.0)
-mel.connect_material_expressions(fresnel, "", lerp, "Alpha")
-mul = mel.create_material_expression(m, unreal.MaterialExpressionMultiply, -150, 150)
-mel.connect_material_expressions(alpha, "", mul, "A")
-mel.connect_material_expressions(lerp, "", mul, "B")
+edge = mel.create_material_expression(m, unreal.MaterialExpressionMultiply, -350, 300)
+mel.connect_material_expressions(rim, "", edge, "A")
+mel.connect_material_expressions(fresnel, "", edge, "B")
+add = mel.create_material_expression(m, unreal.MaterialExpressionAdd, -200, 150)
+mel.connect_material_expressions(alpha, "", add, "A")
+mel.connect_material_expressions(edge, "", add, "B")
+mul = mel.create_material_expression(m, unreal.MaterialExpressionSaturate, -50, 150)
+mel.connect_material_expressions(add, "", mul, "")
 
 mel.connect_material_property(color, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_OPACITY)

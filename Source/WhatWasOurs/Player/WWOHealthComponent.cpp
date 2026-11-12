@@ -4,6 +4,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PlayerStart.h"
+#include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Game/WWOGameMode.h"
@@ -72,6 +73,10 @@ void UWWOHealthComponent::BeginPlay()
 	Spawn = GetOwner()->GetActorTransform();
 	TActorIterator<APlayerStart> Start(GetWorld());
 	if (Start) Spawn = Start->GetActorTransform();
+	for (TActorIterator<ATargetPoint> It(GetWorld()); It; ++It)
+	{
+		if (It->ActorHasTag("KillZ")) MapKillZ = FMath::Max(KillZ, It->GetActorLocation().Z);
+	}
 	Health = MaxHealth();
 	Shield = MaxShield();
 	LastSeen = Health + Shield;
@@ -102,6 +107,26 @@ void UWWOHealthComponent::TakeDamage(float Amount, bool bMelee)
 	OnDamaged.Broadcast(Amount);
 	P->Abilities->OnDamageTaken(Amount); // Static Charge
 	if (Health <= 0.f) Die();
+}
+
+void UWWOHealthComponent::DamageCameFrom(const FVector& From)
+{
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!IsHost() || bDead || GodMode >= 0.5f || P->bUlting || P->EntrenchLeft > 0.f || !P->IsPlayerControlled()) return; // as TakeDamage; bots have no HUD
+	if (P->IsLocallyControlled()) AddDamageMark(From);
+	else P->ClientDamageFrom(From);
+}
+
+void UWWOHealthComponent::AddDamageMark(const FVector& From)
+{
+	const double Now = GetWorld()->GetTimeSeconds();
+	DamageMarks.RemoveAll([Now](const FDamageMark& M) { return Now - M.Time > 3.0; });
+	// More from about the same spot (a burst, a second pellet) refreshes its mark.
+	for (FDamageMark& M : DamageMarks)
+	{
+		if (FVector::DistSquared(M.From, From) < FMath::Square(300.f)) { M.From = From; M.Time = Now; return; }
+	}
+	DamageMarks.Add({ From, Now });
 }
 
 void UWWOHealthComponent::Kill()
@@ -165,7 +190,7 @@ void UWWOHealthComponent::UpdateHealth(float DeltaSeconds)
 		return;
 	}
 	UpdateRevive(DeltaSeconds);
-	if (P->GetActorLocation().Z < KillZ)
+	if (P->GetActorLocation().Z < MapKillZ)
 	{
 		Kill();
 		return;

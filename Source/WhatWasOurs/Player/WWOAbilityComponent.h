@@ -51,6 +51,10 @@ private:
 	TMap<FName, float> ActiveLeft;     // seconds of effect left
 	TMap<FName, bool> Armed;           // charged abilities: armed and waiting for a melee hit
 	float GuardLeft = 0.f;
+	TWeakObjectPtr<const UWWOAbilityData> FistsLit; // the ability the fists are glowing for
+public:
+	float GuardTimeLeft() const { return GuardLeft; } // for the HUD's status chip
+private:
 
 	bool PlayerBusy() const;
 	void SporeDash(UWWOAbilityData* Ability);

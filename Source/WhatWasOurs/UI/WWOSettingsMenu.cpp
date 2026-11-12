@@ -1,4 +1,5 @@
 #include "UI/WWOSettingsMenu.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -31,6 +32,8 @@
 #include "Components/WidgetSwitcher.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
+#include "Components/EditableTextBox.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Styling/CoreStyle.h"
 #include "UI/WWOMenuCursor.h"
 #include "Net/WWONetSubsystem.h"
@@ -165,7 +168,7 @@ UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunc
 	Slot->SetHorizontalAlignment(bLeftAlign ? HAlign_Left : HAlign_Center);
 	Slot->SetVerticalAlignment(VAlign_Center);
 	UWWOClickHandler* H = NewObject<UWWOClickHandler>(Outer ? Outer : this);
-	H->Fn = MoveTemp(Fn);
+	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
 	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
 	Handlers.Add(H);
 	return B;
@@ -208,15 +211,21 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(P, "StickSensitivity", TEXT("Stick sensitivity"), 0.5f, 10.f, 0.1f),
 		Row(G, "RumbleScale", TEXT("Controller rumble strength (0 = off)"), 0.f, 2.f, 0.05f),
 		Row(G, "PunchScale", TEXT("Camera punch strength (0 = off)"), 0.f, 2.f, 0.05f),
+		Row(G, "BlastShake", TEXT("Shake from explosions near you (0 = off)"), 0.f, 2.f, 0.05f),
+		Row(G, "HitFlinch", TEXT("Jolt when you take damage (0 = off; never moves your aim)"), 0.f, 2.f, 0.05f),
 		Row(P, "BobIntensity", TEXT("Head bob intensity"), 0.f, 3.f, 0.1f),
 		Row(P, "WalkStride", TEXT("Walk stride length (m)"), 0.5f, 5.f, 0.1f),
 		Row(P, "SprintStride", TEXT("Sprint stride length (m)"), 0.5f, 6.f, 0.1f),
 		Row(P, "LandingDip", TEXT("Landing dip"), 0.f, 3.f, 0.1f),
 	});
+	AddGlobal(TEXT("Audio"), {
+		Row(P, "SoundVolume", TEXT("Sound effects volume (0 = silent)"), 0.f, 1.5f, 0.05f),
+	});
 	AddGlobal(TEXT("HUD"), {
 		Header(TEXT("Enemy readability")),
 		Row(P, "TargetHighlight", TEXT("Tint on the enemy under the reticle (0 = off)"), 0.f, 0.6f, 0.01f),
 		Row(P, "HealthBarRadius", TEXT("Show health bars of enemies this near the reticle (px; 0 = only the one under it)"), 0.f, 500.f, 5.f),
+		Row(P, "HealthBarAdsScale", TEXT("Marker range while aiming in (times the range above)"), 1.f, 4.f, 0.05f),
 		Row(P, "DamageNumberOffset", TEXT("Damage numbers this far to the side of the hit (px)"), 0.f, 200.f, 5.f),
 	});
 	AddGlobal(TEXT("Jump"), {
@@ -292,7 +301,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Header(TEXT("Weapon handling")),
 		Row(G, "SwapTime", TEXT("Weapon swap time (s)"), 0.05f, 1.5f, 0.01f),
 		Row(G, "ReadyTime", TEXT("Ready time after sprint (s)"), 0.f, 0.6f, 0.01f),
-		Header(TEXT("Frame parts")),
+		Header(TEXT("Shell")),
 		Row(L, "PointValue", TEXT("Each group point changes stats by"), 0.f, 0.25f, 0.01f, Percent()),
 	}, {
 		{ TEXT("Take 30 damage"), [WeakH] { if (WeakH.IsValid()) WeakH->TakeDamage(30.f); } },
@@ -407,7 +416,9 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		MapButton(TEXT("Small arena"), TEXT("L_Arena")),
 		MapButton(TEXT("Large arena (two levels)"), TEXT("L_ArenaLarge")),
 		MapButton(TEXT("Ring (4v4 PvP)"), TEXT("L_ArenaRing")),
+		MapButton(TEXT("Arboretum (4v4 PvP)"), TEXT("L_Arboretum")),
 		MapButton(TEXT("Test range (gray box)"), TEXT("L_TestRange")),
+		MapButton(TEXT("Cascade (6v6 PvP)"), TEXT("L_Cascade")),
 	});
 	// LAN play (UWWONetSubsystem). Hosting reopens this map for others to join; joining loads the host's.
 	auto Net = [WeakWorld]() { return WeakWorld.IsValid() ? UWWONetSubsystem::Get(WeakWorld.Get()) : nullptr; };
@@ -814,6 +825,12 @@ void UWWOSettingsMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		LiveTexts.RemoveAll([](const FLiveText& L) { return !L.Text.IsValid(); });
 		for (const FLiveText& L : LiveTexts) L.Text->SetText(FText::FromString(L.Get()));
 	}
+	if (bOpen && SearchBox && SearchBox->HasKeyboardFocus() && FSlateApplication::IsInitialized())
+	{
+		// Clicking anywhere else gives the keyboard back to the game (nothing else here takes focus).
+		FSlateApplication& App = FSlateApplication::Get();
+		if (App.GetPressedMouseButtons().Contains(EKeys::LeftMouseButton) && !SearchBox->GetCachedGeometry().IsUnderLocation(App.GetCursorPos())) App.SetAllUserFocusToGameViewport();
+	}
 	if (SaveRevertAt > 0.0 && FPlatformTime::Seconds() >= SaveRevertAt)
 	{
 		SaveRevertAt = 0.0;
@@ -832,7 +849,7 @@ int32 UWWOSettingsMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 
 float UWWOSettingsMenu::GlobalScrollOffset() const
 {
-	const UScrollBox* Scroll = GlobalSwitcher ? Cast<UScrollBox>(GlobalSwitcher->GetActiveWidget()) : nullptr;
+	const UScrollBox* Scroll = GlobalSwitcher ? Cast<UScrollBox>(GlobalSwitcher->GetActiveWidget()) : nullptr; // (an item page isn't one: 0)
 	return Scroll ? Scroll->GetScrollOffset() : 0.f;
 }
 
@@ -850,67 +867,19 @@ FString UWWOSettingsMenu::OpenItemKey() const
 	return FString();
 }
 
-void UWWOSettingsMenu::StyleTab(UButton* Tab, bool bSelected)
-{
-	// Godot's tab styles from the settings theme: 4 px corners, 9 x 6 px padding.
-	const float Shade = bSelected ? 0.24f : 0.13f;
-	const FLinearColor Color(Shade, Shade + 0.01f, Shade + 0.04f);
-	FButtonStyle Style = Tab->GetStyle();
-	Style.SetNormal(RoundBrush(Color, 4.f));
-	Style.SetHovered(RoundBrush(bSelected ? Color : FLinearColor(0.18f, 0.19f, 0.22f), 4.f));
-	Style.SetPressed(RoundBrush(bSelected ? Color : FLinearColor(0.18f, 0.19f, 0.22f), 4.f));
-	Tab->SetStyle(Style);
-}
-
-UWidget* UWWOSettingsMenu::MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons)
-{
-	// Godot's TabContainer tab bar (font 15 in this menu's theme). Godot keeps one row and adds
-	// scroll arrows when the tabs don't fit; here they wrap, so every tab stays one click away.
-	UWrapBox* Bar = WidgetTree->ConstructWidget<UWrapBox>();
-	Bar->SetInnerSlotPadding(FVector2D(4.f * K, 4.f * K));
-	TSharedRef<TArray<UButton*>> Buttons = MakeShared<TArray<UButton*>>();
-	for (int32 i = 0; i < Titles.Num(); ++i)
-	{
-		TWeakObjectPtr<UWidgetSwitcher> WeakSwitcher = Switcher;
-		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
-		const bool bGlobal = OutButtons != nullptr;
-		UButton* B = MakeButton(this, Titles[i], [WeakSwitcher, i, Buttons, WeakThis, bGlobal]
-		{
-			if (!WeakSwitcher.IsValid()) return;
-			if (bGlobal && WeakThis.IsValid())
-			{
-				WeakThis->SelectGlobalTab(i);
-				return;
-			}
-			WeakSwitcher->SetActiveWidgetIndex(i);
-			for (int32 j = 0; j < Buttons->Num(); ++j) StyleTab((*Buttons)[j], j == i);
-		}, 15.f, FLinearColor(0.13f, 0.14f, 0.17f), false, FMargin(9.f, 6.f));
-		StyleTab(B, i == 0);
-		Buttons->Add(B);
-		if (OutButtons) OutButtons->Add(B);
-		Bar->AddChild(B);
-	}
-	return Bar;
-}
-
 bool UWWOSettingsMenu::ShowGlobalTab(const FString& Title)
 {
-	const int32 Index = GlobalKeys.IndexOfByKey(TEXT("global/") + Title);
-	if (Index == INDEX_NONE) return false;
-	SelectGlobalTab(Index);
-	return true;
+	return ShowPage(Title);
 }
 
 void UWWOSettingsMenu::SelectGlobalTab(int32 Index)
 {
-	GlobalTab = (Index + GlobalKeys.Num()) % FMath::Max(GlobalKeys.Num(), 1);
-	if (GlobalSwitcher) GlobalSwitcher->SetActiveWidgetIndex(GlobalTab);
-	for (int32 j = 0; j < GlobalTabButtons.Num(); ++j) StyleTab(GlobalTabButtons[j], j == GlobalTab);
+	SelectPage((Index + GlobalKeys.Num()) % FMath::Max(GlobalKeys.Num(), 1));
 }
 
 void UWWOSettingsMenu::CycleGlobalTab(int32 Step)
 {
-	SelectGlobalTab(GlobalTab + Step);
+	SelectTopTab(TopTab + Step); // the bumpers and Q / E step through the five tabs
 }
 
 FString UWWOSettingsMenu::ValueText(const FWWOSettingRow& Row, float V)
@@ -1186,69 +1155,116 @@ void UWWOSettingsMenu::Prepare()
 		LoadSaved();
 		UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 		UOverlay* Root = Cast<UOverlay>(WidgetTree->RootWidget);
+		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
+		TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
+		const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
+		auto Rule = [this](const FLinearColor& Color) -> UWidget*
+		{
+			UBorder* Line = WidgetTree->ConstructWidget<UBorder>();
+			Line->SetBrushColor(WWO::Lin(Color));
+			USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
+			Box->SetHeightOverride(1.5f);
+			Box->AddChild(Line);
+			return Box;
+		};
 
-		UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>();
-		Backdrop->SetBrushColor(FLinearColor(0, 0, 0, 0.6f)); // dims the game behind the menu
-		UOverlaySlot* BackSlot = Root->AddChildToOverlay(Backdrop);
-		BackSlot->SetHorizontalAlignment(HAlign_Fill);
-		BackSlot->SetVerticalAlignment(VAlign_Fill);
+		// The whole window, in the character menu's style. A little see-through, so a slider's
+		// effect on the game behind (field of view, the HUD) can still be watched.
+		UBorder* Page = WidgetTree->ConstructWidget<UBorder>();
+		Page->SetBrushColor(WWO::Lin(FLinearColor(0.1f, 0.11f, 0.13f, 0.95f)));
+		Page->SetPadding(FMargin(40.f * K, 12.f * K, 40.f * K, 28.f * K));
+		UOverlaySlot* PageSlot = Root->AddChildToOverlay(Page);
+		PageSlot->SetHorizontalAlignment(HAlign_Fill);
+		PageSlot->SetVerticalAlignment(VAlign_Fill);
+		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
+		Page->SetContent(Column);
 
-		USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>();
-		PanelBox->SetWidthOverride(1560.f * K);
-		PanelBox->SetHeightOverride(860.f * K);
-		UOverlaySlot* PanelSlot = Root->AddChildToOverlay(PanelBox);
-		PanelSlot->SetHorizontalAlignment(HAlign_Center);
-		PanelSlot->SetVerticalAlignment(VAlign_Center);
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrush(RoundBrush(FLinearColor(0.1f, 0.11f, 0.13f), 12.f));
-		Panel->SetPadding(FMargin(20.f * K));
-		PanelBox->AddChild(Panel);
-		UVerticalBox* Page = WidgetTree->ConstructWidget<UVerticalBox>();
-		Panel->SetContent(Page);
-
+		// Header: the name, the five tabs (bumpers or Q / E), the search box.
 		UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Header->AddChildToHorizontalBox(MakeText(TEXT("Settings"), 32.f))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Header->AddChildToHorizontalBox(MakeText(TEXT("◯ / Esc to go back  ·  L1/R1 or Q/E: Global tabs"), 18.f, FLinearColor(1, 1, 1, 0.6f)))->SetVerticalAlignment(VAlign_Center);
-		Page->AddChildToVerticalBox(Header)->SetPadding(FMargin(0, 0, 0, 12.f * K));
+		UHorizontalBox* Name = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Name->AddChildToHorizontalBox(Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(TEXT("SETTINGS"), 17.f, FLinearColor::White, 420));
+		NameText->SetVerticalAlignment(VAlign_Center);
+		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
+		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
+		NameSlot->SetSize(WWOFillSize(1.f));
+		NameSlot->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < NumTopTabs; ++i)
+		{
+			if (i > 0)
+			{
+				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(Spaced(TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
+				Bar->SetVerticalAlignment(VAlign_Center);
+				Bar->SetPadding(FMargin(26.f * K, 0));
+			}
+			UVerticalBox* Tab = WidgetTree->ConstructWidget<UVerticalBox>();
+			UTextBlock* Label = Spaced(TopTabNames[i], 17.f, FLinearColor::White, 180);
+			Tab->AddChildToVerticalBox(Label)->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
+			UBorder* Line = WidgetTree->ConstructWidget<UBorder>();
+			USizeBox* LineBox = WidgetTree->ConstructWidget<USizeBox>();
+			LineBox->SetHeightOverride(3.f * K);
+			LineBox->AddChild(Line);
+			Tab->AddChildToVerticalBox(LineBox);
+			TopLabels.Add(Label);
+			TopLines.Add(Line);
+			Tabs->AddChildToHorizontalBox(PlainButton(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SelectTopTab(i); }))->SetVerticalAlignment(VAlign_Center);
+		}
+		Header->AddChildToHorizontalBox(Tabs)->SetVerticalAlignment(VAlign_Center);
+		// Search: type part of a setting's name to list every match from every tab.
+		SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
+		FEditableTextBoxStyle BoxStyle = SearchBox->WidgetStyle;
+		const FSlateBrush BoxBrush = RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
+		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
+		BoxStyle.SetBackgroundImageFocused(RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Accent, 1.5f));
+		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
+		BoxStyle.TextStyle.SetFont(Font(15.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		BoxStyle.SetPadding(FMargin(12.f * K, 6.f * K));
+		SearchBox->WidgetStyle = BoxStyle;
+		SearchBox->SetHintText(FText::FromString(TEXT("SEARCH SETTINGS")));
+		SearchBox->OnTextChanged.AddDynamic(this, &UWWOSettingsMenu::OnSearchChanged);
+		SearchBox->OnTextCommitted.AddDynamic(this, &UWWOSettingsMenu::OnSearchCommitted);
+		USizeBox* SearchSize = WidgetTree->ConstructWidget<USizeBox>();
+		SearchSize->SetWidthOverride(250.f * K);
+		SearchSize->AddChild(SearchBox);
+		UHorizontalBox* RightSide = WidgetTree->ConstructWidget<UHorizontalBox>();
+		RightSide->AddChildToHorizontalBox(SearchSize)->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* RightSlot = Header->AddChildToHorizontalBox(RightSide);
+		RightSlot->SetSize(WWOFillSize(1.f));
+		RightSlot->SetHorizontalAlignment(HAlign_Right);
+		RightSlot->SetVerticalAlignment(VAlign_Center);
+		Column->AddChildToVerticalBox(Header);
+		Column->AddChildToVerticalBox(Rule(FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 
-		UHorizontalBox* Panes = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Page->AddChildToVerticalBox(Panes)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Column->AddChildToVerticalBox(Body)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-		// Global pane.
-		UVerticalBox* GlobalPane = WidgetTree->ConstructWidget<UVerticalBox>();
-		GlobalPane->AddChildToVerticalBox(MakeText(TEXT("Global"), 26.f));
+		// Every page: the global sections, then the item browsers, then the search results.
 		GlobalSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
-		TArray<FString> GlobalTitles;
+		// Which tab each global section sits under, in the order its sidebar lists them. One that
+		// isn't named here lands under Player.
+		static const TArray<TArray<FString>> Layout = {
+			{ TEXT("Walk / Sprint"), TEXT("Jump"), TEXT("Crouch / Slide"), TEXT("Camera"), TEXT("HUD"), TEXT("Audio"), TEXT("Player"), TEXT("Aim Assist") },
+			{ TEXT("Melee"), TEXT("Grenades"), TEXT("Ult"), TEXT("Targets") },
+			{ TEXT("Soldier"), TEXT("Swarm"), TEXT("Tank"), TEXT("Bots"), TEXT("Allies") },
+			{ TEXT("Maps"), TEXT("Multiplayer"), TEXT("PvP"), TEXT("Waves") },
+		};
 		for (const FString& Key : GlobalKeys)
 		{
-			GlobalTitles.Add(Find(Key)->Title);
+			const FString Title = Find(Key)->Title;
+			int32 Tab = 0;
+			for (int32 t = 0; t < Layout.Num(); ++t) if (Layout[t].Contains(Title)) Tab = t;
 			UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 			BuildRows(Scroll, Key);
 			GlobalSwitcher->AddChild(Scroll);
+			Pages.Add({ Title, Tab });
 		}
-		GlobalPane->AddChildToVerticalBox(MakeTabs(GlobalTitles, GlobalSwitcher, &GlobalTabButtons))->SetPadding(FMargin(0, 8.f * K, 0, 0));
-		UBorder* GlobalBack = WidgetTree->ConstructWidget<UBorder>();
-		GlobalBack->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.17f), 6.f));
-		GlobalBack->SetPadding(FMargin(0.f));
-		GlobalBack->SetContent(GlobalSwitcher);
-		GlobalPane->AddChildToVerticalBox(GlobalBack)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
-		UVerticalBoxSlot* ResetTabSlot = GlobalPane->AddChildToVerticalBox(MakeButton(this, TEXT("Reset this tab"), [WeakThis]
+		auto AddItems = [&](const TCHAR* Title, TFunction<TArray<FWWOBrowserItem>()> Provider)
 		{
-			if (WeakThis.IsValid()) WeakThis->ResetSection(WeakThis->GlobalKeys[WeakThis->GlobalTab]);
-		}, 22.f));
-		ResetTabSlot->SetHorizontalAlignment(HAlign_Left);
-		ResetTabSlot->SetPadding(FMargin(0, 8.f * K, 0, 0));
-		UHorizontalBoxSlot* GlobalSlot = Panes->AddChildToHorizontalBox(GlobalPane);
-		GlobalSlot->SetSize(WWOFillSize(1.15f));
-		GlobalSlot->SetPadding(FMargin(0, 0, 20.f * K, 0));
-
-		// Specific pane.
-		UVerticalBox* SpecificPane = WidgetTree->ConstructWidget<UVerticalBox>();
-		SpecificPane->AddChildToVerticalBox(MakeText(TEXT("Specific"), 26.f));
-		UWidgetSwitcher* SpecificSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
-		TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-		SpecificSwitcher->AddChild(MakeBrowser([WL]
+			GlobalSwitcher->AddChild(MakeBrowser(MoveTemp(Provider)));
+			Pages.Add({ Title, ItemsTab });
+		};
+		AddItems(TEXT("Equipped"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (!WL.IsValid()) return Items;
@@ -1263,17 +1279,14 @@ void UWWOSettingsMenu::Prepare()
 				if (UWWOFramePartData* Part = WL->GetFramePart(Slot)) Items.Add({ TEXT("frame/") + Part->Id.ToString(), Part->DisplayName, TEXT("Equipped ") + Slot.ToString() });
 			}
 			return Items;
-		}));
-		// Flora: sub-tabs for grenades, abilities and traits.
-		UVerticalBox* FloraPage = WidgetTree->ConstructWidget<UVerticalBox>();
-		UWidgetSwitcher* FloraSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
-		FloraSwitcher->AddChild(MakeBrowser([WL]
+		});
+		AddItems(TEXT("Grenade Types"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (WL.IsValid()) for (UWWOGrenadeData* G : WL->Grenades) Items.Add({ TEXT("grenade/") + G->Id.ToString(), G->DisplayName, G == WL->GetGrenade() ? TEXT("Equipped") : TEXT("") });
 			return Items;
-		}));
-		FloraSwitcher->AddChild(MakeBrowser([WL]
+		});
+		AddItems(TEXT("Abilities"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (!WL.IsValid()) return Items;
@@ -1283,8 +1296,8 @@ void UWWOSettingsMenu::Prepare()
 				Items.Add({ TEXT("ability/") + A->Id.ToString(), A->DisplayName, KindName(A->Kind) + (Slot != INDEX_NONE ? FString::Printf(TEXT(" · equipped in slot %d"), Slot + 1) : FString()) });
 			}
 			return Items;
-		}));
-		FloraSwitcher->AddChild(MakeBrowser([WL]
+		});
+		AddItems(TEXT("Traits"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (!WL.IsValid()) return Items;
@@ -1293,17 +1306,14 @@ void UWWOSettingsMenu::Prepare()
 				Items.Add({ TEXT("trait/") + T->Id.ToString(), T->DisplayName, Capitalize(T->Flora.ToString()) + (WL->IsTraitEquipped(T) ? TEXT(" · equipped") : TEXT("")) });
 			}
 			return Items;
-		}));
-		FloraPage->AddChildToVerticalBox(MakeTabs({ TEXT("Grenades"), TEXT("Abilities"), TEXT("Traits") }, FloraSwitcher, nullptr));
-		FloraPage->AddChildToVerticalBox(FloraSwitcher)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		SpecificSwitcher->AddChild(FloraPage);
-		SpecificSwitcher->AddChild(MakeBrowser([WL]
+		});
+		AddItems(TEXT("Weapons"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (WL.IsValid()) for (UWWOWeaponData* W : WL->Weapons) Items.Add({ TEXT("weapon/") + W->Id.ToString(), W->DisplayName, W->Archetype + (W == WL->GetWeapon() ? TEXT(" · equipped") : TEXT("")) });
 			return Items;
-		}));
-		SpecificSwitcher->AddChild(MakeBrowser([WL]
+		});
+		AddItems(TEXT("Shell"), [WL]
 		{
 			TArray<FWWOBrowserItem> Items;
 			if (!WL.IsValid()) return Items;
@@ -1312,19 +1322,75 @@ void UWWOSettingsMenu::Prepare()
 				Items.Add({ TEXT("frame/") + Part->Id.ToString(), Part->DisplayName, Capitalize(Part->Slot.ToString()) + (Part == WL->GetFramePart(Part->Slot) ? TEXT(" · equipped") : TEXT("")) });
 			}
 			return Items;
-		}));
-		SpecificPane->AddChildToVerticalBox(MakeTabs({ TEXT("Equipped"), TEXT("Flora"), TEXT("Weapons"), TEXT("Frame Parts") }, SpecificSwitcher, nullptr))->SetPadding(FMargin(0, 8.f * K, 0, 0));
-		UBorder* SpecificBack = WidgetTree->ConstructWidget<UBorder>();
-		SpecificBack->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.17f), 6.f));
-		SpecificBack->SetPadding(FMargin(0.f));
-		SpecificBack->SetContent(SpecificSwitcher);
-		SpecificPane->AddChildToVerticalBox(SpecificBack)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Panes->AddChildToHorizontalBox(SpecificPane)->SetSize(WWOFillSize(1.f));
+		});
+		// Controls: the key bindings.
+		BindsPage = GlobalSwitcher->GetChildrenCount();
+		BindsList = WidgetTree->ConstructWidget<UScrollBox>();
+		GlobalSwitcher->AddChild(BindsList);
+		Pages.Add({ TEXT("Key Bindings"), ControlsTab });
+		BuildBinds();
+		SearchPage = GlobalSwitcher->GetChildrenCount();
+		SearchResults = WidgetTree->ConstructWidget<UScrollBox>();
+		GlobalSwitcher->AddChild(SearchResults);
 
-		// Bottom buttons.
-		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Buttons->AddChildToHorizontalBox(MakeButton(this, TEXT("Reset all"), [WeakThis] { if (WeakThis.IsValid()) WeakThis->ResetAll(); }, 22.f))->SetPadding(FMargin(0, 0, 12.f * K, 0));
-		SaveButton = MakeButton(this, TEXT("Save as defaults"), [WeakThis]
+		// Left: the open tab's pages, then the menu's own buttons at the bottom.
+		UVerticalBox* Side = WidgetTree->ConstructWidget<UVerticalBox>();
+		SideSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
+		LastPage.Init(INDEX_NONE, NumTopTabs);
+		for (int32 Tab = 0; Tab < NumTopTabs; ++Tab)
+		{
+			UVerticalBox* List = WidgetTree->ConstructWidget<UVerticalBox>();
+			TArray<int32> Order;
+			if (Layout.IsValidIndex(Tab))
+			{
+				for (const FString& Title : Layout[Tab]) for (int32 p = 0; p < Pages.Num(); ++p) if (Pages[p].Tab == Tab && Pages[p].Title == Title) Order.Add(p);
+			}
+			for (int32 p = 0; p < Pages.Num(); ++p) if (Pages[p].Tab == Tab && !Order.Contains(p)) Order.Add(p);
+			for (const int32 p : Order)
+			{
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UBorder* Mark = WidgetTree->ConstructWidget<UBorder>();
+				USizeBox* MarkBox = WidgetTree->ConstructWidget<USizeBox>();
+				MarkBox->SetWidthOverride(3.f * K);
+				MarkBox->AddChild(Mark);
+				Row->AddChildToHorizontalBox(MarkBox)->SetPadding(FMargin(0, 3.f * K));
+				UTextBlock* Label = Spaced(Pages[p].Title, 15.f, FLinearColor::White, 170);
+				UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
+				LabelSlot->SetPadding(FMargin(16.f * K, 9.f * K, 8.f * K, 9.f * K));
+				LabelSlot->SetVerticalAlignment(VAlign_Center);
+				Pages[p].Label = Label;
+				Pages[p].Mark = Mark;
+				List->AddChildToVerticalBox(PlainButton(Row, [WeakThis, p] { if (WeakThis.IsValid()) WeakThis->SelectPage(p); }))->SetPadding(FMargin(0, 2.f * K));
+				if (LastPage[Tab] == INDEX_NONE) LastPage[Tab] = p;
+			}
+			SideSwitcher->AddChild(List);
+		}
+		Side->AddChildToVerticalBox(SideSwitcher)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		auto SideButton = [&](const FString& Text, TFunction<void()> Fn) -> UButton*
+		{
+			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 8.f));
+			FButtonStyle Style = B->GetStyle();
+			Style.SetNormal(RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f));
+			Style.SetHovered(RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
+			Style.SetPressed(RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			B->SetStyle(Style);
+			Side->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 8.f * K, 0, 0));
+			return B;
+		};
+		SideButton(TEXT("Reset this page"), [WeakThis]
+		{
+			if (!WeakThis.IsValid()) return;
+			// A global page resets its section; an item page, the item that's open.
+			if (WeakThis->CurrentPage == WeakThis->BindsPage)
+			{
+				if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakThis->GetOwningPlayer())) PC->ResetBinds();
+				WeakThis->BuildBinds();
+			}
+			else if (WeakThis->GlobalKeys.IsValidIndex(WeakThis->CurrentPage)) WeakThis->ResetSection(WeakThis->GlobalKeys[WeakThis->CurrentPage]);
+			else if (!WeakThis->OpenItemKey().IsEmpty()) WeakThis->ResetSection(WeakThis->OpenItemKey());
+		});
+		SideButton(TEXT("Reset all"), [WeakThis] { if (WeakThis.IsValid()) WeakThis->ResetAll(); });
+		SaveButton = SideButton(TEXT("Save as defaults"), [WeakThis]
 		{
 			if (!WeakThis.IsValid()) return;
 			const bool bSaved = WeakThis->SaveDefaults();
@@ -1333,28 +1399,243 @@ void UWWOSettingsMenu::Prepare()
 				Label->SetText(FText::FromString(bSaved ? TEXT("Saved ✓") : TEXT("Save failed")));
 			}
 			WeakThis->SaveRevertAt = FPlatformTime::Seconds() + 1.5; // Godot's 1.5 s timer (real time: the game is paused)
-		}, 22.f);
-		Buttons->AddChildToHorizontalBox(SaveButton)->SetPadding(FMargin(0, 0, 12.f * K, 0));
+		});
 		TWeakObjectPtr<APlayerController> WeakPC = GetOwningPlayer();
-		Buttons->AddChildToHorizontalBox(MakeButton(this, TEXT("Close"), [WeakPC]
+		SideButton(TEXT("Close"), [WeakPC]
 		{
 			if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu();
-		}, 22.f));
-		Page->AddChildToVerticalBox(Buttons)->SetPadding(FMargin(0, 12.f * K, 0, 0));
-		SelectGlobalTab(0);
+		});
+		Side->AddChildToVerticalBox(Spaced(TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, FLinearColor(1, 1, 1, 0.4f), 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
+		USizeBox* SideBox = WidgetTree->ConstructWidget<USizeBox>();
+		SideBox->SetWidthOverride(270.f * K);
+		SideBox->AddChild(Side);
+		Body->AddChildToHorizontalBox(SideBox)->SetPadding(FMargin(0, 28.f * K, 28.f * K, 0));
+
+		// Right: the open page, one wide column.
+		UVerticalBox* Main = WidgetTree->ConstructWidget<UVerticalBox>();
+		PageTitle = Spaced(TEXT(""), 20.f, FLinearColor::White, 300);
+		Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
+		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+		Panel->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
+		Panel->SetPadding(FMargin(8.f * K));
+		Panel->SetContent(GlobalSwitcher);
+		Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Body->AddChildToHorizontalBox(Main)->SetSize(WWOFillSize(1.f));
+		SelectPage(0);
 	}
+}
+
+// --- Tabs, pages and search -------------------------------------------------------------------
+
+UTextBlock* UWWOSettingsMenu::Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing)
+{
+	// Capitals with wide letter spacing: the character menu's label style.
+	UTextBlock* T = MakeText(Text.ToUpper(), FontPx, Color);
+	FSlateFontInfo F = T->GetFont();
+	F.LetterSpacing = Spacing;
+	T->SetFont(F);
+	return T;
+}
+
+UButton* UWWOSettingsMenu::PlainButton(UWidget* Inside, TFunction<void()> Fn)
+{
+	// A button with no box of its own (a tab, a sidebar line): only a faint wash when hovered.
+	UButton* B = WidgetTree->ConstructWidget<UButton>();
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	B->IsFocusable = false; // the cursor drives everything, not focus
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	FButtonStyle Style;
+	Style.SetNormal(RoundBrush(FLinearColor(0, 0, 0, 0), 5.f));
+	Style.SetHovered(RoundBrush(FLinearColor(1, 1, 1, 0.06f), 5.f));
+	Style.SetPressed(RoundBrush(FLinearColor(1, 1, 1, 0.1f), 5.f));
+	Style.SetNormalPadding(FMargin(0));
+	Style.SetPressedPadding(FMargin(0));
+	B->SetStyle(Style);
+	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Inside));
+	Slot->SetPadding(FMargin(0));
+	Slot->SetHorizontalAlignment(HAlign_Fill);
+	Slot->SetVerticalAlignment(VAlign_Fill);
+	UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
+	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
+	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
+	Handlers.Add(H);
+	return B;
+}
+
+void UWWOSettingsMenu::BuildBinds()
+{
+	// One line per thing you do: its name, its keyboard / mouse key, its controller button. Click
+	// (or Cross) a key, then press the new one; Esc leaves it as it was. A key already used on
+	// another line changes places with it.
+	AWWOPlayerController* PC = Cast<AWWOPlayerController>(GetOwningPlayer());
+	if (!BindsList || !PC) return;
+	BindsList->ClearChildren();
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
+	TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
+	TWeakObjectPtr<AWWOPlayerController> WeakPC = PC;
+	const float KeyWidth = 300.f;
+	auto Line = [&](UWidget* Name, UWidget* Kbm, UWidget* Pad, float Top)
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UHorizontalBoxSlot* NameSlot = Row->AddChildToHorizontalBox(Name);
+		NameSlot->SetSize(WWOFillSize(1.f));
+		NameSlot->SetVerticalAlignment(VAlign_Center);
+		for (UWidget* W : { Kbm, Pad })
+		{
+			USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
+			Box->SetWidthOverride(KeyWidth * K);
+			Box->AddChild(W);
+			UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Box);
+			S->SetPadding(FMargin(16.f * K, 0, 0, 0));
+			S->SetVerticalAlignment(VAlign_Center);
+		}
+		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(BindsList->AddChild(Row))) Slot->SetPadding(FMargin(12.f * K, Top * K, 16.f * K, 0));
+	};
+	Line(Spaced(TEXT("Action"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), Spaced(TEXT("Keyboard / mouse"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220),
+		Spaced(TEXT("Controller"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), 12.f);
+	for (const FWWOBindRow& R : AWWOPlayerController::BindRows())
+	{
+		auto Key = [&](bool bPad) -> UWidget*
+		{
+			const bool bHas = (bPad ? R.PadKey : R.KbmKey).IsValid();
+			if (!bHas) return MakeText(bPad && R.MoveDir >= 0 ? TEXT("Left stick") : TEXT("—"), 18.f, FLinearColor(1, 1, 1, 0.4f));
+			const bool bWaiting = PC->IsCapturing(R.Id, bPad);
+			const FName Id = R.Id;
+			UButton* B = MakeButton(this, bWaiting ? FString(TEXT("Press a key  ·  Esc cancels")) : AWWOPlayerController::KeyName(PC->GetBind(R.Id, bPad)), [WeakThis, WeakPC, Id, bPad]
+			{
+				if (!WeakThis.IsValid() || !WeakPC.IsValid()) return;
+				WeakPC->BeginKeyCapture(Id, bPad, [WeakThis] { if (WeakThis.IsValid()) WeakThis->BuildBinds(); });
+				WeakThis->BuildBinds(); // shows which one is waiting
+			}, 18.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 7.f));
+			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
+			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : FLinearColor(1, 1, 1, 0.45f)); // yours, not the default: gold
+			FButtonStyle Style = B->GetStyle();
+			Style.SetNormal(RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Edge, bWaiting ? 2.f : 1.5f));
+			Style.SetHovered(RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
+			Style.SetPressed(RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			B->SetStyle(Style);
+			return B;
+		};
+		Line(MakeText(R.Label, 20.f), Key(false), Key(true), 8.f);
+	}
+	UTextBlock* Note = MakeText(TEXT("Click a key, then press the new one (Esc leaves it). A key already on another line swaps with it. Gold = changed from the default. ")
+		TEXT("The menu's own keys stay as they are: Tab / Esc / Options open and close, Q / E and the bumpers change tabs, Circle goes back."), 15.f, FLinearColor(1, 1, 1, 0.5f), true);
+	if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(BindsList->AddChild(Note))) Slot->SetPadding(FMargin(12.f * K, 22.f * K, 16.f * K, 16.f * K));
+}
+
+void UWWOSettingsMenu::SelectPage(int32 Index)
+{
+	// One page of the open tab: its sliders (or its list of items) fill the column on the right.
+	if (!Pages.IsValidIndex(Index) || !GlobalSwitcher) return;
+	CurrentPage = Index;
+	TopTab = Pages[Index].Tab;
+	LastPage[TopTab] = Index;
+	if (GlobalKeys.IsValidIndex(Index)) GlobalTab = Index;
+	if (!SearchText.IsEmpty() && SearchBox) { SearchText.Reset(); SearchBox->SetText(FText::GetEmpty()); } // picking a page leaves the search
+	if (Index == BindsPage) BuildBinds(); // as the bindings are now
+	GlobalSwitcher->SetActiveWidgetIndex(Index);
+	if (SideSwitcher) SideSwitcher->SetActiveWidgetIndex(TopTab);
+	if (PageTitle) PageTitle->SetText(FText::FromString(Pages[Index].Title.ToUpper()));
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
+	for (int32 i = 0; i < TopLabels.Num(); ++i)
+	{
+		TopLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == TopTab ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));
+		TopLines[i]->SetBrushColor(WWO::Lin(i == TopTab ? Accent : FLinearColor(0, 0, 0, 0)));
+	}
+	for (int32 i = 0; i < Pages.Num(); ++i)
+	{
+		if (Pages[i].Label.IsValid()) Pages[i].Label->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Index ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));
+		if (Pages[i].Mark.IsValid()) Pages[i].Mark->SetBrushColor(WWO::Lin(i == Index ? Accent : FLinearColor(1, 1, 1, 0.12f)));
+	}
+}
+
+void UWWOSettingsMenu::SelectTopTab(int32 Index)
+{
+	// A tab opens on the page it was last on.
+	if (bOpen) UWWOSound::PlayFlat(this, "ui_tab");
+	Index = (Index % NumTopTabs + NumTopTabs) % NumTopTabs;
+	if (LastPage.IsValidIndex(Index) && LastPage[Index] != INDEX_NONE) SelectPage(LastPage[Index]);
+}
+
+bool UWWOSettingsMenu::ShowPage(const FString& Title)
+{
+	for (int32 i = 0; i < Pages.Num(); ++i)
+	{
+		if (Pages[i].Title == Title) { SelectPage(i); return true; }
+	}
+	return false;
+}
+
+void UWWOSettingsMenu::OnSearchChanged(const FText& Text)
+{
+	// Every slider whose name (or whose page's or item's name) holds what was typed, from every
+	// tab, under the name of where it lives. Emptying the box goes back to the page you were on.
+	const FString Query = Text.ToString().TrimStartAndEnd();
+	if (Query == SearchText || !SearchResults) return;
+	SearchText = Query;
+	if (Query.IsEmpty())
+	{
+		const int32 Back = CurrentPage;
+		SelectPage(Back);
+		return;
+	}
+	SearchResults->ClearChildren();
+	int32 Found = 0;
+	constexpr int32 Most = 80;
+	for (const FWWOSettingSection& S : Sections)
+	{
+		const bool bWholeSection = S.Title.Contains(Query);
+		bool bNamed = false;
+		for (int32 i = 0; i < S.Rows.Num() && Found < Most; ++i)
+		{
+			const FWWOSettingRow& R = S.Rows[i];
+			if (!R.Header.IsEmpty() || R.LiveHeader || !(bWholeSection || R.Label.Contains(Query))) continue;
+			if (!bNamed)
+			{
+				bNamed = true;
+				UTextBlock* Where = Spaced(S.Title, 13.f, FLinearColor(1, 1, 1, 0.55f), 220);
+				if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(Where))) Slot->SetPadding(FMargin(12.f * K, (Found == 0 ? 12.f : 26.f) * K, 12.f * K, 0));
+			}
+			if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeRow(S.Key, i)))) Slot->SetPadding(FMargin(12.f * K, 8.f * K, 12.f * K, 0));
+			++Found;
+		}
+	}
+	if (Found == 0)
+	{
+		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeText(TEXT("No setting has that in its name."), 20.f, FLinearColor(1, 1, 1, 0.6f))))) Slot->SetPadding(FMargin(12.f * K));
+	}
+	SearchResults->ScrollToStart();
+	GlobalSwitcher->SetActiveWidgetIndex(SearchPage);
+	if (PageTitle) PageTitle->SetText(FText::FromString(FString::Printf(TEXT("SEARCH  ·  %d%s FOUND"), Found, Found >= Most ? TEXT("+") : TEXT(""))));
+}
+
+void UWWOSettingsMenu::AutoTestSearch(const FString& Text)
+{
+	if (SearchBox) SearchBox->SetText(FText::FromString(Text));
+	OnSearchChanged(FText::FromString(Text));
+}
+
+void UWWOSettingsMenu::OnSearchCommitted(const FText& Text, ETextCommit::Type Type)
+{
+	// Enter or Esc hands the keyboard back to the game, so Q / E, Tab and Esc work the menu again.
+	if (Type == ETextCommit::OnEnter || Type == ETextCommit::OnCleared) FSlateApplication::Get().SetAllUserFocusToGameViewport();
 }
 
 void UWWOSettingsMenu::Open()
 {
 	Prepare();
 	bOpen = true;
+	UWWOSound::PlayFlat(this, "ui_open");
 	SetVisibility(ESlateVisibility::Visible);
 	// Item lists can change (a different grenade equipped), so refresh any showing.
 	for (int32 i = 0; i < Browsers.Num(); ++i)
 	{
 		if (Browsers[i].Switcher->GetActiveWidgetIndex() == 0) ShowList(i);
 	}
+	if (SearchBox && !SearchText.IsEmpty()) SearchBox->SetText(FText::GetEmpty());
+	BuildBinds();
 	SaveRevertAt = 0.0;
 	if (SaveButton)
 	{
@@ -1365,6 +1646,7 @@ void UWWOSettingsMenu::Open()
 
 void UWWOSettingsMenu::Close()
 {
+	if (bOpen) UWWOSound::PlayFlat(this, "ui_close");
 	bOpen = false;
 	SetVisibility(ESlateVisibility::Collapsed);
 }

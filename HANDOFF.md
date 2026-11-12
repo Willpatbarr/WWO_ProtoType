@@ -100,11 +100,63 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `WWO_GODOT` or `~/Documents/WhatWasOurs`): the nature pack textures and two mushrooms, the `M_WWO_Graft*`
   materials, and `M_WWO_Body` (a copy of the mannequin material whose paint tint is picked per region)
   with `MI_WWO_Body_01` / `_02`.
+- Environment plants: `Tools/import_flora.py` (UnrealEditor-Cmd -run=pythonscript, with the script's full path;
+  reads `WWO_FLORA_SRC` or `~/Documents/WWO_Flora/arboretum`, made from the downloaded packs in its `source/`
+  folder by `~/Documents/WWO_Flora/tools/prep_arboretum_packs.py` in Blender): `/Game/WWO/Flora` (the spring
+  tree as four meshes on one pivot, 13 tropical plants and a ground-leaf piece), `M_WWO_Flora` and
+  `M_WWO_FloraLeaf` (masked, two-sided foliage) with a `Tint` parameter for recoloring.
+- Concrete kit look: `Tools/create_kit_concrete.py` (UnrealEditor-Cmd -run=pythonscript, full script path, after
+  `import_kit.py`): `M_WWO_KitConcrete` and `/Game/WWO/Kit/Materials/Concrete/MI_KitConcrete_<name>`, one per
+  structural kit material. The concrete surface in `/Game/WWO/Kit/Concrete` is copied from Lyra's example
+  content (the copy command is in the script's header). A builder swaps MI_Kit_<name> for
+  MI_KitConcrete_<name> on the walls, floors, columns and door frames it places.
+  The material weathers itself (dirt patches, leak streaks from each piece's top, grime at its foot; `Grime` 0 =
+  clean) from `T_Grime_Mask`, made by `Tools/make_grime_mask.py` (Blender's Python) into `Tools/art`.
+  `MI_KitConcrete_M_Glass` (`M_WWO_KitGlass`) is see-through dusty glass for the kit's windows, whose own glass
+  is opaque. `import_kit.py` now imports all 158 pieces of the free kit, not only the arenas' 21.
+- Arboretum map (`L_Arboretum`, 4v4 PvP): layout in `~/Documents/WWO_PvP_Mockups/arboretum_map.py` (mockup PNG +
+  `arboretum_map_geometry.json`, the source of truth; Will approved it), turned into boxes by
+  `Tools/arboretum_layout.py` (run it alone to check the floor and the east/west mirror) and built by
+  `build_arboretum()` in `Tools/build_maps.py`: delete `Content/WWO/Maps/L_Arboretum.umap`, then
+  `WWO_MAPS=arboretum UnrealEditor <uproject> -ExecutePythonScript=<full path>/Tools/build_maps.py -unattended`
+  (the full editor, so the boxes merge; don't add `WWO_QUIT=1`, the double exit crashes the editor on its
+  way out). Needs `create_kit_concrete.py` and `import_flora.py` first. Concrete boxes merged per kind into
+  `/Game/WWO/Maps/Arboretum`, glass greenhouse roofs and center skylight, kit crates, red plants on the
+  planters, the spring tree, a tunnel 4 m under the map (stairs in Propagation and Lab A, two spiral ramps
+  in the center room), warm point lights. It is in the Maps menu and `MapsToCook`.
 - Body animations: `Tools/bake_ual_anims.py` (UnrealEditor-Cmd -run=pythonscript; reads the UAL glb files
   from the Godot project, `WWO_GODOT` or `~/Documents/WhatWasOurs`). It retargets each clip in mesh space:
   the UAL rig rests in a T-pose with three spine bones, Manny in an A-pose with five; mapped bones take the
   UAL bone's world rotation change after a fixed rest alignment, the pelvis moves scaled by the pelvis
   heights, and Manny keeps its own bone lengths.
+
+## Cascade map (L_Cascade, 6v6 PvP + PvE): written, not yet built
+- Design and source of truth: `~/Documents/WWO_PvP_Mockups/HANDOFF_Cascade.md` and
+  `cascade_map_geometry.json` (made by `cascade_map.py` there; change the layout in that script and re-run it,
+  never hand-edit the JSON). `Cascade_Plan.png` shows it. The layout is at 1.25x plan scale (`S` in `cascade_map.py`; heights
+  and player-sized pieces unchanged), so its sections come from `Tools/preview_cascade.py`, not the old hand-drawn `Cascade_Sec_*.png`.
+- `Tools/blender_cascade.py` (run with Blender -b --python) makes a low-poly 1:1 blockout, `cascade_build/Cascade_Blockout.blend`.
+- `Tools/cascade_layout.py` (plain Python) turns the JSON into boxes. Run it alone to check the layout
+  (exit 0 = good): `python3 Tools/cascade_layout.py`. It checks 180-degree point symmetry (the map is not
+  mirrored), deck coverage, counts against the JSON, bridge ends, floating pieces, spawns, the hall and
+  balcony doors, the tunnel windows and the ring beside the hub stairs.
+- `python3 Tools/preview_cascade.py` (needs matplotlib) draws the plan and the seven sections from the
+  boxes into `~/Documents/WWO_PvP_Mockups/cascade_build/`. Set them beside the mockup's images.
+- `Tools/build_cascade.py` builds it; `Tools/build_maps.py` calls it for `WWO_MAPS=cascade`. It needs
+  `create_kit_concrete.py` and `import_flora.py` first, plus the Arboretum's helpers in `build_maps.py`
+  (`concrete_instance`, `lamp_instance`, `fit_mesh`, `merge_kind` with base/prefix). Close the game and
+  editor, delete only `Content/WWO/Maps/L_Cascade.umap` (the merged meshes in `Content/WWO/Maps/Cascade` are
+  remade), then `WWO_MAPS=cascade UnrealEditor <uproject> -ExecutePythonScript=<full path>/Tools/build_maps.py
+  -unattended` (the full editor, so the boxes merge). Then `-WWOAutoTestMaps` on `L_Cascade` gives nine views
+  (`36_map_cascade_*`).
+- Gameplay hooks: a `TargetPoint` tagged `KillZ` makes falling kill at z -9 (UWWOHealthComponent).
+  `EnemySpawn` points tagged `PvEOnly` are for the waves only, not PvP respawns. 6v6 needs nothing new:
+  PvP takes 12 players and up to 11 bots.
+- Built and played (2026-11-11): solo and a 6v6 bot match run at about 87 fps. Cascade has its own sky,
+  `M_WWO_Sky_Cascade` (M_WWO_Sky's shader with a clear blue; `SKY_TOP`/`SKY_HORIZON` in build_cascade.py,
+  remade every build), and tints its waterfalls through `MI_Waterfall_Cascade` (`WATERFALL_COLOR`).
+- Not done yet: no mist sprites at the waterfalls; the bridge undersides are very dark in shade. Plants are
+  actors, not instances (about 150).
 
 ## Differences from the Godot version
 - Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and
@@ -185,7 +237,55 @@ LAN multiplayer, phase 1 of 4: see NETWORKING_HANDOFF.md for what is done, how i
 - **Low reticle (Destiny-style):** `AWWOCharacter::ReticleDrop` (Settings, Camera: "Reticle below center", default 0.06 of the screen height), at the hip and aimed in. The camera looks up by the matching angle (`ReticleAngleForFov`, recomputed for the zoomed FOV so the point keeps its place on screen) while the aim stays put, so `AimForward()` (shots, aim assist, the reticle target) points at the reticle; the HUD draws the reticle, hit marker and assist cones there. The gun, drawn with its own FOV, tips down to point at it, and aimed in its sight point (the model's origin) moves down onto it; the sniper's scope overlay is drawn shifted down onto it with the strip above filled black.
 - **Latency:** `r.GTSyncType=1` and `r.OneFrameThreadLag=0` (DefaultEngine.ini) stop the game from running up to three frames ahead of the screen (the GPU is near its 16.7 ms budget at 60 Hz, so frames queued); mouse smoothing is off (DefaultInput.ini). Cost: the arena perf test went from 55.3 to 53.3 fps average. Test shots now log their game, render and GPU times.
 
+## Character menu
+
+- Fills the window (`UWWOCharacterMenu`). Tabs: Loadout, Flora, Weapon, Shell (bumpers or Q / E; "Shell" is the frame parts, still `FramePart` / "Frame Parts" in code and in the settings menu). Loadout is the overview built by `BuildOverview` (frame stat bars and the build list, the character, cards for everything equipped; a card opens the tab that edits it). The other three are the old tiles' editors beside the character. Accent color = the equipped flora's.
+- The Loadout tab's Build section is notes, not a list of items: "Effects you apply" (from the grenade's kind, the abilities and the traits with an `Effect`) and "Buffs on you" (ability self-buffs and the traits' stat `Mods`), each with its source. New abilities need a line in `BuildOverview`.
+- Hovering the flora, grenade, an ability, a trait or a weapon slot on the Loadout tab drops a row of the other choices under it (`UpdateHoverPicker` / `OpenHoverPicker`); clicking the tile itself opens its tab.
+- **Two weapon slots** (`UWWOLoadoutSubsystem::SetSlotConfig` / `SwapWeaponSlot`, saved as `WeaponSlots`): each holds a saved weapon config, any config in either slot. Weapon swap (scroll / Triangle) goes to the other slot's config; with that slot empty it steps through every weapon as before. The B / d-pad down key also goes to the other slot, and names the config it lands on.
+- A shell card offers that slot's other parts the same way. The part under the cursor shows on the four stat bars (`UpdateStatPreview`): one you could equip in green (gain) and red (loss); the one you have on in yellow (what it adds) and faint red (what it costs). Only shell parts move those bars.
+- Icons are stand-ins: the item's initials in a box, until there is art. The frame part cards have room above their text for it.
+- The character stands still. `UpdateTurn` turns it: right stick (the left one moves the menu cursor), A / D, or dragging it with the mouse or Cross.
+- The preview camera is 2.75 m away (it was Godot's 4.4 m) so the character fills the tall middle column; its backdrop is tuned to come out as the page color.
+
+## Settings menu
+
+- Fills the window in the character menu's style (`UWWOSettingsMenu`), 95% opaque so the game behind can still be watched. Five tabs across the top (bumpers or Q / E): Player, Combat, Enemies, Match, Items. Each lists its pages down the left (`Pages`; the `Layout` table in `Prepare` says which global section goes under which tab, and a new section not named there lands under Player). The open page fills one column on the right.
+- Items' pages (Equipped, Grenade Types, Abilities, Traits, Weapons, Shell) are the item browsers: a list, then the picked item's sliders.
+- The search box lists every slider whose name, page or item matches (`OnSearchChanged`, up to 80), under where each lives. Enter, Esc or a click elsewhere gives the keyboard back to the game.
+- **Key bindings** (the Controls tab, `BuildBinds`): one line per action with a keyboard / mouse key and a controller button; click one, then press the new key (`AWWOPlayerController::BeginKeyCapture`, taken by `FWWOMenuCursor::Capture` before the menu sees it). `AWWOPlayerController::BindRows` is the list; changes are kept in `Saved/WWO/Keybinds.json` and `MapKeys` rebuilds the Enhanced Input mappings. A key already on another line swaps with it. The menu's own keys and the sticks aren't rebindable. Test runs (`-WWOAutoTest*`, `-WWOStress`) ignore and never write the saved bindings.
+- `ShowPage(Title)` opens a page by name (the tests use it); `-WWOAutoTestMenus` saves `25_menu_settings_search`.
+
+## Feel additions (2026-11-11)
+
+- **Explosions shake you** (`UWWOWeaponComponent::Shake`, called from `AWWOGrenade::SpawnBlast`): a camera punch and rumble for the local player, by distance and blast size. Settings, Camera: "Shake from explosions near you".
+- **Damage flinch:** taking damage punches the view and rumbles a little (never the aim). Settings, Camera: "Jolt when you take damage".
+- **Melee hits** throw sparks at the hit point (the gold flare on a kill); **grenades** kick up dust and sparks where they bounce.
+
+## Ability and kit effects (2026-11-11 pass)
+
+- While Thornfist is up or Static Charge is armed, both fists glow (`UWWOBodyComponent::SetHandGlow`). The host knows it for everyone and sends it to every machine (`AWWOCharacter::NetFists`); your own are lit from your own ability state.
+- Damage pools have a low haze of their color over the surface and light what stands in them. Spore fog draws its edge on the floor and has wisps rising inside. Blasts leave a scorch that fades over 5 s (`AWWOFXActor::Scorch`).
+- `-WWOFxShots` puts a scorch in its `_burst` shot; `-WWOFxGallery` stages the rest (`42_fx_*`). (An activation flare at the feet was tried and removed: Will didn't like it.)
+
+## Other players' bodies
+
+- Every other player's body (a bot's, a joiner's, the host's as a joiner sees it) shows its flora's grafts and its shell's colors, so you can read what they're running. The host sends each character's loadout to every machine as `AWWOCharacter::NetLook` (set in `ServerSetLoadout` and kept current in `PrepareMovement`); each machine keeps a copy of it on that character (`NetLoadout`, so `UWWOLoadoutSubsystem::Get` on anything of theirs reads theirs) and `ShowLook` rebuilds the body from it when the visible parts change. Your own character always reads your own loadout.
+- Checked with a host (4 idle bots) and a joiner on one machine: both logs list every other character's look (`Net visuals: <character> shows <flora>|<grenade>|<abilities>|<shell parts>`).
+
+## Sound effects
+
+- `UWWOSound` (`Systems/WWOSound`): the game plays an event by name, `Play(ctx, "explosion", Where)` in the world, `PlayFlat(ctx, "hit")` for the player here only, `PlayFor(Character, "reload_start")` for a character's own noise (flat for you, in the world for anyone else). Nothing is sent over the network: each hook sits where its cause is already seen on that machine, next to the matching visual effect.
+- `Config/Sounds.json` maps each event to the sounds it picks from at random, a volume, a pitch range and how far it carries (m; 0 = only ever flat). An event not in the file is silent, so a hook can go in first. Edit and restart; no build.
+- Sounds are SoundWaves in `/Game/WWO/Audio`, imported from the .wav files in `Tools/audio_src` by `Tools/import_sounds.py` (UnrealEditor-Cmd -run=pythonscript). The current ones are placeholders from Kenney's Sci-Fi, Impact and Interface sound packs (CC0, `Tools/audio_src/LICENSE.txt`). To swap one: drop a .wav in that folder, rerun the script, name it in Sounds.json.
+- Events hooked so far: `fire_<weapon id>` (else `fire`), `hit` / `hit_crit` / `kill`, `reload_start` / `reload_done`, `weapon_swap`, `melee_swing` / `melee_hit`, `grenade_throw` / `grenade_bounce` / `explosion`, `ability`, `ult`, `jump` / `land` / `footstep`, `hurt`, `death` / `death_own`, `enemy_death`, `soldier_shot`, and the menus' `ui_click` / `ui_tab` / `ui_open` / `ui_close` / `ui_bind`.
+- Volume: Settings, Player, Audio (`AWWOCharacter::SoundVolume`). The `-WWOStress` log's "Bots sounds:" line counts what has played. No music, ambience or voice yet; no per-surface footsteps.
+
 ## Enemy readability
+
+- **PvP marking** (`UWWOHUDWidget`, `UWWOWeaponComponent::Marked`): a player is marked when the reticle comes over them (hip) or when they enter the marker range while aimed in (`HealthBarRadius`, times `HealthBarAdsScale` aimed in), and dropped on leaving the range. Enemies show bars while marked; teammates' bars (light grey health, 60% white shield) show whenever in sight. On being marked a player's outline flashes once (`AWWOCharacter::UpdateTeamTint`, `M_WWO_Highlight`'s `Rim`): red for foes, blue for teammates. The reticle is blue over a teammate. A diamond sits over foes in sight, a chevron over teammates (through walls).
+- **Your HUD:** vitals are top center; status chips (shield down, slowed, poisoned, in fog / veiled, entrenched, guard) sit under them with timers; a faint red spike (a long shaded pyramid drawn in perspective below your line of sight) points at where damage came from (`UWWOHealthComponent::DamageCameFrom` on the host, `DamageMarks` on the victim's machine).
+- **Looking at it:** `-WWOBotsIdle` makes the bots stand still; `-WWOStressShots` on a `-WWOStress` bot run turns the host to the nearest teammate or foe every 4 s, fakes a hit and a slow, and saves `41_pvp_view_*`.
 Settings, HUD (`AWWOCharacter` properties):
 - **Hover tint** (`TargetHighlight`, 0.12): the enemy under the reticle gets `M_WWO_Highlight` (made by `Tools/create_highlight_material.py`: unlit translucent red, a bit stronger at the outline) as its body mesh's overlay material (`UWWOBodyComponent::SetHighlight`, driven from `UWWOWeaponComponent::UpdateReticleTarget`).
 - **Health bars near the reticle** (`HealthBarRadius`, 140 HUD px): besides the target under the reticle, every enemy in sight whose middle is within that distance of the reticle on screen shows its bar.
@@ -228,5 +328,5 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Gun kick:** each weapon's Settings has "Vertical kick" (0 to 20, 1 = about 3.4 degrees of tilt) and "Horizontal kick" (-5 to 5, + swings the muzzle right) instead of Godot's single gun_kick (`GunKick` only seeds `VerticalKick` now, and an old save's "GunKick" loads as the vertical one). Looks only; recoil is what moves the aim. The gun test's `38_gun_handcannon_kick_diagonal` shows a diagonal kick.
 - **ADS gun size:** Settings, Camera, "Gun size when aimed" (`UWWOWeaponComponent::AdsGunScale`, 1 = same as the hip), one for all weapons. The gun model scales around its sight point as you aim in, so the sight stays on the reticle.
 - **Sight height:** each weapon's Settings section has "Sight dot height above gun (cm)" (`UWWOWeaponData::SightHeight`). It moves the gun and its mod parts down while the sight dot stays put, rebuilt live when the slider moves; Save as defaults keeps it.
-- **Gun screenshots:** `-WWOAutoTestGuns` (best on `L_TestRange`, no enemies in the way) saves `38_gun_<weapon>_<hip|ads|plain|perk|perk_ads>`.
+- **Gun screenshots:** `-WWOAutoTestGuns` (best on `L_TestRange`, no enemies in the way) saves `38_gun_<weapon>_<hip|ads|plain|perk|perk_ads>`. Add `-WWOFxShots` and each gun also fires once from the hip in slow motion, with a second shot drawn across the view as another player's would be: `39_fx_<weapon>_flash` (muzzle flash) and `_trail` (the shots in the air a moment later). A third shot, `_burst`, catches a body hit, a headshot, a death burst and a soldier's bolt placed in front of you. The effects are `AWWOFXActor::BulletTrail`, `MuzzleFlash`, `HitSpark` and `DeathBurst`; your own gun's flash is the `MuzzleFlash*` parts built in `UWWOWeaponComponent::BuildModel`.
 - **Autotest:** `-WWOAutoTestMods` (also the last step of `-WWOAutoTest`). It covers the rifle, then the hand cannon (stats checked against the mod data, perk set fired). It backs up and restores `Saved/SaveGames/Loadout.sav`.

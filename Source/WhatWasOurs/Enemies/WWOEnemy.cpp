@@ -1,4 +1,6 @@
 #include "Enemies/WWOEnemy.h"
+#include "Systems/WWOSound.h"
+#include "FX/WWOFX.h"
 #include "Game/WWOGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Characters/WWOBodyComponent.h"
@@ -267,6 +269,13 @@ bool AWWOEnemy::TargetIsInvisible() const
 void AWWOEnemy::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bDead != bDeathShown)
+	{
+		// On every machine, the moment it dies (bDead replicates): it goes out with a burst.
+		bDeathShown = bDead;
+		if (bDead) UWWOSound::Play(this, "enemy_death", GetActorLocation());
+		if (bDead) AWWOFXActor::DeathBurst(GetWorld(), BodyCenter(), FLinearColor(1.f, 0.55f, 0.2f), GetBodyHeight() / 100.f * 0.8f);
+	}
 	if (!HasAuthority())
 	{
 		// Online, not the host: it moves and animates as the host's copy does; only the hit flash fades here.
@@ -382,7 +391,11 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 
 void AWWOEnemy::DamageTarget(float Amount, bool bMelee)
 {
-	if (AWWOCharacter* P = Cast<AWWOCharacter>(TargetActor.Get())) P->Health->TakeDamage(Amount, bMelee);
+	if (AWWOCharacter* P = Cast<AWWOCharacter>(TargetActor.Get()))
+	{
+		P->Health->DamageCameFrom(GetActorLocation());
+		P->Health->TakeDamage(Amount, bMelee);
+	}
 	else if (AWWOAlly* A = Cast<AWWOAlly>(TargetActor.Get())) A->TakeAllyDamage(Amount, bMelee);
 }
 

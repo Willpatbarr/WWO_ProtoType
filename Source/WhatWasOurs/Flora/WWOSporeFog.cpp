@@ -67,6 +67,25 @@ void AWWOSporeFog::BeginPlay()
 		Puffs.Add(Puff);
 		Sizes.Add(Size);
 	}
+	// Where it ends, drawn on the floor under it, so you know when you're inside.
+	FVector Floor;
+	if (WWOFX::GroundBelow(GetWorld(), GetActorLocation(), Radius * WWO::M + 200.f, Floor, this))
+	{
+		Edge = WWOFX::AddGroundDisc(this, GetRootComponent(), WWO::Lightened(Color(), 0.25f), 0.05f, 0.08f, 0.5f);
+		Edge->SetWorldLocation(Floor + FVector(0, 0, 3.f));
+		const float S = Radius * WWO::M / 50.f;
+		Edge->SetWorldScale3D(FVector(S, S, 1.f));
+	}
+	// Wisps of it curling upward.
+	if (AWWOParticles* Wisps = AWWOParticles::Burst(GetWorld(), GetActorLocation() - FVector(0, 0, Radius * 30.f), WWO::WithAlpha(WWO::Lightened(Color(), 0.2f), 0.3f),
+		FMath::Clamp(FMath::RoundToInt(Radius * 3.f), 4, 16), 3.f, 0.1f, 0.35f, Radius * 0.22f, FVector(0, 0, 0.25f), EWWOParticleStyle::Smoke, false))
+	{
+		Wisps->bOneShot = false;
+		Wisps->Shape = EWWOEmitShape::Sphere;
+		Wisps->ShapeRadius = Radius * 0.7f;
+		Wisps->Start();
+		Smoke = Wisps;
+	}
 	if (AWWOParticles* P = AWWOParticles::Burst(GetWorld(), GetActorLocation(), WWO::WithAlpha(WWO::Lightened(Color(), 0.45f), 0.9f),
 		FMath::RoundToInt(Radius * 12.f), 2.5f, 0.05f, 0.3f, 0.07f, FVector(0, 0, 0.05f), EWWOParticleStyle::Glow, false))
 	{
@@ -82,6 +101,7 @@ void AWWOSporeFog::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->UnregisterFog(this);
 	if (Motes.IsValid()) Motes->StopAndFade();
+	if (Smoke.IsValid()) Smoke->StopAndFade();
 	Super::EndPlay(Reason);
 }
 
@@ -125,6 +145,8 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	}
 	if (Material) Material->SetScalarParameterValue("Alpha", Opacity * 2.2f * Strength()); // the soft edges thin it out
 	if (Duration - Age < Fade * 2.f && Motes.IsValid()) Motes->bEmitting = false;
+	if (Duration - Age < Fade * 2.f && Smoke.IsValid()) Smoke->bEmitting = false;
+	if (Edge) if (UMaterialInstanceDynamic* EdgeMat = WWOFX::MID(Edge)) EdgeMat->SetScalarParameterValue("Alpha", 0.75f * Strength());
 	for (int32 i = 0; i < Puffs.Num(); ++i) // a slow churn, each puff gently swelling and shrinking
 	{
 		Puffs[i]->AddRelativeRotation(FRotator(0.f, FMath::RadiansToDegrees(DeltaSeconds * (0.2f + 0.1f * i)), 0.f));

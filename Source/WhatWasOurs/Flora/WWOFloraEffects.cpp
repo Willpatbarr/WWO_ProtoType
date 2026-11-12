@@ -1,4 +1,5 @@
 #include "Flora/WWOFloraEffects.h"
+#include "Components/PointLightComponent.h"
 #include "Flora/WWOSporeFog.h"
 #include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
@@ -74,6 +75,19 @@ void AWWOSporePool::BeginPlay()
 	Disc = WWOFX::AddGroundDisc(this, GetRootComponent(), Color, 0.1f, 0.55f, 0.8f);
 	Disc->SetRelativeLocation(FVector(0, 0, 4.f));
 	Mat = WWOFX::MID(Disc);
+	// A low haze of its color over the surface, and its light on what stands in it.
+	Haze = WWOFX::AddSoftSphere(this, GetRootComponent(), Color, 0.22f, 1.1f, true, false, 0.1f);
+	Haze->SetRelativeLocation(FVector(0, 0, 12.f));
+	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
+	Light->SetupAttachment(GetRootComponent());
+	Light->SetRelativeLocation(FVector(0, 0, 60.f));
+	Light->SetLightColor(Color);
+	Light->SetIntensityUnits(ELightUnits::Unitless);
+	Light->SetIntensity(2200.f);
+	Light->SetAttenuationRadius(Radius * 1.6f * WWO::M);
+	Light->SetCastShadows(false);
+	Light->RegisterComponent();
+	Glow = Light;
 	if (AWWOParticles* B = AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(Color, 0.3f), 0.8f), FMath::RoundToInt(Radius * 10.f),
 		1.2f, 0.3f, 0.9f, 0.08f, FVector(0, 0, 0.6f), EWWOParticleStyle::Glow, false))
 	{
@@ -123,6 +137,14 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	const float Scale = Radius * WWO::M / 50.f * FMath::Lerp(0.2f, 1.f, Grow) * FadeOut;
 	Disc->SetRelativeScale3D(FVector(Scale, Scale, 1.f));
 	if (Mat) Mat->SetScalarParameterValue("Alpha", FadeOut);
+	if (Haze)
+	{
+		// Breathes a little, and goes with the pool.
+		const float Breath = 1.f + 0.06f * FMath::Sin(Age * 2.3f);
+		Haze->SetRelativeScale3D(FVector(Scale * 0.95f * Breath, Scale * 0.95f * Breath, Scale * 0.22f));
+		if (UMaterialInstanceDynamic* HazeMat = WWOFX::MID(Haze)) HazeMat->SetScalarParameterValue("Alpha", 0.22f * FadeOut);
+	}
+	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Age * 5.f)));
 	if (FadeOut < 1.f && Bubbles.IsValid()) Bubbles->bEmitting = false;
 	if (Flavor == "voltvine" && Age < Duration - 0.4f)
 	{

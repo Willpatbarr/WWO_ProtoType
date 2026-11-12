@@ -9,6 +9,7 @@
 // - Rumble and hit-stop.
 
 #include "CoreMinimal.h"
+#include "InputCoreTypes.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/ForceFeedbackEffect.h"
 #include "WWOTypes.h"
@@ -27,6 +28,19 @@ class SWidget;
 
 UENUM()
 enum class EWWOChord : uint8 { Grenade, Melee, Ult };
+
+// One line of the Controls page: something you do, its keyboard / mouse key and its controller
+// button. Count for an action = that device has none; MoveDir 0-3 = forward, back, left, right.
+struct FWWOBindRow
+{
+	FName Id;
+	const TCHAR* Label;
+	EWWOAction Kbm;
+	FKey KbmKey, KbmAlt;
+	EWWOAction Pad;
+	FKey PadKey;
+	int32 MoveDir = -1;
+};
 
 UCLASS()
 class WHATWASOURS_API AWWOPlayerController : public APlayerController
@@ -66,6 +80,16 @@ public:
 	void CloseMenus();
 	void OnMenuClosed();
 	UWWOSettingsMenu* GetSettingsMenu() const { return SettingsMenu; }
+
+	// Key bindings (the settings menu's Controls page). Each row has a keyboard / mouse key and a
+	// controller button; changes are kept in Saved/WWO/Keybinds.json.
+	static const TArray<FWWOBindRow>& BindRows();
+	static FString KeyName(const FKey& Key);
+	FKey GetBind(FName Row, bool bPad) const;
+	void SetBind(FName Row, bool bPad, const FKey& Key);
+	void ResetBinds();
+	void BeginKeyCapture(FName Row, bool bPad, TFunction<void()> OnDone); // the next press becomes that binding
+	bool IsCapturing(FName Row, bool bPad) const { return CaptureRow == Row && bCapturePad == bPad; }
 	UWWOHUDWidget* GetHUDWidget() const { return HUDWidget; }
 
 	AWWOCharacter* GetWWOCharacter() const;
@@ -77,6 +101,13 @@ private:
 	UPROPERTY() TObjectPtr<UInputAction> LookAction;
 	UPROPERTY() TObjectPtr<UInputAction> MouseLookAction;
 	TMap<const UInputAction*, EWWOAction> ActionIds;
+	TMap<EWWOAction, UInputAction*> ActionFor;
+	TMap<FName, FKey> Binds; // "<row>/kbm" or "<row>/pad" -> the key, where it isn't the default
+	FName CaptureRow;
+	bool bCapturePad = false;
+	void MapKeys();
+	void LoadBinds();
+	void SaveBinds() const;
 
 	UPROPERTY() TObjectPtr<UWWOHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> SettingsMenu;

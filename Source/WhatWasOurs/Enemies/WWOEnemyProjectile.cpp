@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemyProjectile.h"
+#include "Systems/WWOSound.h"
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
@@ -53,7 +54,11 @@ void AWWOEnemyProjectile::EndPlay(const EEndPlayReason::Type Reason)
 	if (!HasAuthority() && Reason == EEndPlayReason::Destroyed && GetWorld())
 	{
 		if (SplashRadius > 0.f) SplashLooks(GetActorLocation());
-		else AWWOFXActor::Pop(GetWorld(), GetActorLocation(), Color, Size * 2.5f, 0.2f);
+		else
+		{
+			AWWOFXActor::Pop(GetWorld(), GetActorLocation(), Color, Size * 2.5f, 0.2f);
+			LandSparks(GetActorLocation());
+		}
 	}
 	Super::EndPlay(Reason);
 }
@@ -78,13 +83,26 @@ AWWOEnemyProjectile* AWWOEnemyProjectile::Fire(UWorld* World, const FVector& Fro
 
 void AWWOEnemyProjectile::Build()
 {
-	UStaticMeshComponent* Ball = WWOFX::AddShape(this, GetRootComponent(), WWOFX::Sphere(), TEXT("M_WWO_Unlit"), Color, 4.f);
-	Ball->SetRelativeScale3D(FVector(Size * 2.f));
+	// A straight shot (a soldier's) is a bolt: stretched along its flight inside a soft glow that
+	// trails behind, with a flash where it left the gun. A lobbed shell stays a glowing ball.
+	const bool bBolt = Gravity == 0.f && SplashRadius <= 0.f && !Velocity.IsNearlyZero();
+	const FLinearColor Hot = FMath::Lerp(Color, FLinearColor::White, bBolt ? 0.6f : 0.f);
+	UStaticMeshComponent* Ball = WWOFX::AddShape(this, GetRootComponent(), WWOFX::Sphere(), TEXT("M_WWO_Unlit"), Hot, 4.f);
+	Ball->SetRelativeScale3D(bBolt ? FVector(Size * 7.f, Size * 1.3f, Size * 1.3f) : FVector(Size * 2.f));
 	Ball->SetCastShadow(false);
 	if (UMaterialInstanceDynamic* M = WWOFX::MID(Ball))
 	{
 		M->SetScalarParameterValue("Alpha", 1.f);
 		M->SetScalarParameterValue("Glow", 4.f);
+	}
+	if (bBolt)
+	{
+		SetActorRotation(Velocity.Rotation());
+		UStaticMeshComponent* Glow = WWOFX::AddSoftSphere(this, GetRootComponent(), Color, 0.85f, 1.2f, true, false, 0.4f);
+		Glow->SetRelativeScale3D(FVector(Size * 11.f, Size * 2.6f, Size * 2.6f));
+		Glow->SetRelativeLocation(FVector(-Size * 220.f, 0, 0)); // mostly behind the bolt
+		AWWOFXActor::MuzzleFlash(GetWorld(), GetActorLocation(), Velocity.GetSafeNormal(), Color, 0.8f);
+		UWWOSound::Play(this, "soldier_shot", GetActorLocation());
 	}
 	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
 	Light->SetupAttachment(GetRootComponent());
@@ -147,6 +165,7 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	else if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()))
 	{
 		if (!P->Health->bDead) ++PlayerHits;
+		P->Health->DamageCameFrom(Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // back along its flight
 		P->Health->TakeDamage(Damage);
 	}
 	else if (AWWOAlly* A = Cast<AWWOAlly>(Hit.GetActor()))
@@ -154,6 +173,7 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 		A->TakeAllyDamage(Damage);
 	}
 	AWWOFXActor::Pop(GetWorld(), Hit.ImpactPoint, Color, Size * 2.5f, 0.2f);
+	if (SplashRadius <= 0.f) LandSparks(Hit.ImpactPoint);
 	Destroy();
 }
 
@@ -166,6 +186,7 @@ void AWWOEnemyProjectile::Splash(const FVector& Point)
 		const float D = FVector::Dist(Point, P->GetActorLocation());
 		if (D <= R + 50.f) // +0.5 m: the player's body, not just its center
 		{
+			P->Health->DamageCameFrom(Point);
 			P->Health->TakeDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
 		}
 	}
@@ -175,6 +196,18 @@ void AWWOEnemyProjectile::Splash(const FVector& Point)
 		if (D <= R + 50.f) Mate->TakeAllyDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
 	}
 	SplashLooks(Point);
+}
+
+void AWWOEnemyProjectile::LandSparks(const FVector& Point)
+{
+	// Sparks thrown back the way the shot came.
+	if (AWWOParticles* Sparks = AWWOParticles::Burst(GetWorld(), Point, FMath::Lerp(Color, FLinearColor::White, 0.4f), 8, 0.3f, 2.f, 5.f, 0.035f,
+		FVector(0, 0, -12.f), EWWOParticleStyle::Glow, false))
+	{
+		Sparks->Direction = (-Velocity.GetSafeNormal() + FVector(0, 0, 0.3f)).GetSafeNormal();
+		Sparks->SpreadDegrees = 60.f;
+		Sparks->Start();
+	}
 }
 
 void AWWOEnemyProjectile::SplashLooks(const FVector& Point)

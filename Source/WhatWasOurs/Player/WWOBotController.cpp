@@ -581,6 +581,10 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	for (bool& J : Just) J = false;
 	for (bool& H : Held) H = false;
 	Move = FVector2D::ZeroVector;
+	// -WWOBotsIdle: the bots stand where they spawn and do nothing (targets for looking at hits,
+	// tints and markers).
+	static const bool bIdle = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsIdle"));
+	if (bIdle) return;
 	AWWOCharacter* Me = Cast<AWWOCharacter>(GetPawn());
 	if (!Me || Me->Health->bDead)
 	{

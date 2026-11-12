@@ -1,10 +1,12 @@
 #pragma once
 
-// Settings menu (Godot: settings_menu.gd): two panes side by side.
-// - Global (left): movement, camera, jump, crouch/slide, melee, grenades, player, targets,
-//   ult, enemies, maps, waves, allies, aim assist. Q/E or L1/R1 cycle its tabs.
-// - Specific (right): Equipped, Flora (Grenades / Abilities / Traits), Weapons, Frame Parts.
-//   Pick an item to open its sliders; Back (or circle / Esc) returns to the list.
+// Settings menu (Godot: settings_menu.gd). It fills the window, in the character menu's style.
+// - Six tabs across the top (Q/E or L1/R1): Player, Combat, Enemies, Match, Items, Controls
+//   (the key bindings). Each lists
+//   its pages down the left; the open page's sliders fill one column on the right.
+// - Items' pages (Equipped, Grenade Types, Abilities, Traits, Weapons, Shell) list items: pick
+//   one to open its sliders; Back (or circle / Esc) returns to the list.
+// - The search box lists every slider whose name matches, from every tab.
 // Every slider binds to a float UPROPERTY by name through reflection. "Save as defaults"
 // writes every section to Saved/WWO/SavedSettings.json; the game loads it on startup and
 // Reset goes back to it. Tab / Esc / Options opens it; it pauses the game.
@@ -103,7 +105,10 @@ public:
 	void Back();
 	void CycleGlobalTab(int32 Step);
 	int32 GetGlobalTab() const { return GlobalTab; }
-	bool ShowGlobalTab(const FString& Title); // selects the Global tab with that title (false: none)
+	bool ShowGlobalTab(const FString& Title); // the same as ShowPage
+	bool ShowPage(const FString& Title);      // opens the page with that title, on whichever tab it's under (false: none)
+	int32 GetTopTab() const { return TopTab; }
+	void AutoTestSearch(const FString& Text); // for the autotest: as if typed into the search box ("" clears it)
 	// What's on screen, for the autotest: the open item of the browser that's showing ("" = its list).
 	FString OpenItemKey() const;
 	float GlobalScrollOffset() const; // the Global tab's scroll position
@@ -163,7 +168,31 @@ private:
 	UWidget* MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Provider);
 	void ShowList(int32 BrowserIndex);
 	void OpenItem(int32 BrowserIndex, const FString& Key);
-	UWidget* MakeTabs(const TArray<FString>& Titles, UWidgetSwitcher* Switcher, TArray<TObjectPtr<UButton>>* OutButtons);
-	static void StyleTab(UButton* Tab, bool bSelected);
+	// The layout: five tabs across the top (Player, Combat, Enemies, Match, Items), each with its
+	// pages listed down the left, and the open page in one column on the right. A page is a global
+	// section's sliders or a list of items to open (Items). GlobalSwitcher holds every page.
+	static constexpr int32 NumTopTabs = 6, ItemsTab = 4, ControlsTab = 5;
+	static inline const TCHAR* const TopTabNames[NumTopTabs] = { TEXT("PLAYER"), TEXT("COMBAT"), TEXT("ENEMIES"), TEXT("MATCH"), TEXT("ITEMS"), TEXT("CONTROLS") };
+	struct FPage { FString Title; int32 Tab = 0; TWeakObjectPtr<UTextBlock> Label; TWeakObjectPtr<class UBorder> Mark; };
+	TArray<FPage> Pages;
+	TArray<int32> LastPage; // per tab, the page it was last on
+	int32 CurrentPage = 0, TopTab = 0, SearchPage = 0;
+	FString SearchText;
+	UPROPERTY() TObjectPtr<UWidgetSwitcher> SideSwitcher;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> TopLabels;
+	UPROPERTY() TArray<TObjectPtr<class UBorder>> TopLines;
+	UPROPERTY() TObjectPtr<UTextBlock> PageTitle;
+	UPROPERTY() TObjectPtr<class UEditableTextBox> SearchBox;
+	UPROPERTY() TObjectPtr<UScrollBox> SearchResults;
+	void SelectPage(int32 Index);
+	// Controls: the key bindings page (AWWOPlayerController keeps the bindings).
+	int32 BindsPage = INDEX_NONE;
+	UPROPERTY() TObjectPtr<UScrollBox> BindsList;
+	void BuildBinds();
+	void SelectTopTab(int32 Index);
+	UTextBlock* Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing);
+	UButton* PlainButton(UWidget* Inside, TFunction<void()> Fn);
+	UFUNCTION() void OnSearchChanged(const FText& Text);
+	UFUNCTION() void OnSearchCommitted(const FText& Text, ETextCommit::Type Type);
 	static FString ValueText(const FWWOSettingRow& Row, float V);
 };

@@ -114,6 +114,7 @@ public:
 	// IWWOTargetable (PvP)
 	virtual TArray<FWWOAimPart> GetAimParts() const override;
 	virtual bool IsCriticalComponent(const UPrimitiveComponent* Component) const override;
+	virtual bool IsCriticalHit(const FHitResult& Hit, const FVector& From) const override;
 	virtual bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0)) override;
 	virtual bool IsDead() const override;
 	virtual float GetHealth() const override;
@@ -126,6 +127,10 @@ public:
 	UPROPERTY() TObjectPtr<class USphereComponent> HeadHitbox;
 	void UpdateHitboxes(); // on only in PvP (co-op traces pass through players as before)
 	bool bHitboxesOn = false;
+	void PinHeadHitbox(); // onto the body's head bone, so it follows the animations
+	// Test runs: shots at the drawn head from all around; how many count as headshots now, and how
+	// many did when the head hitbox sat at the eyes and only the first part hit counted.
+	void ProbeHeadShots(int32& Shots, int32& Crits, int32& OldCrits, float& HeadOffEyes) const;
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -159,6 +164,8 @@ public:
 	// hit damage numbers appear (alternating left and right) so they don't cover the target.
 	UPROPERTY(EditAnywhere, Category = "HUD") float TargetHighlight = 0.12f;
 	UPROPERTY(EditAnywhere, Category = "HUD") float HealthBarRadius = 140.f;
+	UPROPERTY(EditAnywhere, Category = "Audio") float SoundVolume = 1.f; // every sound effect you hear, times this (0 = silent)
+	UPROPERTY(EditAnywhere, Category = "HUD") float HealthBarAdsScale = 1.75f; // the marker range grows by this while aimed in
 	UPROPERTY(EditAnywhere, Category = "HUD") float DamageNumberOffset = 55.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
@@ -258,6 +265,16 @@ public:
 	// Online: your flora, so everyone else sees your character model (Config/CharacterModels.json).
 	UPROPERTY(ReplicatedUsing = OnRep_NetFlora) FName NetFlora;
 	UFUNCTION() void OnRep_NetFlora();
+	// What this player has on, sent by the host to every machine, so their body can show their
+	// flora's grafts and shell colors wherever they are seen (bots and joiners alike).
+	UPROPERTY(ReplicatedUsing = OnRep_NetLook) FWWONetLoadout NetLook;
+	UFUNCTION() void OnRep_NetLook();
+	// The ability lighting this player's fists (Thornfist up, Static Charge armed), sent by the host
+	// so every machine shows the glow, not only the host's and the player's own.
+	UPROPERTY(ReplicatedUsing = OnRep_NetFists) FName NetFists;
+	UFUNCTION() void OnRep_NetFists();
+	void ShowLook(); // someone else's body: grafts and colors from NetLook
+	FString ShownLook; // the parts of NetLook the body was last built from
 	UFUNCTION(Server, Reliable) void ServerSetFlora(FName Flora);
 	// Online: a joiner's loadout, kept on the host (UWWOLoadoutSubsystem::Get finds it for anything
 	// this character owns). Null for your own character and everyone's on a joiner.
@@ -269,6 +286,9 @@ public:
 
 	// Online gunfire (see FWWOGunShot).
 	UFUNCTION(Server, Reliable) void ServerGunShot(const FWWOGunShot& Shot);
+	// A shot by this character as seen from outside (a bot's, another player's): the muzzle flash at
+	// its gun hand, a trail to each end, and (bMarks) a mark where each one landed.
+	void ShowShotFromBody(const FVector& From, TConstArrayView<FVector_NetQuantize> Ends, bool bMarks);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastGunShot(FVector_NetQuantize From, const TArray<FVector_NetQuantize>& Ends);
 	// The host's tally of joiners' shots, for -WWOAutoTestNet.
 	static int32 NetShotsTaken, NetHitsApplied, NetHitsRejected;
@@ -292,6 +312,7 @@ public:
 	UFUNCTION(Server, Reliable) void ServerUseAbility(int32 Slot);
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();
 	UFUNCTION(Client, Reliable) void ClientApplySlow(float Amount, float Seconds);
+	UFUNCTION(Client, Unreliable) void ClientDamageFrom(FVector_NetQuantize From); // the host: you were hit from there (HUD marker)
 	UFUNCTION(NetMulticast, Reliable) void MulticastEntrenchRoots(float Seconds);
 	static int32 NetAbilitiesUsed, NetUltsCast; // host: joiners' abilities and ults it ran
 	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
@@ -340,6 +361,7 @@ private:
 	bool bNetStats = false;   // the host's copy of someone else: the movement values are theirs, already modified
 	bool bLocalVisuals = false; // set up as your own character (first-person gun, shadow-only body)
 	void SetupVisuals(bool bLocal);
+	void UpdateTeamTint(); // PvP: a player you mark flashes a strong outline over a faint tint (red foes, blue teammates)
 	TArray<float> SentMoveStats;
 	float MoveStatsCheck = 0.f;
 	TArray<float> LocalMoveStats() const;

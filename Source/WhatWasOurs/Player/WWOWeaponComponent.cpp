@@ -1,4 +1,5 @@
 #include "Player/WWOWeaponComponent.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
 #include "Game/WWOGameState.h"
@@ -61,7 +62,11 @@ namespace
 	constexpr float MeleeArmDrop = 0.45f;
 	const FVector MeleeGunDropOffset(0.03f, -0.3f, 0.12f);
 	const FVector MeleeGunDropRotation(-0.9f, 0.f, 0.25f);
-	constexpr float MuzzleFlashTime = 0.04f;
+	constexpr float MuzzleFlashTime = 0.05f;
+	const FLinearColor ShotColor(1.f, 0.8f, 0.45f); // trails and the flash's light
+	// The muzzle flash's parts on the first-person gun: the core, and the flares built around it.
+	const FName FlashCore("MuzzleFlash"), FlashTongue("MuzzleFlashTongue"), FlashCrossA("MuzzleFlashCrossA"), FlashCrossB("MuzzleFlashCrossB");
+	bool IsFlashPart(FName Name) { return Name == FlashCore || Name == FlashTongue || Name == FlashCrossA || Name == FlashCrossB; }
 	const FLinearColor SightColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor SightOnTargetColor(1.f, 0.1f, 0.08f);
 
@@ -328,6 +333,7 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	FireCooldown = 0.f;
 	SwapLength = FMath::Max(M("swap_time", SwapTime), 0.05f);
 	SwapLeft = SwapLength;
+	UWWOSound::PlayFor(GetOwner(), "weapon_swap");
 }
 
 void UWWOWeaponComponent::BuildModel()
@@ -338,6 +344,7 @@ void UWWOWeaponComponent::BuildModel()
 	}
 	Parts.Reset();
 	AdsHiddenParts.Reset();
+	FlareSizes.Reset();
 	// One part. Pos and Rot are in the model's space: cm, x forward, y right, z up, origin at the sight.
 	auto AddPart = [this](FName Name, UStaticMesh* Mesh, const FVector& Scale, const FVector& Pos, const FRotator& Rot,
 		const FLinearColor* Color, float Glow) -> UStaticMeshComponent*
@@ -424,6 +431,41 @@ void UWWOWeaponComponent::BuildModel()
 		UStaticMeshComponent* Comp = AddPart(P.Name, Mesh, Scale, Pos, Rot, &P.Color, P.Glow);
 		if (FName(P.Name) == "MuzzleFlash") Comp->SetVisibility(false);
 		if (FName(P.Name) == "Magazine") MagRest = P.Pos;
+	}
+	// The flash is more than the core's blink: a tongue of flame out of the barrel and a cross of
+	// flares around it (soft additive shapes, sized off the core; Shoot rolls and resizes them).
+	if (UStaticMeshComponent* Core = Part(FlashCore))
+	{
+		const FVector At = Core->GetRelativeLocation();
+		const float Across = FMath::Min(Core->GetRelativeScale3D().X, 0.07f); // the core's width (1 = a meter); big-bore guns don't get a flash that fills the view
+		// The core itself glows soft and white-hot instead of showing as a solid ball.
+		Core->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_SoftAdd")));
+		Core->SetRelativeScale3D(FVector(Across * 1.3f));
+		if (UMaterialInstanceDynamic* Mat = Core->CreateAndSetMaterialInstanceDynamic(0))
+		{
+			Mat->SetVectorParameterValue("Color", FMath::Lerp(Flash, FLinearColor::White, 0.5f));
+			Mat->SetScalarParameterValue("Alpha", 1.f);
+			Mat->SetScalarParameterValue("Edge", 1.3f);
+			Mat->SetScalarParameterValue("Rim", 0.f);
+			Mat->SetScalarParameterValue("Core", 1.f);
+		}
+		auto AddFlare = [&](FName Name, const FVector& Scale, float Forward, float Alpha)
+		{
+			UStaticMeshComponent* Flare = AddPart(Name, WWOFX::Sphere(), Scale * Across, At + FVector(Forward * Across * 100.f, 0, 0), FRotator::ZeroRotator, nullptr, 0.f);
+			Flare->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_SoftAdd")));
+			if (UMaterialInstanceDynamic* Mat = Flare->CreateAndSetMaterialInstanceDynamic(0))
+			{
+				Mat->SetVectorParameterValue("Color", Flash);
+				Mat->SetScalarParameterValue("Alpha", Alpha);
+				Mat->SetScalarParameterValue("Edge", 1.3f);
+				Mat->SetScalarParameterValue("Rim", 0.f);
+				Mat->SetScalarParameterValue("Core", 0.6f);
+			}
+			Flare->SetVisibility(false);
+		};
+		AddFlare(FlashTongue, FVector(4.f, 1.1f, 1.1f), 1.8f, 0.8f);
+		AddFlare(FlashCrossA, FVector(0.7f, 2.8f, 0.7f), 0.4f, 0.6f);
+		AddFlare(FlashCrossB, FVector(0.7f, 0.7f, 2.2f), 0.4f, 0.6f);
 	}
 	TMap<FString, FVector> Anchors;
 	if (BodyMesh)
@@ -576,12 +618,29 @@ bool UWWOWeaponComponent::CastRayTo(const FVector& To, FHitResult& OutHit) const
 	return GetWorld()->LineTraceSingleByChannel(OutHit, P->EyeLocation(), To, ECC_Visibility, Params);
 }
 
+FVector UWWOWeaponComponent::TrailStart() const
+{
+	// Where a trail has to start in the world to look like it leaves the first-person gun's muzzle:
+	// the gun draws with its own field of view, so its muzzle isn't where it appears to be.
+	const AWWOCharacter* P = GetPlayer();
+	const UCameraComponent* Camera = P->Camera;
+	const FTransform View = Camera->GetComponentTransform();
+	constexpr float Depth = 120.f; // cm in front of the eye
+	const UStaticMeshComponent* Core = Part(FlashCore);
+	const FVector Seen = Core ? View.InverseTransformPositionNoScale(Core->GetComponentLocation()) : FVector::ZeroVector;
+	if (Seen.X < 1.f) return View.TransformPositionNoScale(FVector(Depth, 12.f, -10.f));
+	const float Ratio = FMath::Tan(FMath::DegreesToRadians(Camera->FieldOfView) * 0.5f)
+		/ FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(Camera->FirstPersonFieldOfView, 1.f, 170.f)) * 0.5f);
+	return View.TransformPositionNoScale(FVector(Depth, Seen.Y / Seen.X * Ratio * Depth, Seen.Z / Seen.X * Ratio * Depth));
+}
+
 void UWWOWeaponComponent::StartReload()
 {
 	if (bReloading || Ammo >= MagazineSize()) return;
 	bReloading = true;
 	ReloadProgress = 0.f;
 	GetPlayer()->bSprinting = false; // reloading stops a sprint
+	UWWOSound::PlayFor(GetOwner(), "reload_start");
 }
 
 void UWWOWeaponComponent::CancelReload()
@@ -604,6 +663,15 @@ void UWWOWeaponComponent::StartPunch(float FovDegrees, float RollDegrees, float 
 	PunchFovValue = FovDegrees;
 	PunchRollValue = RollDegrees;
 	PunchLength = FMath::Max(Seconds, 0.01f);
+}
+
+void UWWOWeaponComponent::Shake(float Strength, float Seconds)
+{
+	// The view widens and tips for a moment (your aim doesn't move) and the controller thumps.
+	if (Strength <= 0.01f) return;
+	Strength = FMath::Min(Strength, 2.f);
+	StartPunch(3.f * Strength, 2.2f * Strength * (FMath::FRand() < 0.5f ? 1.f : -1.f), Seconds);
+	Rumble(0.35f * Strength, 0.8f * Strength, Seconds * 0.8f);
 }
 
 void UWWOWeaponComponent::Rumble(float Weak, float Strong, float Seconds)
@@ -636,14 +704,19 @@ void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 	RefreshStats();
 	if (!FMath::IsNearlyEqual(Weapon->SightHeight, BuiltSightHeight)) BuildModel(); // the slider moved
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
-	if (Loadout && JustPressed((int32)EWWOAction::WeaponNext)) Loadout->CycleWeapon(1);
-	else if (Loadout && JustPressed((int32)EWWOAction::WeaponPrev)) Loadout->CycleWeapon(-1);
+	// Swapping weapons goes to your other weapon slot's saved config. With nothing in that slot it
+	// steps through every weapon, as before there were slots.
+	if (Loadout && JustPressed((int32)EWWOAction::WeaponNext)) { if (!Loadout->SwapWeaponSlot()) Loadout->CycleWeapon(1); }
+	else if (Loadout && JustPressed((int32)EWWOAction::WeaponPrev)) { if (!Loadout->SwapWeaponSlot()) Loadout->CycleWeapon(-1); }
 	ConfigToastLeft = FMath::Max(ConfigToastLeft - DeltaSeconds, 0.f);
 	if (Loadout && JustPressed((int32)EWWOAction::NextConfig))
 	{
-		const int32 Index = Loadout->CycleConfig();
-		ConfigToast = Index == INDEX_NONE ? FString(TEXT("No saved configs (save one in the character menu)"))
-			: Loadout->GetConfigs()[Index].Name + TEXT(": ") + UWWOLoadoutSubsystem::ConfigSummary(Loadout->GetConfigs()[Index], Loadout);
+		// You carry two saved configs, one per weapon slot: this goes to the other one and names it
+		// (the same swap as the weapon swap key, which says nothing).
+		const bool bSwapped = Loadout->SwapWeaponSlot();
+		const int32 Index = Loadout->GetSlotConfig(Loadout->GetActiveSlot());
+		ConfigToast = bSwapped && Index != INDEX_NONE ? Loadout->GetConfigs()[Index].Name + TEXT(": ") + UWWOLoadoutSubsystem::ConfigSummary(Loadout->GetConfigs()[Index], Loadout)
+			: FString(TEXT("Your other weapon slot is empty (pick a config for it in the character menu)"));
 		ConfigToastLeft = 2.5f;
 	}
 	UpdateMelee(DeltaSeconds);
@@ -668,6 +741,7 @@ void UWWOWeaponComponent::UpdateMelee(float DeltaSeconds)
 		bMeleeing = true;
 		MeleeProgress = 0.f;
 		bMeleeLanded = false;
+		UWWOSound::PlayFor(GetOwner(), "melee_swing");
 		CancelReload(); // meleeing cancels a reload, like Destiny
 		P->bSprinting = false;
 		AActor* Target = FindLungeTarget();
@@ -782,6 +856,9 @@ void UWWOWeaponComponent::MeleeStrike()
 	else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	OnHitConfirmed.Broadcast(false, bKilled);
 	Kick = 1.f;
+	AWWOFXActor::HitSpark(GetWorld(), BestPoint, (Origin - BestPoint).GetSafeNormal(), bKilled); // sparks off the hit; the gold flare on a kill
+	UWWOSound::Play(this, "melee_hit", BestPoint);
+	if (bKilled && P->IsLocallyControlled() && P->IsPlayerControlled()) UWWOSound::PlayFlat(this, "kill");
 	MeleeImpact(Best, bKilled, BestPoint);
 }
 
@@ -859,6 +936,7 @@ void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 	if (ReloadProgress >= ReloadSeated && Ammo < MagazineSize())
 	{
 		Ammo = MagazineSize(); // the new magazine is in
+		UWWOSound::PlayFor(GetOwner(), "reload_done");
 		bOverpressure = true;
 	}
 	if (ReloadProgress >= 1.f) CancelReload();
@@ -952,17 +1030,48 @@ void UWWOWeaponComponent::Shoot()
 				bHit = true;
 			}
 		}
-		if (!bHit) continue;
+		if (!bHit)
+		{
+			Ends.Add(P->EyeLocation() + Dir * Weapon->FireRange * WWO::M); // a miss still flies through the air
+			continue;
+		}
 		AWWOFXActor::ImpactMark(GetWorld(), Hit.ImpactPoint);
 		Ends.Add(Hit.ImpactPoint);
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Hit.GetActor());
 		if (!Target || Target->IsDead() || !UWWOWorldSubsystem::CanHurt(P, Hit.GetActor())) continue; // PvP: not your team
-		const bool bCritical = Target->IsCriticalComponent(Hit.GetComponent());
+		const bool bCritical = Target->IsCriticalHit(Hit, P->EyeLocation());
+		if (P->IsLocallyControlled() && P->IsPlayerControlled()) AWWOFXActor::HitSpark(GetWorld(), Hit.ImpactPoint, -Dir, bCritical); // a bot's: ShowShotFromBody
 		FTotal& Entry = Totals.FindOrAdd(Hit.GetActor());
 		if (Entry.Damage == 0.f) Entry.Point = Hit.ImpactPoint;
 		Entry.Damage += Weapon->Damage * ShotScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
 		Entry.bCritical |= bCritical;
 	}
+	// The shot through the air, on this machine. Yours leaves from where your gun's muzzle shows on
+	// screen (thinner, so it doesn't cover what you're aiming at) with the flash on the gun itself;
+	// a bot's is drawn from its body like any other player's.
+	if (P->IsLocallyControlled() && P->IsPlayerControlled())
+	{
+		UWWOSound::PlayFlat(this, UWWOSound::HasEvent(this, FName(*(TEXT("fire_") + Weapon->Id.ToString()))) ? FName(*(TEXT("fire_") + Weapon->Id.ToString())) : FName("fire"));
+		const FVector Muzzle = TrailStart();
+		for (const FVector_NetQuantize& End : Ends) AWWOFXActor::BulletTrail(GetWorld(), Muzzle, End, ShotColor, 0.6f);
+		// No two flashes alike: the cross rolls and every flare changes size a little.
+		const float Roll = FMath::FRandRange(0.f, 360.f);
+		for (const FName& Name : { FlashTongue, FlashCrossA, FlashCrossB })
+		{
+			if (UStaticMeshComponent* Flare = Part(Name))
+			{
+				if (!FlareSizes.Contains(Name)) FlareSizes.Add(Name, Flare->GetRelativeScale3D());
+				Flare->SetRelativeRotation(FRotator(0.f, 0.f, Roll));
+				Flare->SetRelativeScale3D(FlareSizes[Name] * FMath::FRandRange(0.75f, 1.25f));
+			}
+		}
+		if (AWWOFXActor* Light = AWWOFXActor::Spawn(GetWorld(), P->EyeLocation() + P->AimForward() * 80.f, 0.07f))
+		{
+			Light->LightTween(Light->AddLight(ShotColor, 7000.f, 500.f), 7000.f, 0.f, 0.07f, EWWOEase::QuadIn);
+		}
+	}
+	else P->ShowShotFromBody(P->EyeLocation(), Ends, false);
+
 	bool bAnyCritical = false, bAnyKilled = false;
 	int32 Kills = 0;
 	AActor* FirstHit = nullptr;
@@ -1006,6 +1115,7 @@ void UWWOWeaponComponent::Shoot()
 	bLastShotPredictedKill = bAnyKilled;
 	OnShotResult(FirstHit, Totals.Num(), bJoiner ? 0 : Kills, bAnyCritical);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
+	if (Totals.Num() > 0 && P->IsLocallyControlled() && P->IsPlayerControlled()) UWWOSound::PlayFlat(this, bAnyKilled ? "kill" : (bAnyCritical ? "hit_crit" : "hit"));
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
 	float RecoveryTime = Weapon->RecoilRecoveryTime;
@@ -1037,7 +1147,7 @@ void UWWOWeaponComponent::UpdateFov()
 	{
 		// Mod parts that would block the view through the sight (scopes, holo frames) fade out of the way.
 		const bool bAdsHidden = AdsHiddenParts.Contains(Pair.Key) && AdsAmount > 0.6f;
-		if (Pair.Value) Pair.Value->SetVisibility(!bFirstPersonHidden && bShowModel && !bAdsHidden && (Pair.Key != "MuzzleFlash" || bFlashVisible));
+		if (Pair.Value) Pair.Value->SetVisibility(!bFirstPersonHidden && bShowModel && !bAdsHidden && (!IsFlashPart(Pair.Key) || bFlashVisible));
 	}
 }
 
@@ -1054,6 +1164,7 @@ void UWWOWeaponComponent::UpdateReticleTarget()
 	bTargetUnderReticle = ReticleTarget.IsValid();
 	// The faint tint over the enemy under the reticle (moves with it, off when nothing's there).
 	AActor* Now = P->TargetHighlight > 0.f ? ReticleTarget.Get() : nullptr;
+	if (Cast<AWWOCharacter>(Now)) Now = nullptr; // players flash an outline when marked instead (AWWOCharacter::UpdateTeamTint)
 	if (Now != Highlighted.Get())
 	{
 		if (UWWOBodyComponent* Old = Highlighted.IsValid() ? Highlighted->FindComponentByClass<UWWOBodyComponent>() : nullptr) Old->SetHighlight(0.f);

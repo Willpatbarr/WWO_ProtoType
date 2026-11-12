@@ -42,5 +42,6 @@ private:
 	bool bStopped = false; // a joiner's copy that hit something: waits for the host's to go
 	void Splash(const FVector& Point);
 	void SplashLooks(const FVector& Point);
+	void LandSparks(const FVector& Point);
 	void Build();
 };

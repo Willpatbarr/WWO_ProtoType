@@ -31,6 +31,7 @@ private:
 	TWeakObjectPtr<AWWOCharacter> BoundPlayer;
 	float HitTime = 0.f;
 	bool bHitCritical = false;
+	mutable TMap<FString, float> ChipPeak; // status chips: the longest time each has shown (its bar drains against it)
 	bool bHitKilled = false;
 	float DamageFlash = 0.f;
 	// Frame rate readout (top left): averaged over a quarter second of real time.

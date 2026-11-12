@@ -95,6 +95,12 @@ void FWWOMenuCursor::Click(FSlateApplication& SlateApp, bool bDown)
 
 bool FWWOMenuCursor::HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	if (Capture)
+	{
+		// A binding is waiting for its key: this press is it (or isn't, and is swallowed anyway).
+		if (!InKeyEvent.IsRepeat()) TakeCapture(InKeyEvent.GetKey());
+		return true;
+	}
 	if (InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Bottom)
 	{
 		if (!InKeyEvent.IsRepeat()) Click(SlateApp, true);
@@ -117,6 +123,28 @@ bool FWWOMenuCursor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEve
 	return false;
 }
 
+void FWWOMenuCursor::TakeCapture(const FKey& Key)
+{
+	// The handler says whether it took the key; it may also start another capture, so work on a copy.
+	const TFunction<bool(const FKey&)> Handler = Capture;
+	Capture = nullptr;
+	if (!Handler(Key) && !Capture) Capture = Handler; // not one it wanted: keep waiting
+}
+
+bool FWWOMenuCursor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+{
+	if (!Capture) return false;
+	TakeCapture(MouseEvent.GetEffectingButton());
+	return true;
+}
+
+bool FWWOMenuCursor::HandleMouseWheelOrGestureEvent(FSlateApplication& SlateApp, const FPointerEvent& InWheelEvent, const FPointerEvent* InGestureEvent)
+{
+	if (!Capture || InWheelEvent.GetWheelDelta() == 0.f) return false;
+	TakeCapture(InWheelEvent.GetWheelDelta() > 0.f ? EKeys::MouseScrollUp : EKeys::MouseScrollDown);
+	return true;
+}
+
 bool FWWOMenuCursor::HandleAnalogInputEvent(FSlateApplication& SlateApp, const FAnalogInputEvent& InAnalogInputEvent)
 {
 	const FKey Key = InAnalogInputEvent.GetKey();
@@ -124,6 +152,7 @@ bool FWWOMenuCursor::HandleAnalogInputEvent(FSlateApplication& SlateApp, const F
 	if (Key == EKeys::Gamepad_LeftX) { LeftStick.X = Value; return true; }
 	if (Key == EKeys::Gamepad_LeftY) { LeftStick.Y = Value; return true; }
 	if (Key == EKeys::Gamepad_RightY) { RightStickY = Value; return true; }
+	if (Key == EKeys::Gamepad_RightX) { RightStickX = Value; return true; }
 	return false;
 }
 

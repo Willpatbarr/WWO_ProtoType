@@ -65,6 +65,7 @@ public:
 	UPROPERTY() TMap<FName, FName> Frame;
 	UPROPERTY() TMap<FName, FName> WeaponMods; // slot -> mod id
 	UPROPERTY() TArray<FWWOModConfig> ModConfigs;
+	UPROPERTY() TArray<int32> WeaponSlots; // the saved config in each of the two weapon slots (-1 = none)
 };
 
 UCLASS()
@@ -146,6 +147,13 @@ public:
 	int32 GetActiveConfig() const { return ActiveConfig; }
 	void DeleteConfig(int32 Index);
 	static FString ConfigSummary(const FWWOModConfig& Config, const UWWOLoadoutSubsystem* L);
+	// The two weapons you carry: each slot holds one saved config (any config in either slot, for
+	// now). The active slot's is the one in your hands; swapping weapons goes to the other slot.
+	static constexpr int32 WeaponSlotCount = 2;
+	int32 GetSlotConfig(int32 Slot) const { return SlotConfigs.IsValidIndex(Slot) && Configs.IsValidIndex(SlotConfigs[Slot]) ? SlotConfigs[Slot] : INDEX_NONE; }
+	int32 GetActiveSlot() const { return ActiveSlot; }
+	void SetSlotConfig(int32 Slot, int32 ConfigIndex);
+	bool SwapWeaponSlot(); // false when the other slot is empty
 
 	// Sum of Amount for equipped traits with this effect (0 if none).
 	float TraitBonus(FName Effect) const;
@@ -175,6 +183,8 @@ private:
 	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> EquippedMods;
 	TArray<FWWOModConfig> Configs;
 	int32 ActiveConfig = INDEX_NONE; // the last one applied (this session)
+	TArray<int32> SlotConfigs = { INDEX_NONE, INDEX_NONE };
+	int32 ActiveSlot = 0;
 
 	bool bCopy = false; // a joiner's loadout on the host
 	void LoadMods();

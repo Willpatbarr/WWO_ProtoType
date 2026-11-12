@@ -8,6 +8,7 @@
 // point check allows for it. Then everyone else sees the shot (MulticastGunShot).
 
 #include "Player/WWOCharacter.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOGrenadeComponent.h"
@@ -179,13 +180,37 @@ void AWWOCharacter::MulticastGunShot_Implementation(FVector_NetQuantize From, co
 	// The shooter already showed it; everyone else draws its tracers and impacts.
 	if (IsLocallyControlled() || GetNetMode() == NM_DedicatedServer) return;
 	++NetShotsSeen;
-	// From about where their gun is: in front of the eye, a little right and down.
-	const FVector Forward = GetActorForwardVector();
-	const FVector Muzzle = FVector(From) + Forward * 45.f + GetActorRightVector() * 18.f - FVector(0.f, 0.f, 15.f);
+	ShowShotFromBody(From, Ends, true);
+}
+
+void AWWOCharacter::ShowShotFromBody(const FVector& From, TConstArrayView<FVector_NetQuantize> Ends, bool bMarks)
+{
+	if (Ends.Num() == 0) return;
+	UWorld* World = GetWorld();
+	// From about where their gun is: a forearm past the right hand, toward where the shot went (or,
+	// without a hand to go by, in front of the eye, a little right and down).
+	const FVector Aim = (FVector(Ends[0]) - From).GetSafeNormal();
+	FVector Muzzle = From + GetActorForwardVector() * 45.f + GetActorRightVector() * 18.f - FVector(0.f, 0.f, 15.f);
+	static const FName Hand("hand_r");
+	if (GetMesh() && GetMesh()->GetBoneIndex(Hand) != INDEX_NONE) Muzzle = GetMesh()->GetSocketLocation(Hand) + Aim * 40.f;
+	static const FLinearColor Color(1.f, 0.8f, 0.45f);
+	AWWOFXActor::MuzzleFlash(World, Muzzle, Aim, Color);
+	{
+		const FName Own(*(TEXT("fire_") + (Weapon->GetWeaponData() ? Weapon->GetWeaponData()->Id.ToString() : FString())));
+		UWWOSound::Play(this, UWWOSound::HasEvent(this, Own) ? Own : FName("fire"), Muzzle, 0.8f);
+	}
 	for (const FVector_NetQuantize& End : Ends)
 	{
-		AWWOFXActor::Tracer(GetWorld(), Muzzle, End, FLinearColor(1.f, 0.85f, 0.55f), 1.5f, 0.06f);
-		AWWOFXActor::ImpactMark(GetWorld(), End);
+		AWWOFXActor::BulletTrail(World, Muzzle, End, Color);
+		// What it landed on, if anything (a miss's end is out in the open air): sparks off a body,
+		// gold for a headshot; a mark on anything else.
+		const FVector Dir = (FVector(End) - From).GetSafeNormal();
+		FHitResult Near;
+		if (!World->LineTraceSingleByChannel(Near, FVector(End) - Dir * 20.f, FVector(End) + Dir * 20.f, ECC_Visibility,
+			FCollisionQueryParams(SCENE_QUERY_STAT(WWOShotMark), false, this))) continue;
+		const IWWOTargetable* Target = Cast<IWWOTargetable>(Near.GetActor());
+		if (Target && !Target->IsDead() && UWWOWorldSubsystem::CanHurt(this, Near.GetActor())) AWWOFXActor::HitSpark(World, End, -Dir, Target->IsCriticalHit(Near, From));
+		else if (bMarks) AWWOFXActor::ImpactMark(World, End);
 	}
 }
 

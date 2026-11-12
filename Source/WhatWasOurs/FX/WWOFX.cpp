@@ -148,6 +148,20 @@ void AWWOFXActor::ScaleTween(USceneComponent* Comp, const FVector& From, const F
 	Tweens.Add(T);
 }
 
+void AWWOFXActor::MoveTween(USceneComponent* Comp, const FVector& From, const FVector& To, float Duration, EWWOEase Ease, float Delay)
+{
+	FWWOTween T;
+	T.Comp = Comp;
+	T.bMove = true;
+	T.ScaleFrom = From;
+	T.ScaleTo = To;
+	T.Duration = FMath::Max(Duration, 0.001f);
+	T.Ease = Ease;
+	T.Delay = Delay;
+	Comp->SetRelativeLocation(From);
+	Tweens.Add(T);
+}
+
 void AWWOFXActor::ParamTween(UMaterialInstanceDynamic* Mat, FName Param, float From, float To, float Duration, EWWOEase Ease, float Delay)
 {
 	if (!Mat) return;
@@ -213,7 +227,11 @@ void AWWOFXActor::Tick(float DeltaSeconds)
 		const float Raw = (Age - T.Delay) / T.Duration;
 		if (Raw < 0.f) continue;
 		const float E = EaseValue(T.Ease, Raw);
-		if (T.bScale && T.Comp.IsValid())
+		if (T.bMove && T.Comp.IsValid())
+		{
+			T.Comp->SetRelativeLocation(FMath::Lerp(T.ScaleFrom, T.ScaleTo, FMath::Clamp(E, 0.f, 1.f)));
+		}
+		else if (T.bScale && T.Comp.IsValid())
 		{
 			T.Comp->SetRelativeScale3D(FMath::Lerp(T.ScaleFrom, T.ScaleTo, E));
 		}
@@ -261,6 +279,140 @@ void AWWOFXActor::Tracer(UWorld* World, const FVector& From, const FVector& To, 
 	Line->SetWorldRotation((To - From).Rotation());
 	FX->ScaleTween(Line, FVector(Length / 100.f, Width / 100.f, Width / 100.f), FVector(Length / 100.f, Width / 100.f, Width / 100.f), Seconds);
 	FX->ParamTween(WWOFX::MID(Line), "Alpha", Color.A, 0.f, Seconds);
+}
+
+void AWWOFXActor::BulletTrail(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Size)
+{
+	constexpr float Speed = 30000.f;   // cm/s: fast, but a few frames in the air so the eye catches it
+	constexpr float StreakMax = 450.f; // cm
+	constexpr float Linger = 0.2f;     // seconds the wake takes to fade once the streak has landed
+	const float Length = FVector::Dist(From, To);
+	if (Length < 40.f) return;
+	const float Streak = FMath::Min(StreakMax, Length * 0.6f);
+	const float Travel = FMath::Max((Length - Streak) / Speed, 0.02f);
+	AWWOFXActor* FX = Spawn(World, From, Travel + Linger);
+	if (!FX) return;
+	FX->SetActorRotation((To - From).Rotation()); // x runs along the shot
+	USceneComponent* Root = FX->GetRootComponent();
+	const FVector Start(Streak * 0.5f, 0, 0), End(Length - Streak * 0.5f, 0, 0);
+
+	// The streak: a white-hot core inside a soft colored glow, gone when it lands.
+	const FLinearColor Hot = FMath::Lerp(Color, FLinearColor::White, 0.7f);
+	UStaticMeshComponent* Core = WWOFX::AddShape(FX, Root, WWOFX::Cube(), TEXT("M_WWO_Unlit"), Hot);
+	Core->SetCastShadow(false);
+	Core->SetRelativeScale3D(FVector(Streak, 1.4f * Size, 1.4f * Size) / 100.f);
+	FX->MoveTween(Core, Start, End, Travel);
+	FX->ParamTween(WWOFX::MID(Core), "Alpha", 1.f, 0.f, 0.03f, EWWOEase::Linear, Travel);
+	UStaticMeshComponent* Glow = WWOFX::AddSoftSphere(FX, Root, Color, 0.9f, 1.2f, true, false, 0.6f);
+	Glow->SetRelativeScale3D(FVector(Streak * 1.2f, 9.f * Size, 9.f * Size) / 100.f);
+	FX->MoveTween(Glow, Start, End, Travel);
+	FX->ParamTween(WWOFX::MID(Glow), "Alpha", 0.9f, 0.f, 0.03f, EWWOEase::Linear, Travel);
+
+	// The wake: a thin line drawn out behind the streak, fading after it lands.
+	FLinearColor Faint = Color;
+	Faint.A = 0.45f;
+	UStaticMeshComponent* Wake = WWOFX::AddShape(FX, Root, WWOFX::Cube(), TEXT("M_WWO_Unlit"), Faint);
+	Wake->SetCastShadow(false);
+	const float Thin = 1.2f * Size / 100.f;
+	FX->ScaleTween(Wake, FVector(0.01f, Thin, Thin), FVector(Length / 100.f, Thin, Thin), Travel);
+	FX->MoveTween(Wake, FVector::ZeroVector, FVector(Length * 0.5f, 0, 0), Travel);
+	FX->ParamTween(WWOFX::MID(Wake), "Alpha", 0.45f, 0.f, Linger, EWWOEase::QuadOut, Travel * 0.5f);
+}
+
+void AWWOFXActor::Scorch(UWorld* World, const FVector& Ground, float RadiusM, float Seconds)
+{
+	AWWOFXActor* FX = Spawn(World, Ground + FVector(0, 0, 2.f), Seconds);
+	if (!FX) return;
+	UStaticMeshComponent* Mark = WWOFX::AddGroundDisc(FX, FX->GetRootComponent(), FLinearColor(0.02f, 0.02f, 0.025f), 0.35f, 0.75f, 0.f);
+	const float S = RadiusM * WWO::M / 50.f; // the plane is 100 cm across
+	Mark->SetRelativeScale3D(FVector(S, S, 1.f));
+	Mark->SetRelativeRotation(FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f));
+	FX->ParamTween(WWOFX::MID(Mark), "Alpha", 0.7f, 0.f, Seconds, EWWOEase::QuadIn);
+}
+
+void AWWOFXActor::MuzzleFlash(UWorld* World, const FVector& At, const FVector& Dir, const FLinearColor& Color, float Size)
+{
+	constexpr float Seconds = 0.07f;
+	AWWOFXActor* FX = Spawn(World, At, Seconds);
+	if (!FX) return;
+	// x along the barrel, rolled differently every shot so no two flashes match.
+	FRotator Rot = Dir.Rotation();
+	Rot.Roll = FMath::FRandRange(0.f, 360.f);
+	FX->SetActorRotation(Rot);
+	USceneComponent* Root = FX->GetRootComponent();
+	const float S = Size * FMath::FRandRange(0.85f, 1.2f) / 100.f;
+	auto Flare = [&](const FVector& ScaleCm, const FVector& PosCm, const FLinearColor& C, float Alpha, float Core)
+	{
+		UStaticMeshComponent* Ball = WWOFX::AddSoftSphere(FX, Root, C, Alpha, 1.3f, true, false, Core);
+		Ball->SetRelativeLocation(PosCm * S * 100.f);
+		FX->ScaleTween(Ball, ScaleCm * S * 0.6f, ScaleCm * S, Seconds, EWWOEase::ExpoOut);
+		FX->ParamTween(WWOFX::MID(Ball), "Alpha", Alpha, 0.f, Seconds, EWWOEase::QuadIn);
+	};
+	const FLinearColor Hot = FMath::Lerp(Color, FLinearColor::White, 0.6f);
+	Flare(FVector(16.f, 16.f, 16.f), FVector(4.f, 0, 0), Hot, 1.f, 1.f);       // core
+	Flare(FVector(46.f, 10.f, 10.f), FVector(22.f, 0, 0), Color, 0.9f, 0.5f);  // tongue, out of the barrel
+	Flare(FVector(7.f, 40.f, 7.f), FVector(5.f, 0, 0), Color, 0.7f, 0.3f);     // cross
+	Flare(FVector(7.f, 7.f, 32.f), FVector(5.f, 0, 0), Color, 0.7f, 0.3f);
+	FX->LightTween(FX->AddLight(Color, 9000.f * Size, 450.f), 9000.f * Size, 0.f, Seconds, EWWOEase::QuadIn);
+}
+
+void AWWOFXActor::HitSpark(UWorld* World, const FVector& At, const FVector& Away, bool bCritical)
+{
+	static const FLinearColor Plain(1.f, 0.72f, 0.35f), Gold(1.f, 0.85f, 0.2f);
+	const FLinearColor Color = bCritical ? Gold : Plain;
+	const float Big = bCritical ? 1.7f : 1.f;
+	const FVector Out = At + Away * 4.f; // just off the surface, so the body doesn't hide it
+	if (AWWOFXActor* FX = Spawn(World, Out, 0.12f))
+	{
+		UStaticMeshComponent* Ball = WWOFX::AddSoftSphere(FX, FX->GetRootComponent(), FMath::Lerp(Color, FLinearColor::White, 0.6f), 1.f, 1.3f, true, false, 1.f);
+		const float S = 0.22f * Big;
+		FX->ScaleTween(Ball, FVector(S * 0.4f), FVector(S), 0.12f, EWWOEase::ExpoOut);
+		FX->ParamTween(WWOFX::MID(Ball), "Alpha", 1.f, 0.f, 0.12f, EWWOEase::QuadIn);
+		if (bCritical)
+		{
+			// A flat flare across the hit, so a headshot reads at a glance.
+			UStaticMeshComponent* Streak = WWOFX::AddSoftSphere(FX, FX->GetRootComponent(), Color, 0.9f, 1.3f, true, false, 0.5f);
+			Streak->SetWorldRotation(Away.Rotation());
+			FX->ScaleTween(Streak, FVector(0.05f, 0.25f, 0.05f), FVector(0.05f, 0.75f, 0.05f), 0.12f, EWWOEase::ExpoOut);
+			FX->ParamTween(WWOFX::MID(Streak), "Alpha", 0.9f, 0.f, 0.12f, EWWOEase::QuadIn);
+		}
+	}
+	if (AWWOParticles* Sparks = AWWOParticles::Burst(World, Out, FMath::Lerp(Color, FLinearColor::White, 0.4f), bCritical ? 12 : 6, bCritical ? 0.4f : 0.28f,
+		2.f, bCritical ? 7.f : 5.f, bCritical ? 0.045f : 0.035f, FVector(0, 0, -12.f), EWWOParticleStyle::Glow, false))
+	{
+		Sparks->Direction = (Away + FVector(0, 0, 0.3f)).GetSafeNormal();
+		Sparks->SpreadDegrees = 55.f;
+		Sparks->Start();
+	}
+}
+
+void AWWOFXActor::DeathBurst(UWorld* World, const FVector& At, const FLinearColor& Color, float SizeM)
+{
+	const float K = SizeM / 1.8f;
+	const FLinearColor Hot = FMath::Lerp(Color, FLinearColor::White, 0.5f);
+	if (AWWOFXActor* FX = Spawn(World, At, 0.35f))
+	{
+		UStaticMeshComponent* Ball = WWOFX::AddSoftSphere(FX, FX->GetRootComponent(), Hot, 0.9f, 1.2f, true, false, 0.8f);
+		FX->ScaleTween(Ball, FVector(0.5f * K), FVector(2.4f * K), 0.25f, EWWOEase::ExpoOut);
+		FX->ParamTween(WWOFX::MID(Ball), "Alpha", 0.9f, 0.f, 0.25f, EWWOEase::QuadIn);
+		FX->LightTween(FX->AddLight(Color, 12000.f * K, 600.f * K), 12000.f * K, 0.f, 0.3f, EWWOEase::QuadOut);
+	}
+	FVector Ground;
+	if (WWOFX::GroundBelow(World, At, 300.f, Ground)) Shockwave(World, Ground, Color, 2.2f * K, 0.4f);
+	if (AWWOParticles* Sparks = AWWOParticles::Burst(World, At, Hot, 26, 0.6f, 2.5f, 8.f, 0.05f * K, FVector(0, 0, -10.f), EWWOParticleStyle::Glow, false))
+	{
+		Sparks->Shape = EWWOEmitShape::Sphere;
+		Sparks->ShapeRadius = 0.3f * K;
+		Sparks->Start();
+	}
+	if (AWWOParticles* Chunks = AWWOParticles::Burst(World, At, FLinearColor(0.12f, 0.12f, 0.14f), 10, 0.9f, 2.f, 5.5f, 0.09f * K, FVector(0, 0, -14.f), EWWOParticleStyle::Chunk, false))
+	{
+		Chunks->Direction = FVector::UpVector;
+		Chunks->SpreadDegrees = 75.f;
+		Chunks->Shape = EWWOEmitShape::Sphere;
+		Chunks->ShapeRadius = 0.3f * K;
+		Chunks->Start();
+	}
 }
 
 void AWWOFXActor::ImpactMark(UWorld* World, const FVector& At)

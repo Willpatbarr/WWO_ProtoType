@@ -115,6 +115,12 @@ public:
 	// A faint tint over the visible body (the model, else the mannequin): the enemy under the
 	// reticle. 0 takes it off.
 	void SetHighlight(float Alpha);
+	// PvP: a tint over the visible body while a player is near the watcher's reticle: Fill faintly
+	// all over, Rim strongly around the outline. Both 0 takes it off. It replaces the reticle highlight.
+	void SetTeamTint(const FLinearColor& Color, float Fill, float Rim);
+	// A soft glow around both hands (an ability that charges the fists); Alpha 0 takes it off.
+	void SetHandGlow(const FLinearColor& Color, float Alpha);
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> HandGlows;
 
 	UAnimSequence* FindAnim(FName Anim) const;
 	static bool IsLooping(FName Anim);
@@ -135,6 +141,10 @@ private:
 	UFUNCTION() void OnRep_Net();
 	bool Replicating() const; // the host, online: record commands into Net
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> HighlightMat; // M_WWO_Highlight, made on first use
+	float HighlightAlpha = 0.f;                 // the reticle highlight (SetHighlight)
+	FLinearColor TeamTint = FLinearColor::Black; // SetTeamTint
+	float TeamTintAlpha = 0.f, TeamTintRim = 0.f;
+	void RefreshOverlay(); // the overlay material on the visible body, from the two above
 	FName ActiveModel;
 	bool bFollowsLoadout = false;
 	bool bModelGrafts = false;  // keep the flora grafts on the model

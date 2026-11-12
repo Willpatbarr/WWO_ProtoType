@@ -1,4 +1,5 @@
 #include "Weapons/WWOGrenade.h"
+#include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
@@ -318,6 +319,28 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 	if (Spec.bExplodeOnImpact && !Cast<AWWOGrenade>(Other))
 	{
 		Explode();
+		return;
+	}
+	// A knock of dust and a few sparks where it bounces, harder hits kicking up more.
+	const float Speed = ImpactVelocity.Size() / WWO::M;
+	if (Speed > 2.f && !bStuck)
+	{
+		const FVector At = Hit.ImpactPoint + Hit.ImpactNormal * 4.f;
+		UWWOSound::Play(this, "grenade_bounce", At, FMath::Clamp(Speed / 10.f, 0.3f, 1.f));
+		if (AWWOParticles* Dust = AWWOParticles::Burst(GetWorld(), At, FLinearColor(0.6f, 0.58f, 0.54f, 0.35f), FMath::Clamp(FMath::RoundToInt(Speed * 0.6f), 3, 10), 0.5f,
+			0.4f, 1.4f, 0.16f, FVector(0, 0, 0.3f), EWWOParticleStyle::Smoke, false))
+		{
+			Dust->Direction = Hit.ImpactNormal;
+			Dust->SpreadDegrees = 70.f;
+			Dust->Start();
+		}
+		if (AWWOParticles* Sparks = AWWOParticles::Burst(GetWorld(), At, FLinearColor(1.f, 0.85f, 0.6f), FMath::Clamp(FMath::RoundToInt(Speed * 0.4f), 2, 6), 0.25f,
+			1.5f, 4.f, 0.03f, FVector(0, 0, -12.f), EWWOParticleStyle::Glow, false))
+		{
+			Sparks->Direction = Hit.ImpactNormal;
+			Sparks->SpreadDegrees = 60.f;
+			Sparks->Start();
+		}
 	}
 }
 
@@ -563,12 +586,24 @@ void AWWOGrenade::SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const F
 		UPointLightComponent* Flash = FX->AddLight(FMath::Lerp(Color, FLinearColor::White, 0.25f), 0.f, R * 2.2f * WWO::M);
 		FX->LightTween(Flash, (bBlind ? 8.f : 6.f) * 3000.f, 0.f, 0.45f, EWWOEase::QuadOut);
 	}
+	UWWOSound::Play(World, "explosion", Center, FMath::Clamp(R / 4.f, 0.4f, 1.3f));
+	// Whoever is playing here feels it if it's close: harder the nearer and the bigger it is.
+	if (const APlayerController* PC = World->GetFirstPlayerController())
+	{
+		if (AWWOCharacter* Me = Cast<AWWOCharacter>(PC->GetPawn()))
+		{
+			const float Reach = FMath::Max(R, 1.f) * 2.5f * WWO::M;
+			const float Near = 1.f - FVector::Dist(Me->EyeLocation(), Center) / Reach;
+			if (Near > 0.f && !Me->Health->bDead) Me->Weapon->Shake(Me->Weapon->BlastShake * Near * FMath::Clamp(R / 4.f, 0.4f, 1.5f), 0.35f);
+		}
+	}
 	// Sparks, more for bigger blasts.
 	AWWOParticles::Burst(World, Center, FMath::Lerp(Color, FLinearColor::White, 0.3f), FMath::Clamp(FMath::RoundToInt(R * 9.f), 6, 70),
 		0.55f, R * 1.2f, R * 3.f, FMath::Clamp(R * 0.025f, 0.04f, 0.2f), FVector(0, 0, -9.8f));
 	FVector Ground;
 	const bool bGround = WWOFX::GroundBelow(World, Center, FMath::Max(R * 0.5f, 0.6f) * WWO::M, Ground, Ignore);
 	if (bGround && R >= 1.f) AWWOFXActor::Shockwave(World, Ground, Color, R * 1.2f, 0.4f);
+	if (bGround && R >= 1.f) AWWOFXActor::Scorch(World, Ground, R * 0.7f);
 	if (Look.Flavor == "voltvine")
 	{
 		// A few bolts crackle out from the middle of the blast.

@@ -40,6 +40,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Player") float ReviveHealth = 0.5f; // of max health, no shield
 
 	static constexpr float KillZ = -3000.f; // cm
+	float MapKillZ = KillZ; // cm: a map can raise it with a TargetPoint tagged KillZ (L_Cascade: its chasm kills at -9 m)
 
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Health = 100.f;
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Shield = 100.f;
@@ -60,6 +61,12 @@ public:
 	float MaxHealth() const;
 	float MaxShield() const;
 	void TakeDamage(float Amount, bool bMelee = false); // bMelee: a bite, punch or slam
+	// Where damage came from, for the HUD's direction markers. The host calls DamageCameFrom next to
+	// the damage; it reaches the machine of the player who was hit, which keeps the marks.
+	struct FDamageMark { FVector From; double Time; };
+	TArray<FDamageMark> DamageMarks; // your own player's, on your machine (newest last)
+	void DamageCameFrom(const FVector& From);
+	void AddDamageMark(const FVector& From);
 	void Kill();
 	void Respawn();
 	void Revive();         // host: back up where you fell

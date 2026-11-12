@@ -57,7 +57,15 @@ namespace
 
 	FString ButtonText(const UButton* B)
 	{
-		const UTextBlock* T = Cast<UTextBlock>(B->GetChildAt(0));
+		// Its label: the text it holds, or the first text inside what it holds (the character menu's
+		// tabs and cards wrap theirs in boxes).
+		const UWidget* W = B->GetChildAt(0);
+		while (W && !W->IsA<UTextBlock>())
+		{
+			const UPanelWidget* Panel = Cast<UPanelWidget>(W);
+			W = Panel && Panel->GetChildrenCount() > 0 ? Panel->GetChildAt(0) : nullptr;
+		}
+		const UTextBlock* T = Cast<UTextBlock>(W);
 		return T ? T->GetText().ToString() : FString();
 	}
 
@@ -75,14 +83,13 @@ namespace
 		return bFound;
 	}
 
-	// The first slider on screen in the Specific pane (the right half of the menu).
+	// The first slider on screen (the open page's, or the open item's).
 	USlider* FirstSlider(UUserWidget* Menu)
 	{
 		USlider* Found = nullptr;
-		const float Mid = Menu->GetCachedGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5f, 0.5f)).X;
 		Menu->WidgetTree->ForEachWidget([&](UWidget* W)
 		{
-			if (!Found && Cast<USlider>(W) && IsShown(W) && W->GetCachedGeometry().GetAbsolutePosition().X > Mid) Found = Cast<USlider>(W);
+			if (!Found && Cast<USlider>(W) && IsShown(W)) Found = Cast<USlider>(W);
 		});
 		return Found;
 	}
@@ -170,20 +177,46 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	// R1, R1, L1: Global tabs 0 -> 1 -> 2 -> 1.
 	case 3: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_RightShoulder); Next(); } break;
-	case 4: if (AutoMenuClock > Wait) { Check(Settings->GetGlobalTab() == 1, TEXT("R1 next Global tab")); InjectKey(EKeys::Gamepad_RightShoulder, true); Next(); } break;
+	case 4: if (AutoMenuClock > Wait) { Check(Settings->GetTopTab() == 1, TEXT("R1 next tab")); InjectKey(EKeys::Gamepad_RightShoulder, true); Next(); } break;
 	case 5: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_RightShoulder); Next(); } break;
-	case 6: if (AutoMenuClock > Wait) { Check(Settings->GetGlobalTab() == 2, TEXT("R1 again")); InjectKey(EKeys::Gamepad_LeftShoulder, true); Next(); } break;
+	case 6: if (AutoMenuClock > Wait) { Check(Settings->GetTopTab() == 2, TEXT("R1 again")); InjectKey(EKeys::Gamepad_LeftShoulder, true); Next(); } break;
 	case 7: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_LeftShoulder); Next(); } break;
 	case 8:
 		if (AutoMenuClock > Wait)
 		{
-			Check(Settings->GetGlobalTab() == 1 && Settings->IsOpen(), TEXT("L1 previous Global tab (menu still open, no grenade / melee)"));
-			Shot(TEXT("25_menu_settings_tabs"));
-			Next();
+			// The tab, then a search across every tab, then back to the page.
+			static int32 Sub = 0;
+			if (Sub == 0)
+			{
+				Check(Settings->GetTopTab() == 1 && Settings->IsOpen(), TEXT("L1 previous tab (menu still open, no grenade / melee)"));
+				Shot(TEXT("25_menu_settings_tabs"));
+				Sub = 1;
+			}
+			else if (Sub == 1 && AutoMenuClock > Wait + 0.3f) { Settings->AutoTestSearch(TEXT("damage")); Sub = 2; }
+			else if (Sub == 2 && AutoMenuClock > Wait + 0.8f) { Shot(TEXT("25_menu_settings_search")); Sub = 3; }
+			else if (Sub == 3 && AutoMenuClock > Wait + 1.1f) { Settings->AutoTestSearch(TEXT("")); Check(Settings->GetTopTab() == 1, TEXT("clearing the search returns to the page")); Sub = 4; }
+			// The Controls page, with jump moved onto J (sprint's Shift given to crouch swaps the two).
+			else if (Sub == 4 && AutoMenuClock > Wait + 1.3f)
+			{
+				SetBind("jump", false, EKeys::J);
+				SetBind("crouch", false, EKeys::LeftShift);
+				Check(GetBind("jump", false) == EKeys::J && GetBind("crouch", false) == EKeys::LeftShift && GetBind("sprint", false) == EKeys::C, TEXT("rebinding: jump on J, crouch and sprint swapped"));
+				Check(Settings->ShowPage(TEXT("Key Bindings")), TEXT("the Key Bindings page opens"));
+				Sub = 5;
+			}
+			else if (Sub == 5 && AutoMenuClock > Wait + 1.8f) { Shot(TEXT("25_menu_settings_controls")); Sub = 6; }
+			else if (Sub == 6 && AutoMenuClock > Wait + 2.1f)
+			{
+				ResetBinds();
+				Check(GetBind("jump", false) == EKeys::SpaceBar, TEXT("resetting the bindings puts jump back on Space"));
+				Settings->ShowPage(TEXT("Melee"));
+				Sub = 0;
+				Next();
+			}
 		}
 		break;
 	// Left stick + cross: the Specific pane's Flora tab, then the equipped grenade in its list.
-	case 9: if (ClickButton(Settings, TEXT("Flora"))) Next(); break;
+	case 9: if (ClickButton(Settings, TEXT("ITEMS"))) Next(); break; // the tab; it opens on Equipped
 	case 10: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
 	case 11: if (ClickButton(Settings, Grenade + TEXT("\n"))) Next(); break;
 	case 12: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
@@ -238,13 +271,13 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		}
 		break;
 	// Right stick scrolls the area under the cursor: the Global pane's Melee tab.
-	case 20: if (ClickButton(Settings, TEXT("Melee"))) Next(); break;
+	case 20: Check(Settings->ShowPage(TEXT("Melee")), TEXT("the Melee page opens by name")); Next(); break;
 	case 21: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
 	case 22:
 	{
-		FVector2D At;
-		if (!FindButton(Settings, TEXT("Reset this tab"), At)) { if (Timeout(1.f, TEXT("find Reset this tab"))) Next(); break; }
-		if (Steer(At - FVector2D(0.f, 200.f)) || Timeout(4.f, TEXT("steer over the Global rows"))) Next();
+		USlider* S = FirstSlider(Settings);
+		if (!S) { if (Timeout(1.f, TEXT("find a Melee slider"))) Next(); break; }
+		if (Steer(S->GetCachedGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5f, 0.5f)) + FVector2D(0.f, 60.f)) || Timeout(4.f, TEXT("steer over the page's rows"))) Next();
 		break;
 	}
 	case 23:
@@ -256,6 +289,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 			Check(Settings->GlobalScrollOffset() > 100.f,
 				FString::Printf(TEXT("right stick scrolls the Melee tab (tab %d, offset %.0f)"), Settings->GetGlobalTab(), Settings->GlobalScrollOffset()));
 			Shot(TEXT("27_menu_settings_scrolled"));
+			Settings->ShowPage(TEXT("Equipped")); // back to the item left open, for the circle checks
 			Next();
 		}
 		break;
@@ -293,8 +327,38 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	case 36: if (AutoMenuClock > Wait) { InjectKey(EKeys::Gamepad_Special_Left, true); Next(); } break;
 	// Character menu: touchpad opens; stick + cross through the Flora tile and the grenade picker.
 	case 37: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(Character->IsOpen() && IsPaused(), TEXT("touchpad opens the character menu")); Next(); } break;
-	case 38: if (AutoMenuClock > 0.5f) { Shot(TEXT("28_menu_character")); Next(); } break;
-	case 39: if (ClickButton(Character, TEXT("Flora"))) Next(); break;
+	case 38:
+	{
+		// The Loadout tab, then with the cursor resting on the grenade tile (its initials), which
+		// drops the row of other grenades under it.
+		static int32 Sub = 0;
+		static float SubAt = 0.f;
+		FString GrenadeInitials;
+		TArray<FString> Words;
+		Grenade.ParseIntoArray(Words, TEXT(" "));
+		for (const FString& Word : Words) if (GrenadeInitials.Len() < 2) GrenadeInitials += Word.Left(1).ToUpper();
+		FVector2D At;
+		if (Sub == 0 && AutoMenuClock > 0.5f) { Shot(TEXT("28_menu_character")); Sub = 1; }
+		else if (Sub == 1 && AutoMenuClock > 0.8f && (!FindButton(Character, GrenadeInitials, At) || Steer(At) || AutoMenuClock > 5.f)) { Sub = 2; SubAt = AutoMenuClock; }
+		else if (Sub == 2 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_hover")); Sub = 3; SubAt = AutoMenuClock; }
+		// Then on the head's shell card (the part you have on: yellow on the bars), and on another
+		// head in the row that opens (green and red for what swapping would do).
+		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f && (!FindButton(Character, TEXT("/"), At) || Steer(At) || AutoMenuClock > SubAt + 5.f)) { Sub = 4; SubAt = AutoMenuClock; }
+		else if (Sub == 4 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_part")); Sub = 5; SubAt = AutoMenuClock; }
+		else if (Sub == 5 && AutoMenuClock > SubAt + 0.3f)
+		{
+			FString Other;
+			if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+			{
+				for (const UWWOFramePartData* Part : L->FramePartsFor("head")) if (Part->bUnlocked && Part != L->GetFramePart("head") && Other.IsEmpty()) Other = Part->DisplayName.ToUpper();
+			}
+			if (Other.IsEmpty() || !FindButton(Character, Other, At) || Steer(At) || AutoMenuClock > SubAt + 5.f) { Sub = 6; SubAt = AutoMenuClock; }
+		}
+		else if (Sub == 6 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_part_swap")); Sub = 7; SubAt = AutoMenuClock; }
+		else if (Sub == 7 && AutoMenuClock > SubAt + 0.3f) { Sub = 0; Next(); }
+		break;
+	}
+	case 39: if (ClickButton(Character, TEXT("FLORA"))) Next(); break; // the tab
 	case 40: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
 	case 41: if (ClickButton(Character, TEXT("Grenade\n"))) Next(); break;
 	case 42: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
@@ -318,7 +382,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 46: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Right); Next(); } break;
 	case 47: if (AutoMenuClock > Wait) { Check(Character->DebugState() == TEXT("expanded '' picker ''") && Character->IsOpen(), TEXT("circle collapses the tile")); Next(); } break;
-	case 48: if (ClickButton(Character, TEXT("Weapons"))) Next(); break;
+	case 48: if (ClickButton(Character, TEXT("WEAPON"))) Next(); break; // the tab (not the Loadout tab's weapon card)
 	case 49: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
 	case 50:
 		if (AutoMenuClock > 0.3f)

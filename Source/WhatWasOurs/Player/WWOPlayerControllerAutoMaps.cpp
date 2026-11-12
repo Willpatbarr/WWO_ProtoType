@@ -1,7 +1,8 @@
 // Map steps of the autotest (-WWOAutoTestMaps, and the end of -WWOAutoTest): the level seen from a
 // handful of fixed cameras (spawn, overviews, platforms and their ramps, halls), one screenshot
 // each, for checking the arena look and lighting. Views are written in Godot tile coordinates
-// like build_maps.py: tile (x, z) at height y, 4 m tiles centered on the map.
+// like build_maps.py: tile (x, z) at height y, 4 m tiles centered on the map; L_Cascade's in its
+// mockup's meters (x east, y north, z up; Tools/cascade_layout.py).
 
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
@@ -43,6 +44,18 @@ namespace
 		{TEXT("east_hallway"), {19.0, 15.2, 1.7}, {19.0, 0.0, 1.5}},
 		{TEXT("top"), {11.5, 23.0, 36.0}, {11.5, 7.0, 0.0}},
 	};
+	// L_Cascade (6v6): mockup meters (x east, y north, z up), origin at the citadel.
+	const FWWOMapView CascadeViews[] = {
+		{TEXT("spawn"), {-82.5, 0.0, 1.7}, {-55.0, 0.0, 1.5}},
+		{TEXT("hall"), {-16.2, -5.0, 4.7}, {10.0, 5.0, 5.0}},
+		{TEXT("balcony"), {-24.8, 9.0, 6.7}, {-16.2, 22.5, 6.0}},
+		{TEXT("node_low"), {47.5, 47.5, 2.7}, {27.5, 27.5, 1.0}},
+		{TEXT("bridge_arch"), {32.0, 58.0, 5.0}, {19.0, 42.5, 0.0}},
+		{TEXT("north_terminal"), {0.0, 67.5, 4.7}, {0.0, 50.0, 2.0}},
+		{TEXT("high_node_to_ring"), {-45.0, 45.0, 7.7}, {-22.5, 22.5, 0.0}},
+		{TEXT("ring_sunrise"), {-33.8, 12.5, 1.7}, {-27.5, -20.0, 1.5}},
+		{TEXT("top"), {0.0, -118.8, 87.5}, {0.0, 0.0, 0.0}},
+	};
 	// The test range: positions are Godot meters (x, z, y), no tile grid.
 	const FWWOMapView TestRangeViews[] = {
 		{TEXT("spawn"), {0.0, 3.0, 1.7}, {0.0, -20.0, 1.0}},
@@ -57,12 +70,15 @@ bool AWWOPlayerController::UpdateAutoMapTest(AWWOCharacter* P, float DeltaTime)
 	const FString Map = World->GetMapName();
 	const bool bLarge = Map.Contains(TEXT("ArenaLarge"));
 	const bool bRange = Map.Contains(TEXT("TestRange"));
-	const FWWOMapView* Views = bLarge ? ArenaLargeViews : bRange ? TestRangeViews : ArenaViews;
-	const int32 Count = bLarge ? UE_ARRAY_COUNT(ArenaLargeViews) : bRange ? UE_ARRAY_COUNT(TestRangeViews) : UE_ARRAY_COUNT(ArenaViews);
-	const FString MapTag = bLarge ? TEXT("large") : bRange ? TEXT("range") : TEXT("arena");
+	const bool bCascade = Map.Contains(TEXT("Cascade"));
+	const FWWOMapView* Views = bCascade ? CascadeViews : bLarge ? ArenaLargeViews : bRange ? TestRangeViews : ArenaViews;
+	const int32 Count = bCascade ? UE_ARRAY_COUNT(CascadeViews) : bLarge ? UE_ARRAY_COUNT(ArenaLargeViews) : bRange ? UE_ARRAY_COUNT(TestRangeViews) : UE_ARRAY_COUNT(ArenaViews);
+	const FString MapTag = bCascade ? TEXT("cascade") : bLarge ? TEXT("large") : bRange ? TEXT("range") : TEXT("arena");
 	const FVector2D Size = bLarge ? FVector2D(24.0, 16.0) : FVector2D(16.0, 12.0);
-	auto ToWorld = [bRange, Size](const FVector& V)
+	auto ToWorld = [bRange, bCascade, Size](const FVector& V)
 	{
+		// Mockup meters: Unreal X = north, Y = east.
+		if (bCascade) return FVector(V.Y, V.X, V.Z) * WWO::M;
 		// Godot (x, y, z) = Unreal (-z, x, y) * 100; tiles are 4 m, centered on the map.
 		const double X = bRange ? V.X : (V.X - (Size.X - 1.0) * 0.5) * 4.0;
 		const double Z = bRange ? V.Y : (V.Y - (Size.Y - 1.0) * 0.5) * 4.0;

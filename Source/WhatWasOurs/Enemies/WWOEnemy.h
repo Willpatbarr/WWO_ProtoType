@@ -125,6 +125,7 @@ protected:
 private:
 	FTransform SpawnTransform;
 	float Flash = 0.f;
+	bool bDeathShown = false; // the death burst has played for this death
 	float RetargetLeft = 0.f;
 	float CorpseLeft = -1.f;
 	float RespawnLeft = -1.f;

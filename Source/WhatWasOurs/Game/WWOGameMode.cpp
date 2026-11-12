@@ -1,4 +1,10 @@
 #include "Game/WWOGameMode.h"
+#include "Characters/WWOBodyComponent.h"
+#include "FX/WWOFX.h"
+#include "Weapons/WWOGrenade.h"
+#include "Flora/WWOFloraEffects.h"
+#include "Systems/WWOSound.h"
+#include "TimerManager.h"
 #include "Engine/NetConnection.h"
 #include "Engine/NetDriver.h"
 #include "Player/WWOBotController.h"
@@ -536,9 +542,13 @@ void AWWOGameMode::EndMatch(int32 WinningTeam)
 FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 {
 	// The spawn spot (enemy spawn points and player starts) farthest from the nearest living
-	// player of the other team.
+	// player of the other team. Enemy spawn points tagged PvEOnly (L_Cascade's, out on the nodes and
+	// terminals) are for the waves only.
 	TArray<FTransform> Spots;
-	for (AActor* Point : SpawnPoints()) Spots.Add(FTransform(Point->GetActorRotation(), Point->GetActorLocation() + FVector(0, 0, 100.f)));
+	for (AActor* Point : SpawnPoints())
+	{
+		if (!Point->ActorHasTag("PvEOnly")) Spots.Add(FTransform(Point->GetActorRotation(), Point->GetActorLocation() + FVector(0, 0, 100.f)));
+	}
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It) Spots.Add(It->GetActorTransform());
 	if (Spots.Num() == 0) return Player ? Player->GetActorTransform() : FTransform::Identity;
 	TArray<const AWWOCharacter*> Others;
@@ -570,7 +580,7 @@ void AWWOGameMode::UpdateBots()
 	if (BotsSpawned > 0 && (BotLogClock += GetWorld()->GetDeltaSeconds()) >= BotLogNext)
 	{
 		// How the bots are getting on (every 10 s).
-		BotLogNext += 10.f;
+		BotLogNext += FParse::Param(FCommandLine::Get(), TEXT("WWOStressShots")) ? 4.f : 10.f;
 		int32 Count[4] = {}, Following = 0;
 		for (TActorIterator<AWWOBotController> It(GetWorld()); It; ++It)
 		{
@@ -581,6 +591,45 @@ void AWWOGameMode::UpdateBots()
 		UE_LOG(LogWWO, Display, TEXT("Bots: t=%.0f roam %d hunt %d fight %d retreat %d; sightings %d, shots %d, kills %d, paths %d (%d failed), stuck hops %d, gave up %d"),
 			BotLogClock, Count[0], Count[1], Count[2], Count[3], AWWOBotController::Sightings, AWWOBotController::ShotsFired, PvPKills,
 			AWWOBotController::PathsFound, AWWOBotController::PathsFailed, AWWOBotController::StuckJumps, AWWOBotController::Regoals);
+		// -WWOStressShots: the host's player turns to the nearest other player in sight, a teammate and
+		// a foe in turn, and the view is saved a moment later (Saved/AutoTest/41_pvp_view_<t>.png).
+		if (FParse::Param(FCommandLine::Get(), TEXT("WWOStressShots")))
+		{
+			APlayerController* PC = GetWorld()->GetFirstPlayerController();
+			AWWOCharacter* Me = PC ? Cast<AWWOCharacter>(PC->GetPawn()) : nullptr;
+			static bool bWantFoe = false;
+			bWantFoe = !bWantFoe;
+			AWWOCharacter* Best = nullptr;
+			float BestD = 6000.f;
+			for (TActorIterator<AWWOCharacter> It(GetWorld()); Me && It; ++It)
+			{
+				if (*It == Me || It->Health->bDead || UWWOWorldSubsystem::CanHurt(Me, *It) != bWantFoe) continue;
+				const float D = FVector::Dist(It->GetActorLocation(), Me->GetActorLocation());
+				FHitResult Block;
+				FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOStressShot), false, Me);
+				Params.AddIgnoredActor(*It);
+				if (D < BestD && !GetWorld()->LineTraceSingleByChannel(Block, Me->EyeLocation(), It->GetActorLocation(), ECC_Visibility, Params)) { BestD = D; Best = *It; }
+			}
+			if (Best)
+			{
+				const FVector Dir = (Best->GetActorLocation() - Me->EyeLocation()).GetSafeNormal();
+				Me->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
+				// And something for the HUD to show: a hit from behind and to the right, and a slow.
+				Me->Health->DamageCameFrom(Me->GetActorLocation() - Dir * 400.f + FVector::CrossProduct(FVector::UpVector, Dir) * 400.f);
+				Me->ApplySlow(0.4f, 3.f);
+				const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("41_pvp_view_%03d_%s.png"), FMath::RoundToInt(BotLogClock), bWantFoe ? TEXT("foe") : TEXT("mate"));
+				FTimerHandle Handle;
+				GetWorld()->GetTimerManager().SetTimer(Handle, [Path] { FScreenshotRequest::RequestScreenshot(Path, true, false); }, 0.25f, false);
+				UE_LOG(LogWWO, Display, TEXT("Bots view: %s at %.0f m, team %d (mine %d) -> %s"), bWantFoe ? TEXT("foe") : TEXT("teammate"), BestD / 100.f,
+					UWWOWorldSubsystem::TeamOf(Best), UWWOWorldSubsystem::TeamOf(Me), *Path);
+			}
+		}
+		UE_LOG(LogWWO, Display, TEXT("Bots sounds: %s"), *UWWOSound::Summary());
+		int32 HeadShots = 0, HeadCrits = 0, HeadOldCrits = 0;
+		float HeadOffEyes = 0.f;
+		for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It) It->ProbeHeadShots(HeadShots, HeadCrits, HeadOldCrits, HeadOffEyes);
+		UE_LOG(LogWWO, Display, TEXT("Bots heads: %d test shots at the drawn heads, %d count as headshots (%d under the old hitboxes); head up to %.0f cm from the eye point"),
+			HeadShots, HeadCrits, HeadOldCrits, HeadOffEyes);
 		UE_LOG(LogWWO, Display, TEXT("Bots kit: melees %d, grenades %d, abilities %d, ults %d, retreats %d (%d found no cover), gun swaps %d; stuck hops roaming %d hunting %d fighting %d retreating %d"),
 			AWWOBotController::Melees, AWWOBotController::Grenades, AWWOBotController::AbilitiesUsed, AWWOBotController::Ults,
 			AWWOBotController::Retreats, AWWOBotController::NoCover, AWWOBotController::Swaps,
@@ -637,6 +686,46 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 			for (int32 i = 0; i < FogCount; ++i)
 			{
 				AWWOSporeFog::SpawnFog(GetWorld(), Host->GetActorLocation() + Host->GetActorForwardVector() * (Ahead + i * 2.f) * WWO::M, 7.f, 600.f, true);
+			}
+		}
+	}
+	// -WWOFxGallery (with -WWOHostPvP -WWOBots=1 -WWOBotsIdle, on L_TestRange): stages the kit effects
+	// in front of the host one after another and saves each (Saved/AutoTest/42_fx_*.png).
+	if (FParse::Param(FCommandLine::Get(), TEXT("WWOFxGallery")))
+	{
+		auto At = [this, DeltaSeconds](float T) { return StressClock >= T && StressClock - DeltaSeconds < T; };
+		auto Save = [this](const TCHAR* Name, float After)
+		{
+			const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("42_fx_%s.png"), Name);
+			FTimerHandle Handle;
+			GetWorld()->GetTimerManager().SetTimer(Handle, [Path] { FScreenshotRequest::RequestScreenshot(Path, true, false); }, FMath::Max(After, 0.03f), false); // (a timer of 0 never fires)
+		};
+		AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer();
+		AWWOCharacter* Bot = nullptr;
+		for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It) if (*It != Host && !Bot) Bot = *It;
+		if (Host)
+		{
+			const FVector Fwd = Host->GetActorForwardVector(), Right = Host->GetActorRightVector(), Feet = Host->FeetLocation();
+			const FLinearColor Orange(0.95f, 0.5f, 0.1f);
+			if (At(3.f))
+			{
+				// Someone standing in front of you, a damage pool to the right, a spore fog beyond on the left.
+				Host->SetViewRotation(-0.12f, Host->GetActorRotation().Yaw);
+				if (Bot) Bot->TeleportTo(Host->GetActorLocation() + Fwd * 330.f - Right * 60.f, (-Fwd).Rotation());
+				AWWOSporePool::Spawn(GetWorld(), Feet + Fwd * 620.f + Right * 330.f, 2.6f, 0.f, 60.f, FLinearColor(0.3f, 0.6f, 1.f), "voltvine", nullptr);
+				AWWOSporeFog::SpawnFog(GetWorld(), Feet + Fwd * 1150.f - Right * 520.f + FVector(0, 0, 150.f), 3.6f, 60.f, true);
+			}
+			if (At(6.f)) Save(TEXT("1_pool_and_fog"), 0.f);
+			if (At(6.5f) && Bot) { Bot->Body->SetHandGlow(Orange, 0.85f); Save(TEXT("2_glowing_fists"), 0.4f); }
+			if (At(9.5f))
+			{
+				// A blast, then the scorch it leaves.
+				FWWOGrenadeLook Look;
+				Look.Color = Orange;
+				Look.Flavor = "ironbark";
+				AWWOGrenade::SpawnBlast(GetWorld(), Look, Feet + Fwd * 560.f - Right * 300.f + FVector(0, 0, 30.f), 3.f);
+				Save(TEXT("4_blast"), 0.08f);
+				Save(TEXT("5_scorch"), 1.2f);
 			}
 		}
 	}

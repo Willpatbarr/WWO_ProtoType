@@ -28,6 +28,9 @@ public:
 	static constexpr float Speed = 1400.f;       // Godot pixels per second at full stick
 	static constexpr float ScrollSpeed = 1100.f; // Godot pixels per second at full right stick
 	static constexpr float Deadzone = 0.15f;
+	// The right stick's sideways tilt (its up and down scrolls): the character menu turns the
+	// character with it.
+	static inline float RightStickX = 0.f;
 
 	// The game viewport: the cursor centers in it, stays in it and moves in its scale.
 	void SetViewport(const TSharedPtr<SWidget>& InViewport) { Viewport = InViewport; }
@@ -37,6 +40,12 @@ public:
 	virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
 	virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
 	virtual bool HandleAnalogInputEvent(FSlateApplication& SlateApp, const FAnalogInputEvent& InAnalogInputEvent) override;
+	virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override;
+	virtual bool HandleMouseWheelOrGestureEvent(FSlateApplication& SlateApp, const FPointerEvent& InWheelEvent, const FPointerEvent* InGestureEvent) override;
+	// Set while a key binding waits for its key (the Controls page): the next key, mouse button,
+	// wheel step or controller button goes to it instead of the menu. Returns true once it's done
+	// (taken or cancelled); false keeps waiting.
+	TFunction<bool(const FKey&)> Capture;
 	virtual const TCHAR* GetDebugName() const override { return TEXT("WWOMenuCursor"); }
 
 	// Godot's cursor: a 14 px ring (2.5 px line) with a 3 px dot, white at 90%. Drawn by an
@@ -52,6 +61,7 @@ private:
 	bool bPendingCenter = false;
 	bool ViewportRect(FVector2D& OutMin, FVector2D& OutSize) const;
 	void Click(FSlateApplication& SlateApp, bool bDown);
+	void TakeCapture(const FKey& Key);
 };
 
 class FWWOMenuKeys : public IInputProcessor

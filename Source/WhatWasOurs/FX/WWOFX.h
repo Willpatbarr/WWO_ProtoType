@@ -58,6 +58,7 @@ struct FWWOTween
 	FName Param;           // material scalar (when Material is set)
 	bool bScale = false;   // animate the component's relative scale
 	bool bLight = false;   // animate a light's intensity
+	bool bMove = false;    // animate the component's relative location (ScaleFrom/ScaleTo hold the two spots)
 	FVector ScaleFrom = FVector::OneVector, ScaleTo = FVector::OneVector;
 	float From = 0.f, To = 0.f;
 	float Delay = 0.f, Duration = 0.1f;
@@ -80,6 +81,7 @@ public:
 	static AWWOFXActor* Spawn(UWorld* World, const FVector& At, float Lifetime);
 
 	void ScaleTween(USceneComponent* Comp, const FVector& From, const FVector& To, float Duration, EWWOEase Ease = EWWOEase::Linear, float Delay = 0.f);
+	void MoveTween(USceneComponent* Comp, const FVector& From, const FVector& To, float Duration, EWWOEase Ease = EWWOEase::Linear, float Delay = 0.f);
 	void ParamTween(UMaterialInstanceDynamic* Mat, FName Param, float From, float To, float Duration, EWWOEase Ease = EWWOEase::Linear, float Delay = 0.f);
 	void LightTween(UPointLightComponent* Light, float From, float To, float Duration, EWWOEase Ease = EWWOEase::Linear);
 	UPointLightComponent* AddLight(const FLinearColor& Color, float Intensity, float RadiusCm);
@@ -91,6 +93,20 @@ public:
 	static void Pop(UWorld* World, const FVector& At, const FLinearColor& Color, float RadiusM, float Seconds = 0.2f);
 	static void Tracer(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Width = 2.f, float Seconds = 0.08f);
 	static void ImpactMark(UWorld* World, const FVector& At);
+	// A gunshot through the air: a bright streak that flies from From to To with a thin wake that
+	// lingers a moment behind it. Size scales the widths (your own shots use a smaller one).
+	static void BulletTrail(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Size = 1.f);
+	// The burst at a gun's muzzle: a hot core, a tongue of flame along Dir, a cross of flares at a
+	// random roll, and a flash of light. For guns seen in the world (someone else's, a bot's).
+	// A shot landing on a body: a quick flash and sparks thrown back along Away (toward the shooter).
+	// A critical hit is bigger, brighter and gold.
+	static void HitSpark(UWorld* World, const FVector& At, const FVector& Away, bool bCritical);
+	// Something dying: a flash, a ring along the ground, sparks, and chunks thrown up and out.
+	// SizeM is about the body's height.
+	static void DeathBurst(UWorld* World, const FVector& At, const FLinearColor& Color, float SizeM = 1.8f);
+	// A dark mark left on the ground by a blast, fading over Seconds.
+	static void Scorch(UWorld* World, const FVector& Ground, float RadiusM, float Seconds = 5.f);
+	static void MuzzleFlash(UWorld* World, const FVector& At, const FVector& Dir, const FLinearColor& Color, float Size = 1.f);
 
 private:
 	TArray<FWWOTween> Tweens;

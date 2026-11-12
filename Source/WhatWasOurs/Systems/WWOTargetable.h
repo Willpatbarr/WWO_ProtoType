@@ -22,6 +22,9 @@ public:
 	// Crit spot first, then the body (the last part is always the body).
 	virtual TArray<FWWOAimPart> GetAimParts() const = 0;
 	virtual bool IsCriticalComponent(const UPrimitiveComponent* Component) const = 0;
+	// Whether a shot that landed as Hit, fired from From, counts as a crit. By default that's the
+	// part it met first; players also count a shot whose line goes on through the head.
+	virtual bool IsCriticalHit(const FHitResult& Hit, const FVector& From) const { return IsCriticalComponent(Hit.GetComponent()); }
 	// Returns true if this hit killed it. Color tints the damage number (alpha 0 = default).
 	virtual bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0)) = 0;
 	virtual bool IsDead() const = 0;
