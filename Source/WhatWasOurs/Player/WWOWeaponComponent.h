@@ -237,7 +237,12 @@ private:
 	float ReadyLeft = 0.f;
 	bool bReadyShotQueued = false;
 	float FireCooldown = 0.f;
-	public: float KickAmount() const { return Kick; } // 0-1, for the HUD's iron-sight marks
+	public:
+	// Where the first-person gun's sight point is seen on screen: X and Y from the screen's centre in
+	// half screen widths (+ right, + down), and how far the gun is seen rolled (radians, + clockwise).
+	// The HUD draws the iron-sight brackets there, so they ride on the gun. False: no gun to see.
+	bool SightOnScreen(FVector2D& OutAt, float& OutRoll) const;
+	float KickAmount() const { return Kick; } // 0-1, for the HUD's iron-sight marks
 	private:
 	float Kick = 0.f;       // the gun model's kick now, 1 at the shot (looks only)
 	float KickAge = 1000.f; // s since the shot that started it

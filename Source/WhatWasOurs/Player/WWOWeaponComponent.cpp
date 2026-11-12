@@ -769,6 +769,28 @@ FVector UWWOWeaponComponent::TrailStart() const
 	return View.TransformPositionNoScale(FVector(Depth, Seen.Y / Seen.X * Ratio * Depth, Seen.Z / Seen.X * Ratio * Depth));
 }
 
+bool UWWOWeaponComponent::SightOnScreen(FVector2D& OutAt, float& OutRoll) const
+{
+	const AWWOCharacter* P = GetPlayer();
+	if (!P || !P->Camera || !ModelRoot || bFirstPersonHidden) return false;
+	// The gun draws with its own field of view (TrailStart has the same sum the other way round).
+	const FTransform View = P->Camera->GetComponentTransform();
+	const float HalfTan = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(P->Camera->FirstPersonFieldOfView, 1.f, 170.f)) * 0.5f);
+	auto Seen = [&](const FVector& World, FVector2D& Out) -> bool
+	{
+		const FVector V = View.InverseTransformPositionNoScale(World);
+		if (V.X < 0.1f) return false;
+		Out = FVector2D(V.Y, -V.Z) / (V.X * HalfTan);
+		return true;
+	};
+	const FVector Sight = ModelRoot->GetComponentLocation();
+	FVector2D Above;
+	if (!Seen(Sight, OutAt) || !Seen(Sight + ModelRoot->GetUpVector() * 2.f, Above)) return false;
+	const FVector2D Up = Above - OutAt;
+	OutRoll = FMath::Atan2(Up.X, -Up.Y);
+	return true;
+}
+
 void UWWOWeaponComponent::StartReload()
 {
 	if (bReloading || Ammo >= MagazineSize()) return;

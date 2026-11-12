@@ -274,6 +274,7 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - **Not done:** the amounts are first guesses to tune in the tester; the sign of the strafe shift and roll is a guess (both sliders go negative); jumping, hip-fire movement and fast turns were not in the footage.
 
 - **ADS gun angle** (`AdsTilt`, per gun, degrees, in the tester's "Aiming in" group): tips the gun about its sight point when aimed. The global `AdsLevel` only does anything on guns whose top sits below the sight line (not the test hand cannon), so it left the tester pane.
+- **Iron-sight marks**: the pip is drawn on the aim point; the two brackets are drawn where the gun's sight point is seen (`UWWOWeaponComponent::SightOnScreen`, through the gun's own FOV) and turned with it, so they follow the strafe shift, sway and kick. The camera no longer bobs when aimed in.
 - **Hip kick vs aimed kick**: `VerticalKick`/`HorizontalKick` are the hip amounts and `AdsKick` the share left when aimed. The hand cannon was 20 x 0.34 (69 degrees from the hip); it is now 8 x 0.85 (28 degrees hip, the same 23 aimed). `-WWOTesterHip` captures frames from the hip.
 
 ## Settings online: the host's tuning, your own preferences (2026-11-12)

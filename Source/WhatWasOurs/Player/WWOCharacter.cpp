@@ -1347,7 +1347,7 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 	if (bWalking) BobTime += Speed / Stride * UE_PI * BobDelta; // one step = half a sine wave
 	if (FMath::FloorToInt(BobTime / UE_PI) != StepBefore && !bCrouching) UWWOSound::PlayFor(this, "footstep", bSprinting ? 1.f : 0.75f); // a foot comes down (yours flat, anyone else's from where they are)
 	BobWeight = WWO::MoveToward(BobWeight, bWalking ? 1.f : 0.f, 4.f * BobDelta);
-	const float Amount = BobIntensity * BobWeight * (1.f - 0.75f * Weapon->AdsAmount); // steadier when aimed
+	const float Amount = BobIntensity * BobWeight * (1.f - Weapon->AdsAmount); // none when aimed in: the view stays level so the aim point holds still
 	const float Up = FMath::Lerp(WalkBobUp, SprintBobUp, SprintBlend) * Amount;
 	const float Side = FMath::Lerp(WalkBobSide, SprintBobSide, SprintBlend) * Amount;
 	if (!bUlting)
