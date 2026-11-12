@@ -556,9 +556,9 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	{
 		TArray<float> Lit;
 		const int32 Steps = Radar(Pl, Lit);
-		const float R = Pl->RadarSize, Hub = R * 0.14f;
+		const float R = Pl->RadarSize, Hub = R * 0.2f;
 		const FVector2D Mid(40.f + R, (CVarWWOShowFPS.GetValueOnGameThread() ? 130.f : 40.f) + R);
-		const FLinearColor Base(0.02f, 0.03f, 0.04f, 0.45f), Edge(1.f, 1.f, 1.f, 0.35f), Foe(1.f, 0.16f, 0.12f);
+		const FLinearColor Base(0.5f, 0.5f, 0.5f, 0.1f), Split(0.85f, 0.85f, 0.85f, 0.3f), Rim(0.85f, 0.85f, 0.85f, 0.9f), Foe(1.f, 0.16f, 0.12f), You(0.3f, 0.6f, 1.f);
 		constexpr float Gap = 0.035f; // radians left clear each side of a section
 		constexpr int32 Slices = 6;
 		// A piece of a ring: between two radii, across one section (less the gaps).
@@ -587,10 +587,11 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			// The line between this section and the next.
 			const float A = (Section + 0.5f) * UE_PI / 4.f;
 			const FVector2D D(FMath::Sin(A), -FMath::Cos(A));
-			P.Line(Mid + D * Hub, Mid + D * R, Edge, 1.f);
+			P.Line(Mid + D * Hub, Mid + D * R, Split, 1.f);
 		}
-		P.Circle(Mid, R, Edge, 1.5f);
-		P.Circle(Mid, Hub, Edge, 1.f, 24);
+		P.Circle(Mid, R, Rim, 1.f, 64);
+		// You: a small triangle in the middle, pointing the way you look (it never moves).
+		P.Tri(Mid + FVector2D(0.f, -Hub * 0.8f), Mid + FVector2D(Hub * 0.5f, Hub * 0.55f), Mid + FVector2D(-Hub * 0.5f, Hub * 0.55f), You);
 	}
 
 	// Ammo (bottom right): weapon name, the count (red when low), reload bar.
