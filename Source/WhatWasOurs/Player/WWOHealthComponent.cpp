@@ -25,6 +25,7 @@ void UWWOHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWWOHealthComponent, bDead);
 	DOREPLIFETIME(UWWOHealthComponent, bRevived);
 	DOREPLIFETIME(UWWOHealthComponent, BeingRevived);
+	DOREPLIFETIME(UWWOHealthComponent, SpawnYaw);
 }
 
 bool UWWOHealthComponent::IsHost() const
@@ -60,11 +61,28 @@ void UWWOHealthComponent::OnRep_Dead()
 		// revived where you fell (keep looking where you were).
 		SetBodyBlocks(true);
 		P->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-		if (P->IsLocallyControlled() && !bRevived) P->SetViewRotation(0.f, Spawn.Rotator().Yaw);
+		if (P->IsLocallyControlled() && !bRevived) P->SetViewRotation(0.f, SpawnYaw);
 		P->ClearStatusEffects();
 		SinceDamage = 99.f;
 		OnRespawned.Broadcast();
 	}
+}
+
+float UWWOHealthComponent::MapKillHeight(const UWorld* World)
+{
+	// Looked up once per map (the level's TargetPoint tagged KillZ, else the default).
+	static TWeakObjectPtr<const UWorld> For;
+	static float Height = KillZ;
+	if (For.Get() != World)
+	{
+		For = World;
+		Height = KillZ;
+		if (World) for (TActorIterator<ATargetPoint> It(World); It; ++It)
+		{
+			if (It->ActorHasTag("KillZ")) Height = FMath::Max(KillZ, It->GetActorLocation().Z);
+		}
+	}
+	return Height;
 }
 
 void UWWOHealthComponent::BeginPlay()
@@ -77,9 +95,15 @@ void UWWOHealthComponent::BeginPlay()
 	{
 		if (It->ActorHasTag("KillZ")) MapKillZ = FMath::Max(KillZ, It->GetActorLocation().Z);
 	}
-	Health = MaxHealth();
-	Shield = MaxShield();
+	// The host starts everyone full. A joiner's copy keeps what the host sent (a player already hurt
+	// or down when this machine joined).
+	if (IsHost())
+	{
+		Health = MaxHealth();
+		Shield = MaxShield();
+	}
 	LastSeen = Health + Shield;
+	SpawnYaw = Spawn.Rotator().Yaw;
 }
 
 float UWWOHealthComponent::MaxHealth() const
@@ -142,6 +166,10 @@ void UWWOHealthComponent::Die()
 	Health = 0.f;
 	bDead = true;
 	BeingRevived = 0.f;
+	// Down mid-revive: the teammate you were bringing back stops showing a bar, and you start over next time.
+	if (ReviveTarget.IsValid()) ReviveTarget->Health->BeingRevived = 0.f;
+	ReviveTarget = nullptr;
+	ReviveProgress = 0.f;
 	// Alone: respawn shortly. Co-op online: down until a teammate revives you. PvP: respawn after its delay.
 	const AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
 	if (UWWOWorldSubsystem::IsPvP(this)) RespawnLeft = GM ? FMath::Max(GM->PvPRespawnTime, 0.1f) : 3.f;
@@ -168,7 +196,8 @@ void UWWOHealthComponent::Respawn()
 	SetBodyBlocks(true);
 	FTransform Where = Spawn;
 	if (const AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>(); GM && UWWOWorldSubsystem::IsPvP(this)) Where = GM->PvPSpawnFor(P);
-	Spawn = Where; // a joiner faces it too (OnRep_Dead)
+	Spawn = Where;
+	SpawnYaw = Where.Rotator().Yaw; // a joiner faces it too (OnRep_Dead)
 	P->TeleportTo(Where.GetLocation(), Where.Rotator());
 	P->SetViewRotation(0.f, Where.Rotator().Yaw);
 	LastAttacker = nullptr;

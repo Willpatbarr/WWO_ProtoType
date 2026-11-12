@@ -110,7 +110,8 @@ void AWWOPlayerController::BeginPlay()
 	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
 	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
 	bAutoTestNet = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestNet"));
-	bAutoTestTabs = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTabs")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"));
+	bAutoTestTabs = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTabs")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"))
+		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPose"));
 	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"))
 		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
 	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
@@ -586,6 +587,7 @@ void AWWOPlayerController::Rumble(float Weak, float Strong, float Seconds)
 void AWWOPlayerController::Hitstop(float Seconds)
 {
 	if (Seconds <= 0.f) return;
+	if (GetNetMode() != NM_Standalone) return; // time dilation is the whole world's: online a punch would slow everyone
 	HitstopLeft = Seconds;
 	UGameplayStatics::SetGlobalTimeDilation(this, 0.03f);
 }

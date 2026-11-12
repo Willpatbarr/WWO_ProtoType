@@ -164,7 +164,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	if (!HasAuthority()) return; // the damage is the host's
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
-	TickLeft = 0.5f;
+	TickLeft += 0.5f; // not reset: a late frame doesn't cost damage
 	FWWODamageBy By(this);
 	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
 	{

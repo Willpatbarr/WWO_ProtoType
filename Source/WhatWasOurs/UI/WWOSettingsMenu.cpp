@@ -855,7 +855,8 @@ void UWWOSettingsMenu::LoadSaved()
 			if (const FWWOSettingRow* R = RowFor(SectionKey, Id))
 			{
 				const float V = (float)ValuePair.Value->AsNumber();
-				// Target health resets every target when set; apply it quietly here.
+				// Target health resets every target when set: in someone else's game they are the host's to reset.
+				if (bRestricted && Id == "TargetHealth") continue;
 				R->Set(V);
 				Defaults.FindOrAdd(SectionKey).Add(Id, V);
 			}

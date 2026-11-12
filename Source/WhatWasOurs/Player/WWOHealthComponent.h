@@ -40,12 +40,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Player") float ReviveHealth = 0.5f; // of max health, no shield
 
 	static constexpr float KillZ = -3000.f; // cm
+	static float MapKillHeight(const UWorld* World); // this map's (enemies and allies die below it too)
 	float MapKillZ = KillZ; // cm: a map can raise it with a TargetPoint tagged KillZ (L_Cascade: its chasm kills at -9 m)
 
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Health = 100.f;
 	UPROPERTY(ReplicatedUsing = OnRep_Health) float Shield = 100.f;
 	UPROPERTY(ReplicatedUsing = OnRep_Dead) bool bDead = false;
 	UPROPERTY(Replicated) bool bRevived = false;      // the last time bDead cleared was a revive (in place)
+	UPROPERTY(Replicated) float SpawnYaw = 0.f;       // the way the last respawn faced (a joiner turns its own view to it)
+	double LastAttackTime = -1000.0;                  // host: when LastAttacker last hit you
 	UPROPERTY(Replicated) float BeingRevived = 0.f;   // while down: how far a teammate's revive is (0-1)
 	TWeakObjectPtr<AActor> LastAttacker; // host: who hit you last (PvP kill credit)
 	bool bWantsRevive = false; // host: this player holds Revive (their own input, or ServerSetRevive)

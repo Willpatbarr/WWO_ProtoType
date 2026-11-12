@@ -1,4 +1,7 @@
 #include "Player/WWOUltComponent.h"
+#include "Misc/CommandLine.h"
+#include "Systems/WWOWorldSubsystem.h"
+#include "GameFramework/GameStateBase.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOBotController.h"
@@ -199,6 +202,28 @@ void UWWOUltComponent::Release()
 	}
 }
 
+void UWWOUltComponent::Abort(bool bRefused)
+{
+	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (bActive)
+	{
+		if (Orb)
+		{
+			if (OrbLight) OrbLight->DestroyComponent();
+			Orb->DestroyComponent();
+			Orb = nullptr;
+			OrbLight = nullptr;
+		}
+		Finish();
+	}
+	if (bRefused)
+	{
+		Charge = 1.f;
+		P->VeilLeft = 0.f;
+		P->EntrenchLeft = 0.f;
+	}
+}
+
 void UWWOUltComponent::Finish()
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
@@ -217,6 +242,12 @@ void UWWOUltComponent::Finish()
 void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	if (!bStartChecked && GetWorld()->GetGameState())
+	{
+		// Alone and in co-op the ult starts full (handy for trying things); a PvP match starts everyone empty.
+		bStartChecked = true;
+		if (UWWOWorldSubsystem::IsPvP(this) && !FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest"))) Charge = 0.f;
+	}
 	if (!bActive)
 	{
 		if (Charge < 1.f) Charge = FMath::Min(Charge + DeltaSeconds / FMath::Max(ChargeTime, 0.1f), 1.f);

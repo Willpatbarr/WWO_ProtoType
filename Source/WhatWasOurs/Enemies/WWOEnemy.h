@@ -94,6 +94,7 @@ protected:
 	virtual void Setup() {}
 	virtual FVector Think(float DeltaSeconds) { return FVector::ZeroVector; }
 	virtual void Animate(float DeltaSeconds) {}
+	virtual void AnimateRemote(float DeltaSeconds) {} // a joiner's copy: the looks the host's Animate sets by hand
 	virtual float Absorb(float Damage, bool bCritical, const FVector& Point) { return Damage; }
 	virtual void OnHit(bool bCritical) {}
 	virtual void OnReset() {}
@@ -111,6 +112,8 @@ protected:
 	FVector FlatToTarget() const;
 	FVector TargetAimPoint() const;
 	bool CanSeeTarget(const FVector& From) const;
+	bool LedgeAhead(const FVector& Direction) const; // no floor a step that way: don't walk off it
+	float HeightToTarget() const;                    // cm between its feet and the target's, unsigned
 	void TurnToward(const FVector& Direction, float DeltaSeconds, float Speed = -1.f);
 	void DamageTarget(float Amount, bool bMelee = false);
 	void PinCrit(FName Bone, const FVector& WorldPoint, const FVector& HalfExtentCm);

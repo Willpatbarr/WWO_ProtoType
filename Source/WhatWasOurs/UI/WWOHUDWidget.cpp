@@ -687,6 +687,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 				Face(Corners[0], Corners[2], Corners[3], Inside);
 			}
 		}
+		// Blinded (PvP, a Blinding Grenade): white, clearing over the last part of the blind time.
+		if (Pl->BlindLeft > 0.f) P.Box(FVector2D::ZeroVector, Size, FLinearColor(1.f, 1.f, 1.f, 0.97f * FMath::Clamp(Pl->BlindLeft / FMath::Max(Pl->BlindTotal * 0.6f, 0.1f), 0.f, 1.f)));
 		// Damage flash and death screen.
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.8f, 0.05f, 0.02f, DamageFlash));
 		auto ReviveBar = [&](float Frac, float Y)

@@ -1649,6 +1649,17 @@ FString UWWOWeaponComponent::PerkStatus() const
 	if (L->HasPerk("patience") && AdsAmount > 0.5f) Active.Add(AimHeld >= 0.6f ? FString(TEXT("Patience READY")) : FString(TEXT("Patience")));
 	if (L->HasPerk("hammer") && HammerLeft > 0.f) Active.Add(FString::Printf(TEXT("Hammer %.1fs"), HammerLeft));
 	if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) Active.Add(TEXT("Cold Bore READY"));
+	if (L->HasPerk("tighten") && AdsAmount > 0.5f) Active.Add(TEXT("Tightened"));
+	if (L->HasPerk("refund")) Active.Add(TEXT("Marksman"));
+	if (L->HasPerk("fourth_round")) Active.Add(TEXT("Fourth Round"));
+	// The ones that depend on what you're aiming at: lit while the target under the reticle qualifies.
+	if (const IWWOTargetable* Aimed = Cast<IWWOTargetable>(ReticleTarget.Get()); Aimed && Pl)
+	{
+		const float Dist = FVector::Dist(Pl->EyeLocation(), Aimed->BodyCenter()) / WWO::M;
+		if (L->HasPerk("longshot") && Dist >= LongShotRange) Active.Add(TEXT("Long Shot"));
+		if (L->HasPerk("point_blank") && Dist <= PointBlankRange) Active.Add(TEXT("Point Blank"));
+		if (L->HasPerk("executioner") && Aimed->GetHealth() + Aimed->GetShield() < 0.5f * (Aimed->GetMaxHealth() + Aimed->GetMaxShield())) Active.Add(TEXT("Finisher"));
+	}
 	if (L->HasPerk("breath") && AdsAmount > 0.5f) Active.Add(AimHeld >= BreathTime ? FString(TEXT("Breath HELD")) : FString(TEXT("Breath")));
 	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding) Active.Add(TEXT("Slideshot"));
 	if (L->HasPerk("full_burst") && (bFullBurst || bBurstBoosted)) Active.Add(TEXT("Full Burst READY"));

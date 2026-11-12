@@ -33,6 +33,8 @@ protected:
 	virtual void Setup() override;
 	virtual FVector Think(float DeltaSeconds) override;
 	virtual void Animate(float DeltaSeconds) override;
+	virtual void AnimateRemote(float DeltaSeconds) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void OnReset() override;
 	virtual void OnDeath() override;
 	virtual void OnHit(bool bCritical) override;
@@ -45,6 +47,11 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> Gun;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> GlowMat;
 	UPROPERTY() TObjectPtr<UPointLightComponent> MuzzleLight;
+	// For joiners: how bright the muzzle's windup glow should be (0-255) and whether it is in a fight
+	// (gun raised). The host sets both in Animate; a joiner's copy follows them in AnimateRemote.
+	UPROPERTY(Replicated) uint8 NetGlow = 0;
+	UPROPERTY(Replicated) bool bNetAlerted = false;
+	void PlaceGun(float Aim, const FVector* AimAt);
 	static double NextBurstTime; // shared by every soldier: spaces out their bursts
 	float StrafeDir = 1.f, StrafeLeft = 0.f, Cooldown = 1.f, Windup = -1.f, ShotTimer = 0.f, Glow = 0.f, AimBlend = 0.f, CoverCheck = 0.f;
 	int32 ShotsLeft = 0;

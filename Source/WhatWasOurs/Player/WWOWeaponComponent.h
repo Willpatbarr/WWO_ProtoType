@@ -114,6 +114,7 @@ public:
 	FString ConfigToast; // "Config 2: Long Barrel, ..." for a moment after a quick swap
 	float ConfigToastLeft = 0.f; // active perks for the HUD, e.g. "Focus 3/5 · Static 7/10"
 	float AdsAmount = 0.f;
+	float SecondsSinceShot() const { return SinceShot; }
 	int32 Ammo = 30;
 	bool bReloading = false;
 	float ReloadProgress = 0.f;
@@ -161,6 +162,7 @@ public:
 	// chain. The host runs it for every punch (a joiner's too); a joiner only shows its own discharge.
 	void MeleeKitEffects(AActor* Target, const FVector& Point);
 	int32 HostStaticHits = 0; // host: a joiner's hits toward the Static perk's arc
+	FName HostStaticGun;      // ...with this gun
 
 private:
 	UPROPERTY() TObjectPtr<UWWOWeaponData> BaseWeapon; // the asset

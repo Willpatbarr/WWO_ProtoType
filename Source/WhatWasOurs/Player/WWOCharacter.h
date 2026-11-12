@@ -99,7 +99,7 @@ struct FWWOGunShot
 };
 
 // The most a gun setup can do, for the host checking a joiner's shot (WWOCharacterGunNet.cpp).
-struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; int32 Burst = 1; }; // per hit, shots per s, cm, rounds per trigger pull
+struct FWWOGunLimits { float Damage = 0.f, Rate = 0.f, Range = 0.f; int32 Burst = 1; float Round = 0.f; }; // per hit, shots per s, cm, rounds per trigger pull, one round's modded damage
 
 // A player. In PvP also a target for the other team (IWWOTargetable): shots hit its body and head
 // hitboxes (on only in PvP), damage goes to its health on the host.
@@ -311,7 +311,16 @@ public:
 	UFUNCTION(Server, Reliable) void ServerThrowGrenade(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir);
 	// Online kit: a joiner's ability or ult (its own machine runs it at once; the host runs the
 	// world side), the host's slow on a joiner, and roots everyone else sees.
-	UFUNCTION(Server, Reliable) void ServerUseAbility(int32 Slot);
+	UFUNCTION(Server, Reliable) void ServerUseAbility(int32 Slot, FVector_NetQuantizeNormal Aim);
+	// The host said no to something this machine already did (0 grenade, 1 ability in Slot, 2 ult):
+	// the charge comes back and what it started here stops.
+	UFUNCTION(Client, Reliable) void ClientKitRefused(uint8 What, int32 Slot);
+	UFUNCTION(Server, Unreliable) void ServerSetPose(uint8 Raise, int8 Look);
+	FVector NetAim = FVector::ForwardVector; // host: where a joiner was looking when it last used an ability
+	// PvP: a Blinding Grenade whites out a player's screen for a while (the HUD draws it).
+	void ApplyBlind(float Seconds);
+	UFUNCTION(Client, Reliable) void ClientApplyBlind(float Seconds);
+	float BlindLeft = 0.f, BlindTotal = 1.f;
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();
 	UFUNCTION(Client, Reliable) void ClientApplySlow(float Amount, float Seconds);
 	UFUNCTION(Client, Unreliable) void ClientDamageFrom(FVector_NetQuantize From); // the host: you were hit from there (HUD marker)
@@ -324,6 +333,17 @@ public:
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:
+	// What others see of your upper body (see SendPose): how far the gun is up, 0-1, and the look's
+	// pitch in degrees. Yours on your machine; a joiner's on the host as it last sent them.
+public:
+	float PoseRaise = 0.f, PosePitch = 0.f;
+private:
+	float ShownRaise = 0.f, ShownPitch = 0.f, PoseSendLeft = 0.f, RemoteStride = 0.f;
+	uint8 SentRaise = 0;
+	int8 SentLook = 0;
+	float LocalRaise() const;
+	void SendPose(float DeltaSeconds);
+	void RemoteFootsteps(float DeltaSeconds);
 	bool bWeaponSawDead = false; // the weapon has been told of the death (or the respawn) it last saw
 	float ShotBudget = 3.f;      // host: shots this player may fire right now (refills at the gun's rate)
 	double ShotBudgetTime = 0.0; // when it was last refilled

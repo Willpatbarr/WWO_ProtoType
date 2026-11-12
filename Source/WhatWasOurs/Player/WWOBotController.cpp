@@ -406,6 +406,7 @@ void AWWOBotController::ListenToHumans(const AWWOCharacter* Me)
 bool AWWOBotController::CanSee(const AWWOCharacter* Me, const AWWOCharacter* Other, float RangeCm, float ConeCos) const
 {
 	if (Other->IsInvisible()) return false; // Veil
+	if (Me->BlindLeft > 0.f) return false;  // blinded by a Blinding Grenade
 	const FVector Eye = Me->EyeLocation();
 	const FVector To = Other->EyeLocation() - Eye;
 	const float Dist = To.Size();

@@ -82,13 +82,14 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	Super::InitGame(MapName, Options, ErrorMessage);
 	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
 	FString Value;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = FCString::Atof(*Value); // tests
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = CmdKillTarget = FCString::Atof(*Value); // tests
+	bTestRun = FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) != nullptr;
 	if (FParse::Value(FCommandLine::Get(), TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
 	if (bPvP && FParse::Value(FCommandLine::Get(), TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
 	// ?bots=N: the launch screen's count for this match (a local PvP match fills both teams).
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
 	OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
-	if (OptionBots >= 0) BotsWanted = FMath::Max(BotsWanted, OptionBots);
+	// (The launch screen's count is exact, not a floor under the Bots setting: see UpdateBots.)
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
@@ -103,9 +104,43 @@ void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
 	Super::PostLogin(NewPlayer);
 	if (bPvP)
 	{
+		const bool bMidMatch = State == EWWOWaveState::Match && !NewPlayer->IsLocalController();
+		if (bMidMatch) RetireBotFor(NewPlayer); // before the team is picked: the person takes the bot's side
 		BalanceTeam(NewPlayer);
 		TeamGiven.Add(NewPlayer->GetPlayerState<AWWOPlayerState>());
+		// Into a match under way: at a spot away from the other team, not the map's one Player Start.
+		if (AWWOCharacter* Body = bMidMatch ? Cast<AWWOCharacter>(NewPlayer->GetPawn()) : nullptr)
+		{
+			const FTransform Spot = PvPSpawnFor(Body);
+			Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
+			Body->Health->SpawnYaw = Spot.Rotator().Yaw;
+			NewPlayer->ClientSetRotation(Spot.Rotator());
+		}
 	}
+}
+
+void AWWOGameMode::RetireBotFor(AController* Joiner)
+{
+	// One bot leaves, from the bigger team, so the match stays the size it was.
+	int32 Count[2] = { 0, 0 };
+	TArray<AWWOBotController*> BotsNow;
+	for (TActorIterator<AWWOBotController> It(GetWorld()); It; ++It)
+	{
+		BotsNow.Add(*It);
+		if (const AWWOPlayerState* PS = It->GetPlayerState<AWWOPlayerState>(); PS && PS->Team >= 0 && PS->Team <= 1) ++Count[PS->Team];
+	}
+	if (BotsNow.Num() == 0) return;
+	const int32 From = Count[1] > Count[0] ? 1 : 0;
+	AWWOBotController* Leaving = BotsNow[0];
+	for (AWWOBotController* Bot : BotsNow)
+	{
+		if (const AWWOPlayerState* PS = Bot->GetPlayerState<AWWOPlayerState>(); PS && PS->Team == From) Leaving = Bot;
+	}
+	UE_LOG(LogWWO, Display, TEXT("PvP: %s makes room for %s"), *GetNameSafe(Leaving->PlayerState), *GetNameSafe(Joiner));
+	if (APawn* Body = Leaving->GetPawn()) Body->Destroy();
+	Leaving->Destroy();
+	--BotsSpawned;
+	--BotsExtra;
 }
 
 void AWWOGameMode::Logout(AController* Exiting)
@@ -115,8 +150,8 @@ void AWWOGameMode::Logout(AController* Exiting)
 	const APlayerController* Person = Cast<APlayerController>(Exiting);
 	if (bPvP && Person && !Person->IsLocalController() && State == EWWOWaveState::Match)
 	{
-		BotsWanted = FMath::Min(FMath::Max3(BotsWanted, FMath::RoundToInt(Bots), BotsSpawned) + 1, 11);
-		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place (%d bots wanted)"), *GetNameSafe(Exiting->PlayerState), BotsWanted);
+		++BotsExtra;
+		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place"), *GetNameSafe(Exiting->PlayerState));
 	}
 	Super::Logout(Exiting);
 }
@@ -177,6 +212,7 @@ void AWWOGameMode::Begin()
 			GS->TeamScores = { 0, 0 };
 		}
 		MatchLeft = TimeLimit * 60.f;
+		MatchElapsed = 0.f;
 		Winner = -1;
 		State = EWWOWaveState::Match;
 		return;
@@ -535,7 +571,11 @@ void AWWOGameMode::UpdateMatch(float DeltaSeconds)
 		}
 	}
 	if (State != EWWOWaveState::Match) return;
-	if (TimeLimit > 0.f && (MatchLeft -= DeltaSeconds) <= 0.f)
+	if (CmdKillTarget >= 0.f) KillTarget = CmdKillTarget; // a test's own target, over the saved setting loaded since
+	// By time played, so the limit can be turned on, off or changed mid-match.
+	MatchElapsed += DeltaSeconds;
+	MatchLeft = FMath::Max(TimeLimit * 60.f - MatchElapsed, 0.f);
+	if (TimeLimit > 0.f && MatchElapsed >= TimeLimit * 60.f)
 	{
 		const AWWOGameState* GS = WGS();
 		const int32 Blue = GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : 0;
@@ -549,7 +589,9 @@ void AWWOGameMode::OnPvPDeath(AWWOCharacter* Victim)
 	if (State != EWWOWaveState::Match || !Victim) return;
 	AWWOPlayerState* VictimPS = Victim->GetPlayerState<AWWOPlayerState>();
 	if (VictimPS) ++VictimPS->Deaths;
-	AWWOCharacter* Killer = Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get());
+	// Whoever hit them last, if that was in the last 10 s (a fall long after a fight is nobody's kill).
+	const bool bRecent = GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 10.0;
+	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
 	AWWOPlayerState* KillerPS = Killer ? Killer->GetPlayerState<AWWOPlayerState>() : nullptr;
 	if (!KillerPS || !UWWOWorldSubsystem::CanHurt(Killer, Victim))
 	{
@@ -595,14 +637,24 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 	{
 		if (Other != Player && !Other->Health->bDead && UWWOWorldSubsystem::CanHurt(Player, Other)) Others.Add(Other);
 	}
-	int32 Best = FMath::RandRange(0, Spots.Num() - 1);
-	float BestDistance = -1.f;
-	for (int32 i = 0; i < Spots.Num() && Others.Num() > 0; ++i)
+	// Rank them by how far the nearest foe is, leave out any somebody is standing on, and take one
+	// of the best three at random: a team that dies together doesn't all come back on one spot.
+	TArray<TPair<float, int32>> Ranked;
+	for (int32 i = 0; i < Spots.Num(); ++i)
 	{
-		float Nearest = TNumericLimits<float>::Max();
+		bool bTaken = false;
+		for (const AWWOCharacter* Any : UWWOWorldSubsystem::Get(this)->GetPlayers())
+		{
+			bTaken |= Any != Player && !Any->Health->bDead && FVector::Dist2D(Any->GetActorLocation(), Spots[i].GetLocation()) < 150.f;
+		}
+		if (bTaken) continue;
+		float Nearest = Others.Num() > 0 ? TNumericLimits<float>::Max() : 0.f;
 		for (const AWWOCharacter* Other : Others) Nearest = FMath::Min(Nearest, FVector::Dist(Other->GetActorLocation(), Spots[i].GetLocation()));
-		if (Nearest > BestDistance) { BestDistance = Nearest; Best = i; }
+		Ranked.Add({ Nearest, i });
 	}
+	Ranked.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key > B.Key; });
+	const int32 Best = Ranked.Num() > 0 ? Ranked[FMath::RandRange(0, FMath::Min(Ranked.Num(), Others.Num() > 0 ? 3 : Ranked.Num()) - 1)].Value
+		: FMath::RandRange(0, Spots.Num() - 1);
 	// Facing the middle of the map.
 	FTransform Spot = Spots[Best];
 	FVector ToMiddle = -Spot.GetLocation();
@@ -674,7 +726,12 @@ void AWWOGameMode::UpdateBots()
 			AWWOBotController::Retreats, AWWOBotController::NoCover, AWWOBotController::Swaps,
 			AWWOBotController::StuckIn[0], AWWOBotController::StuckIn[1], AWWOBotController::StuckIn[2], AWWOBotController::StuckIn[3]);
 	}
-	const int32 Wanted = FMath::Max(BotsWanted, FMath::Clamp(FMath::RoundToInt(Bots), 0, 11));
+	// How many: the launch screen's count when it gave one (a local match fills the map's teams
+	// exactly), else the Bots setting (or -WWOBots); then one more per person who left, one fewer
+	// per person who joined.
+	// (A test run takes only what its command line asks for, not the saved Bots setting.)
+	const int32 Asked = OptionBots >= 0 ? OptionBots : FMath::Max(BotsWanted, bTestRun ? 0 : FMath::RoundToInt(Bots));
+	const int32 Wanted = FMath::Clamp(Asked + BotsExtra, 0, 11);
 	if (BotsSpawned >= Wanted || State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(this)->GetPlayer()) return;
 	AWWOBotController* Bot = GetWorld()->SpawnActor<AWWOBotController>();
 	if (!Bot) return;

@@ -115,6 +115,7 @@ private:
 	bool bFuseIsFizzle = false;
 	int32 PatchesLeft = 0;
 	float PatchCooldown = 0.f;
+	TWeakObjectPtr<class AWWOCharacter> CountedFor;
 	bool bCounted = false;
 	FVector ReleasedAt = FVector::ZeroVector;
 	bool bBounced = false;

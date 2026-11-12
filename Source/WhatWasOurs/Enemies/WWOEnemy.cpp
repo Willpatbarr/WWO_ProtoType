@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemy.h"
+#include "WhatWasOurs.h"
 #include "Systems/WWOSound.h"
 #include "FX/WWOFX.h"
 #include "Game/WWOGameState.h"
@@ -124,8 +125,12 @@ void AWWOEnemy::BeginPlay()
 	Super::BeginPlay();
 	SpawnTransform = GetActorTransform();
 	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this)) WS->RegisterTarget(this);
-	MaxHealth = Data() ? Data()->MaxHealth : 100.f;
-	Health = MaxHealth;
+	// A joiner's copy keeps what the host sent (an enemy already hurt when it first shows up).
+	if (HasAuthority())
+	{
+		MaxHealth = Data() ? Data()->MaxHealth : 100.f;
+		Health = MaxHealth;
+	}
 	Setup();
 }
 
@@ -286,9 +291,17 @@ void AWWOEnemy::Tick(float DeltaSeconds)
 		// Online, not the host: it moves and animates as the host's copy does; only the hit flash fades here.
 		Flash = WWO::MoveToward(Flash, 0.f, 6.f * DeltaSeconds);
 		Body->SetFlash(Flash);
+		AnimateRemote(DeltaSeconds);
 		return;
 	}
 	UWWOEnemyMovement* Move = EnemyMovement();
+	// Off the map (walked or knocked off a ledge): it dies like a player would, so a wave isn't left
+	// waiting on something falling forever.
+	if (!bDead && GetActorLocation().Z < UWWOHealthComponent::MapKillHeight(GetWorld()))
+	{
+		UE_LOG(LogWWO, Display, TEXT("%s fell off the map"), *GetName());
+		Die();
+	}
 	if (bDead)
 	{
 		Move->bSteering = true;
@@ -366,7 +379,7 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 	const AWWOAlly* CurrentAlly = Cast<AWWOAlly>(TargetActor.Get());
 	const AWWOCharacter* CurrentPlayer = Cast<AWWOCharacter>(TargetActor.Get());
 	const bool bTargetDown = (CurrentAlly && CurrentAlly->IsDown()) || (CurrentPlayer && CurrentPlayer->Health->bDead);
-	if (TargetActor.IsValid() && RetargetLeft > 0.f && !bTargetDown) return;
+	if (TargetActor.IsValid() && RetargetLeft > 0.f && !bTargetDown && !TargetIsInvisible()) return; // a veiled target: look for someone else now
 	RetargetLeft = 0.5f;
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
 	AActor* Best = nullptr;
@@ -501,6 +514,27 @@ FString AWWOEnemy::PathDebug() const
 			*PathGoal.ToCompactString(), Nav->ProjectPointToNavigation(PathGoal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
 	}
 	return Out;
+}
+
+bool AWWOEnemy::LedgeAhead(const FVector& Direction) const
+{
+	// A step that way, is there floor within a short drop? (Level geometry only.)
+	const FVector Step = GetActorLocation() + Direction.GetSafeNormal2D() * (GetCapsuleComponent()->GetScaledCapsuleRadius() + 70.f);
+	const float Feet = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	FHitResult Hit;
+	return !GetWorld()->LineTraceSingleByObjectType(Hit, Step, Step - FVector(0, 0, Feet + 150.f), Objects,
+		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyLedge), false, this));
+}
+
+float AWWOEnemy::HeightToTarget() const
+{
+	if (!TargetActor.IsValid()) return 0.f;
+	const IWWOTargetable* T = Cast<IWWOTargetable>(TargetActor.Get());
+	const float TheirFeet = T ? T->FeetLocation().Z : TargetActor->GetActorLocation().Z - 90.f;
+	return FMath::Abs(TheirFeet - FeetLocation().Z);
 }
 
 bool AWWOEnemy::WallAhead(const FVector& Direction, FVector* OutNormal) const

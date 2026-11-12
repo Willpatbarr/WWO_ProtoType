@@ -71,7 +71,7 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 			{
 				Armed.Add(A->Id, true); // the next melee hit discharges it
 				UWWOSound::PlayFor(P, "ability");
-				if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner()); Me && GetNetMode() == NM_Client) Me->ServerUseAbility(Slot);
+				if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner()); Me && GetNetMode() == NM_Client) Me->ServerUseAbility(Slot, Me->AimForward());
 			}
 			continue;
 		}
@@ -80,12 +80,23 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 		ActiveLeft.Add(A->Id, FMath::Max(ActiveLeft.FindRef(A->Id) - DeltaSeconds, 0.f));
 		if (bPressed && !PlayerBusy() && ActivateAbility(A) && GetNetMode() == NM_Client)
 		{
-			if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner())) Me->ServerUseAbility(Slot); // the host runs it too
+			if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner())) Me->ServerUseAbility(Slot, Me->AimForward()); // the host runs it too
 		}
 	}
 }
 
-void UWWOAbilityComponent::HostUseAbility(int32 Slot)
+void UWWOAbilityComponent::UndoUse(int32 Slot)
+{
+	// The host refused it: what this machine started is taken back and the charge returned.
+	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+	const UWWOAbilityData* A = Loadout ? Loadout->GetAbility(Slot) : nullptr;
+	if (!A) return;
+	Armed.Remove(A->Id);
+	ActiveLeft.Add(A->Id, 0.f);
+	if (A->Kind == EWWOAbilityKind::Active) ChargeById.Add(A->Id, 1.f);
+}
+
+bool UWWOAbilityComponent::HostUseAbility(int32 Slot)
 {
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this); // the joiner's copy
 	UWWOAbilityData* A = Loadout ? Loadout->GetAbility(Slot) : nullptr;
@@ -93,7 +104,7 @@ void UWWOAbilityComponent::HostUseAbility(int32 Slot)
 	if (!A || !P || P->Health->bDead)
 	{
 		UE_LOG(LogWWO, Display, TEXT("NetAbility refused from %s: slot %d %s"), *GetNameSafe(P), Slot, A ? TEXT("dead") : TEXT("empty"));
-		return;
+		return false;
 	}
 	constexpr float Ready = 0.95f; // a little slack: the two machines' recharges run a frame or two apart
 	bool bDone = false;
@@ -104,6 +115,7 @@ void UWWOAbilityComponent::HostUseAbility(int32 Slot)
 	}
 	else if (A->Kind == EWWOAbilityKind::Active) bDone = ActivateAbility(A, Ready);
 	UE_LOG(LogWWO, Display, TEXT("NetAbility %s from %s: %s (charge %.2f)"), *A->Id.ToString(), *P->GetName(), bDone ? TEXT("used") : TEXT("refused, not ready"), Charge(A));
+	return bDone;
 }
 
 bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
@@ -221,7 +233,10 @@ void UWWOAbilityComponent::RootBombs(UWWOAbilityData* A)
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	if (!P->HasAuthority()) return; // the host throws a joiner's bombs (they replicate)
 	const float Bigger = 1.f + UWWOLoadoutSubsystem::Bonus(this, "blast_bigger");
-	const FTransform Eye = P->Camera->GetComponentTransform();
+	// Where the thrower is looking: its own aim here, or for a joiner (whose copy here has no camera
+	// pitch) the direction it sent with the ability.
+	const FVector Aim = P->IsLocallyControlled() ? P->AimForward() : P->NetAim;
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Aim).GetSafeNormal(UE_SMALL_NUMBER, P->GetActorRightVector());
 	TArray<AWWOGrenade*> Thrown;
 	for (const float Side : { -1.f, 1.f })
 	{
@@ -234,9 +249,9 @@ void UWWOAbilityComponent::RootBombs(UWWOAbilityData* A)
 		Spec.bExplodeOnImpact = true;
 		Spec.Flavor = A->Flora;
 		Spec.ThrownFrom = P->GetActorLocation();
-		const FVector At = Eye.TransformPosition(FVector(60.f, 35.f * Side, -20.f));
-		FVector Dir = P->AimForward().RotateAngleAxis(1.5f * Side, FVector::UpVector);
-		Dir = Dir.RotateAngleAxis(-2.f, P->Camera->GetRightVector()); // a little upward
+		const FVector At = P->EyeLocation() + Aim * 60.f + Right * 35.f * Side - FVector(0, 0, 20.f);
+		FVector Dir = Aim.RotateAngleAxis(1.5f * Side, FVector::UpVector);
+		Dir = Dir.RotateAngleAxis(-2.f, Right); // a little upward
 		AWWOGrenade* Bomb = AWWOGrenade::Throw(GetWorld(), Spec, At, Dir.GetSafeNormal() * A->BombSpeed * WWO::M, P);
 		if (!Bomb) continue;
 		for (AWWOGrenade* Other : Thrown) Bomb->IgnoreActor(Other); // the pair never hit each other

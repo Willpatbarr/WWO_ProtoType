@@ -1,4 +1,5 @@
 #include "Allies/WWOAlly.h"
+#include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemy.h"
 #include "Characters/WWOBodyComponent.h"
@@ -92,10 +93,29 @@ void AWWOAlly::GoDown()
 	Health = 0.f;
 	Shield = 0.f;
 	DownLeft = D()->RespawnTime;
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	ShowDown(true);
 	Body->Play("Death01", 1.f, 0.1f);
-	Gun->SetVisibility(false, true);
+}
+
+void AWWOAlly::ShowDown(bool bIsDown)
+{
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, bIsDown ? ECR_Ignore : ECR_Block);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, bIsDown ? ECR_Ignore : ECR_Block);
+	if (Gun) Gun->SetVisibility(!bIsDown, true);
+}
+
+void AWWOAlly::OnRep_Down()
+{
+	ShowDown(bDown);
+}
+
+void AWWOAlly::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOAlly, Health);
+	DOREPLIFETIME(AWWOAlly, Shield);
+	DOREPLIFETIME(AWWOAlly, DownLeft);
+	DOREPLIFETIME(AWWOAlly, bDown);
 }
 
 void AWWOAlly::GetUp()
@@ -103,9 +123,7 @@ void AWWOAlly::GetUp()
 	bDown = false;
 	Health = D()->MaxHealth;
 	Shield = D()->MaxShield;
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	Gun->SetVisibility(true, true);
+	ShowDown(false);
 	if (const AWWOCharacter* P = UWWOWorldSubsystem::Get(this)->GetPlayer())
 	{
 		// 2 m to your right, as in Godot, but not through a wall: it stops short of one.
@@ -219,7 +237,7 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 	if (Distance <= Data->FollowMax) return FVector::ZeroVector;
 	// Walk back toward you, around walls.
 	PathAge += DeltaSeconds;
-	if (PathAge > 0.4f || Path.Num() < 2)
+	if (PathAge > 0.4f) // on its age alone: a straight two-point path trims to one point at once
 	{
 		bool bPartial = false;
 		Path = WWONav::FindPath(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), bPartial);

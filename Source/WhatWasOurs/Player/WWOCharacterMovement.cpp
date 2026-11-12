@@ -257,7 +257,7 @@ bool UWWOCharacterMovement::CanCrouchInCurrentState() const
 {
 	// The melee lunge flies; stay crouched through it like Godot does.
 	const AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);
-	if (Owner && Owner->IsLunging() && IsFlying() && CanEverCrouch()) return true;
+	if (Owner && (Owner->IsLunging() || Owner->IsInLungeFlight()) && IsFlying() && CanEverCrouch()) return true;
 	return Super::CanCrouchInCurrentState();
 }
 

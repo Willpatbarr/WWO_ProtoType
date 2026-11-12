@@ -53,6 +53,9 @@ public:
 	bool CanActivate() const;
 	bool ActivateUlt();
 	void Fill() { Charge = 1.f; }
+	// Stops an ult under way (its owner died, or the host refused a joiner's): the camera and gun
+	// come back and nothing goes off. bRefused also gives the charge back and ends what it started here.
+	void Abort(bool bRefused);
 
 private:
 	UPROPERTY() TObjectPtr<UCameraComponent> UltCamera;
@@ -78,6 +81,7 @@ private:
 	FTransform FirstPersonTransform() const;
 	void Begin();
 	void Finish();
+	bool bStartChecked = false; // PvP: a match starts with the ult empty (checked once the mode is known)
 	void Release();
 	void PlaceOrb();
 };

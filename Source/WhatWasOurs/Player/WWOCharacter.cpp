@@ -292,6 +292,7 @@ void AWWOCharacter::TickStatusTimers(float DeltaSeconds)
 	SlowLeft = FMath::Max(SlowLeft - DeltaSeconds, 0.f);
 	VeilLeft = FMath::Max(VeilLeft - DeltaSeconds, 0.f);
 	EntrenchLeft = FMath::Max(EntrenchLeft - DeltaSeconds, 0.f);
+	BlindLeft = FMath::Max(BlindLeft - DeltaSeconds, 0.f);
 }
 
 void AWWOCharacter::TickRemoteOnHost(float DeltaSeconds)
@@ -322,16 +323,39 @@ void AWWOCharacter::TickRemoteOnHost(float DeltaSeconds)
 	if (!bUlting && EntrenchLeft <= 0.f) UpdateModel(); // the body replicates to everyone else
 }
 
-void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot)
+void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot, FVector_NetQuantizeNormal Aim)
 {
 	++NetAbilitiesUsed;
-	Abilities->HostUseAbility(Slot);
+	NetAim = FVector(Aim).GetSafeNormal(UE_SMALL_NUMBER, GetActorForwardVector()); // this copy's camera has no pitch
+	if (!Abilities->HostUseAbility(Slot)) ClientKitRefused(1, Slot);
+}
+
+void AWWOCharacter::ClientKitRefused_Implementation(uint8 What, int32 Slot)
+{
+	UE_LOG(LogWWO, Display, TEXT("Net: the host refused %s"), What == 0 ? TEXT("the grenade") : (What == 1 ? TEXT("the ability") : TEXT("the ult")));
+	if (What == 0) Grenades->Charge = FMath::Min(Grenades->Charge + 1.f, Grenades->MaxCharges());
+	else if (What == 1) Abilities->UndoUse(Slot);
+	else Ult->Abort(true);
+}
+
+void AWWOCharacter::ApplyBlind(float Seconds)
+{
+	if (Seconds <= 0.f) return;
+	BlindLeft = FMath::Max(BlindLeft, Seconds);
+	BlindTotal = FMath::Max(BlindLeft, 0.1f);
+	if (HasAuthority() && !IsLocallyControlled() && GetNetMode() != NM_Standalone) ClientApplyBlind(Seconds);
+}
+
+void AWWOCharacter::ClientApplyBlind_Implementation(float Seconds)
+{
+	ApplyBlind(Seconds);
 }
 
 void AWWOCharacter::ServerActivateUlt_Implementation()
 {
 	if (Ult->Charge >= 0.95f) Ult->Fill(); // a little slack: the two charges run a frame or two apart
 	const bool bCast = Ult->ActivateUlt();
+	if (!bCast) ClientKitRefused(2, 0);
 	NetUltsCast += bCast ? 1 : 0;
 	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), bCast ? TEXT("cast") : TEXT("refused"));
 }
@@ -542,7 +566,11 @@ bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, 
 	if (Health->bDead) return false;
 	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
 	if (!HasAuthority()) return false; // a joiner's hit: the number now; the host applies it (health replicates)
-	if (UWWOWorldSubsystem::CurrentAttacker.IsValid()) Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker; // damage from nobody doesn't erase who hit you last
+	if (UWWOWorldSubsystem::CurrentAttacker.IsValid())
+	{
+		Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker; // damage from nobody doesn't erase who hit you last
+		Health->LastAttackTime = GetWorld()->GetTimeSeconds();
+	}
 	const AActor* By = UWWOWorldSubsystem::CurrentAttacker.Get();
 	Health->DamageCameFrom(By && By != this ? By->GetActorLocation() : Point); // whoever did it, else where it landed
 	Health->TakeDamage(Damage);
@@ -589,7 +617,8 @@ float AWWOCharacter::ReticleDropAngle() const
 
 void AWWOCharacter::SetViewRotation(float PitchRad, float YawDeg)
 {
-	Pitch = FMath::Clamp(PitchRad, FMath::DegreesToRadians(-89.f), FMath::DegreesToRadians(89.f));
+	// The camera looks up by the low reticle's angle on top of this: keep the two under straight up.
+	Pitch = FMath::Clamp(PitchRad, FMath::DegreesToRadians(-89.f), FMath::DegreesToRadians(89.f) - FMath::Max(AppliedReticleDrop, 0.f));
 	if (Controller)
 	{
 		Controller->SetControlRotation(FRotator(FMath::RadiansToDegrees(Pitch), YawDeg, 0.f));
@@ -696,15 +725,23 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 		// Someone else's character: the host runs their health and the world side of their kit;
 		// everyone shows their body.
 		if (HasAuthority()) TickRemoteOnHost(DeltaSeconds);
+		else BlindLeft = FMath::Max(BlindLeft - DeltaSeconds, 0.f);
+		RemoteFootsteps(DeltaSeconds);
 		return;
 	}
+	SendPose(DeltaSeconds);
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
 	UpdateReviveInput();
 	if (Health->bDead != bWeaponSawDead)
 	{
 		// Dying stops the gun mid-burst, mid-reload or mid-punch; coming back starts every gun full.
 		bWeaponSawDead = Health->bDead;
-		if (bWeaponSawDead) Weapon->Interrupt();
+		if (bWeaponSawDead)
+		{
+			Weapon->Interrupt();
+			Ult->Abort(false);          // no blast at the respawn spot from an ult you died in
+			Grenades->CancelRelease();  // nor a grenade you had wound up
+		}
 		else Weapon->ResetForRespawn();
 	}
 	if (Health->bDead)
@@ -721,8 +758,60 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	Ult->UpdateUlt(DeltaSeconds);
 }
 
+float AWWOCharacter::LocalRaise() const
+{
+	// How far this player has its gun up, 0-1: aimed in, or just fired from the hip.
+	if (Health->bDead || bUlting || Weapon->bReloading || Weapon->bMeleeing || bSprinting || bSliding || bMantling) return 0.f;
+	return FMath::Max(Weapon->AdsAmount, Weapon->SecondsSinceShot() < 0.6f ? 0.7f : 0.f);
+}
+
+void AWWOCharacter::SendPose(float DeltaSeconds)
+{
+	// What others should see of what you're doing with your upper body: how far the gun is up and
+	// where you're looking (up or down). Your own machine knows; a joiner tells the host ten times
+	// a second, and the host's copy of you poses its body, which replicates to everyone else.
+	PoseRaise = LocalRaise();
+	PosePitch = FMath::RadiansToDegrees(Pitch);
+	if (GetNetMode() != NM_Client || (PoseSendLeft -= DeltaSeconds) > 0.f) return;
+	PoseSendLeft = 0.1f;
+	const uint8 Raise = (uint8)FMath::RoundToInt(FMath::Clamp(PoseRaise, 0.f, 1.f) * 255.f);
+	const int8 Look = (int8)FMath::Clamp(FMath::RoundToInt(PosePitch), -89, 89);
+	if (Raise == SentRaise && Look == SentLook) return;
+	SentRaise = Raise;
+	SentLook = Look;
+	ServerSetPose(Raise, Look);
+}
+
+void AWWOCharacter::ServerSetPose_Implementation(uint8 Raise, int8 Look)
+{
+	PoseRaise = Raise / 255.f;
+	PosePitch = FMath::Clamp((float)Look, -89.f, 89.f);
+}
+
+void AWWOCharacter::RemoteFootsteps(float DeltaSeconds)
+{
+	// Someone else's steps, heard from where they are: paced by how fast they move (their own
+	// machine paces its own by the head bob).
+	const float Speed = GetVelocity().Size2D() / WWO::M;
+	if (Health->bDead || bIsCrouched || Speed < 0.5f || !GetCharacterMovement()->IsMovingOnGround()) return;
+	const bool bRunning = Speed > WalkSpeed * 1.3f;
+	const float Before = RemoteStride;
+	RemoteStride += Speed / FMath::Max(bRunning ? SprintStride : WalkStride, 0.1f) * DeltaSeconds;
+	if (FMath::FloorToInt(RemoteStride) != FMath::FloorToInt(Before)) UWWOSound::PlayFor(this, "footstep", bRunning ? 1.f : 0.75f);
+}
+
 void AWWOCharacter::UpdateModel()
 {
+	// The upper body: arms up as far as the gun is raised (aimed in, or just fired), and the torso
+	// leaning with the look, up or down. Eased here; the body replicates both to the other machines.
+	{
+		const float Step = GetWorld()->GetDeltaSeconds();
+		const bool bPlain = Health->bDead || bUlting || EntrenchLeft > 0.f;
+		ShownRaise = WWO::MoveToward(ShownRaise, bPlain ? 0.f : PoseRaise, 7.f * Step);
+		ShownPitch = FMath::Lerp(ShownPitch, bPlain ? 0.f : PosePitch, 1.f - FMath::Exp(-12.f * Step));
+		Body->SetUpperBody("Pistol_Aim_Neutral", ShownRaise);
+		Body->SetHunch(-ShownPitch * 0.55f, ShownPitch * 0.25f);
+	}
 	// Pick the body animation from what you're doing. Playback speeds up or slows to match the
 	// speed (m/s) each animation looks right at.
 	constexpr float WalkAnimSpeed = 1.6f, JogAnimSpeed = 4.5f, SprintAnimSpeed = 7.f, CrouchAnimSpeed = 1.5f;
@@ -859,6 +948,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 	if (MoveIn.Held & MoveLunge)
 	{
 		// Flying at the velocity the lunging machine sent (CalcVelocity uses LungeVelocity).
+		if (!bLungeFlight) bSprinting = bSliding = false; // a lunge ends a sprint or slide, on both machines' copies of the move
 		bLungeFlight = true;
 		LungeVelocity = MoveIn.Push;
 		if (Move->MovementMode != MOVE_Flying) Move->SetMovementMode(MOVE_Flying);
@@ -1175,7 +1265,9 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float
 	}
 	else
 	{
-		WishVelocity = FVector(WWO::MoveToward(V.X, 0.f, Speed), WWO::MoveToward(V.Y, 0.f, Speed), 0.f) * WWO::M;
+		// Godot stops by Speed a physics frame (60 a second): the same rate per second here, whatever the frame rate.
+		const float Step = Speed * 60.f * DeltaSeconds;
+		WishVelocity = FVector(WWO::MoveToward(V.X, 0.f, Step), WWO::MoveToward(V.Y, 0.f, Step), 0.f) * WWO::M;
 	}
 }
 
@@ -1228,11 +1320,11 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 	if (bFrozen) DeltaSeconds = 0.f;
 	// Eye height eases between standing and crouched.
 	const float Target = bIsCrouched ? CrouchCameraZ : StandCameraZ;
-	CameraBaseZ = FMath::Lerp(CameraBaseZ, Target, FMath::Min(CameraSmoothing * DeltaSeconds, 1.f));
+	CameraBaseZ = FMath::Lerp(CameraBaseZ, Target, 1.f - FMath::Exp(-CameraSmoothing * DeltaSeconds)); // the same ease at any frame rate
 
 	// Landing dip: the camera drops quickly toward the kick while the kick eases back.
-	LandOffset = FMath::Lerp(LandOffset, LandKick, FMath::Min(25.f * DeltaSeconds, 1.f));
-	LandKick = FMath::Lerp(LandKick, 0.f, FMath::Min(8.f * DeltaSeconds, 1.f));
+	LandOffset = FMath::Lerp(LandOffset, LandKick, 1.f - FMath::Exp(-25.f * DeltaSeconds));
+	LandKick = FMath::Lerp(LandKick, 0.f, 1.f - FMath::Exp(-8.f * DeltaSeconds));
 
 	// Head bob: up/down once per step, side to side once per two steps.
 	const float Speed = FVector2D(GetVelocity().X, GetVelocity().Y).Size() / WWO::M;
@@ -1319,7 +1411,7 @@ bool AWWOCharacter::TryMantle(const FVector2D& Input)
 {
 	// Mantle when airborne, pushing forward, facing a wall with a flat top in reach and
 	// room to stand up there.
-	if (MantleReach <= 0.f || IsOnFloor() || bSliding || bLunging || Input.Y < 0.5f) return false;
+	if (MantleReach <= 0.f || IsOnFloor() || bSliding || bLunging || bLungeFlight || Input.Y < 0.5f) return false; // (the host's copy only knows the flight)
 	UWorld* World = GetWorld();
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOMantle), false, this);
 	FVector Forward = GetActorForwardVector();

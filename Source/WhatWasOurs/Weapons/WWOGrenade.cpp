@@ -125,10 +125,11 @@ void AWWOGrenade::Setup(AActor* InThrower)
 	if (Spec.Seedburst || Spec.bIsSeed)
 	{
 		AWWOCharacter* P = Cast<AWWOCharacter>(InThrower);
-		if (P && P->IsLocallyControlled())
+		if (P && P->IsLocallyControlled() && !P->GetBot())
 		{
-			P->Abilities->LiveSeeds++; // keeps the Seedburst HUD lit
+			P->Abilities->LiveSeeds++; // keeps the Seedburst HUD lit (a person's own; a bot has no HUD)
 			bCounted = true;
+			CountedFor = P;
 		}
 	}
 	BuildLooks();
@@ -185,10 +186,7 @@ void AWWOGrenade::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (bCounted)
 	{
-		if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this))
-		{
-			if (AWWOCharacter* P = WS->GetPlayer()) P->Abilities->LiveSeeds = FMath::Max(P->Abilities->LiveSeeds - 1, 0);
-		}
+		if (AWWOCharacter* P = CountedFor.Get()) P->Abilities->LiveSeeds = FMath::Max(P->Abilities->LiveSeeds - 1, 0); // off whoever it was counted on
 	}
 	if (Trail.IsValid()) Trail->StopAndFade();
 	Super::EndPlay(Reason);
@@ -514,6 +512,15 @@ void AWWOGrenade::Explode()
 				if (FVector::Dist(Enemy->FeetLocation(), Center) > Reach) continue;
 				if (D->Kind == EWWOGrenadeKind::Blind) Enemy->ApplyBlind(D->BlindTime);
 				else Enemy->ApplySlow(D->SlowAmount, SlowTime);
+				Affected++;
+			}
+			// PvP: the other team's players caught in it. Slowed as an enemy is; blinded = a white-out
+			// of their screen that clears over the blind time (a bot loses its target and its aim).
+			for (AWWOCharacter* Foe : UWWOWorldSubsystem::Get(this)->GetPlayers())
+			{
+				if (Foe->Health->bDead || !UWWOWorldSubsystem::CanHurt(Thrower.Get(), Foe) || FVector::Dist(Foe->GetActorLocation(), Center) > Reach) continue;
+				if (D->Kind == EWWOGrenadeKind::Blind) Foe->ApplyBlind(D->BlindTime);
+				else Foe->ApplySlow(D->SlowAmount, SlowTime);
 				Affected++;
 			}
 			UE_LOG(LogWWO, Log, TEXT("Grenade %s: %s %d enemies"), *D->Id.ToString(), D->Kind == EWWOGrenadeKind::Blind ? TEXT("blinded") : TEXT("slowed"), Affected);

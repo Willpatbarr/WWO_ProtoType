@@ -156,7 +156,7 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	if (!HasAuthority()) return; // the damage is the host's
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
-	TickLeft = FogTick;
+	TickLeft += FogTick; // not reset: a late frame doesn't cost damage
 	const AWWOCharacter* Player = GetOwner() ? Cast<AWWOCharacter>(GetOwner()) : UWWOWorldSubsystem::Get(this)->GetPlayer(); // whose Spore Fog Damage
 	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
 	if (!Ability || Strength() < 0.3f) return;

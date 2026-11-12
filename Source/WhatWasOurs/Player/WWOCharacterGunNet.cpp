@@ -80,6 +80,7 @@ namespace
 		Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
 		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? 1.25f : 1.f) * GunSlack;
 		Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
+		Out.Round = Scaled(Gun->Damage, "damage"); // what the arc perks scale from, as on the shooter's machine
 		return true;
 	}
 }
@@ -137,12 +138,17 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	// The joiner's arc perks (UWWOWeaponComponent::OnShotResult runs them for the host's own shots).
 	if (FirstCrit && Perks.Contains("ricochet"))
 	{
-		AWWOChainLightning::SpawnFrom(GetWorld(), FirstCrit, this, FLinearColor(1.f, 0.62f, 0.2f), Gun->Damage * 0.6f, 8.f, 1.f, 1, 0.04f);
+		AWWOChainLightning::SpawnFrom(GetWorld(), FirstCrit, this, FLinearColor(1.f, 0.62f, 0.2f), Limits.Round * 0.6f, 8.f, 1.f, 1, 0.04f);
+	}
+	if (Weapon->HostStaticGun != Shot.WeaponId)
+	{
+		Weapon->HostStaticGun = Shot.WeaponId; // another gun: its own count, as the joiner's starts over on a swap
+		Weapon->HostStaticHits = 0;
 	}
 	if (FirstHit && Perks.Contains("static") && ++Weapon->HostStaticHits >= 10)
 	{
 		Weapon->HostStaticHits = 0;
-		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, this, FLinearColor(0.45f, 0.75f, 1.f), Gun->Damage * 2.f, 6.f, 0.85f, 2, 0.07f);
+		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, this, FLinearColor(0.45f, 0.75f, 1.f), Limits.Round * 2.f, 6.f, 0.85f, 2, 0.07f);
 	}
 	if (Kills > 0)
 	{
@@ -267,7 +273,7 @@ void AWWOCharacter::ClientHitMarker_Implementation(bool bKilled)
 
 void AWWOCharacter::ServerThrowGrenade_Implementation(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir)
 {
-	Grenades->HostThrow(Hand, Dir);
+	if (!Grenades->HostThrow(Hand, Dir) && !Health->bDead) ClientKitRefused(0, 0); // its charge comes back
 }
 
 void AWWOCharacter::ClientKillCredit_Implementation(int32 Kills, bool bMelee)

@@ -27,9 +27,11 @@ public:
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UWWOBodyComponent> Body;
 
-	float Health = 100.f;
-	float Shield = 100.f;
-	float DownLeft = 0.f;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// The host's; replicated so a joiner's HUD shows them and a downed ally stops blocking it.
+	UPROPERTY(Replicated) float Health = 100.f;
+	UPROPERTY(Replicated) float Shield = 100.f;
+	UPROPERTY(Replicated) float DownLeft = 0.f;
 	bool IsDown() const { return bDown; }
 
 	void TakeAllyDamage(float Amount, bool bMelee = false);
@@ -39,7 +41,9 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> Gun;
-	bool bDown = false;
+	UPROPERTY(ReplicatedUsing = OnRep_Down) bool bDown = false;
+	UFUNCTION() void OnRep_Down();
+	void ShowDown(bool bIsDown); // collision and the gun, on every machine
 	float SinceHit = 99.f;
 	float FireCooldown = 0.5f;
 	TArray<FVector> Path;

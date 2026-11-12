@@ -75,7 +75,7 @@ void AWWOTarget::BeginPlay()
 	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this))
 	{
 		WS->RegisterTarget(this);
-		MaxHealth = Health = WS->TargetHealth;
+		if (HasAuthority()) MaxHealth = Health = WS->TargetHealth; // a joiner's copy keeps the host's values
 	}
 }
 

@@ -165,7 +165,7 @@ FVector AWWOSoldier::ChooseMove(const FVector& ToTarget, float Distance, float D
 	}
 	// Too close: back off. With a wall right behind it, Godot keeps backing into the wall;
 	// here it strafes instead (below), so it doesn't stand pinned there.
-	if (Distance < S->MinRange && !WallAhead(-Toward)) return -Toward;
+	if (Distance < S->MinRange && !WallAhead(-Toward) && !LedgeAhead(-Toward)) return -Toward; // nor off a ledge
 	if (Distance >= S->MinRange && (Distance > S->MaxRange || !bSees)) return PathDirection(TargetActor->GetActorLocation(), DeltaSeconds); // walk around walls to get a shot
 	StrafeLeft -= DeltaSeconds;
 	if (StrafeLeft <= 0.f)
@@ -173,7 +173,15 @@ FVector AWWOSoldier::ChooseMove(const FVector& ToTarget, float Distance, float D
 		StrafeLeft = S->StrafeTime * FMath::FRandRange(0.6f, 1.4f);
 		StrafeDir = -StrafeDir;
 	}
-	return FVector::CrossProduct(Toward, FVector::UpVector) * StrafeDir;
+	FVector Strafe = FVector::CrossProduct(Toward, FVector::UpVector) * StrafeDir;
+	if (LedgeAhead(Strafe))
+	{
+		// The deck ends that way: go the other way, or stand if it ends there too.
+		StrafeDir = -StrafeDir;
+		Strafe = -Strafe;
+		if (LedgeAhead(Strafe)) return FVector::ZeroVector;
+	}
+	return Strafe;
 }
 
 AActor* AWWOSoldier::NearestCover() const
@@ -266,11 +274,42 @@ void AWWOSoldier::Animate(float DeltaSeconds)
 	const float Speed = GetVelocity().Size2D() / WWO::M;
 	Body->SetMix("Idle", "Walk", FMath::Clamp(Speed / 1.f, 0.f, 1.f), FMath::Max(Speed / 1.6f, 0.5f));
 	Body->SetUpperBody("Pistol_Aim_Neutral", AimBlend);
+	NetGlow = (uint8)FMath::RoundToInt(GlowTarget * 255.f);
+	bNetAlerted = bAlerted;
+	const FVector AimAt = bAlerted && TargetActor.IsValid() ? TargetAimPoint() : FVector::ZeroVector;
+	PlaceGun(AimBlend, bAlerted && TargetActor.IsValid() ? &AimAt : nullptr);
+}
+
+void AWWOSoldier::PlaceGun(float Aim, const FVector* AimAt)
+{
+	// In the right hand, pointing where the soldier faces and tipped down; in a fight it comes up
+	// onto the target (a joiner's copy has no target: level along its facing).
 	const FVector Hand = GetMesh()->GetSocketLocation("hand_r");
 	Gun->SetWorldLocation(Hand);
 	FVector AimPoint = Hand + GetActorForwardVector() * 100.f - FVector(0, 0, 60.f);
-	if (bAlerted && TargetActor.IsValid()) AimPoint = FMath::Lerp(AimPoint, TargetAimPoint(), AimBlend);
+	const FVector Raised = AimAt ? *AimAt : Hand + GetActorForwardVector() * 100.f;
+	AimPoint = FMath::Lerp(AimPoint, Raised, Aim);
 	if (!Hand.Equals(AimPoint)) Gun->SetWorldRotation((AimPoint - Hand).Rotation());
+}
+
+void AWWOSoldier::AnimateRemote(float DeltaSeconds)
+{
+	if (!Gun) return;
+	// The host's copy does this in Animate and OnDeath; here the same looks from what it replicates.
+	Gun->SetVisibility(!bDead, true);
+	const float GlowTarget = bDead ? 0.f : NetGlow / 255.f;
+	Glow = GlowTarget < Glow ? WWO::MoveToward(Glow, GlowTarget, 8.f * DeltaSeconds) : GlowTarget;
+	if (GlowMat) GlowMat->SetScalarParameterValue("Glow", FMath::Lerp(0.4f, 8.f, Glow));
+	if (MuzzleLight) MuzzleLight->SetIntensity(Glow * 2.5f * 1500.f);
+	AimBlend = WWO::MoveToward(AimBlend, bNetAlerted && !bDead ? 1.f : 0.f, 4.f * DeltaSeconds);
+	PlaceGun(AimBlend, nullptr);
+}
+
+void AWWOSoldier::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOSoldier, NetGlow);
+	DOREPLIFETIME(AWWOSoldier, bNetAlerted);
 }
 
 // =================================================================================================
@@ -340,7 +379,9 @@ FVector AWWOSwarm::Think(float DeltaSeconds)
 		}
 		return FVector::ZeroVector;
 	}
-	if (Distance <= S->BiteRange)
+	// On the level above or below (a platform, a deck): flat distance says "in reach" through the floor.
+	const bool bSameLevel = HeightToTarget() <= 120.f;
+	if (Distance <= S->BiteRange && bSameLevel)
 	{
 		if (BiteTimer <= 0.f)
 		{
@@ -350,7 +391,7 @@ FVector AWWOSwarm::Think(float DeltaSeconds)
 		}
 		return FVector::ZeroVector; // stand and bite
 	}
-	if (Distance <= S->LeapRange && LeapCooldown <= 0.f && GetCharacterMovement()->IsMovingOnGround())
+	if (Distance <= S->LeapRange && bSameLevel && LeapCooldown <= 0.f && GetCharacterMovement()->IsMovingOnGround())
 	{
 		Leap(Toward);
 		return FVector::ZeroVector;
@@ -463,7 +504,7 @@ void AWWOTank::Setup()
 	Bubble = WWOFX::AddSoftSphere(this, GetRootComponent(), ShieldColor, 0.06f, 0.5f, false, true);
 	Bubble->SetRelativeScale3D(FVector(0.75f, 0.75f, 1.15f) * ModelScale * WWO::M * 2.f / 100.f);
 	Bubble->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 140.f));
-	ResetShield();
+	if (HasAuthority()) ResetShield(); // a joiner's copy keeps the shield the host sent
 }
 
 void AWWOTank::ResetShield()
@@ -556,7 +597,7 @@ FVector AWWOTank::Think(float DeltaSeconds)
 		return FVector::ZeroVector; // planted while slamming and recovering
 	}
 	TurnToward(ToTarget, DeltaSeconds);
-	if (Distance <= T->SlamRange && SlamCooldown <= 0.f)
+	if (Distance <= T->SlamRange && SlamCooldown <= 0.f && HeightToTarget() <= 150.f && CanSeeTarget(Head))
 	{
 		SlamTime = 0.f;
 		bSlamLanded = false;
@@ -585,7 +626,7 @@ void AWWOTank::Slam()
 		FVector To = Victim->GetActorLocation() - GetActorLocation();
 		const float Height = FMath::Abs(To.Z);
 		To.Z = 0.f;
-		return To.Size() <= T->SlamRadius * WWO::M && Height <= 250.f;
+		return To.Size() <= T->SlamRadius * WWO::M && Height <= 150.f; // not through a deck
 	};
 	for (AWWOCharacter* P : WS->GetPlayers()) // every player, online
 	{

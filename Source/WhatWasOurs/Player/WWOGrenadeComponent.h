@@ -39,6 +39,9 @@ public:
 
 private:
 	float ReleaseLeft = -1.f; // seconds until the grenade leaves the hand
+public:
+	void CancelRelease() { ReleaseLeft = -1.f; } // its owner died with one wound up
+private:
 	void Release();
 	void ThrowFrom(const FVector& Hand, const FVector& Dir); // build the grenade from the loadout and let go
 	const UWWOGrenadeData* Current(const UWWOGrenadeData* Grenade) const;

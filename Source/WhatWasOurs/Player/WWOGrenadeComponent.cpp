@@ -1,4 +1,5 @@
 #include "Player/WWOGrenadeComponent.h"
+#include "Characters/WWOBodyComponent.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
@@ -122,6 +123,7 @@ bool UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
 void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
+	P->Body->PlayUpperShot("OverhandThrow", 0.05f, 0.25f); // others see the arm come over
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	UWWOGrenadeData* Data = Loadout ? Loadout->GetGrenade() : nullptr;
 	if (!Data) return;

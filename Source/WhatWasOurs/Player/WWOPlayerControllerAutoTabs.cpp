@@ -15,6 +15,9 @@
 #include "Misc/Paths.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "Camera/CameraActor.h"
+#include "Characters/WWOBodyComponent.h"
+#include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
 
 namespace
@@ -30,6 +33,45 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L || !GetPawn() || !CharacterMenu) return;
 	TabsClock += DeltaTime;
+	// -WWOAutoTestPose: what others see of your upper body. Your own body, shown whole and seen from
+	// outside: gun down, then aimed in looking level, up 35 degrees and down 35 (84_pose_*).
+	static const bool bPose = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPose"));
+	if (bPose)
+	{
+		static const TCHAR* const Names[] = { TEXT("84_pose_hip"), TEXT("84_pose_aim_level"), TEXT("84_pose_aim_up"), TEXT("84_pose_aim_down") };
+		static const float Looks[] = { 0.f, 0.f, 35.f, -35.f };
+		static TWeakObjectPtr<ACameraActor> Camera;
+		AWWOCharacter* P = GetWWOCharacter();
+		if (TabsStage == 0)
+		{
+			if (TabsClock < 8.f) return;
+			P->Health->GodMode = 1.f;
+			P->Body->SetShadowOnly(false);
+			P->Weapon->SetVisibility(false, true);
+			const FVector Side = P->GetActorLocation() + P->GetActorForwardVector() * 230.f + P->GetActorRightVector() * 230.f + FVector(0, 0, 40.f);
+			Camera = GetWorld()->SpawnActor<ACameraActor>(Side, (P->GetActorLocation() + FVector(0, 0, 30.f) - Side).Rotation());
+			if (Camera.IsValid()) SetViewTarget(Camera.Get());
+			++TabsStage;
+			TabsClock = 0.f;
+			return;
+		}
+		const int32 Index = TabsStage - 1;
+		if (Index >= (int32)UE_ARRAY_COUNT(Names))
+		{
+			if (TabsClock > 0.5f) { FPlatformMisc::RequestExit(false); TabsClock = -100.f; }
+			return;
+		}
+		Held[(int32)EWWOAction::Aim] = Index > 0;
+		P->SetViewRotation(FMath::DegreesToRadians(Looks[Index]), P->GetActorRotation().Yaw);
+		if (TabsClock > 1.3f)
+		{
+			UE_LOG(LogWWO, Display, TEXT("AutoTest pose: %s (gun up %.2f, looking %.0f degrees)"), Names[Index], P->PoseRaise, P->PosePitch);
+			Shot(Names[Index]);
+			++TabsStage;
+			TabsClock = 0.f;
+		}
+		return;
+	}
 	// -WWOAutoTestVignette: the low-health vignette at full, 75%, 50%, 25% and 8% of health and
 	// shield together, held there for a moment each (83_vignette_<percent>), then healing back.
 	static const bool bVignette = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"));
