@@ -27,6 +27,19 @@ ditto "$PROJECT_DIR/Saved/StagedBuilds/Mac/WhatWasOurs.app" "$OUT/WhatWasOurs.ap
 # An ad-hoc signature changes every build, and macOS then asks for Local Network access again on
 # every Mac the new build runs on; a stable identity keeps the permission across builds.
 SIGN_ID="${WWO_SIGN_ID:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development/ {print $2; exit}')}"
+# A revoked certificate still signs, but macOS then kills the app at launch and removes it. Try the
+# identity on a throwaway file first; when it is revoked, leave the app's ad-hoc signature alone
+# (it runs anywhere; the only cost is the Local Network prompt again on each new build).
+if [ -n "$SIGN_ID" ]; then
+  PROBE="$(mktemp -t wwo_probe)"
+  cp /usr/bin/true "$PROBE"
+  codesign --force --timestamp=none --sign "$SIGN_ID" "$PROBE" 2>/dev/null || true
+  if spctl -a -vv "$PROBE" 2>&1 | grep -q CERT_REVOKED; then
+    echo "Signing certificate $SIGN_ID is revoked (renew it in Xcode > Settings > Accounts): keeping the ad-hoc signature"
+    SIGN_ID=""
+  fi
+  rm -f "$PROBE"
+fi
 if [ -n "$SIGN_ID" ]; then
   ENTS="$(mktemp -t wwo_ents).plist"
   codesign -d --entitlements :- "$OUT/WhatWasOurs.app" > "$ENTS" 2>/dev/null
