@@ -29,10 +29,13 @@ if not "%MISSING%"=="" if not "%WWO_SKIP_PACKS%"=="1" (
   echo to try without them ^(enemies fall back to the mannequin; the cook may log errors^).
   exit /b 1
 )
+rem Without the packs the cook reports the assets that point at them as errors: keep going past those.
+set "COOK_EXTRA="
+if not "%MISSING%"=="" set "COOK_EXTRA=-IgnoreCookErrors"
 if exist "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" copy /Y "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" "%PROJECT_DIR%\Config\ShippedSettings.json" >nul
 call "%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="%PROJECT_DIR%\WhatWasOurs.uproject" ^
   -platform=Win64 -clientconfig=Development -build -cook -stage -pak ^
-  -archive -archivedirectory="%WWO_OUT%" -noP4 -utf8output
+  -archive -archivedirectory="%WWO_OUT%" -noP4 -utf8output %COOK_EXTRA%
 if errorlevel 1 (
   echo Packaging failed: the first error above is the one to read.
   exit /b 1
