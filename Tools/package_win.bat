@@ -8,6 +8,9 @@ rem The build starts from Config\ShippedSettings.json: the Settings values in gi
 rem or this PC's own if "Save as defaults" has been used here.
 setlocal
 set "PROJECT_DIR=%~dp0.."
+rem Quotes typed around a folder (set UE_ROOT="C:\...") would break the checks below: drop them.
+if defined UE_ROOT set "UE_ROOT=%UE_ROOT:"=%"
+if defined WWO_OUT set "WWO_OUT=%WWO_OUT:"=%"
 if "%UE_ROOT%"=="" set "UE_ROOT=C:\Program Files\Epic Games\UE_5.8"
 if "%WWO_OUT%"=="" set "WWO_OUT=%PROJECT_DIR%\Builds\Windows"
 if not exist "%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat" (
