@@ -48,7 +48,11 @@ public:
 	EAct Playing() const { return Act; }
 
 	// The window: where the player's view is drawn, as fractions of the screen.
-	static constexpr float WinX = 0.355f, WinY = 0.05f, WinW = 0.63f, WinH = 0.63f, PaneW = 0.34f;
+	static constexpr float WinX = 0.355f;
+	static constexpr float WinY = 0.05f;
+	static constexpr float WinW = 0.63f;
+	static constexpr float WinH = 0.63f;
+	static constexpr float PaneW = 0.34f;
 
 private:
 	bool bOpen = false, bControl = false, bBuilt = false, bStrafe = false;

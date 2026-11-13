@@ -49,8 +49,20 @@ public:
 	// For logs and tests.
 	FString DebugState() const;
 	int32 StateIndex() const { return (int32)State; }
-	static int32 Sightings, PathsFound, PathsFailed, ShotsFired, StuckJumps, Regoals; // every bot, this run
-	static int32 Melees, Grenades, AbilitiesUsed, Ults, Retreats, NoCover, Swaps;
+	// every bot, this run
+	static int32 Sightings;
+	static int32 PathsFound;
+	static int32 PathsFailed;
+	static int32 ShotsFired;
+	static int32 StuckJumps;
+	static int32 Regoals;
+	static int32 Melees;
+	static int32 Grenades;
+	static int32 AbilitiesUsed;
+	static int32 Ults;
+	static int32 Retreats;
+	static int32 NoCover;
+	static int32 Swaps;
 	static int32 StuckIn[4]; // stuck hops by state
 	static int32 Callouts;   // callouts a teammate acted on
 	AWWOCharacter* GetFoe() const { return Foe.Get(); }

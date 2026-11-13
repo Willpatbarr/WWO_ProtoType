@@ -22,7 +22,9 @@ public:
 
 	// The leaf sheet rectangles (VineGraft: FROND, FROND_SHORT, BLADE), stem at the bottom edge.
 	struct FRect { float X, Y, W, H; };
-	static const FRect Frond, FrondShort, Blade;
+	static const FRect Frond;
+	static const FRect FrondShort;
+	static const FRect Blade;
 
 	FWWOGraftBuilder(const FVector& InOrigin, const FLinearColor& InPodColor, float InUnit, FRandomStream& InRandom);
 

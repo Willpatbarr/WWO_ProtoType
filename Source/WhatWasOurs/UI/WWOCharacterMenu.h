@@ -166,7 +166,10 @@ private:
 	static constexpr float ModSlotHeight = 82.f; // Godot pixels per slot, padding included
 	// The Weapon tab's four columns (Godot pixels; with their gaps they fit the 1464 the panel has
 	// at 16:9): weapons, stat bars and perks, mod slots, configs or the open slot's mods.
-	static constexpr float WeaponColumn = 290.f, StatsColumn = 430.f, SlotColumn = 196.f, SideColumn = 440.f;
+	static constexpr float WeaponColumn = 290.f;
+	static constexpr float StatsColumn = 430.f;
+	static constexpr float SlotColumn = 196.f;
+	static constexpr float SideColumn = 440.f;
 	static constexpr float ConfigListHeight = 540.f; // the config list scrolls inside this, the page never
 	FName OpenSlot;
 	float PopupIdle = 0.f;

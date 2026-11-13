@@ -194,7 +194,9 @@ private:
 	// The layout: five tabs across the top (Player, Combat, Enemies, Match, Items), each with its
 	// pages listed down the left, and the open page in one column on the right. A page is a global
 	// section's sliders or a list of items to open (Items). GlobalSwitcher holds every page.
-	static constexpr int32 NumTopTabs = 6, ItemsTab = 4, ControlsTab = 5;
+	static constexpr int32 NumTopTabs = 6;
+	static constexpr int32 ItemsTab = 4;
+	static constexpr int32 ControlsTab = 5;
 	static inline const TCHAR* const TopTabNames[NumTopTabs] = { TEXT("PLAYER"), TEXT("COMBAT"), TEXT("ENEMIES"), TEXT("MATCH"), TEXT("ITEMS"), TEXT("CONTROLS") };
 	struct FPage { FString Title; int32 Tab = 0; TWeakObjectPtr<UTextBlock> Label; TWeakObjectPtr<class UBorder> Mark; };
 	UPROPERTY() TArray<TObjectPtr<UWidget>> TopTabWidgets; // each tab's button, then the bar before it (null for the first)

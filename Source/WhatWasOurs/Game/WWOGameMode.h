@@ -73,7 +73,9 @@ public:
 	void SwitchTeam(AController* Player);
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	int32 People() const; // players who aren't bots
-	static int32 PvPKills, PvPMatchesEnded; // for -WWOAutoTestNet
+	// for -WWOAutoTestNet
+	static int32 PvPKills;
+	static int32 PvPMatchesEnded;
 	// The firing tester (?tester, from the launch screen; -WWOTester): no waves, no enemies, one
 	// target dummy ahead of the start. UWWOFiringTester is the screen over it.
 	bool bTester = false;

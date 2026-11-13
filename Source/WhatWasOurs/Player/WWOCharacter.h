@@ -320,7 +320,9 @@ public:
 	void ShowShotFromBody(const FVector& From, TConstArrayView<FVector_NetQuantize> Ends, bool bMarks);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastGunShot(FVector_NetQuantize From, const TArray<FVector_NetQuantize>& Ends);
 	// The host's tally of joiners' shots, for -WWOAutoTestNet.
-	static int32 NetShotsTaken, NetHitsApplied, NetHitsRejected;
+	static int32 NetShotsTaken;
+	static int32 NetHitsApplied;
+	static int32 NetHitsRejected;
 	static int32 NetShotsSeen; // shots from someone else shown on this machine
 
 	// Online melee: a joiner's swing (so the host's copy of its body punches, which everyone else
@@ -328,7 +330,10 @@ public:
 	UFUNCTION(Server, Reliable) void ServerMeleeSwing();
 	UFUNCTION(Server, Reliable) void ServerMeleeHit(AActor* Target, float Damage, FVector_NetQuantize Origin, FVector_NetQuantize Point);
 	void PlaySwingOnBody(); // the punch on the full body (others see it online)
-	static int32 NetMeleeSwings, NetMeleeApplied, NetMeleeRejected; // the host's tally of joiners' melee
+	// the host's tally of joiners' melee
+	static int32 NetMeleeSwings;
+	static int32 NetMeleeApplied;
+	static int32 NetMeleeRejected;
 
 	// The host's word on what a joiner's shot or punch killed (kill perks, the kill marker).
 	UFUNCTION(Client, Reliable) void ClientKillCredit(int32 Kills, bool bMelee);
@@ -352,7 +357,9 @@ public:
 	UFUNCTION(Client, Reliable) void ClientApplySlow(float Amount, float Seconds);
 	UFUNCTION(Client, Unreliable) void ClientDamageFrom(FVector_NetQuantize From); // the host: you were hit from there (HUD marker)
 	UFUNCTION(NetMulticast, Reliable) void MulticastEntrenchRoots(float Seconds);
-	static int32 NetAbilitiesUsed, NetUltsCast; // host: joiners' abilities and ults it ran
+	// host: joiners' abilities and ults it ran
+	static int32 NetAbilitiesUsed;
+	static int32 NetUltsCast;
 	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
 
 	AWWOPlayerController* GetWWOController() const;
