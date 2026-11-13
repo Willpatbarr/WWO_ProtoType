@@ -1,4 +1,6 @@
 #include "UI/WWOLaunchMenu.h"
+#include "Fonts/CompositeFont.h"
+#include "Misc/Paths.h"
 #include "UI/WWOSettingsMenu.h"
 #include "UI/WWOMenuCursor.h"
 #include "Net/WWONetSubsystem.h"
@@ -421,6 +423,24 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	RuleSlot->SetPadding(FMargin(0, 26.f * K, 0, 0));
 
 	UTextBlock* PlayLabel = Spaced(TEXT("PLAY"), 46.f, FLinearColor::White, 700);
+	{
+		// PLAY is set in Poppins Light (Content/WWO/Fonts, SIL Open Font License), read from its file
+		// once and kept. Without the file it stays in the menus' own font.
+		static TSharedPtr<FCompositeFont> Poppins;
+		const FString File = FPaths::ProjectContentDir() / TEXT("WWO/Fonts/Poppins-Light.ttf");
+		if (!Poppins.IsValid() && FPaths::FileExists(File))
+		{
+			Poppins = MakeShared<FCompositeFont>(FName("Light"), File, EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
+		}
+		if (Poppins.IsValid())
+		{
+			FSlateFontInfo F = PlayLabel->GetFont();
+			F.FontObject = nullptr;
+			F.CompositeFont = Poppins;
+			F.TypefaceFontName = FName("Light");
+			PlayLabel->SetFont(F);
+		}
+	}
 	PlayLabel->SetJustification(ETextJustify::Center);
 	UOverlay* PlayInside = Tree->ConstructWidget<UOverlay>();
 	UOverlaySlot* PlayLabelSlot = PlayInside->AddChildToOverlay(PlayLabel);

@@ -477,4 +477,5 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 
 - **Title screen**: the name is the wordmark logo (`/Game/WWO/Textures/UI/T_LogoTitle`), as wide as the text it replaced; the "//" above it is gone. Both old texts are still in the layout, unseen, so nothing else moved (`UWWOSettingsMenu::MakeLogo`).
 - **Headers**: the "//" before "WHAT WAS OURS" is the round leaf mark (`T_LogoMark`) in the character menu and on the setup screen after PLAY. The Settings header ("// SETTINGS") and the build title inside the Weapon tab keep theirs.
+- **PLAY**: set in Poppins Light, read at run time from `Content/WWO/Fonts/Poppins-Light.ttf` (SIL Open Font License, text beside it; from the Google Fonts repository). The folder is staged with the game (`DirectoriesToAlwaysStageAsUFS`); not checked in a packaged build yet.
 - **Source art**: `Tools/art/ui/*.png` (white on clear, cut from the supplied black-background images); `Tools/import_ui_logos.py` imports them. `/Game/WWO/Textures/UI` is always cooked (they are loaded by path).
