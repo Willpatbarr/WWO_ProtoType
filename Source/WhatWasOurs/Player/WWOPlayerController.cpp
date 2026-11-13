@@ -432,6 +432,13 @@ void AWWOPlayerController::OnActionStarted(const FInputActionInstance& Instance)
 	if (BlockedUntilReleased[(int32)*Id]) return; // still held from the press that closed a menu
 	Held[(int32)*Id] = true;
 	JustPressed[(int32)*Id] = true;
+	if (*Id == EWWOAction::Fire)
+	{
+		// The engine's own press: the trigger reading starts from here, so it doesn't count this pull again.
+		FireStartedAt = FPlatformTime::Seconds();
+		bTriggerDown = true;
+		TriggerHigh = 0.f;
+	}
 	// The bumpers are grenade and melee in play and the tab keys in a menu: never both.
 	if (*Id == EWWOAction::GrenadePad && !IsPaused() && !IsMenuOpen()) ChordPending.Add(EWWOChord::Grenade, 0.f);
 	if (*Id == EWWOAction::MeleePad && !IsPaused() && !IsMenuOpen()) ChordPending.Add(EWWOChord::Melee, 0.f);
@@ -502,6 +509,7 @@ void AWWOPlayerController::PlayerTick(float DeltaTime)
 	FMemory::Memcpy(ScriptNow, ScriptQueued, sizeof(ScriptNow)); // a scripted press: readable for this frame
 	FMemory::Memzero(ScriptQueued, sizeof(ScriptQueued));
 	Super::PlayerTick(DeltaTime); // processes input: fills Held / JustPressed for this frame
+	UpdateTrigger();
 	UpdateDevice();
 	UpdateChord(DeltaTime);
 	if (SettingsMenu && !SettingsMenu->IsPrepared() && GetPawn()) SettingsMenu->Prepare(); // applies the saved settings
@@ -539,6 +547,47 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 	else if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogJoinerStress(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
 	else if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
+}
+
+bool AWWOPlayerController::StepTrigger(float V, float Reset, bool& bDown, float& Low, float& High)
+{
+	if (bDown)
+	{
+		High = FMath::Max(High, V);
+		if (V <= High - Reset || V < 0.05f)
+		{
+			bDown = false;
+			Low = V;
+		}
+		return false;
+	}
+	Low = FMath::Min(Low, V);
+	if (V < Low + Reset || V <= 0.1f) return false;
+	bDown = true;
+	High = V;
+	return true;
+}
+
+void AWWOPlayerController::UpdateTrigger()
+{
+	// The engine only reports a trigger as let go when it is nearly all the way out, so a quick
+	// second pull that starts from half way never registers. Read as an axis instead, the trigger
+	// re-arms as soon as it has come back up a little (AWWOCharacter::TriggerReset), and pulling it
+	// in again from there is a fresh press of Fire.
+	const FKey Bound = GetBind("fire", true);
+	const FKey Axis = Bound == EKeys::Gamepad_RightTrigger ? EKeys::Gamepad_RightTriggerAxis
+		: Bound == EKeys::Gamepad_LeftTrigger ? EKeys::Gamepad_LeftTriggerAxis : FKey();
+	const AWWOCharacter* P = Cast<AWWOCharacter>(GetPawn());
+	if (!Axis.IsValid() || !P)
+	{
+		bTriggerDown = false;
+		TriggerLow = TriggerHigh = 0.f;
+		return;
+	}
+	const int32 Fire = (int32)EWWOAction::Fire;
+	if (!StepTrigger(GetInputAnalogKeyState(Axis), FMath::Clamp(P->TriggerReset, 0.02f, 0.9f), bTriggerDown, TriggerLow, TriggerHigh)) return;
+	// Only when the engine still has it down (its own press won't come) and didn't just press it.
+	if (Held[Fire] && !BlockedUntilReleased[Fire] && FPlatformTime::Seconds() - FireStartedAt > 0.1) JustPressed[Fire] = true;
 }
 
 void AWWOPlayerController::UpdateDevice()

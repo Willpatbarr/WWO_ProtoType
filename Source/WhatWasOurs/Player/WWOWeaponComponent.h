@@ -236,6 +236,7 @@ private:
 	float SwapLeft = 0.f, SwapLength = 0.35f;
 	float ReadyLeft = 0.f;
 	bool bReadyShotQueued = false;
+	float FireBuffer = 0.f; // s left in which a semi-auto pull that came too early still fires (AWWOCharacter::FireBufferTime)
 	float FireCooldown = 0.f;
 	public:
 	// Where the first-person gun's sight point is seen on screen: X and Y from the screen's centre in

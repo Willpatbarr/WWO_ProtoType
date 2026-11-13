@@ -190,6 +190,12 @@ public:
 	// The red vignette that grows around the screen as your health and shield drop (0 = off).
 	UPROPERTY(EditAnywhere, Category = "HUD") float HealthVignette = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Camera") float StickSensitivity = 4.f; // radians per second at full tilt
+	// Forgiving trigger pulls. TriggerReset: how far a controller trigger has to come back up (share
+	// of its travel) before pulling it in again counts as a new pull; it never has to be let go all
+	// the way. FireBufferTime: a pull this long (s) before a semi-auto gun can fire still fires, the
+	// moment it can.
+	UPROPERTY(EditAnywhere, Category = "Camera") float TriggerReset = 0.15f;
+	UPROPERTY(EditAnywhere, Category = "Camera") float FireBufferTime = 0.2f;
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Walk") float SprintSpeed = 10.f;
 	UPROPERTY(EditAnywhere, Category = "Crouch") float CrouchSpeed = 2.5f;

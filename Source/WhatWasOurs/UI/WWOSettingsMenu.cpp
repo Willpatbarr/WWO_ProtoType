@@ -94,7 +94,7 @@ namespace
 	const TMap<FString, TArray<FName>>& OwnSettings()
 	{
 		static const TMap<FString, TArray<FName>> Own = {
-			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsDotSize", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity", "AdsBob" } },
+			{ TEXT("Camera"), { "HipFov", "ReticleDrop", "AdsDotSize", "AdsGunScale", "AdsLevel", "MouseSensitivity", "StickSensitivity", "TriggerReset", "FireBufferTime", "RumbleScale", "PunchScale", "BlastShake", "HitFlinch", "BobIntensity", "AdsBob" } },
 			{ TEXT("Audio"), {} },
 			{ TEXT("HUD"), {} },
 		};
@@ -224,6 +224,8 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(G, "AdsLevel", TEXT("Auto-level the gun's top when aimed (only guns whose top sits below the sight; per gun: ADS gun angle)"), 0.f, 1.f, 0.05f),
 		Row(P, "MouseSensitivity", TEXT("Mouse sensitivity"), 0.1f, 10.f, 0.1f),
 		Row(P, "StickSensitivity", TEXT("Stick sensitivity"), 0.5f, 10.f, 0.1f),
+		Row(P, "TriggerReset", TEXT("Trigger: how far it must come back up to fire again (share of its travel)"), 0.03f, 0.6f, 0.01f),
+		Row(P, "FireBufferTime", TEXT("Semi-auto: a pull this early still fires (s; 0 = off)"), 0.f, 0.5f, 0.01f),
 		Row(G, "RumbleScale", TEXT("Controller rumble strength (0 = off)"), 0.f, 2.f, 0.05f),
 		Row(G, "PunchScale", TEXT("Camera punch strength (0 = off)"), 0.f, 2.f, 0.05f),
 		Row(G, "BlastShake", TEXT("Shake from explosions near you (0 = off)"), 0.f, 2.f, 0.05f),

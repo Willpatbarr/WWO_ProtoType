@@ -70,6 +70,10 @@ public:
 	void ScriptPress(EWWOAction Action) { ScriptQueued[(int32)Action] = true; }
 	void ScriptMove(FVector2D Axis) { ScriptMoveValue = Axis; }
 	void ClearScript();
+	// One step of the forgiving trigger: V is how far in it is (0-1). True on the frame it counts as
+	// pulled: when it has come in by Reset from the lowest it has been since the last pull. It counts
+	// as let go once it has come back out by Reset from the furthest in it got (or nearly all the way).
+	static bool StepTrigger(float V, float Reset, bool& bDown, float& Low, float& High);
 	UWWOFiringTester* GetFiringTester() const { return FiringTester; }
 	bool IsOtherMenuOpen() const; // a real menu (settings, character, launch), not the tester's own pane
 	void RefreshMenuMode() { SetMenuMode(IsMenuOpen()); }
@@ -197,6 +201,11 @@ private:
 	bool bAutoTestTabs = false;
 	void UpdateAutoTabsTest(float DeltaTime);
 	bool bAutoTestTester = false;
+	// The fire trigger, read as an axis (UpdateTrigger).
+	bool bTriggerDown = false;
+	float TriggerLow = 0.f, TriggerHigh = 0.f;
+	double FireStartedAt = -10.0; // real time of the engine's last press of Fire
+	void UpdateTrigger();
 	void UpdateAutoTesterTest(float DeltaTime); // -WWOAutoTestTester: the firing tester
 	// -WWOAutoTestNet (WWOPlayerControllerAutoNet.cpp): online play, run on the host and the joiner.
 	bool bAutoTestNet = false;

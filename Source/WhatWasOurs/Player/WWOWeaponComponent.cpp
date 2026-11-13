@@ -1128,6 +1128,10 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 	bFlashVisible = FlashTime > 0.f; // decided before this frame's shot, like Godot (a new flash shows from the next frame)
 
 	FireCooldown -= DeltaSeconds;
+	// A semi-auto pull is remembered for a moment: one that comes just before the gun can fire
+	// again (or during a burst) fires as soon as it can, instead of being lost.
+	if (Weapon->IsSemiAuto() && JustPressed((int32)EWWOAction::Fire)) FireBuffer = FMath::Max(P->FireBufferTime, 0.f);
+	else FireBuffer = FMath::Max(FireBuffer - DeltaSeconds, 0.f);
 	// A burst under way finishes on its own, trigger held or not (a reload, a punch or a swap cuts
 	// it short). FireCooldown keeps counting meanwhile: it times burst start to burst start.
 	if (BurstLeft > 0)
@@ -1159,7 +1163,7 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 		FireCooldown = FMath::Max(FireCooldown, 0.f); // don't bank shots while waiting
 		return;
 	}
-	const bool bWants = WantsToFire() || (bReadyShotQueued && Weapon->IsSemiAuto());
+	const bool bWants = WantsToFire() || ((bReadyShotQueued || FireBuffer > 0.f) && Weapon->IsSemiAuto());
 	bReadyShotQueued = false;
 	if (!bWants || bReloading || bMeleeing || IsSwapping())
 	{
@@ -1175,6 +1179,7 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 			return;
 		}
 		const int32 Rounds = Weapon->BurstCount();
+		FireBuffer = 0.f; // the remembered pull is spent
 		if (Rounds > 1) BeginBurst(Rounds);
 		FireRound();
 		FireCooldown += 60.f / FMath::Max(Weapon->FireRate, 1.f);

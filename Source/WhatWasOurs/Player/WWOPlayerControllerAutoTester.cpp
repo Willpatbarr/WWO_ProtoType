@@ -1,6 +1,7 @@
 // -WWOAutoTestTester (with -WWOTester on the command line, which opens the firing tester): looks
 // the screen over and plays its buttons, with screenshots 86_tester_*. Logs `AutoTest tester: ... ok|FAIL`.
 
+#include "UI/WWOSettingsMenu.h"
 #include "UI/WWOHUDWidget.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
@@ -140,6 +141,7 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 		FiringTester->SetStrafe(false);
 		FiringTester->SetControl(true);
 	}
+	static float SecondPull = 0.f;
 	if (Crossed(19.5f))
 	{
 		Check(FiringTester->HasControl() && !IsMenuOpen(), TEXT("TAKE CONTROL hands over the player"));
@@ -149,6 +151,32 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 	if (Crossed(20.f))
 	{
 		Check(!FiringTester->HasControl() && FiringTester->WantsCursor(), TEXT("the Settings key gives the cursor back to the pane"));
+		// The forgiving trigger: half way out and back in is a new pull; a wobble isn't.
+		bool bDown = false; float Low = 0.f, High = 0.f; int32 Pulls = 0;
+		for (const float V : { 0.f, 0.5f, 1.f, 1.f, 0.95f, 0.6f, 0.9f, 1.f, 0.97f, 1.f, 0.3f, 0.34f, 0.3f, 1.f, 0.f }) Pulls += StepTrigger(V, 0.15f, bDown, Low, High) ? 1 : 0;
+		Check(Pulls == 3, FString::Printf(TEXT("trigger: three pulls counted from one that never fully lets go (%d)"), Pulls));
+	}
+	// A semi-auto pull just before the gun can fire again still fires. (The gun is made one-shot-a-pull
+	// for the check through its setting, and put back after: nothing is saved in between.)
+	static float SemiBefore = 0.f;
+	const FString GunKey = FString(TEXT("weapon/")) + P->Weapon->GetWeaponData()->Id.ToString();
+	if (Crossed(20.05f) && SettingsMenu)
+	{
+		SemiBefore = SettingsMenu->GetValue(GunKey, "SemiAuto");
+		SettingsMenu->SetValue(GunKey, "SemiAuto", 1.f);
+	}
+	if (Crossed(20.2f))
+	{
+		TesterAmmo = P->Weapon->Ammo;
+		ScriptPress(EWWOAction::Fire);
+		SecondPull = TesterClock + 60.f / FMath::Max(P->Weapon->GetWeaponData()->FireRate, 1.f) - 0.12f; // 0.12 s too early
+	}
+	if (SecondPull > 0.f && Crossed(SecondPull)) ScriptPress(EWWOAction::Fire);
+	if (Crossed(21.4f))
+	{
+		const int32 Per = FMath::Max(P->Weapon->GetWeaponData()->BurstCount(), 1);
+		if (SettingsMenu) SettingsMenu->SetValue(GunKey, "SemiAuto", SemiBefore);
+		Check(TesterAmmo - P->Weapon->Ammo == 2 * Per, FString::Printf(TEXT("semi-auto: a pull 0.12 s early still fired (%d rounds gone, %d wanted)"), TesterAmmo - P->Weapon->Ammo, 2 * Per));
 		if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); L && TesterGunBefore.IsValid()) L->EquipWeapon(TesterGunBefore.Get()); // the gun you had
 		if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this)) L->FlushSave(); // anything due is written now, then replaced
 		if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
