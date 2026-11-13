@@ -894,7 +894,7 @@ void UWWOSettingsMenu::LoadSaved()
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return;
 	for (const auto& SectionPair : Root->Values)
 	{
-		const TSharedPtr<FJsonObject>* Values;
+		const TSharedPtr<FJsonObject>* Values = nullptr;
 		if (!SectionPair.Value->TryGetObject(Values)) continue;
 		const FString SectionKey(*SectionPair.Key);
 		for (const auto& ValuePair : (*Values)->Values)

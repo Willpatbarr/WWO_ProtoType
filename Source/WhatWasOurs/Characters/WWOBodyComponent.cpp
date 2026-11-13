@@ -43,8 +43,8 @@ namespace
 			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
 		}
 		if (Key.IsNone() || !Json.IsValid()) return nullptr;
-		const TSharedPtr<FJsonObject>* Models;
-		const TSharedPtr<FJsonObject>* Model;
+		const TSharedPtr<FJsonObject>* Models = nullptr;
+		const TSharedPtr<FJsonObject>* Model = nullptr;
 		if (Json->TryGetObjectField(TEXT("models"), Models) && (*Models)->TryGetObjectField(Key.ToString(), Model)) return *Model;
 		return nullptr;
 	}

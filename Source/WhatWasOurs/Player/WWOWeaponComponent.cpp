@@ -99,8 +99,8 @@ namespace
 			// Saved/WWO/WeaponModels.local.json (this machine only, never in git or a build): its
 			// "weapons" entries replace the shipped ones, for trying a model that isn't the game's.
 			TSharedPtr<FJsonObject> Local;
-			const TSharedPtr<FJsonObject>* Ours;
-			const TSharedPtr<FJsonObject>* Theirs;
+			const TSharedPtr<FJsonObject>* Ours = nullptr;
+			const TSharedPtr<FJsonObject>* Theirs = nullptr;
 			if (Json.IsValid() && FFileHelper::LoadFileToString(Text, *(FPaths::ProjectSavedDir() / TEXT("WWO/WeaponModels.local.json")))
 				&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Local) && Local.IsValid()
 				&& Json->TryGetObjectField(TEXT("weapons"), Ours) && Local->TryGetObjectField(TEXT("weapons"), Theirs))
@@ -110,8 +110,8 @@ namespace
 			}
 		}
 		if (!Json.IsValid()) return nullptr;
-		const TSharedPtr<FJsonObject>* Weapons;
-		const TSharedPtr<FJsonObject>* Model;
+		const TSharedPtr<FJsonObject>* Weapons = nullptr;
+		const TSharedPtr<FJsonObject>* Model = nullptr;
 		if (Json->TryGetObjectField(TEXT("weapons"), Weapons) && (*Weapons)->TryGetObjectField(WeaponId.ToString(), Model)) return *Model;
 		return nullptr;
 	}
@@ -119,7 +119,7 @@ namespace
 	// A 3-number array field (or one number for all three), else Default.
 	FVector JsonVec(const TSharedPtr<FJsonObject>& O, const TCHAR* Field, const FVector& Default = FVector::ZeroVector)
 	{
-		const TArray<TSharedPtr<FJsonValue>>* A;
+		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
 		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() >= 3) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), (*A)[2]->AsNumber());
 		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() == 2) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), 0.0);
 		double N;
@@ -604,7 +604,7 @@ void UWWOWeaponComponent::BuildModel()
 		TopBelowSight = FMath::Max(-(JsonVec(Model, TEXT("offset")).Z + MeshTop) + Weapon->SightHeight, 0.f);
 		const FVector Rot = JsonVec(Model, TEXT("rot"));
 		AddPart("Body", BodyMesh, JsonVec(Model, TEXT("scale"), FVector(1.0)), JsonVec(Model, TEXT("offset")), FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
-		const TArray<TSharedPtr<FJsonValue>>* Extras;
+		const TArray<TSharedPtr<FJsonValue>>* Extras = nullptr;
 		if (Model->TryGetArrayField(TEXT("parts"), Extras))
 		{
 			for (int32 i = 0; i < Extras->Num(); ++i)
@@ -612,7 +612,7 @@ void UWWOWeaponComponent::BuildModel()
 				if ((*Extras)[i]->AsObject().IsValid()) AddJsonPart(FName(*FString::Printf(TEXT("Extra%d"), i)), (*Extras)[i]->AsObject(), JsonVec(Model, TEXT("offset")));
 			}
 		}
-		const TSharedPtr<FJsonObject>* AnchorObj;
+		const TSharedPtr<FJsonObject>* AnchorObj = nullptr;
 		if (Model->TryGetObjectField(TEXT("anchors"), AnchorObj))
 		{
 			for (const auto& Pair : (*AnchorObj)->Values)

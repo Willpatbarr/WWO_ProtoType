@@ -504,7 +504,7 @@ void UWWOLoadoutSubsystem::LoadDefaultLoadout()
 	Data->Grenade = FName(Json->GetStringField(TEXT("grenade")));
 	for (const TSharedPtr<FJsonValue>& V : Json->GetArrayField(TEXT("abilities"))) Data->Abilities.Add(FName(V->AsString()));
 	for (const TSharedPtr<FJsonValue>& V : Json->GetArrayField(TEXT("traits"))) Data->Traits.Add(FName(V->AsString()));
-	const TSharedPtr<FJsonObject>* Frame;
+	const TSharedPtr<FJsonObject>* Frame = nullptr;
 	if (Json->TryGetObjectField(TEXT("frame"), Frame))
 	{
 		for (const auto& Pair : (*Frame)->Values) Data->Frame.Add(FName(*Pair.Key), FName(Pair.Value->AsString()));
@@ -674,7 +674,7 @@ void UWWOLoadoutSubsystem::LoadMods()
 		UE_LOG(LogWWO, Warning, TEXT("Config/WeaponMods.json isn't valid JSON"));
 		return;
 	}
-	const TArray<TSharedPtr<FJsonValue>>* List;
+	const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
 	if (!Json->TryGetArrayField(TEXT("mods"), List)) return;
 	int32 Order = 0;
 	for (const TSharedPtr<FJsonValue>& V : *List)
@@ -691,7 +691,7 @@ void UWWOLoadoutSubsystem::LoadMods()
 		O->TryGetStringField(TEXT("perk_text"), Mod->PerkText);
 		FString Perk;
 		if (O->TryGetStringField(TEXT("perk"), Perk)) Mod->Perk = FName(Perk);
-		const TSharedPtr<FJsonObject>* Stats;
+		const TSharedPtr<FJsonObject>* Stats = nullptr;
 		if (O->TryGetObjectField(TEXT("stats"), Stats))
 		{
 			for (const auto& Pair : (*Stats)->Values)
@@ -703,7 +703,7 @@ void UWWOLoadoutSubsystem::LoadMods()
 				Mod->Mods.Add(M);
 			}
 		}
-		const TArray<TSharedPtr<FJsonValue>>* Parts;
+		const TArray<TSharedPtr<FJsonValue>>* Parts = nullptr;
 		if (O->TryGetArrayField(TEXT("parts"), Parts))
 		{
 			for (const TSharedPtr<FJsonValue>& PartValue : *Parts)
