@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "Player/WWOProf.h"
 #include "Characters/WWOBodyComponent.h"
 #include "FX/WWOFX.h"
 #include "Weapons/WWOGrenade.h"
@@ -391,6 +392,7 @@ void AWWOGameMode::Countdown(float Seconds)
 
 void AWWOGameMode::Tick(float DeltaSeconds)
 {
+	WWO_PROF("GameMode");
 	Super::Tick(DeltaSeconds);
 	// Every player's death counts (online, players join later and respawn as new characters).
 	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())

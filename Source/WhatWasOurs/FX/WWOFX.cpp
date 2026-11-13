@@ -1,4 +1,5 @@
 #include "FX/WWOFX.h"
+#include "Player/WWOProf.h"
 #include "WWOTypes.h"
 #include "Systems/WWOTargetable.h"
 #include "Components/StaticMeshComponent.h"
@@ -220,6 +221,7 @@ float AWWOFXActor::EaseValue(EWWOEase Ease, float T)
 
 void AWWOFXActor::Tick(float DeltaSeconds)
 {
+	WWO_PROF("FXActor");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	for (const FWWOTween& T : Tweens)
@@ -517,6 +519,7 @@ void AWWOParticles::EmitOne()
 
 void AWWOParticles::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Particles");
 	Super::Tick(DeltaSeconds);
 	if (!bStarted) return;
 	if (bEmitting && !bOneShot)
@@ -705,6 +708,7 @@ void AWWOLightningBolt::Reform()
 
 void AWWOLightningBolt::Tick(float DeltaSeconds)
 {
+	WWO_PROF("LightningBolt");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	if (Age >= Lifetime)
@@ -814,6 +818,7 @@ void AWWODischarge::Reform()
 
 void AWWODischarge::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Discharge");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	if (Age >= Lifetime)

@@ -109,6 +109,7 @@ private:
 	TArray<FName> Guns;  // the two it carries
 	bool bHasKit = false;
 	void GiveKit(AWWOCharacter* Me);
+	float NextBusy = 4.f; // -WWOBotsBusy: when it next throws or uses something for the sake of it
 	float NextMelee = 0.f, NextGrenade = 3.f, NextAbility = 0.f, NextUlt = 5.f, NextSwap = 0.f;
 	// Throwing: it turns to the arc, lets go, and holds the aim until the grenade has left its hand.
 	bool bThrowing = false, bThrown = false;

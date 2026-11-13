@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemy.h"
+#include "Player/WWOProf.h"
 #include "WhatWasOurs.h"
 #include "Systems/WWOSound.h"
 #include "FX/WWOFX.h"
@@ -278,6 +279,7 @@ bool AWWOEnemy::TargetIsInvisible() const
 
 void AWWOEnemy::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Enemy");
 	Super::Tick(DeltaSeconds);
 	if (bDead != bDeathShown)
 	{

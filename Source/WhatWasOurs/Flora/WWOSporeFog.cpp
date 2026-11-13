@@ -1,4 +1,5 @@
 #include "Flora/WWOSporeFog.h"
+#include "Player/WWOProf.h"
 #include "Net/UnrealNetwork.h"
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
@@ -136,6 +137,7 @@ bool AWWOSporeFog::Blocks(const UWorld* World, const FVector& From, const FVecto
 
 void AWWOSporeFog::Tick(float DeltaSeconds)
 {
+	WWO_PROF("SporeFog");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	if (Age >= Duration)

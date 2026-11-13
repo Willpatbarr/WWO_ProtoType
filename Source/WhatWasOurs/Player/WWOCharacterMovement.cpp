@@ -1,4 +1,5 @@
 #include "Player/WWOCharacterMovement.h"
+#include "Player/WWOProf.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOAbilityComponent.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -222,6 +223,7 @@ bool UWWOCharacterMovement::ForcePositionUpdate(float DeltaTime)
 
 void UWWOCharacterMovement::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	WWO_PROF("CharacterMovement");
 	// On the machine that controls this character: this frame's local work and move input first.
 	// (The host's copy of someone else moves only as their moves arrive.)
 	AWWOCharacter* Owner = Cast<AWWOCharacter>(CharacterOwner);

@@ -1,4 +1,5 @@
 #include "Systems/WWOWorldSubsystem.h"
+#include "Player/WWOProf.h"
 #include "EngineUtils.h"
 #include "Enemies/WWOEnemy.h"
 #include "Allies/WWOAlly.h"
@@ -211,6 +212,7 @@ void UWWOWorldSubsystem::ShowText(const FString& Text, bool bCritical, const FVe
 
 void UWWOWorldSubsystem::Tick(float DeltaTime)
 {
+	WWO_PROF("WorldSubsystem");
 	for (FWWOFloatingText& T : Texts) T.Age += DeltaTime;
 	// Godot's tween: rises for 0.7 s, fades from 0.25 s over 0.7 s, then frees itself.
 	Texts.RemoveAll([](const FWWOFloatingText& T) { return T.Age >= FWWOFloatingText::Lifetime; });

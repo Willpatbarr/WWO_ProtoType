@@ -243,6 +243,7 @@ private:
 	bool bPerfTest = false;
 	bool bPerfProfiled = false;
 	float PerfStartClock = 0.f;
+	bool UpdatePerfSweep(class AWWOCharacter* P, float DeltaTime); // -WWOPerfSweep: true while it is running
 	TArray<FVector2D> PerfSums; // per view: (frame ms, GPU ms) summed
 	TArray<int32> PerfFrames;
 	void UpdatePerfTest(class AWWOCharacter* P, float DeltaTime);

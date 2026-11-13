@@ -1,4 +1,5 @@
 #include "World/WWOTarget.h"
+#include "Player/WWOProf.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
@@ -146,6 +147,7 @@ void AWWOTarget::SetCollision(bool bOn)
 
 void AWWOTarget::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Target");
 	Super::Tick(DeltaSeconds);
 	if (StrafeDistance > 0.f && !bDead && HasAuthority())
 	{

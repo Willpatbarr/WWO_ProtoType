@@ -1,4 +1,5 @@
 #include "Flora/WWOFloraEffects.h"
+#include "Player/WWOProf.h"
 #include "Components/PointLightComponent.h"
 #include "Flora/WWOSporeFog.h"
 #include "Game/WWOGameState.h"
@@ -123,6 +124,7 @@ void AWWOSporePool::EndPlay(const EEndPlayReason::Type Reason)
 
 void AWWOSporePool::Tick(float DeltaSeconds)
 {
+	WWO_PROF("SporePool");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	if (Age >= Duration)
@@ -239,6 +241,7 @@ void AWWOSporePatch::EndPlay(const EEndPlayReason::Type Reason)
 
 void AWWOSporePatch::Tick(float DeltaSeconds)
 {
+	WWO_PROF("SporePatch");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	const float In = BackOut(Age / 0.25f);
@@ -284,6 +287,7 @@ void UWWODamageOverTime::Apply(AActor* Target, float DamagePerSecond, float Seco
 
 void UWWODamageOverTime::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	WWO_PROF("DamageOverTime");
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	IWWOTargetable* Target = Cast<IWWOTargetable>(GetOwner());
 	if (!Target || Target->IsDead())
@@ -403,6 +407,7 @@ void AWWOBarkWall::Dust(float Amount)
 
 void AWWOBarkWall::Tick(float DeltaSeconds)
 {
+	WWO_PROF("BarkWall");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	// The slab is centered on the collision box: grow it up from the ground.
@@ -481,6 +486,7 @@ void AWWOEntrenchRoots::BurstDirt()
 
 void AWWOEntrenchRoots::Tick(float DeltaSeconds)
 {
+	WWO_PROF("EntrenchRoots");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	RingAge += DeltaSeconds;
@@ -589,6 +595,7 @@ void AWWOChainLightning::DamageTarget(AActor* Target, float Amount)
 
 void AWWOChainLightning::Tick(float DeltaSeconds)
 {
+	WWO_PROF("ChainLightning");
 	Super::Tick(DeltaSeconds);
 	Wait -= DeltaSeconds;
 	if (Wait > 0.f) return;

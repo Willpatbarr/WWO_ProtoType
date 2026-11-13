@@ -1,4 +1,5 @@
 #include "Player/WWOBotController.h"
+#include "Player/WWOProf.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOWeaponComponent.h"
@@ -577,6 +578,7 @@ FString AWWOBotController::DebugState() const
 
 void AWWOBotController::Tick(float DeltaSeconds)
 {
+	WWO_PROF("BotController");
 	Super::Tick(DeltaSeconds);
 	// Buttons are decided fresh every frame; a press lasts one frame (the character reads it once).
 	for (bool& J : Just) J = false;
@@ -695,6 +697,25 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	const bool bShotgun = W && W->Pellets > 1.5f;
 	const bool bSniper = W && W->Zoom >= 4.f;
 	bool bWantSprint = false, bMoving = false;
+
+	// -WWOBotsBusy (performance runs): every few seconds each bot throws its grenade or sets off an
+	// ability, ready or not and with or without anyone to use it on, so a measured match always has
+	// grenades, fog, walls and ability effects going.
+	static const bool bBusy = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsBusy"));
+	if (bBusy && Clock >= NextBusy && !Gun->bMeleeing)
+	{
+		NextBusy = Clock + FMath::FRandRange(2.f, 5.f);
+		if (FMath::RandBool())
+		{
+			Me->Grenades->Charge = FMath::Max(Me->Grenades->Charge, 1.f);
+			if (Me->Grenades->ThrowGrenade()) ++Grenades;
+		}
+		else
+		{
+			Me->Abilities->FillCharges();
+			Press(FMath::RandBool() ? EWWOAction::Ability1 : EWWOAction::Ability2);
+		}
+	}
 
 	// Mid-throw: its eyes are on the arc until the grenade has left its hand.
 	if (bThrowing)

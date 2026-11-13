@@ -479,3 +479,20 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Headers**: the "//" before "WHAT WAS OURS" is the round leaf mark (`T_LogoMark`) in the character menu and on the setup screen after PLAY. The Settings header ("// SETTINGS") and the build title inside the Weapon tab keep theirs.
 - **PLAY**: set in Poppins Light, read at run time from `Content/WWO/Fonts/Poppins-Light.ttf` (SIL Open Font License, text beside it; from the Google Fonts repository). The folder is staged with the game (`DirectoriesToAlwaysStageAsUFS`); not checked in a packaged build yet.
 - **Source art**: `Tools/art/ui/*.png` (white on clear, cut from the supplied black-background images); `Tools/import_ui_logos.py` imports them. `/Game/WWO/Textures/UI` is always cooked (they are loaded by path).
+
+## Optimization pass (2026-11-12)
+
+Measured on the M4 Mac mini, full screen 2560 x 1440 (the engine renders about 1552 x 873 and upsamples), in a 12-player bot match with the bots throwing grenades and using abilities.
+
+| Map | Before | After |
+|---|---|---|
+| Arboretum | 17.3 ms (58 fps) | 13.9 ms (72 fps) |
+| Cascade | 16.2 ms (62 fps) | 12.6 ms (79 fps) |
+
+- **The game is GPU-limited.** The game thread does about 4.4 ms of work a frame in that match (the rest of its time is waiting for the GPU): character movement 1.1, actor ticks 1.2, UI 0.5. Our own per-frame code adds up to about 2.3 ms.
+- **Nanite off on the Mac** (`Config/Mac/MacEngine.ini`, `r.Nanite=0`): Nanite's fixed passes cost about 3 ms a frame more than plain meshes on this GPU. Other platforms keep Nanite; the maps' own meshes are now Nanite assets too (`Tools/enable_nanite.py`), with full-detail fallbacks so the Mac draws the same geometry.
+- **Cascaded shadows on the Mac** (same file): with Nanite off, virtual shadow maps cost about 3 ms a frame in motion, cascades about 0.5 ms, same picture (pairs in `Saved/Compare/perf_*_old_new.jpg` on this machine).
+- **What is left on the GPU** (about 11-12 ms): the 58 unshadowed point lights 1.9 ms, TAA upsampling 1.25, base pass 1.4, the sun 0.8, shadows 1.0, reflections 0.8, tonemap 0.55, the lit-translucency volume 0.56, sky 0.5, ambient occlusion 0.4. No single setting among these gave a clear win without changing the look; FXAA instead of TAA would save 1 ms but shimmers.
+- **Tools** (all with `-WWOPerfTest`): the summary now gives game-thread and render-thread time and a `PerfTest code ...` line per timed function (`WWO_PROF`, `Player/WWOProf.h`); `-WWOPerfSweep="cvar value|cvar value,cvar value|..."` holds one view (`-WWOPerfView=N`) and prints each entry's frame time against the plain view; `-WWOPerfMove` swings the camera while it measures; `-WWOPerfCsv` records the engine's CSV profile; `-WWOBotsBusy` makes the bots throw and use abilities constantly. Run a map as `L_Arboretum?pvp -WWOBots=11` for a match.
+- **Not tried on Windows.** There Nanite and virtual shadow maps stay on, as before this pass.
+- **Possible later**: fewer or smaller lamp lights in the Arboretum, a baked sky cubemap instead of the real-time sky light capture, lighter fallback meshes (the Arboretum's three pipe meshes are 300k triangles).

@@ -1,4 +1,5 @@
 #include "Player/WWOCharacter.h"
+#include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "FX/WWOFX.h"
 #include "Player/WWOBotController.h"
@@ -721,6 +722,7 @@ void AWWOCharacter::PrepareMovement(float DeltaSeconds)
 
 void AWWOCharacter::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Character");
 	Super::Tick(DeltaSeconds);
 	UpdateHitboxes(); // PvP hitboxes on or off, on every machine
 	UpdateTeamTint();

@@ -1,4 +1,5 @@
 #include "UI/WWOHUDWidget.h"
+#include "Player/WWOProf.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOCharacter.h"
@@ -212,6 +213,7 @@ void UWWOHUDWidget::Bind(AWWOCharacter* P)
 
 void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
+	WWO_PROF("HUDWidget.NativeTick");
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	AWWOCharacter* P = Player();
 	if (P && BoundPlayer.Get() != P) Bind(P);
@@ -294,6 +296,7 @@ int32 UWWOHUDWidget::Radar(const AWWOCharacter* Viewer, TArray<float>& Out)
 int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, const FSlateRect& Culling,
 	FSlateWindowElementList& Out, int32 LayerId, const FWidgetStyle& Style, bool bParentEnabled) const
 {
+	WWO_PROF("HUDWidget.NativePaint");
 	const int32 Result = Super::NativePaint(Args, Geo, Culling, Out, LayerId, Style, bParentEnabled);
 	AWWOCharacter* Pl = Player();
 	APlayerController* PC = GetOwningPlayer();

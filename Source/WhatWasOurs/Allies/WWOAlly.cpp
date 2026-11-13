@@ -1,4 +1,5 @@
 #include "Allies/WWOAlly.h"
+#include "Player/WWOProf.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemy.h"
@@ -160,6 +161,7 @@ FString AWWOAlly::StatusText() const
 
 void AWWOAlly::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Ally");
 	Super::Tick(DeltaSeconds);
 	if (!HasAuthority())
 	{

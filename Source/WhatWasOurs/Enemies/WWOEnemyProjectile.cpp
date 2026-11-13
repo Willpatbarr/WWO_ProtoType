@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemyProjectile.h"
+#include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
@@ -116,6 +117,7 @@ void AWWOEnemyProjectile::Build()
 
 void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 {
+	WWO_PROF("EnemyProjectile");
 	Super::Tick(DeltaSeconds);
 	const bool bHost = HasAuthority();
 	if (!bHost && bStopped) return;

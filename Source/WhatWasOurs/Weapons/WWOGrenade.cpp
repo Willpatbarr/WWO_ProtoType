@@ -1,4 +1,5 @@
 #include "Weapons/WWOGrenade.h"
+#include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -199,6 +200,7 @@ void AWWOGrenade::IgnoreActor(AActor* Other)
 
 void AWWOGrenade::Tick(float DeltaSeconds)
 {
+	WWO_PROF("Grenade");
 	Super::Tick(DeltaSeconds);
 	if (!HasAuthority())
 	{

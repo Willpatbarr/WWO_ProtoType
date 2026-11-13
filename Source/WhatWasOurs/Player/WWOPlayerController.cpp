@@ -1,4 +1,5 @@
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOProf.h"
 #include "UI/WWOFiringTester.h"
 #include "Game/WWOGameMode.h"
 #include "Player/WWOTestRun.h"
@@ -505,6 +506,7 @@ FVector2D AWWOPlayerController::GetLookAxis() const
 
 void AWWOPlayerController::PlayerTick(float DeltaTime)
 {
+	WWO_PROF("PlayerController.PlayerTick");
 	FMemory::Memzero(JustPressed, sizeof(JustPressed));
 	FMemory::Memcpy(ScriptNow, ScriptQueued, sizeof(ScriptNow)); // a scripted press: readable for this frame
 	FMemory::Memzero(ScriptQueued, sizeof(ScriptQueued));
@@ -523,6 +525,7 @@ void AWWOPlayerController::PlayerTick(float DeltaTime)
 
 void AWWOPlayerController::Tick(float DeltaSeconds)
 {
+	WWO_PROF("PlayerController");
 	Super::Tick(DeltaSeconds);
 	if (IsLocalController())
 	{

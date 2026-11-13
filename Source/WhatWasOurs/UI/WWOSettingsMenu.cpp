@@ -1,4 +1,5 @@
 #include "UI/WWOSettingsMenu.h"
+#include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
@@ -931,6 +932,7 @@ void UWWOSettingsMenu::Build()
 
 void UWWOSettingsMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
+	WWO_PROF("SettingsMenu.NativeTick");
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	if (bOpen)
 	{

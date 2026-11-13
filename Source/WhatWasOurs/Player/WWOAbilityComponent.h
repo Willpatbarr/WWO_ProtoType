@@ -41,6 +41,7 @@ public:
 	UWWOAbilityData* ConsumeStaticCharge();
 	float IncomingMeleeMultiplier() const;
 	float ExtraCharges() const;
+	void FillCharges() { for (TPair<FName, float>& C : ChargeById) C.Value = 1.f; } // everything ready again (-WWOBotsBusy)
 	UWWOAbilityData* ThornfistActive() const;
 	float MeleeMultiplier() const;
 
