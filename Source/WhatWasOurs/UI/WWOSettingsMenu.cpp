@@ -20,6 +20,8 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Components/ProgressBar.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
@@ -1084,6 +1086,34 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	KeepHandler(H);
 	Live.Add({ Slider, Value, Fill, Key, RowIndex });
 	return Root;
+}
+
+UWidget* UWWOSettingsMenu::MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps)
+{
+	UOverlay* Both = Tree->ConstructWidget<UOverlay>();
+	if (Keeps)
+	{
+		Keeps->SetVisibility(ESlateVisibility::Hidden); // takes its room, draws nothing
+		Both->AddChildToOverlay(Keeps);
+	}
+	UImage* Image = Tree->ConstructWidget<UImage>();
+	if (UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, bWordmark ? TEXT("/Game/WWO/Textures/UI/T_LogoTitle.T_LogoTitle") : TEXT("/Game/WWO/Textures/UI/T_LogoMark.T_LogoMark")))
+	{
+		FSlateBrush Brush;
+		Brush.SetResourceObject(Texture);
+		Brush.ImageSize = Size;
+		Brush.DrawAs = ESlateBrushDrawType::Image;
+		Image->SetBrush(Brush);
+	}
+	else if (Keeps) Keeps->SetVisibility(ESlateVisibility::HitTestInvisible); // no texture: the text it replaced
+	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* ImageSlot = Both->AddChildToOverlay(Image);
+	ImageSlot->SetHorizontalAlignment(HAlign_Center);
+	ImageSlot->SetVerticalAlignment(VAlign_Center);
+	// The wordmark's texture is clear above and below the letters (40 of its 256 rows each way):
+	// that part doesn't count for layout, so the text it replaced still decides how tall this is.
+	if (bWordmark && Keeps) ImageSlot->SetPadding(FMargin(0.f, -Size.Y * 40.f / 256.f));
+	return Both;
 }
 
 UWidget* UWWOSettingsMenu::MakeRowFor(const FString& Key, FName Id)

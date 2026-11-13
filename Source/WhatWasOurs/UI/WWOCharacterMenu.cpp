@@ -284,7 +284,7 @@ void UWWOCharacterMenu::Open()
 		// Header: the game's name, the tabs, the keys.
 		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(Spaced(Styler, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
+		Name->AddChildToHorizontalBox(UWWOSettingsMenu::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(Styler, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(Styler, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));

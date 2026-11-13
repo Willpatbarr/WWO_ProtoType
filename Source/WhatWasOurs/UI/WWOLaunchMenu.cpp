@@ -401,12 +401,16 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 
 	// The middle: the mark, the name, a rule, then PLAY.
 	UVerticalBox* Middle = Tree->ConstructWidget<UVerticalBox>();
-	Middle->AddChildToVerticalBox(Spaced(TEXT("//"), 44.f, A, 0))->SetHorizontalAlignment(HAlign_Center);
+	// (The old "//" mark above the name is gone; its room is kept so nothing else moves.)
+	UTextBlock* OldMark = Spaced(TEXT("//"), 44.f, A, 0);
+	OldMark->SetVisibility(ESlateVisibility::Hidden);
+	Middle->AddChildToVerticalBox(OldMark)->SetHorizontalAlignment(HAlign_Center);
 	UTextBlock* Name = Spaced(TEXT("WHAT WAS OURS"), 84.f, FLinearColor::White, 520);
 	FSlateFontInfo NameFont = Name->GetFont();
 	NameFont.TypefaceFontName = FName("Bold");
 	Name->SetFont(NameFont);
-	UVerticalBoxSlot* NameSlot = Middle->AddChildToVerticalBox(Name);
+	// The name is the wordmark logo, as wide as the text it replaced (which keeps its room under it).
+	UVerticalBoxSlot* NameSlot = Middle->AddChildToVerticalBox(UWWOSettingsMenu::MakeLogo(Tree, true, FVector2D(1060.f, 132.5f) * K, Name));
 	NameSlot->SetHorizontalAlignment(HAlign_Center);
 	NameSlot->SetPadding(FMargin(0, 14.f * K, 0, 0));
 	USizeBox* RuleBox = Tree->ConstructWidget<USizeBox>();
@@ -473,7 +477,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	// Header, as on the other menus: the game's name, where you are, the keys.
 	UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-	Name->AddChildToHorizontalBox(Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
+	Name->AddChildToHorizontalBox(UWWOSettingsMenu::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
 	UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 	NameText->SetVerticalAlignment(VAlign_Center);
 	NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));

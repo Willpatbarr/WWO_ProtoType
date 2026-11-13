@@ -472,3 +472,9 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Burst rifle settings** (in `Saved/WWO/SavedSettings.json` on this machine, previous file `SavedSettings.before-pulse.json`): RecoilShape 1, RecoilUp 0.75, BurstRecoilLater 0.4, RecoilKickTime 0.06, RecoilRecoveryTime 0.45, RecoilSide 0.08, BurstRate 820, AdsKick 0.025, KickPush 0.6, KickSide 0.15, KickPivotAhead 5, KickHold 0.03, KickReturn 0.06.
 - **Measure bare**: weapon mods change recoil, so frame captures for matching use `-WWOTesterNoMods` (the saved loadout is put back afterwards).
 - **Not matched**: hip fire (no footage), and strafing only by eye.
+
+## Logos (2026-11-12)
+
+- **Title screen**: the name is the wordmark logo (`/Game/WWO/Textures/UI/T_LogoTitle`), as wide as the text it replaced; the "//" above it is gone. Both old texts are still in the layout, unseen, so nothing else moved (`UWWOSettingsMenu::MakeLogo`).
+- **Headers**: the "//" before "WHAT WAS OURS" is the round leaf mark (`T_LogoMark`) in the character menu and on the setup screen after PLAY. The Settings header ("// SETTINGS") and the build title inside the Weapon tab keep theirs.
+- **Source art**: `Tools/art/ui/*.png` (white on clear, cut from the supplied black-background images); `Tools/import_ui_logos.py` imports them. `/Game/WWO/Textures/UI` is always cooked (they are loaded by path).

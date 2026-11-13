@@ -140,6 +140,11 @@ public:
 	UButton* MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx = 22.f, const FLinearColor& Color = FLinearColor(0.2f, 0.21f, 0.25f),
 		bool bLeftAlign = false, FMargin Padding = FMargin(10.f, 4.f), bool bWrap = false);
 	UTextBlock* MakeText(const FString& Text, float FontPx, const FLinearColor& Color = FLinearColor::White, bool bWrap = false);
+	// The game's logo as a widget (Tools/import_ui_logos.py): the "WHAT WAS OURS" wordmark (bWordmark)
+	// or the round leaf mark, drawn Size big (the wordmark's texture is 8 : 1 and the letters fill
+	// its width; the mark is square). Keeps, if given, is put under it unseen: the text the logo
+	// stands in for, so everything around stays exactly where it was.
+	static UWidget* MakeLogo(class UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps = nullptr);
 	// Godot's ring cursor, drawn over an open menu (see FWWOMenuCursor).
 	static void PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer);
 
