@@ -464,3 +464,11 @@ A test version of the frames-and-mods design (LaminarFlow doc "Weapon Frames & M
 - **Teammates** (`RadarMates`): in the centre triangle's blue, a dot at their place when inside the range, else an arrow on the rim pointing their way. Everyone you can't hurt counts (your team in PvP, all players in co-op).
 - **Enemy bars**: health in the radar's red, 126 x 7 px, with a 3 px shield bar directly on top (one backing, no gap), 16 px clear of the head. `FPainter::Tri` shows a colour darker than `Box` does, hence `FoeRed` and `FoeRedBox`.
 - **Not done**: the `no_radar` trait still does nothing. Only checked with one dummy at one height (the tester autotest).
+
+## Pulse rifle pass (2026-11-12)
+
+- **Matched to the Destiny clip** (`Pulse Rifle.MP4`, bare gun, aimed in): the view's rise and fall over a 3-round burst is within 1-2 px per frame at 540p. Destiny's burst kicks 9, 3.5, 3.5 px (first round much the biggest), rounds 4.5 frames apart, and the whole burst falls back in about 0.4 s. Its gun model barely moves aimed in (pushes back about 2%, a few px down and right).
+- **Code**: `BurstRecoilLater` (per gun: a burst's later rounds kick this share of the first). Shaped recoil (`RecoilShape`) now also owes back what earlier shots hadn't fallen back yet, so a burst or quick follow-up shots come down as one (before, only the last shot's kick fell back).
+- **Burst rifle settings** (in `Saved/WWO/SavedSettings.json` on this machine, previous file `SavedSettings.before-pulse.json`): RecoilShape 1, RecoilUp 0.75, BurstRecoilLater 0.4, RecoilKickTime 0.06, RecoilRecoveryTime 0.45, RecoilSide 0.08, BurstRate 820, AdsKick 0.025, KickPush 0.6, KickSide 0.15, KickPivotAhead 5, KickHold 0.03, KickReturn 0.06.
+- **Measure bare**: weapon mods change recoil, so frame captures for matching use `-WWOTesterNoMods` (the saved loadout is put back afterwards).
+- **Not matched**: hip fire (no footage), and strafing only by eye.

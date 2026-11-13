@@ -46,7 +46,7 @@ namespace
 	{
 		static const TArray<FGroup> Groups = {
 			{ TEXT("Aiming in"), { "AdsTime", "Zoom", "ViewmodelFov", "SightHeight", "AdsTilt" } },
-			{ TEXT("Recoil: the view (where shots go)"), { "RecoilUp", "RecoilSide", "RecoilKickTime", "RecoilRecovery", "RecoilRecoveryTime", "RecoilShape", "HipSpread" } },
+			{ TEXT("Recoil: the view (where shots go)"), { "RecoilUp", "RecoilSide", "RecoilKickTime", "RecoilRecovery", "RecoilRecoveryTime", "RecoilShape", "BurstRecoilLater", "HipSpread" } },
 			{ TEXT("Kick: the gun model (looks only)"), { "VerticalKick", "HorizontalKick", "KickHold", "KickReturn", "AdsKick", "KickPush", "KickPivotDown", "KickPivotAhead", "KickSide" } },
 			{ TEXT("Movement: the gun model"), { "Sway", "GunBob", "AdsGunBob", "StrafeShift", "StrafeRoll", "SlideTilt" } },
 			{ TEXT("Firing"), { "FireRate", "SemiAuto", "Burst", "BurstRate" } },

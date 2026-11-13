@@ -1359,7 +1359,8 @@ void UWWOWeaponComponent::Shoot()
 	if (bSynced) RecoveryTime = 60.f / FMath::Max(Weapon->FireRate, 1.f) - Weapon->RecoilKickTime + Weapon->RecoilRecoveryDelay;
 	const bool bShaped = Weapon->RecoilShape >= 0.5f; // the measured rise and fall, over the rise and fall-back times
 	if (bShaped) RecoveryTime = Weapon->RecoilRecoveryTime;
-	P->AddRecoil(FMath::DegreesToRadians(Weapon->RecoilUp), FMath::DegreesToRadians(FMath::FRandRange(-Weapon->RecoilSide, Weapon->RecoilSide)),
+	const float Share = BurstLeft > 0 ? FMath::Max(Weapon->BurstRecoilLater, 0.f) : 1.f; // (BurstLeft is only set once a burst's first round is away)
+	P->AddRecoil(FMath::DegreesToRadians(Weapon->RecoilUp * Share), FMath::DegreesToRadians(FMath::FRandRange(-Weapon->RecoilSide, Weapon->RecoilSide) * Share),
 		Weapon->RecoilKickTime, Weapon->RecoilRecovery, RecoveryTime, bShaped ? -1.f : (bSynced ? Weapon->RecoilRecoveryCurve : 0.f));
 	Rumble(Weapon->RumbleWeak, Weapon->RumbleStrong, Weapon->RumbleTime);
 	StartPunch(Weapon->PunchFov, Weapon->PunchRoll * (FMath::FRand() < 0.5f ? 1.f : -1.f), Weapon->PunchTime);

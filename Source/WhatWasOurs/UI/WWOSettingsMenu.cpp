@@ -573,6 +573,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 			Row(W, "KickPivotAhead", TEXT("...and ahead of the sight by (cm)"), -10.f, 20.f, 0.1f),
 			Row(W, "KickSide", TEXT("Kick shifts the gun right (cm)"), -5.f, 5.f, 0.05f),
 			Row(W, "RecoilShape", TEXT("Recoil follows the measured curves (0/1)"), 0.f, 1.f, 1.f),
+			Row(W, "BurstRecoilLater", TEXT("Burst: later rounds kick this much of the first"), 0.f, 1.5f, 0.05f),
 			Row(W, "MagazineSize", TEXT("Magazine size"), 1.f, 100.f, 1.f),
 			Row(W, "ReloadTime", TEXT("Reload time (s)"), 0.3f, 6.f, 0.05f),
 			Header(TEXT("Rumble")),

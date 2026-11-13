@@ -1571,7 +1571,10 @@ void AWWOCharacter::AddRecoil(float PitchRad, float YawRad, float KickTime, floa
 	KickShapeTime = FMath::Max(KickTime, 0.001f);
 	KickShapeAge = 0.f;
 	const float Peak = Pitch + KickLeft;
-	RecoilRest = Peak - PitchRad * FMath::Clamp(Recovery, 0.f, 1.f); // only this shot's kick falls back
+	// Only this shot's kick falls back. Shaped recoil also still owes whatever the shots before it
+	// hadn't fallen back yet, so a burst, or shots in quick succession, come back down as one.
+	const float Owed = bKickShaped && bRecovering && RecoveryCurve < 0.f ? TimedLeft(RecoveryAge) : 0.f;
+	RecoilRest = Peak - PitchRad * FMath::Clamp(Recovery, 0.f, 1.f) - Owed;
 	RecoveryTime = FMath::Max(InRecoveryTime, 0.01f);
 	bRecovering = Recovery > 0.f;
 	RecoveryCurve = InRecoveryCurve;

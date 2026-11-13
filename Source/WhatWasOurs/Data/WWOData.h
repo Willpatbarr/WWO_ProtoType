@@ -100,6 +100,8 @@ public:
 	// 1: the view's recoil rises and falls along the curves read off Destiny 2 footage (quick then
 	// steady up over the rise time; slow, faster, then tailing off down over the fall-back time).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float RecoilShape = 0.f;
+	// A burst's later rounds kick the view this much of what its first round does (1 = the same).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shooting") float BurstRecoilLater = 1.f;
 	// What marks the aim point when aimed in. It is drawn by the HUD at the point shots go to, so
 	// nothing the gun does moves it: 0 none (a scope draws its own), 1 a dot, 2 iron-sight marks.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handling") float AdsMark = -1.f;

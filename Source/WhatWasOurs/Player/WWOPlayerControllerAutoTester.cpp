@@ -52,6 +52,12 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 		{
 			TesterGunBefore = L->GetWeapon();
 			for (UWWOWeaponData* W : L->Weapons) if (W && W->Id == FName(*Gun)) L->EquipWeapon(W);
+			// -WWOTesterNoMods: the bare frame, so what is measured is the gun's own numbers (the saved
+			// loadout comes back at the end with the rest).
+			if (FParse::Param(FCommandLine::Get(), TEXT("WWOTesterNoMods")))
+			{
+				for (const TCHAR* Slot : { TEXT("barrel"), TEXT("magazine"), TEXT("stock"), TEXT("sight"), TEXT("chambering"), TEXT("grip") }) L->EquipMod(Slot, nullptr);
+			}
 		}
 	}
 	// -WWOTesterFrames=N (run with -benchmark -fps=60 so every frame is 1/60 s): aim in, fire one
