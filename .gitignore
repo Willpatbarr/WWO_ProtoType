@@ -24,6 +24,8 @@ Content/FirstPersonRifleAnimations/
 Content/FirstPersonGrenadeAnimation/
 Content/FirstPersonBrawler/
 Content/FP_AKS74U_Animation/
+# Fab sound pack (free; Static Charge's discharge uses its lightning strikes)
+Content/FreeModularMagicSFX/
 
 # Packaging output (Tools/package_mac.sh, Tools/package_win.bat)
 Builds/

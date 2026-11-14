@@ -208,7 +208,7 @@ void AWWOBotController::UseKit(AWWOCharacter* Me, AWWOCharacter* Target, float D
 			if (!A || Me->Abilities->Charge(A) < 1.f || Me->Abilities->IsEffectActive(A)) continue;
 			bool bUse = false;
 			if (A->Id == "thornfist") bUse = Dist < 6.f;                              // a harder punch is coming
-			else if (A->Id == "static_charge") bUse = Dist < 8.f;                     // armed for the next punch
+			else if (A->Id == "static_charge") bUse = false;                          // arms itself when full: nothing to press
 			else if (A->Id == "spore_dash") bUse = HealthLeft < 0.5f && OffDeg < 30.f; // back out of trouble, behind fog
 			else if (A->Id == "root_bombs") bUse = Dist > 5.f && Dist < 30.f && OffDeg < 4.f;
 			else bUse = A->Kind == EWWOAbilityKind::Active && bInRange;

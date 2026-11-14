@@ -154,6 +154,24 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   hit was a head hit (`UWWOHealthComponent::bLastAttackCritical`). The number is real: a precision kill now adds 2 to
   the team score (`AWWOGameState::KillPoints` / `PrecisionKillPoints`; set both to 1 to go back to a point a kill).
   Test: `-WWOBotShots -WWOTestKills` has the host kill a bot every 4 s and saves `Saved/AutoTest/44_kill_NN.png`.
+- Spore Fog Damage in PvP (2026-11-14): `AWWOSporeFog::Tick` only looped over the waves' enemies, so the fog never hurt
+  players or bots. It now also hits every character `CanHurt` allows, credited to the fog's owner (`PlayerOf(this)`).
+  Test: `-WWOBotShots -WWOBotsIdle -WWOStress -WWOTestFog` logs `FogTest:` lines (it equips the ability: back up Loadout.sav).
+- Static Charge (2026-11-14): no button any more. `UWWOAbilityComponent::UpdateAbilities` arms it the moment its charge
+  is full, and the next melee hit discharges it as before (`ConsumeStaticCharge`).
+  While it is charged the HUD shows a faint blue vignette and thin lightning arcing along the screen edges
+  (`UWWOHUDWidget::StaticShown`). Test: `-WWOBotShots -WWOStress -WWOTestCharge` saves `46_static_N.png` (equips it: back up Loadout.sav).
+  Its discharge plays `static_discharge` (the Free Modular Magic SFX pack's `SW_MagicImpact_LightningStrike_1..4`, pitched
+  down to 0.78-0.88 for depth) on every machine through `AWWOGameState::Sound` (a new multicast for Sounds.json events).
+  Sounds.json names that start with `/` are whole package paths (`UWWOSound::Load`).
+  Louder and deeper since: pitch 0.55-0.65 at volume 4.0 (the engine's cap for one sound), with `static_discharge_boom`
+  (the pack's six `LightningStrikeMulti` sounds, pitch 0.5-0.6) layered under it. The pack (`Content/FreeModularMagicSFX`,
+  free on Fab) is not in git, like the other Fab packs: without it the discharge is silent.
+- Hit markers (2026-11-14): every `TakeHit` (character, enemy, target dummy) now ends in `UWWOWorldSubsystem::ConfirmHit`,
+  which marks the attacking player's reticle whatever dealt the damage (fog, chain lightning, pools, poison, grenades...).
+  `TakeHit` is a wrapper; each class's own work is in `ApplyHit`. The host tells a joiner with `ClientHitMarker` unless
+  the joiner already marked its own shot or punch (`bAttackerSawHit`). Bots and AI allies mark nothing. A kill marker
+  is not overwritten by lesser hits. The grenade and pool `Confirm` helpers are gone. `-WWOTestFog` logs the count.
 - Damage numbers (2026-11-14): `UWWOWorldSubsystem::SpawnDamageNumber` shows a number only for the local player's own
   damage (`CurrentAttacker` is them, or unset); teammates', bots', other players' and AI allies' hits show none.
 - Match-end scoreboard (2026-11-14): `UI/WWOScoreboard`. `AWWOGameMode::EndMatch` sets `AWWOGameState::bMatchOver` /

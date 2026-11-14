@@ -99,6 +99,14 @@ TArray<FWWOAimPart> AWWOTarget::GetAimParts() const
 
 bool AWWOTarget::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
+	if (IsDead()) return false;
+	const bool bKilled = ApplyHit(Damage, bCritical, Point, Color);
+	UWWOWorldSubsystem::ConfirmHit(this, bCritical, bKilled);
+	return bKilled;
+}
+
+bool AWWOTarget::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
+{
 	if (bDead) return false;
 	if (bCritical) HeadFlash = 1.f;
 	else BodyFlash = 1.f;

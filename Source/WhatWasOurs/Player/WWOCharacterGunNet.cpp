@@ -143,6 +143,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	++NetShotsTaken;
 	int32 Kills = 0;
 	FWWODamageBy By(this); // PvP kill credit
+	TGuardValue<bool> Seen(UWWOWorldSubsystem::bAttackerSawHit, true); // the joiner marked its own shot
 	AActor* FirstHit = nullptr;
 	AActor* FirstCrit = nullptr;
 
@@ -297,7 +298,11 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 	++NetMeleeApplied;
 	LastMeleeHitTime = GetWorld()->GetTimeSeconds();
 	FWWODamageBy By(this);
-	const bool bKilled = Cast<IWWOTargetable>(Target)->TakeHit(Damage, false, Point);
+	bool bKilled;
+	{
+		TGuardValue<bool> Seen(UWWOWorldSubsystem::bAttackerSawHit, true); // the joiner marked its own punch
+		bKilled = Cast<IWWOTargetable>(Target)->TakeHit(Damage, false, Point);
+	}
 	Weapon->MeleeKnockBack(Target, bKilled);
 	Weapon->MeleeKitEffects(Target, Point); // Melee Guard, Thornfist's discharge, Static Charge's chain
 	if (bKilled)

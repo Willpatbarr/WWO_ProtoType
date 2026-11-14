@@ -48,7 +48,11 @@ void UWWOSound::Load()
 			for (const TSharedPtr<FJsonValue>& Name : *Names)
 			{
 				const FString Asset = Name->AsString();
-				if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *FString::Printf(TEXT("/Game/WWO/Audio/%s.%s"), *Asset, *Asset)))
+				// A bare name is a sound in /Game/WWO/Audio; one that starts with "/" is a whole
+				// package path (a sound from a Fab pack: "/Game/FreeModularMagicSFX/E_Impact/Mono/SW_...").
+				const FString Path = Asset.StartsWith(TEXT("/")) ? FString::Printf(TEXT("%s.%s"), *Asset, *FPaths::GetBaseFilename(Asset))
+					: FString::Printf(TEXT("/Game/WWO/Audio/%s.%s"), *Asset, *Asset);
+				if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *Path))
 				{
 					E.Sounds.Add(Sound);
 					Loaded.Add(Sound);

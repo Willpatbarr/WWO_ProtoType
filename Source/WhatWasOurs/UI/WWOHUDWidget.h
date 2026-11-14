@@ -49,6 +49,7 @@ private:
 	mutable TMap<FString, float> ChipPeak; // status chips: the longest time each has shown (its bar drains against it)
 	bool bHitKilled = false;
 	float DamageFlash = 0.f;
+	float StaticShown = 0.f; // 0-1: Static Charge is charged and waiting (the blue edges and the arcs)
 	float HurtShown = 0.f; // the low-health vignette's strength now, 0-1 (eases toward how hurt you are)
 	// Frame rate readout (top left): averaged over a quarter second of real time.
 	float FpsShown = 0.f;

@@ -412,14 +412,6 @@ void AWWOGrenade::UpdateMine(float DeltaSeconds)
 	}
 }
 
-void AWWOGrenade::Confirm(bool bKilled)
-{
-	AWWOCharacter* P = Cast<AWWOCharacter>(Thrower.Get());
-	if (!P) return;
-	if (P->IsLocallyControlled()) P->Weapon->OnHitConfirmed.Broadcast(false, bKilled);
-	else P->ClientHitMarker(bKilled); // a joiner's grenade: tell its thrower
-}
-
 void AWWOGrenade::SpikeHit(AActor* TargetActor)
 {
 	// Direct contact: a hit, then poison.
@@ -428,7 +420,6 @@ void AWWOGrenade::SpikeHit(AActor* TargetActor)
 	const FVector Point = GetActorLocation();
 	IWWOTargetable* Target = Cast<IWWOTargetable>(TargetActor);
 	const bool bKilled = Target->TakeHit(Spec.Damage, false, Point);
-	Confirm(bKilled);
 	UE_LOG(LogWWO, Log, TEXT("Grenade %s: spiked %s for %.0f after %.2f s (killed %d), poison %.0f/s for %.1f s"), *Spec.Data->Id.ToString(),
 		*TargetActor->GetName(), Spec.Damage, Age, bKilled, Spec.Data->PoisonDps, Spec.Data->PoisonTime);
 	if (!bKilled)
@@ -486,7 +477,7 @@ void AWWOGrenade::Explode()
 			continue;
 		}
 		const float Dealt = Spec.Damage * FMath::Lerp(1.f, EdgeDamage, BestDistance / (Spec.BlastRadius * WWO::M));
-		Confirm(Target->TakeHit(Dealt, false, BestPart.Position));
+		Target->TakeHit(Dealt, false, BestPart.Position); // marks the thrower's reticle (ConfirmHit)
 		HitCount++;
 		DealtTotal += Dealt;
 	}

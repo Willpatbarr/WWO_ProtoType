@@ -205,6 +205,7 @@ void UWWOHUDWidget::Bind(AWWOCharacter* P)
 	BoundPlayer = P;
 	P->Weapon->OnHitConfirmed.AddWeakLambda(this, [this](bool bCritical, bool bKilled)
 	{
+		if (!bKilled && bHitKilled && HitTime > 0.f) return; // a kill marker outlasts the hits around it
 		HitTime = bKilled ? KillMarkerTime : HitMarkerTime;
 		bHitCritical = bCritical;
 		bHitKilled = bKilled;
@@ -220,6 +221,11 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (P && BoundPlayer.Get() != P) Bind(P);
 	HitTime -= GetWorld() ? GetWorld()->GetDeltaSeconds() : InDeltaTime; // game time, like Godot's _process (slows in a hit-stop)
 	DamageFlash = WWO::MoveToward(DamageFlash, 0.f, 1.2f * InDeltaTime);
+	{
+		const UWWOAbilityData* Static = P ? P->Abilities->Equipped("static_charge") : nullptr;
+		const bool bCharged = Static && P->Abilities->IsEffectActive(Static) && !P->Health->bDead;
+		StaticShown = WWO::MoveToward(StaticShown, bCharged ? 1.f : 0.f, (bCharged ? 2.5f : 5.f) * InDeltaTime); // in over 0.4 s, gone in 0.2
+	}
 	// How hurt you are, 0 (full health and shield) to 1 (nothing left): the vignette follows it,
 	// quickly as damage lands and a little slower as you heal.
 	float Hurt = 0.f;
@@ -330,6 +336,48 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	{
 		const float Amount = FMath::Pow(HurtShown, 1.6f);
 		P.Vignette(FLinearColor(0.75f, 0.03f, 0.02f, FMath::Clamp(0.9f * Amount * Pl->HealthVignette, 0.f, 0.95f)), FMath::Lerp(0.95f, 0.3f, Amount));
+	}
+	// Static Charge charged and waiting for a punch: a faint blue at the edges of the screen, and
+	// thin lightning that keeps arcing along them.
+	if (StaticShown > 0.01f)
+	{
+		const double Real = FPlatformTime::Seconds();
+		const FLinearColor Blue(0.3f, 0.62f, 1.f);
+		P.Vignette(WWO::WithAlpha(Blue, (0.3f + 0.04f * FMath::Sin(Real * 5.0)) * StaticShown), 0.62f);
+		// The arcs: a new set every 0.09 s, each slot lit a little under half the time. An arc runs
+		// along one edge, close to it, jagged.
+		constexpr int32 Slots = 7;
+		const int64 Step = int64(Real / 0.09);
+		for (int32 Slot = 0; Slot < Slots; ++Slot)
+		{
+			FRandomStream Rand(int32((Step * 31 + Slot * 7919) & 0x7fffffff));
+			if (Rand.FRand() > 0.42f) continue;
+			const int32 Side = Rand.RandRange(0, 3); // top, bottom, left, right
+			const bool bFlat = Side < 2;
+			const float Long = bFlat ? Size.X : Size.Y;
+			const float Length = Rand.FRandRange(110.f, 300.f);
+			const float From = Rand.FRandRange(0.f, Long - Length);
+			const int32 Points = Rand.RandRange(7, 12);
+			const float Bright = Rand.FRandRange(0.35f, 0.7f) * StaticShown;
+			FVector2D Last = FVector2D::ZeroVector;
+			for (int32 i = 0; i <= Points; ++i)
+			{
+				const float Along = From + Length * i / Points + (i > 0 && i < Points ? Rand.FRandRange(-8.f, 8.f) : 0.f);
+				// How far in from the edge: its ends touch the edge, its middle wanders in.
+				const float In = (i == 0 || i == Points) ? 2.f : Rand.FRandRange(4.f, 30.f);
+				FVector2D At;
+				if (Side == 0) At = FVector2D(Along, In);
+				else if (Side == 1) At = FVector2D(Along, Size.Y - In);
+				else if (Side == 2) At = FVector2D(In, Along);
+				else At = FVector2D(Size.X - In, Along);
+				if (i > 0)
+				{
+					P.Line(Last, At, WWO::WithAlpha(Blue, 0.16f * Bright), 6.f);                           // its glow
+					P.Line(Last, At, FLinearColor(0.8f, 0.92f, 1.f, Bright), 1.6f);                      // the bolt
+				}
+				Last = At;
+			}
+		}
 	}
 	// ADS vignette and scope.
 	if (W && VignetteMat && W->AdsVignette * Aimed > 0.001f)

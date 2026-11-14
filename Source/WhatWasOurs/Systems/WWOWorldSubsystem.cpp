@@ -6,6 +6,7 @@
 #include "Allies/WWOAlly.h"
 #include "Flora/WWOSporeFog.h"
 #include "Player/WWOCharacter.h"
+#include "Player/WWOWeaponComponent.h"
 #include "World/WWOTarget.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -78,6 +79,21 @@ TArray<AActor*> UWWOWorldSubsystem::LivingTargets(const UObject* For) const
 }
 
 TWeakObjectPtr<AActor> UWWOWorldSubsystem::CurrentAttacker;
+
+bool UWWOWorldSubsystem::bAttackerSawHit = false;
+int32 UWWOWorldSubsystem::HitsMarked = 0;
+
+void UWWOWorldSubsystem::ConfirmHit(AActor* Victim, bool bCritical, bool bKilled)
+{
+	AWWOCharacter* By = Cast<AWWOCharacter>(CurrentAttacker.Get());
+	if (!By || By == Victim || !By->IsPlayerControlled()) return; // bots and allies have no reticle
+	if (By->IsLocallyControlled())
+	{
+		++HitsMarked;
+		By->Weapon->OnHitConfirmed.Broadcast(bCritical, bKilled);
+	}
+	else if (By->HasAuthority() && !bAttackerSawHit) By->ClientHitMarker(bKilled);
+}
 
 FWWODamageBy::FWWODamageBy(const UObject* Attacker)
 {

@@ -1108,6 +1108,8 @@ void UWWOWeaponComponent::MeleeKitEffects(AActor* TargetActor, const FVector& Po
 	if (const UWWOAbilityData* StaticCharge = P->Abilities->ConsumeStaticCharge())
 	{
 		AWWOChainLightning::Spawn(GetWorld(), StaticCharge, TargetActor, P, Color);
+		AWWOGameState::Sound(GetWorld(), "static_discharge", Point); // the deep crack of it going off, for everyone near
+		AWWOGameState::Sound(GetWorld(), "static_discharge_boom", Point); // and a rolling strike under it, so it lands heavy
 	}
 }
 

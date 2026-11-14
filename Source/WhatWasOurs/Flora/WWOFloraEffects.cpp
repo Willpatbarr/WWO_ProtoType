@@ -29,15 +29,6 @@ namespace
 		return P;
 	}
 
-	// A hit by something a player left in the world: their hit marker (a joiner's goes over the network).
-	void ConfirmFor(AActor* Player, bool bKilled)
-	{
-		AWWOCharacter* P = Cast<AWWOCharacter>(Player);
-		if (!P) return;
-		if (P->IsLocallyControlled()) P->Weapon->OnHitConfirmed.Broadcast(false, bKilled);
-		else P->ClientHitMarker(bKilled);
-	}
-
 	float BackOut(float T)
 	{
 		T = FMath::Clamp(T, 0.f, 1.f);
@@ -175,8 +166,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 		const FVector2D Flat(Feet.X - GetActorLocation().X, Feet.Y - GetActorLocation().Y);
 		if (Flat.Size() <= Radius * WWO::M && FMath::Abs(Feet.Z - GetActorLocation().Z) < 150.f)
 		{
-			const bool bKilled = Target->TakeHit(Dps * 0.5f, false, Feet + FVector(0, 0, 30.f), Color);
-			ConfirmFor(Thrower.Get(), bKilled);
+			Target->TakeHit(Dps * 0.5f, false, Feet + FVector(0, 0, 30.f), Color);
 		}
 	}
 }

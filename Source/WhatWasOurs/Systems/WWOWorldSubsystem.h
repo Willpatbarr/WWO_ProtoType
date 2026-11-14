@@ -85,6 +85,12 @@ public:
 	// Who is dealing the damage being applied right now (host): set around a hit so a player's
 	// TakeHit knows who to credit (FWWODamageBy).
 	static TWeakObjectPtr<AActor> CurrentAttacker;
+	// Any damage a player deals marks their reticle, whatever dealt it (gun, fist, grenade, fog,
+	// lightning...): every TakeHit ends here. On the attacker's own machine it shows at once; the
+	// host tells a joiner, unless that joiner already showed the hit itself (bAttackerSawHit).
+	static void ConfirmHit(AActor* Victim, bool bCritical, bool bKilled);
+	static bool bAttackerSawHit;
+	static int32 HitsMarked; // how many reached this machine's own reticle (tests read it)
 
 	// Bring every target back at full health; enemies reset to their spawn. Teammates too.
 	void ResetTargets();

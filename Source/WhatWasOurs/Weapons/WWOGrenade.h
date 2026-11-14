@@ -132,5 +132,4 @@ private:
 	void Burst(const FVector& Center);
 	void ShareShields(const FVector& Center);
 
-	void Confirm(bool bKilled);
 };

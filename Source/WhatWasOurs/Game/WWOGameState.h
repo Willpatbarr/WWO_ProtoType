@@ -50,6 +50,7 @@ public:
 	static int32 BlastsSeen; // blasts this machine drew for the host (-WWOAutoTestNet)
 	static void Blast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore = nullptr);
 	static void Text(UWorld* World, const FString& Words, const FVector& At, const FLinearColor& Color); // "BLINDED", "SLOWED"
+	static void Sound(UWorld* World, FName Event, const FVector& At, float Volume = 1.f); // a Sounds.json event, heard on every machine
 	static void Poison(AActor* Target, float DamagePerSecond, float Seconds); // the host's poison (its looks and numbers everywhere)
 	static void Tracer(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color);
 	static void Shockwave(UWorld* World, const FVector& At, const FLinearColor& Color, float RadiusM, float Seconds);
@@ -59,6 +60,7 @@ public:
 private:
 	UFUNCTION(NetMulticast, Reliable) void MulticastKill(const class AWWOPlayerState* KillerState, const FString& Killer, int8 KillerTeam, const FString& Victim, int8 VictimTeam, FName How, uint8 Points);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM);
+	UFUNCTION(NetMulticast, Unreliable) void MulticastSound(FName Event, FVector_NetQuantize At, float Volume);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastText(const FString& Words, FVector_NetQuantize At, FLinearColor Color);
 	UFUNCTION(NetMulticast, Reliable) void MulticastPoison(AActor* Target, float DamagePerSecond, float Seconds);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastTracer(FVector_NetQuantize From, FVector_NetQuantize To, FLinearColor Color);

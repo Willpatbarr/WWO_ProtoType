@@ -4,6 +4,7 @@
 // Entrench) with its after-effects checked. Logs as `AutoTest ability:` / `AutoTest ult:`, with
 // screenshots 23_ability_* and 24_ult_*. The loadout is put back at the end.
 
+#include "Systems/WWOSound.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -433,8 +434,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 		}
 		if (Cross(0.1f))
 		{
-			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: static charge starts at %.2f (needs %.0f damage); pressing while empty"), Abilities->Charge(A), A->ChargeDamage);
-			Press(EWWOAction::Ability1);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: static charge starts at %.2f (needs %.0f damage); no button is pressed"), Abilities->Charge(A), A->ChargeDamage);
 		}
 		if (Cross(0.2f))
 		{
@@ -450,7 +450,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 			P->Health->Health = P->Health->MaxHealth();
 			P->Health->Shield = P->Health->MaxShield();
 		}
-		if (Cross(0.3f)) Press(EWWOAction::Ability1);
+		// (No press: it arms itself once it's full.)
 		if (Cross(0.4f))
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: static charge armed %d (charge %.2f); jumps %.0f, range %.1f m, damage %.0f falling off x%.2f every %.2f s"),
@@ -473,7 +473,8 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 		if (Cross(2.2f))
 		{
 			Report(TEXT("static charge chain"));
-			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: static charge after: armed %d, charge %.2f"), Abilities->IsEffectActive(A), Abilities->Charge(A));
+			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: static charge after: armed %d, charge %.2f; discharge sound played %d"), Abilities->IsEffectActive(A), Abilities->Charge(A),
+				UWWOSound::Played.FindRef("static_discharge"));
 			Finish();
 		}
 		return false;

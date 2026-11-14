@@ -4,6 +4,7 @@
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOAbilityComponent.h"
+#include "Player/WWOHealthComponent.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -159,17 +160,27 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	TickLeft -= DeltaSeconds;
 	if (TickLeft > 0.f) return;
 	TickLeft += FogTick; // not reset: a late frame doesn't cost damage
-	const AWWOCharacter* Player = GetOwner() ? Cast<AWWOCharacter>(GetOwner()) : UWWOWorldSubsystem::Get(this)->GetPlayer(); // whose Spore Fog Damage
+	// Whose Spore Fog Damage: the player whose kit made the fog (its owner, or whoever owns that:
+	// a spore patch, a grenade), else, for a fog nobody owns, this machine's player.
+	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
+	const AWWOCharacter* Player = UWWOWorldSubsystem::PlayerOf(this);
+	if (!Player && !GetOwner()) Player = WS->GetPlayer();
 	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
 	if (!Ability || Strength() < 0.3f) return;
-	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+	const float Hit = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(Player, "poison_damage")) * FogTick; // Stronger Poison
+	const FLinearColor Tint = WWO::Lightened(Color(), 0.3f);
+	FWWODamageBy By(Player); // theirs: the kill credit, and the numbers on their screen only
+	for (AWWOEnemy* Enemy : WS->LivingEnemies())
 	{
 		if (!Enemy->IsRankAndFile()) continue;
 		const FVector Chest = Enemy->FeetLocation() + FVector(0, 0, 80.f);
-		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M)
-		{
-			const float Dps = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")); // Stronger Poison
-			Enemy->TakeHit(Dps * FogTick, false, Chest, WWO::Lightened(Color(), 0.3f));
-		}
+		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Enemy->TakeHit(Hit, false, Chest, Tint);
+	}
+	// PvP: the other team's players and bots in it too (it used to hurt the waves' enemies only).
+	for (AWWOCharacter* Other : WS->GetPlayers())
+	{
+		if (!Other || Other->Health->bDead || !UWWOWorldSubsystem::CanHurt(Player, Other)) continue;
+		const FVector Chest = Other->FeetLocation() + FVector(0, 0, 80.f);
+		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Other->TakeHit(Hit, false, Chest, Tint);
 	}
 }

@@ -31,6 +31,9 @@
 #include "EngineUtils.h"
 #include "RenderTimer.h"
 #include "Flora/WWOSporeFog.h"
+#include "Player/WWOAbilityComponent.h"
+#include "Systems/WWOLoadoutSubsystem.h"
+#include "Data/WWOData.h"
 #include "UObject/UObjectIterator.h"
 #include "Components/StaticMeshComponent.h"
 #include "UnrealClient.h"
@@ -937,6 +940,53 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 			{
 				ShotAt = -1.f;
 				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("44_kill_%02d.png"), Done), true, false);
+			}
+		}
+		// -WWOTestFog (with -WWOBotsIdle): the host gets Spore Fog Damage, and every 12 s a fog of
+		// theirs (4 m, 8 s) lands on an enemy bot; the bot's shield and health are logged each second.
+		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestFog")))
+		{
+			static float NextFog = 8.f, NextLog = 0.f;
+			static TWeakObjectPtr<AWWOCharacter> Fogged;
+			if (StressClock >= NextFog)
+			{
+				NextFog = StressClock + 12.f;
+				UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
+				if (Loadout && !Host->Abilities->Equipped("spore_fog_damage"))
+				{
+					for (UWWOAbilityData* A : Loadout->Abilities) if (A && A->Id == "spore_fog_damage") Loadout->EquipAbility(0, A);
+				}
+				for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It)
+				{
+					if (*It == Host || It->Health->bDead || !UWWOWorldSubsystem::CanHurt(Host, *It)) continue;
+					Fogged = *It;
+					AWWOSporeFog::SpawnFog(GetWorld(), It->GetActorLocation(), 4.f, 8.f, false, Host);
+					UE_LOG(LogWWO, Display, TEXT("FogTest: fog on %s (equipped %d)"), *It->GetName(), Host->Abilities->Equipped("spore_fog_damage") ? 1 : 0);
+					break;
+				}
+			}
+			if (Fogged.IsValid() && StressClock >= NextLog)
+			{
+				NextLog = StressClock + 1.f;
+				UE_LOG(LogWWO, Display, TEXT("FogTest: t %.0f %s shield %.0f health %.0f dead %d, hit markers %d"), StressClock, *Fogged->GetName(), Fogged->Health->Shield, Fogged->Health->Health, Fogged->Health->bDead ? 1 : 0, UWWOWorldSubsystem::HitsMarked);
+			}
+		}
+		// -WWOTestCharge: the host gets Static Charge, filled (so it arms itself); pictures of the
+		// screen with it charged (46_static_N.png).
+		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestCharge")))
+		{
+			static int32 Shots = 0;
+			static float NextShot = 9.f;
+			UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
+			if (Loadout && !Host->Abilities->Equipped("static_charge"))
+			{
+				for (UWWOAbilityData* A : Loadout->Abilities) if (A && A->Id == "static_charge") Loadout->EquipAbility(0, A);
+			}
+			if (StressClock > 6.f) Host->Abilities->OnDamageTaken(99999.f);
+			if (StressClock >= NextShot && Shots < 3)
+			{
+				NextShot = StressClock + 0.7f;
+				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("46_static_%d.png"), Shots++), true, false);
 			}
 		}
 		if (Host && Near)

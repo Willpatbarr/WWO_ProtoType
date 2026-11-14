@@ -570,6 +570,14 @@ void AWWOCharacter::ProbeHeadShots(int32& Shots, int32& Crits, int32& OldCrits, 
 
 bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
+	if (IsDead()) return false;
+	const bool bKilled = ApplyHit(Damage, bCritical, Point, Color);
+	UWWOWorldSubsystem::ConfirmHit(this, bCritical, bKilled);
+	return bKilled;
+}
+
+bool AWWOCharacter::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
+{
 	if (Health->bDead) return false;
 	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(Damage, bCritical, Point, Color);
 	if (!HasAuthority()) return false; // a joiner's hit: the number now; the host applies it (health replicates)

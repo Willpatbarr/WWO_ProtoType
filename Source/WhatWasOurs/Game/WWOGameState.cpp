@@ -1,5 +1,6 @@
 #include "Game/WWOGameState.h"
 #include "WhatWasOurs.h"
+#include "Systems/WWOSound.h"
 #include "GameFramework/PlayerController.h"
 #include "Game/WWOPlayerState.h"
 #include "FX/WWOFX.h"
@@ -46,6 +47,22 @@ void AWWOGameState::MulticastBlast_Implementation(const FWWOGrenadeLook& Look, F
 	if (HasAuthority()) return; // the host drew it already
 	++BlastsSeen;
 	AWWOGrenade::SpawnBlast(GetWorld(), Look, Center, RadiusM);
+}
+
+void AWWOGameState::Sound(UWorld* World, FName Event, const FVector& At, float Volume)
+{
+	if (!World) return;
+	UWWOSound::Play(World, Event, At, Volume);
+	if (World->GetNetMode() == NM_ListenServer)
+	{
+		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastSound(Event, At, Volume);
+	}
+}
+
+void AWWOGameState::MulticastSound_Implementation(FName Event, FVector_NetQuantize At, float Volume)
+{
+	if (HasAuthority()) return; // the host played it already
+	UWWOSound::Play(this, Event, At, Volume);
 }
 
 void AWWOGameState::Text(UWorld* World, const FString& Words, const FVector& At, const FLinearColor& Color)

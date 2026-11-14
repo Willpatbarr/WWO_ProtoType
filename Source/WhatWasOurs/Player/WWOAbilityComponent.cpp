@@ -67,11 +67,12 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 		const bool bPressed = Bot ? Bot->WasJustPressed(Button) : PC->WasJustPressed(Button);
 		if (A && A->Kind == EWWOAbilityKind::Charged)
 		{
-			if (bPressed && !PlayerBusy() && Charge(A) >= 1.f)
+			// No button: once it's full it arms itself, and the next melee hit discharges it. (Each
+			// machine that follows this player's charge, theirs and the host's, arms its own copy.)
+			if (Charge(A) >= 1.f && !Armed.FindRef(A->Id))
 			{
-				Armed.Add(A->Id, true); // the next melee hit discharges it
-				UWWOSound::PlayFor(P, "ability");
-				if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner()); Me && GetNetMode() == NM_Client) Me->ServerUseAbility(Slot, Me->AimForward());
+				Armed.Add(A->Id, true);
+				if (P->IsLocallyControlled() || Bot) UWWOSound::PlayFor(P, "ability"); // the sound of it coming ready
 			}
 			continue;
 		}
