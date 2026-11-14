@@ -24,8 +24,13 @@ Content/FirstPersonRifleAnimations/
 Content/FirstPersonGrenadeAnimation/
 Content/FirstPersonBrawler/
 Content/FP_AKS74U_Animation/
-# Fab sound pack (free; Static Charge's discharge uses its lightning strikes)
-Content/FreeModularMagicSFX/
+# Fab sound pack (free). Only the ten lightning strikes Static Charge's discharge plays are in git.
+Content/FreeModularMagicSFX/*
+!Content/FreeModularMagicSFX/E_Impact/
+Content/FreeModularMagicSFX/E_Impact/*
+!Content/FreeModularMagicSFX/E_Impact/Mono/
+Content/FreeModularMagicSFX/E_Impact/Mono/*
+!Content/FreeModularMagicSFX/E_Impact/Mono/SW_MagicImpact_LightningStrike*.uasset
 
 # Packaging output (Tools/package_mac.sh, Tools/package_win.bat)
 Builds/

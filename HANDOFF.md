@@ -165,8 +165,8 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   down to 0.78-0.88 for depth) on every machine through `AWWOGameState::Sound` (a new multicast for Sounds.json events).
   Sounds.json names that start with `/` are whole package paths (`UWWOSound::Load`).
   Louder and deeper since: pitch 0.55-0.65 at volume 4.0 (the engine's cap for one sound), with `static_discharge_boom`
-  (the pack's six `LightningStrikeMulti` sounds, pitch 0.5-0.6) layered under it. The pack (`Content/FreeModularMagicSFX`,
-  free on Fab) is not in git, like the other Fab packs: without it the discharge is silent.
+  (the pack's six `LightningStrikeMulti` sounds, pitch 0.5-0.6) layered under it. The ten strike sounds it plays are in git
+  (`Content/FreeModularMagicSFX/E_Impact/Mono`); the rest of the pack (free on Fab) is not.
 - Hit markers (2026-11-14): every `TakeHit` (character, enemy, target dummy) now ends in `UWWOWorldSubsystem::ConfirmHit`,
   which marks the attacking player's reticle whatever dealt the damage (fog, chain lightning, pools, poison, grenades...).
   `TakeHit` is a wrapper; each class's own work is in `ApplyHit`. The host tells a joiner with `ClientHitMarker` unless
