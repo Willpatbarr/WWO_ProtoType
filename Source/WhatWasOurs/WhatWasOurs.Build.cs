@@ -8,8 +8,8 @@ public class WhatWasOurs : ModuleRules
 
 		// Files the game reads at runtime from Config/ (not assets), staged into packaged builds.
 		// ShippedSettings.json is a copy of your saved Settings values (Tools/package_mac.sh makes it),
-		// the defaults a packaged build starts from.
-		foreach (string Name in new string[] { "WeaponModels.json", "WeaponMods.json", "CharacterModels.json", "DefaultLoadout.json", "Sounds.json", "ShippedSettings.json" })
+		// the defaults a packaged build starts from; ShippedKeybinds.json the same for key and button bindings.
+		foreach (string Name in new string[] { "WeaponModels.json", "WeaponMods.json", "CharacterModels.json", "DefaultLoadout.json", "Sounds.json", "ShippedSettings.json", "ShippedKeybinds.json" })
 		{
 			RuntimeDependencies.Add("$(ProjectDir)/Config/" + Name, StagedFileType.UFS);
 		}

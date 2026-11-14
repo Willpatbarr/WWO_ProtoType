@@ -33,6 +33,7 @@ rem Without the packs the cook reports the assets that point at them as errors: 
 set "COOK_EXTRA="
 if not "%MISSING%"=="" set "COOK_EXTRA=-IgnoreCookErrors"
 if exist "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" copy /Y "%PROJECT_DIR%\Saved\WWO\SavedSettings.json" "%PROJECT_DIR%\Config\ShippedSettings.json" >nul
+if exist "%PROJECT_DIR%\Saved\WWO\Keybinds.json" copy /Y "%PROJECT_DIR%\Saved\WWO\Keybinds.json" "%PROJECT_DIR%\Config\ShippedKeybinds.json" >nul
 call "%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="%PROJECT_DIR%\WhatWasOurs.uproject" ^
   -platform=Win64 -clientconfig=Development -build -cook -stage -pak ^
   -archive -archivedirectory="%WWO_OUT%" -noP4 -utf8output %COOK_EXTRA%

@@ -301,7 +301,8 @@ void AWWOPlayerController::LoadBinds()
 	if (BindsTestRun()) return;
 	FString Text;
 	TSharedPtr<FJsonObject> Json;
-	if (!FFileHelper::LoadFileToString(Text, *BindsPath()) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return;
+	// Your saved bindings, or with none saved yet the ones the build shipped with (Config/ShippedKeybinds.json).
+	if ((!FFileHelper::LoadFileToString(Text, *BindsPath()) && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedKeybinds.json")))) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return;
 	for (const auto& Pair : Json->Values)
 	{
 		const FKey Key(FName(*Pair.Value->AsString()));

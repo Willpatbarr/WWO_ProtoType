@@ -172,6 +172,9 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `TakeHit` is a wrapper; each class's own work is in `ApplyHit`. The host tells a joiner with `ClientHitMarker` unless
   the joiner already marked its own shot or punch (`bAttackerSawHit`). Bots and AI allies mark nothing. A kill marker
   is not overwritten by lesser hits. The grenade and pool `Confirm` helpers are gone. `-WWOTestFog` logs the count.
+- Shipped defaults (2026-11-14, alpha 1.1.0): `Config/ShippedSettings.json` is Will's Settings values as of this date,
+  and `Config/ShippedKeybinds.json` (new) his key and button bindings; `LoadBinds` falls back to it the way `LoadSaved`
+  falls back to ShippedSettings, and both package scripts refresh it. God mode is never read from the shipped file.
 - Damage numbers (2026-11-14): `UWWOWorldSubsystem::SpawnDamageNumber` shows a number only for the local player's own
   damage (`CurrentAttacker` is them, or unset); teammates', bots', other players' and AI allies' hits show none.
 - Match-end scoreboard (2026-11-14): `UI/WWOScoreboard`. `AWWOGameMode::EndMatch` sets `AWWOGameState::bMatchOver` /

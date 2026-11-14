@@ -1,8 +1,8 @@
 {
 	"global/Walk / Sprint":
 	{
-		"WalkSpeed": 5,
-		"SprintSpeed": 10
+		"WalkSpeed": 4,
+		"SprintSpeed": 9
 	},
 	"global/Camera":
 	{
@@ -63,31 +63,26 @@
 	},
 	"global/Melee":
 	{
-		"MeleeTime": 0.55000001192092896,
-		"MeleeReach": 2.5,
-		"MeleeDamage": 80,
-		"LungeRange": 3.7000000476837158,
-		"LungeAngle": 20,
-		"LungeSpeed": 12,
+		"MeleeTime": 0.40000000596046448,
+		"MeleeReach": 3,
+		"MeleeDamage": 130,
+		"LungeRange": 4,
+		"LungeAngle": 45,
+		"LungeSpeed": 18.5,
 		"LungeVertical": 1,
-		"LungeAim": 0.5,
-		"MeleeHitstop": 0.014999999664723873,
-		"MeleeJolt": 2,
-		"MeleePunchFov": -4,
-		"MeleePunchRoll": 2.5,
-		"MeleePunchTime": 0.25,
+		"LungeAim": 0.69999998807907104,
+		"MeleeHitstop": 0,
+		"MeleeJolt": 8,
+		"MeleePunchFov": -14.25,
+		"MeleePunchRoll": 8,
+		"MeleePunchTime": 0.54999995231628418,
 		"MeleeRumbleStrong": 0.75,
-		"MeleeRumbleWeak": 0.69999998807907104,
-		"MeleeRumbleTime": 0.10999999940395355,
+		"MeleeRumbleWeak": 0.85000002384185791,
+		"MeleeRumbleTime": 0.22999998927116394,
 		"MeleeKnockback": 6,
 		"MeleeKillBoost": 1.3999999761581421,
 		"MeleeKillKnockback": 2,
-		"MeleeArmYaw": 16,
-		"MeleeArmPitch": 8,
-		"MeleeArmPush": 0.05000000074505806,
-		"MeleeArmFov": 90,
-		"MeleeArmHold": 0.0099999997764825821,
-		"MeleeArmRetract": 0.20000000298023224
+		"HandsHitHold": 0.049999997019767761
 	},
 	"global/Grenades":
 	{
@@ -209,13 +204,13 @@
 	},
 	"global/PvP":
 	{
-		"KillTarget": 50,
+		"KillTarget": 200,
 		"TimeLimit": 10,
 		"PvPRespawnTime": 3
 	},
 	"global/Bots":
 	{
-		"Bots": 4,
+		"Bots": 8,
 		"BotHealth": 150,
 		"BotShield": 100,
 		"BotReaction": 0.34999999403953552,
@@ -231,7 +226,7 @@
 	},
 	"global/Waves":
 	{
-		"Enabled": 1,
+		"Enabled": 0,
 		"WavesToWin": 8,
 		"StartDelay": 6,
 		"BreakTime": 2.5,
@@ -241,7 +236,7 @@
 	"global/Allies":
 	{
 		"AiEnabled": 1,
-		"MaxHealth": 100,
+		"MaxHealth": 150,
 		"MaxShield": 100,
 		"RechargeDelay": 4,
 		"ShieldRegen": 40,
@@ -419,11 +414,11 @@
 		"Pellets": 8,
 		"PelletSpread": 4,
 		"HipSpread": 0,
-		"RecoilUp": 4,
+		"RecoilUp": 8,
 		"RecoilSide": 1,
-		"RecoilKickTime": 0,
-		"RecoilRecovery": 0,
-		"RecoilRecoveryTime": 0.11999999731779099,
+		"RecoilKickTime": 0.10499999672174454,
+		"RecoilRecovery": 0.5,
+		"RecoilRecoveryTime": 0.2800000011920929,
 		"RecoilRecoverySync": 0,
 		"RecoilRecoveryCurve": 2,
 		"RecoilRecoveryDelay": 0,
@@ -725,9 +720,9 @@
 	},
 	"ability/thornfist":
 	{
-		"MeleeDamageMult": 2.5,
-		"Duration": 8,
-		"Cooldown": 20,
+		"MeleeDamageMult": 1.5,
+		"Duration": 9,
+		"Cooldown": 19,
 		"DischargeArcs": 6,
 		"DischargeRadius": 1.2000000476837158,
 		"DischargeTime": 0.34999999403953552
@@ -755,7 +750,7 @@
 	},
 	"ability/spore_fog_damage":
 	{
-		"FogDps": 12
+		"FogDps": 25
 	},
 	"ability/spore_dash":
 	{
@@ -767,9 +762,9 @@
 	},
 	"ability/spore_patches":
 	{
-		"PatchMax": 5,
-		"PatchRadius": 2,
-		"PatchTime": 6
+		"PatchMax": 7,
+		"PatchRadius": 1.5,
+		"PatchTime": 4
 	},
 	"ability/root_bombs":
 	{
@@ -798,7 +793,7 @@
 	},
 	"trait/longer_fog":
 	{
-		"Amount": 0.5
+		"Amount": 0.75
 	},
 	"trait/faster_shield_recovery":
 	{
@@ -862,7 +857,7 @@
 	"grenade/shock_pool":
 	{
 		"Damage": 92,
-		"BlastRadius": 8.6000003814697266,
+		"BlastRadius": 6.3000001907348633,
 		"ThrowDistanceMult": 0.55000001192092896,
 		"RechargeMult": 0.80000001192092896,
 		"FuseMult": 0.80000001192092896,
@@ -890,7 +885,7 @@
 		"BlastRadius": 5,
 		"ThrowDistanceMult": 1,
 		"RechargeMult": 1,
-		"FuseMult": 0.85000002384185791,
+		"FuseMult": 1.4500000476837158,
 		"Bounce": 0.34999999403953552,
 		"PoolDps": 50,
 		"PoolTime": 5
@@ -903,9 +898,9 @@
 		"RechargeMult": 1,
 		"FuseMult": 1,
 		"Bounce": 0.94999998807907104,
-		"PoisonDps": 20,
-		"PoisonTime": 5,
-		"SpikeLife": 6,
+		"PoisonDps": 40,
+		"PoisonTime": 6,
+		"SpikeLife": 4.5,
 		"SeekRadius": 1,
 		"SeekStrength": 110
 	},

@@ -15,6 +15,10 @@ pkill -f "WhatWasOurs.uproject.*-game" || true
 if [ -f "$PROJECT_DIR/Saved/WWO/SavedSettings.json" ]; then
   cp "$PROJECT_DIR/Saved/WWO/SavedSettings.json" "$PROJECT_DIR/Config/ShippedSettings.json"
 fi
+# The same for key and button bindings (Config/ShippedKeybinds.json).
+if [ -f "$PROJECT_DIR/Saved/WWO/Keybinds.json" ]; then
+  cp "$PROJECT_DIR/Saved/WWO/Keybinds.json" "$PROJECT_DIR/Config/ShippedKeybinds.json"
+fi
 "$ENGINE/Build/BatchFiles/RunUAT.sh" BuildCookRun -project="$PROJECT_DIR/WhatWasOurs.uproject" \
   -platform=Mac -clientconfig=Development -build -cook -stage -pak \
   -noP4 -utf8output -nocompileeditor -skipbuildeditor

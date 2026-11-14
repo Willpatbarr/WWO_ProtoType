@@ -886,7 +886,8 @@ void UWWOSettingsMenu::LoadSaved()
 {
 	// Your saved values, or in a fresh packaged build the ones it shipped with (Config/ShippedSettings.json).
 	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *SavePath()) && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json")))) return;
+	const bool bMine = FFileHelper::LoadFileToString(Text, *SavePath());
+	if (!bMine && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json")))) return;
 	TSharedPtr<FJsonObject> Root;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return;
 	for (const auto& SectionPair : Root->Values)
@@ -904,6 +905,8 @@ void UWWOSettingsMenu::LoadSaved()
 				const float V = (float)ValuePair.Value->AsNumber();
 				// Target health resets every target when set: in someone else's game they are the host's to reset.
 				if (bRestricted && Id == "TargetHealth") continue;
+				// God mode never ships on, whatever the packaging machine had saved.
+				if (!bMine && Id == "GodMode") continue;
 				R->Set(V);
 				Defaults.FindOrAdd(SectionKey).Add(Id, V);
 			}
