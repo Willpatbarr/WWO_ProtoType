@@ -77,6 +77,15 @@ public:
 	static const FWWOMapInfo* FindMap(FName Level);
 	static FString MapTitle(FName Level);
 	static FString MatchOptions(bool bListen, bool bPvP, int32 Bots); // the travel URL's options
+
+	// The gamer tag: the name other players see above your health bar. Asked for on the launch
+	// screen before hosting or joining, kept in Saved/WWO/GamerTag.txt, and sent to the host as the
+	// travel URL's Tag option, which the game mode names the player from as they log in.
+	static constexpr int32 MaxTagLength = 16;
+	static FString CleanTag(const FString& Typed); // letters, digits, _ and - only, at most MaxTagLength
+	const FString& GetGamerTag() const { return GamerTag; }
+	void SetGamerTag(const FString& Typed, bool bSave = true);
+	FString WithName(const FString& Options) const; // Options plus ?Tag=<tag> when there is one (AWWOGameMode::InitNewPlayer reads it)
 	void JoinAddress(const FString& Address);
 	void Leave();
 
@@ -97,7 +106,8 @@ private:
 	FName PendingMap;
 	bool bPendingPvP = false;
 	int32 PendingBots = -1;
-	FString HostOptions() const { return MatchOptions(true, bPendingPvP, PendingBots); }
+	FString HostOptions() const { return WithName(MatchOptions(true, bPendingPvP, PendingBots)); }
+	FString GamerTag;
 	bool bTitleDecided = false; // the first map load's choice has been made
 	bool bShowTitle = false;    // the next map load opens on the launch screen
 	bool bJoinFirst = false;    // FindAndJoin: join the first game the search finds

@@ -1,4 +1,5 @@
 #include "Systems/WWOWorldSubsystem.h"
+#include "WhatWasOurs.h"
 #include "Player/WWOProf.h"
 #include "EngineUtils.h"
 #include "Enemies/WWOEnemy.h"
@@ -196,6 +197,15 @@ void UWWOWorldSubsystem::SetTargetHealth(float Value)
 
 void UWWOWorldSubsystem::SpawnDamageNumber(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
+	// Only your own damage shows as numbers: not a teammate's, a bot's or an enemy player's (the
+	// host works out everybody's hits, so it would see them all). Damage with nobody behind it
+	// (CurrentAttacker unset) still shows.
+	if (const AActor* By = CurrentAttacker.Get(); By && By != GetPlayer())
+	{
+		UE_LOG(LogWWO, VeryVerbose, TEXT("Damage number hidden: %s's"), *By->GetName());
+		return;
+	}
+	UE_LOG(LogWWO, VeryVerbose, TEXT("Damage number shown: %s's"), *GetNameSafe(CurrentAttacker.Get()));
 	ShowText(FString::FromInt(FMath::RoundToInt(Damage)), bCritical, Point, Color);
 }
 

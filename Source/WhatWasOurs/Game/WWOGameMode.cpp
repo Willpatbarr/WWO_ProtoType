@@ -102,6 +102,16 @@ AWWOGameState* AWWOGameMode::WGS() const
 	return GetGameState<AWWOGameState>();
 }
 
+FString AWWOGameMode::InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal)
+{
+	const FString Error = Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+	// The engine has just named them after their computer; their gamer tag replaces that. (Cleaned
+	// again here: the options come from the other machine.)
+	const FString Tag = UWWONetSubsystem::CleanTag(UGameplayStatics::ParseOption(Options, TEXT("Tag")));
+	if (!Tag.IsEmpty() && NewPlayerController) ChangeName(NewPlayerController, Tag, false);
+	return Error;
+}
+
 void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
@@ -259,6 +269,8 @@ void AWWOGameMode::Begin()
 		{
 			GS->bPvP = true;
 			GS->TeamScores = { 0, 0 };
+			GS->bMatchOver = false;
+			GS->MatchWinner = -1;
 		}
 		MatchLeft = TimeLimit * 60.f;
 		MatchElapsed = 0.f;
@@ -594,8 +606,8 @@ FString AWWOGameMode::StatusText(FLinearColor& OutColor) const
 	}
 	case EWWOWaveState::MatchOver:
 		OutColor = Winner < 0 ? FLinearColor(0.9f, 0.9f, 0.9f) : AWWOPlayerState::TeamColor(Winner);
-		return Winner < 0 ? FString::Printf(TEXT("DRAW  %d – %d   ·   restarting"), Blue, Orange)
-			: FString::Printf(TEXT("%s WINS  %d – %d   ·   restarting"), *AWWOPlayerState::TeamName(Winner), Blue, Orange);
+		return Winner < 0 ? FString::Printf(TEXT("DRAW  %d – %d%s"), Blue, Orange, bTestRun ? TEXT("   ·   restarting") : TEXT(""))
+			: FString::Printf(TEXT("%s WINS  %d – %d%s"), *AWWOPlayerState::TeamName(Winner), Blue, Orange, bTestRun ? TEXT("   ·   restarting") : TEXT(""));
 	case EWWOWaveState::Countdown:
 		return Wave > 0 ? FString::Printf(TEXT("Wave %d of %d in %d"), Wave + 1, Total, FMath::CeilToInt(Timer))
 			: FString::Printf(TEXT("Get ready: wave 1 of %d in %d"), Total, FMath::CeilToInt(Timer));
@@ -661,14 +673,21 @@ void AWWOGameMode::OnPvPDeath(AWWOCharacter* Victim)
 	}
 	++KillerPS->Kills;
 	++PvPKills;
+	// A precision kill (the hit that killed was a head hit) scores more.
+	const bool bPrecision = Victim->Health->bLastAttackCritical && GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 0.05;
+	const int32 Points = bPrecision ? AWWOGameState::PrecisionKillPoints : AWWOGameState::KillPoints;
+	if (bPrecision) ++KillerPS->PrecisionKills;
 	AWWOGameState* GS = WGS();
 	if (GS)
 	{
 		if (GS->TeamScores.Num() < 2) GS->TeamScores.SetNum(2);
-		++GS->TeamScores[KillerPS->Team];
+		GS->TeamScores[KillerPS->Team] += Points;
 	}
 	UE_LOG(LogWWO, Display, TEXT("PvP: %s (%s) killed %s; %s %d"), *KillerPS->GetPlayerName(), *AWWOPlayerState::TeamName(KillerPS->Team),
 		VictimPS ? *VictimPS->GetPlayerName() : *Victim->GetName(), *AWWOPlayerState::TeamName(KillerPS->Team), GS ? GS->TeamScores[KillerPS->Team] : 0);
+	// The kill feed, on everyone's screen: killer > killee.
+	if (GS) GS->ReportKill(KillerPS, KillerPS->GetPlayerName(), KillerPS->Team, VictimPS ? VictimPS->GetPlayerName() : Victim->GetName(), VictimPS ? VictimPS->Team : -1,
+		bPrecision ? AWWOGameState::KillPrecision : FName(), Points);
 	if (GS && KillTarget >= 1.f && GS->TeamScores[KillerPS->Team] >= FMath::RoundToInt(KillTarget)) EndMatch(KillerPS->Team);
 }
 
@@ -677,7 +696,14 @@ void AWWOGameMode::EndMatch(int32 WinningTeam)
 	State = EWWOWaveState::MatchOver;
 	Winner = WinningTeam;
 	++PvPMatchesEnded;
-	RestartLeft = 6.f;
+	// The scoreboard comes up on every machine and stays until the host picks what's next
+	// (UWWOScoreboard: next match, change map, quit). A test run restarts by itself as before.
+	if (AWWOGameState* GS = WGS())
+	{
+		GS->bMatchOver = true;
+		GS->MatchWinner = (int8)WinningTeam;
+	}
+	if (bTestRun) RestartLeft = 6.f;
 	UE_LOG(LogWWO, Display, TEXT("PvP: match over, %s"), WinningTeam < 0 ? TEXT("a draw") : *(AWWOPlayerState::TeamName(WinningTeam) + TEXT(" wins")));
 }
 
@@ -823,7 +849,7 @@ void AWWOGameMode::UpdateBots()
 	AWWOBotController* Bot = GetWorld()->SpawnActor<AWWOBotController>();
 	if (!Bot) return;
 	++BotsSpawned;
-	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("Bot %d"), BotsSpawned));
+	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("bot%d"), BotsSpawned));
 	BalanceTeam(Bot);
 	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
 	// steady scene of moving characters for performance tests).
@@ -887,6 +913,31 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 				if (!Near || FVector::DistSquared(It->GetActorLocation(), Host->GetActorLocation()) < FVector::DistSquared(Near->GetActorLocation(), Host->GetActorLocation())) Near = *It;
 			}
 			Host->Health->GodMode = 1.f;
+		}
+		// -WWOTestKills: every 4 s the host kills an enemy bot, every other one with a precision hit,
+		// and saves a picture half a second later (44_kill_NN.png): the "Kill +1" by the reticle.
+		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestKills")))
+		{
+			static float NextKill = 8.f, ShotAt = -1.f;
+			static int32 Done = 0;
+			if (StressClock >= NextKill)
+			{
+				for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It)
+				{
+					if (*It == Host || It->Health->bDead || !UWWOWorldSubsystem::CanHurt(Host, *It)) continue;
+					FWWODamageBy By(Host);
+					It->TakeHit(99999.f, Done % 2 == 1, It->GetActorLocation());
+					NextKill = StressClock + (Done % 3 == 2 ? 0.3f : 4.f); // now and then two close together
+					ShotAt = StressClock + 0.5f;
+					++Done;
+					break;
+				}
+			}
+			if (ShotAt > 0.f && StressClock >= ShotAt)
+			{
+				ShotAt = -1.f;
+				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("44_kill_%02d.png"), Done), true, false);
+			}
 		}
 		if (Host && Near)
 		{

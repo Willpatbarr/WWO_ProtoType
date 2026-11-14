@@ -299,6 +299,7 @@ void AWWOAlly::Shoot(AWWOEnemy* Enemy)
 	AWWOGameState::Tracer(GetWorld(), From, bHit ? Hit.ImpactPoint : From + Dir * Data->SightRange * WWO::M, FLinearColor(0.5f, 1.f, 0.9f, 0.8f)); // everyone sees it
 	if (bHit)
 	{
+		FWWODamageBy By(this); // an ally's hits are its own (no damage numbers for them on your screen)
 		if (AWWOEnemy* Victim = Cast<AWWOEnemy>(Hit.GetActor())) Victim->TakeHit(Data->Damage, false, Hit.ImpactPoint, FLinearColor(0.55f, 0.9f, 0.85f));
 	}
 }

@@ -29,6 +29,8 @@ public:
 	AWWOGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
+	// Names the player from the gamer tag in their login options (?Tag=, UWWONetSubsystem::WithName).
+	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
 	virtual void Logout(AController* Exiting) override; // PvP: a bot takes a leaving player's place
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

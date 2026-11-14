@@ -2,6 +2,7 @@
 #include "Player/WWOProf.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
+#include "GameFramework/PlayerState.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
@@ -482,7 +483,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	// Health bars: the target under the reticle, and every other visible enemy whose middle is
 	// within HealthBarRadius of the reticle on screen. A thin shield bar sits right on top of the
 	// health bar (no gap, no border), and the pair floats a little clear of the head.
-	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = FLinearColor(0.9f, 0.9f, 0.92f)) // an enemy's shield: a very light grey
+	auto HealthBar = [&](const IWWOTargetable* Target, const FLinearColor& BarHealthColor = FoeRedBox, const FLinearColor& BarShieldColor = FLinearColor(0.9f, 0.9f, 0.92f), const FString& Name = FString()) // an enemy's shield: a very light grey
 	{
 		FVector2D Top;
 		if (!ToScreen(Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight()), Top)) return;
@@ -494,13 +495,16 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		// No border: just a faint dark track the size of the bars, so the part that is gone still reads.
 		P.Box(TopLeft, FVector2D(Wide, HealthTall + (bShield ? ShieldTall : 0.f)), FLinearColor(0, 0, 0, 0.35f));
 		P.Box(Pos, FVector2D(Wide * Fraction, HealthTall), BarHealthColor);
-		FString Label = FString::FromInt(FMath::CeilToInt(Target->GetHealth()));
-		if (bShield)
-		{
-			P.Box(TopLeft, FVector2D(Wide * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), ShieldTall), BarShieldColor);
-			if (Target->GetShield() > 0.f) Label = FString::Printf(TEXT("%d + %d"), FMath::CeilToInt(Target->GetShield()), FMath::CeilToInt(Target->GetHealth()));
-		}
-		P.Text(Label, TopLeft + FVector2D(Wide * 0.5f, -21), 16.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline 6 px up, no outline
+		if (bShield) P.Box(TopLeft, FVector2D(Wide * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), ShieldTall), BarShieldColor);
+		// (No health and shield numbers over the bars any more.) A player's gamer tag, or a bot's "bot3", sits on them.
+		if (!Name.IsEmpty()) P.Text(Name, TopLeft + FVector2D(Wide * 0.5f, -21), 15.f, FLinearColor(1.f, 1.f, 1.f, 0.92f), 0.5f, 3.f);
+	};
+	// The name on a player's bars: their player state's (the gamer tag they joined with; bots are bot1, bot2...).
+	auto TagOf = [](const AActor* Actor) -> FString
+	{
+		const APawn* Pawn = Cast<APawn>(Actor);
+		const APlayerState* PS = Pawn ? Pawn->GetPlayerState() : nullptr;
+		return PS ? PS->GetPlayerName() : FString();
 	};
 	// Who is marked: a target is picked up when the reticle comes over it (at the hip) or as soon as
 	// it is inside the marker range (aimed in: within HealthBarRadius of the reticle on screen, and
@@ -537,7 +541,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 		{
 			const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
 			bool bInSight = false;
-			if (Target && !Target->IsDead() && Track(Actor, Target, bInSight)) HealthBar(Target);
+			if (Target && !Target->IsDead() && Track(Actor, Target, bInSight)) HealthBar(Target, FoeRedBox, FLinearColor(0.9f, 0.9f, 0.92f), TagOf(Actor));
 		}
 		if (UWWOWorldSubsystem::IsPvP(Pl))
 		{
@@ -546,7 +550,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 				if (Mate == Pl || Mate->Health->bDead || UWWOWorldSubsystem::CanHurt(Pl, Mate)) continue;
 				bool bInSight = false;
 				Track(Mate, Mate, bInSight);
-				if (bInSight) HealthBar(Mate, FLinearColor(0.82f, 0.83f, 0.85f), FLinearColor(1.f, 1.f, 1.f, 0.6f));
+				if (bInSight) HealthBar(Mate, FLinearColor(0.82f, 0.83f, 0.85f), FLinearColor(1.f, 1.f, 1.f, 0.6f), TagOf(Mate));
 			}
 		}
 	}
@@ -562,7 +566,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			if (Other == Pl || Other->Health->bDead || UWWOWorldSubsystem::TeamOf(Other) != MyTeam || MyTeam < 0) continue;
 			FVector2D At;
 			if (!ToScreen(Other->FeetLocation() + FVector(0, 0, Other->GetBodyHeight()), At)) continue;
-			At.Y -= 66.f;
+			At.Y -= 66.f; // clear of the bars and the name over them
 			FHitResult Hit;
 			const bool bInSight = !Gun->CastRayTo(Other->GetAimParts()[0].Position, Hit) || Hit.GetActor() == Other;
 			const FLinearColor C = WWO::WithAlpha(AWWOPlayerState::TeamColor(MyTeam), bInSight ? 1.f : 0.45f);
@@ -572,6 +576,54 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 			P.Line(At + M, At + R, Back, 6.f);
 			P.Line(At + L, At + M, C, 3.f);
 			P.Line(At + M, At + R, C, 3.f);
+		}
+	}
+
+	// Your own kills, to the right of the reticle for 2.5 s: "Kill +1", "Precision kill +2" (the
+	// number is what it added to your team's score). The newest is level with the reticle, older ones above it.
+	if (const AWWOGameState* Mine = Pl->GetWorld()->GetGameState<AWWOGameState>())
+	{
+		constexpr float Shown = 2.5f, Fade = 0.5f, Px = 22.f, LineTall = 30.f, Right = 150.f;
+		const double KillNow = FPlatformTime::Seconds();
+		float Y = AimAt.Y;
+		for (int32 Index = Mine->KillFeed.Num() - 1; Index >= 0; --Index)
+		{
+			const AWWOGameState::FKillLine& Line = Mine->KillFeed[Index];
+			const float Age = float(KillNow - Line.At);
+			if (Age > Shown) break;
+			if (!Line.bMine) continue;
+			const bool bPrecision = Line.How == AWWOGameState::KillPrecision;
+			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
+			P.Text(FString::Printf(TEXT("%s +%d"), bPrecision ? TEXT("Precision kill") : TEXT("Kill"), Line.Points), FVector2D(AimAt.X + Right, Y), Px,
+				WWO::WithAlpha(bPrecision ? UWWOWorldSubsystem::CritColor() : FLinearColor::White, Alpha), 0.f, 5.f, 0.75f * Alpha, 0.5f);
+			Y -= LineTall;
+		}
+	}
+
+	// The kill feed (bottom left, over the ability, grenade and ult boxes): "killer > killee", each
+	// name in its team's color, the newest at the bottom, each line for 6 s and fading over its last one.
+	if (const AWWOGameState* Feed = Pl->GetWorld()->GetGameState<AWWOGameState>())
+	{
+		constexpr float Shown = 6.f, Fade = 1.f, Px = 16.f, LineTall = 23.f;
+		const double FeedNow = FPlatformTime::Seconds();
+		const FSlateFontInfo FeedFont = P.Font(Px, 4.f);
+		// Built upward from the newest line, which sits just above the boxes (their top is 126 px off the bottom).
+		float Y = P.Size.Y - 126.f - 14.f - LineTall;
+		for (int32 Index = Feed->KillFeed.Num() - 1; Index >= 0; --Index)
+		{
+			const AWWOGameState::FKillLine& Line = Feed->KillFeed[Index];
+			const float Age = float(FeedNow - Line.At);
+			if (Age > Shown) break; // older ones are older still
+			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
+			auto TeamTint = [&](int32 Team) { return WWO::WithAlpha(Team >= 0 ? AWWOPlayerState::TeamColor(Team) : FLinearColor::White, Alpha); };
+			float X = 40.f;
+			P.Text(Line.Killer, FVector2D(X, Y), Px, TeamTint(Line.KillerTeam), 0.f, 4.f);
+			X += P.Measure(Line.Killer, FeedFont).X;
+			const FString Arrow = TEXT("  >  ");
+			P.Text(Arrow, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.75f * Alpha), 0.f, 4.f);
+			X += P.Measure(Arrow, FeedFont).X;
+			P.Text(Line.Victim, FVector2D(X, Y), Px, TeamTint(Line.VictimTeam), 0.f, 4.f);
+			Y -= LineTall;
 		}
 	}
 

@@ -1,5 +1,7 @@
 #include "Net/WWONetSubsystem.h"
 #include "Game/WWOPlayerState.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WhatWasOurs.h"
 #include "OnlineSubsystem.h"
@@ -59,6 +61,30 @@ FString UWWONetSubsystem::MatchOptions(bool bListen, bool bPvP, int32 Bots)
 	return FString::Join(Parts, TEXT("?"));
 }
 
+FString UWWONetSubsystem::CleanTag(const FString& Typed)
+{
+	FString Out;
+	for (const TCHAR C : Typed)
+	{
+		if (Out.Len() >= MaxTagLength) break;
+		if (FChar::IsAlnum(C) && C < 128 || C == TEXT('_') || C == TEXT('-')) Out.AppendChar(C);
+	}
+	return Out;
+}
+
+void UWWONetSubsystem::SetGamerTag(const FString& Typed, bool bSave)
+{
+	GamerTag = CleanTag(Typed);
+	if (bSave) FFileHelper::SaveStringToFile(GamerTag, *(FPaths::ProjectSavedDir() / TEXT("WWO/GamerTag.txt")));
+}
+
+FString UWWONetSubsystem::WithName(const FString& Options) const
+{
+	if (GamerTag.IsEmpty()) return Options;
+	// (Tag, not the engine's Name: the engine overwrites Name with the computer's own name on the way in.)
+	return Options.IsEmpty() ? TEXT("Tag=") + GamerTag : Options + TEXT("?Tag=") + GamerTag;
+}
+
 bool UWWONetSubsystem::WantsTitle(const UObject* WorldContext)
 {
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
@@ -86,7 +112,7 @@ void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 	bShowTitle = false;
 	CancelSearch();
 	UE_LOG(LogWWO, Display, TEXT("Net: playing %s alone (%s)"), *Map.ToString(), bPvP ? TEXT("PvP against bots") : TEXT("waves"));
-	UGameplayStatics::OpenLevel(GetWorld(), Map, true, MatchOptions(false, bPvP, Bots));
+	UGameplayStatics::OpenLevel(GetWorld(), Map, true, WithName(MatchOptions(false, bPvP, Bots)));
 }
 
 void UWWONetSubsystem::PlayTester()
@@ -138,6 +164,14 @@ UWWONetSubsystem* UWWONetSubsystem::Get(const UObject* WorldContext)
 void UWWONetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+	FString Saved;
+	if (FFileHelper::LoadFileToString(Saved, *(FPaths::ProjectSavedDir() / TEXT("WWO/GamerTag.txt")))) GamerTag = CleanTag(Saved);
+	// A test run that drives the launch screen has nobody to type one.
+	// -WWOGamerTag=<name>: this run's tag (not saved), for tests with more than one copy of the game.
+	FString Given;
+	if (FParse::Value(FCommandLine::Get(), TEXT("WWOGamerTag="), Given)) SetGamerTag(Given, false);
+	// (-WWONoTestTag: leave it empty, to see the launch screen asking for one.)
+	if (GamerTag.IsEmpty() && FCString::Stristr(FCommandLine::Get(), TEXT("-WWOAutoTest")) && !FParse::Param(FCommandLine::Get(), TEXT("WWONoTestTag"))) GamerTag = TEXT("tester");
 	if (GEngine)
 	{
 		NetFailureHandle = GEngine->OnNetworkFailure().AddUObject(this, &UWWONetSubsystem::OnNetworkFailure);
@@ -439,7 +473,7 @@ void UWWONetSubsystem::JoinAddress(const FString& Address)
 	Status = TEXT("Joining ") + Address;
 	bShowTitle = false;
 	UE_LOG(LogWWO, Display, TEXT("Net: joining %s"), *Address);
-	PC->ClientTravel(Address, TRAVEL_Absolute);
+	PC->ClientTravel(GamerTag.IsEmpty() ? Address : Address + TEXT("?Tag=") + GamerTag, TRAVEL_Absolute); // the host names you from it
 }
 
 void UWWONetSubsystem::Leave()

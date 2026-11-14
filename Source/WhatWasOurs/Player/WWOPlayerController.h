@@ -22,6 +22,7 @@ class UWWOHUDWidget;
 class UWWOSettingsMenu;
 class UWWOCharacterMenu;
 class UWWOLaunchMenu;
+class UWWOScoreboard;
 class UWWOFiringTester;
 class AWWOCharacter;
 class FWWOMenuCursor;
@@ -132,6 +133,8 @@ private:
 	UPROPERTY() TObjectPtr<UWWOSettingsMenu> SettingsMenu;
 	UPROPERTY() TObjectPtr<UWWOCharacterMenu> CharacterMenu;
 	UPROPERTY() TObjectPtr<UWWOLaunchMenu> LaunchMenu; // only when the map opened on the launch screen
+	UPROPERTY() TObjectPtr<UWWOScoreboard> Scoreboard; // the end of a PvP match (made when the first one ends)
+	void UpdateScoreboard();
 	UPROPERTY() TObjectPtr<UWWOFiringTester> FiringTester; // only in the firing tester (AWWOGameMode::bTester)
 	bool ScriptHeld[(int32)EWWOAction::Count] = {};
 	bool ScriptQueued[(int32)EWWOAction::Count] = {};

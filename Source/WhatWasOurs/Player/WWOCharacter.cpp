@@ -577,6 +577,7 @@ bool AWWOCharacter::TakeHit(float Damage, bool bCritical, const FVector& Point, 
 	{
 		Health->LastAttacker = UWWOWorldSubsystem::CurrentAttacker; // damage from nobody doesn't erase who hit you last
 		Health->LastAttackTime = GetWorld()->GetTimeSeconds();
+		Health->bLastAttackCritical = bCritical;
 	}
 	const AActor* By = UWWOWorldSubsystem::CurrentAttacker.Get();
 	Health->DamageCameFrom(By && By != this ? By->GetActorLocation() : Point); // whoever did it, else where it landed

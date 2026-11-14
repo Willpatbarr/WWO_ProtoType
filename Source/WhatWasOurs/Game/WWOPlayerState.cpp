@@ -6,5 +6,6 @@ void AWWOPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AWWOPlayerState, Team);
 	DOREPLIFETIME(AWWOPlayerState, Kills);
+	DOREPLIFETIME(AWWOPlayerState, PrecisionKills);
 	DOREPLIFETIME(AWWOPlayerState, Deaths);
 }

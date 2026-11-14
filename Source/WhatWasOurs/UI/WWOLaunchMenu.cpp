@@ -13,6 +13,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/EditableTextBox.h"
 #include "Components/ButtonSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -188,6 +189,8 @@ FString UWWOLaunchMenu::StatusLine() const
 	// while a game is starting. Not beside the host and local choices, where a search that
 	// finished late would say "no games found".
 	const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+	// Hosting or joining needs a gamer tag first (once everything else is picked, that is what's missing).
+	if (bSetup && StartedAt <= 0.0 && NeedsTag() && CanStart()) return TEXT("Enter a gamer tag to ") + FString(Connection == ConnJoin ? TEXT("join") : TEXT("host"));
 	if (!Net || (bSetup && Connection != ConnJoin && StartedAt <= 0.0)) return FString();
 	return Net->Status;
 }
@@ -294,10 +297,32 @@ bool UWWOLaunchMenu::CanStart() const
 	return Connection != ConnNone && Mode != ModeNone && !Map.IsNone();
 }
 
+bool UWWOLaunchMenu::NeedsTag() const
+{
+	const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+	return (Connection == ConnHost || Connection == ConnJoin) && (!Net || Net->GetGamerTag().IsEmpty());
+}
+
+void UWWOLaunchMenu::OnTagChanged(const FText& Text)
+{
+	// Kept as it is typed (cleaned: letters, digits, _ and - only); the box shows the cleaned tag.
+	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+	if (!Net) return;
+	Net->SetGamerTag(Text.ToString());
+	if (TagBox && Net->GetGamerTag() != Text.ToString()) TagBox->SetText(FText::FromString(Net->GetGamerTag()));
+	if (StatusText) StatusText->SetText(FText::FromString(StatusLine()));
+}
+
 void UWWOLaunchMenu::Start()
 {
 	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
 	if (!Net || !CanStart()) return;
+	if (NeedsTag()) // nobody hosts or joins without a name for the others to see
+	{
+		if (StatusText) StatusText->SetText(FText::FromString(StatusLine()));
+		if (TagBox) TagBox->SetKeyboardFocus();
+		return;
+	}
 	const bool bPvP = Mode == ModePvP;
 	const FWWOMapInfo* Info = UWWONetSubsystem::FindMap(Map);
 	UE_LOG(LogWWO, Display, TEXT("Launch: starting (%s)"), *DebugState());
@@ -546,6 +571,25 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 			[WeakThis] { if (WeakThis.IsValid()) WeakThis->ChooseMode(ModePvP); }));
 		AddChoice(Left, Choice(TEXT("PvE"), Connection == ConnLocal ? TEXT("Wave survival") : TEXT("Wave survival together, up to 6 players"), Mode == ModePvE,
 			[WeakThis] { if (WeakThis.IsValid()) WeakThis->ChooseMode(ModePvE); }));
+	}
+	TagBox = nullptr;
+	if (Connection == ConnHost || Connection == ConnJoin)
+	{
+		// The gamer tag: what the others see above your health bar. Needed before START / JOIN.
+		Left->AddChildToVerticalBox(StepLabel(Connection == ConnHost ? 4 : 3, TEXT("Gamer tag")))->SetPadding(FMargin(0, 26.f * K, 0, 12.f * K));
+		TagBox = Tree->ConstructWidget<UEditableTextBox>();
+		FEditableTextBoxStyle BoxStyle = TagBox->WidgetStyle;
+		const FSlateBrush BoxBrush = UWWOSettingsMenu::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
+		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
+		BoxStyle.SetBackgroundImageFocused(UWWOSettingsMenu::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, A, 1.5f));
+		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
+		BoxStyle.TextStyle.SetFont(UWWOSettingsMenu::Font(20.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		BoxStyle.SetPadding(FMargin(14.f * K, 10.f * K));
+		TagBox->WidgetStyle = BoxStyle;
+		TagBox->SetHintText(FText::FromString(TEXT("Type a name (letters, digits, _ -)")));
+		TagBox->SetText(FText::FromString(Net ? Net->GetGamerTag() : FString()));
+		TagBox->OnTextChanged.AddDynamic(this, &UWWOLaunchMenu::OnTagChanged);
+		Left->AddChildToVerticalBox(Sized(Tree, TagBox, 0.f, 54.f));
 	}
 	USizeBox* LeftBox = Tree->ConstructWidget<USizeBox>();
 	LeftBox->SetWidthOverride(440.f * K);

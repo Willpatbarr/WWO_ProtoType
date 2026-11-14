@@ -68,6 +68,9 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 
 	void Rebuild();
+	UPROPERTY() TObjectPtr<class UEditableTextBox> TagBox; // the gamer tag (Host and Join)
+	UFUNCTION() void OnTagChanged(const FText& Text);
+	bool NeedsTag() const; // hosting or joining with no gamer tag entered yet
 	UWidget* BuildTitle();
 	UWidget* BuildSetup();
 	FLinearColor Accent() const;

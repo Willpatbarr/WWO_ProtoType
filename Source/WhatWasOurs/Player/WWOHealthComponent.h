@@ -49,6 +49,7 @@ public:
 	UPROPERTY(Replicated) bool bRevived = false;      // the last time bDead cleared was a revive (in place)
 	UPROPERTY(Replicated) float SpawnYaw = 0.f;       // the way the last respawn faced (a joiner turns its own view to it)
 	double LastAttackTime = -1000.0;                  // host: when LastAttacker last hit you
+	bool bLastAttackCritical = false;                 // host: that hit was a precision (head) hit
 	UPROPERTY(Replicated) float BeingRevived = 0.f;   // while down: how far a teammate's revive is (0-1)
 	TWeakObjectPtr<AActor> LastAttacker; // host: who hit you last (PvP kill credit)
 	bool bWantsRevive = false; // host: this player holds Revive (their own input, or ServerSetRevive)

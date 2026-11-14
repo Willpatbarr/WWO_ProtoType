@@ -1,4 +1,7 @@
 #include "Game/WWOGameState.h"
+#include "WhatWasOurs.h"
+#include "GameFramework/PlayerController.h"
+#include "Game/WWOPlayerState.h"
 #include "FX/WWOFX.h"
 #include "Flora/WWOFloraEffects.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -12,6 +15,8 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, StatusColor);
 	DOREPLIFETIME(AWWOGameState, bPvP);
 	DOREPLIFETIME(AWWOGameState, TeamScores);
+	DOREPLIFETIME(AWWOGameState, bMatchOver);
+	DOREPLIFETIME(AWWOGameState, MatchWinner);
 }
 
 void AWWOGameState::Bolt(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Lifetime, AActor* FromActor, AActor* ToActor)
@@ -51,6 +56,31 @@ void AWWOGameState::Text(UWorld* World, const FString& Words, const FVector& At,
 	{
 		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastText(Words, At, Color);
 	}
+}
+
+const FName AWWOGameState::KillPrecision(TEXT("precision"));
+
+void AWWOGameState::ReportKill(const AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points)
+{
+	if (HasAuthority()) MulticastKill(KillerState, Killer, (int8)KillerTeam, Victim, (int8)VictimTeam, How, (uint8)Points);
+}
+
+void AWWOGameState::MulticastKill_Implementation(const AWWOPlayerState* KillerState, const FString& Killer, int8 KillerTeam, const FString& Victim, int8 VictimTeam, FName How, uint8 Points)
+{
+	// On the host and on every joiner alike: each keeps its own list.
+	FKillLine Line;
+	Line.Killer = Killer;
+	Line.Victim = Victim;
+	Line.KillerTeam = KillerTeam;
+	Line.VictimTeam = VictimTeam;
+	Line.Points = Points;
+	const APlayerController* Local = GetWorld()->GetFirstPlayerController();
+	Line.bMine = KillerState && Local && Local->PlayerState == KillerState;
+	Line.How = How;
+	Line.At = FPlatformTime::Seconds();
+	KillFeed.Add(Line);
+	if (!HasAuthority()) UE_LOG(LogWWO, Verbose, TEXT("Kill feed: %s > %s (%s, +%d, mine %d)"), *Killer, *Victim, *How.ToString(), (int32)Points, Line.bMine ? 1 : 0);
+	if (KillFeed.Num() > 8) KillFeed.RemoveAt(0, KillFeed.Num() - 8);
 }
 
 void AWWOGameState::MulticastText_Implementation(const FString& Words, FVector_NetQuantize At, FLinearColor Color)

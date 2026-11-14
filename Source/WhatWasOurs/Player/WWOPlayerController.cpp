@@ -16,6 +16,8 @@
 #include "UI/WWOSettingsMenu.h"
 #include "UI/WWOCharacterMenu.h"
 #include "UI/WWOLaunchMenu.h"
+#include "UI/WWOScoreboard.h"
+#include "Game/WWOGameState.h"
 #include "UI/WWOMenuCursor.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -538,6 +540,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 		}
 		bCreateHeld = bCreate;
 		if (MenuKeys.IsValid() && !MenuKeys->Viewport.IsValid()) MenuKeys->Viewport = GameViewportWidget();
+		UpdateScoreboard();
 	}
 	if (bPerfTest)
 	{
@@ -681,7 +684,8 @@ void AWWOPlayerController::Hitstop(float Seconds)
 
 bool AWWOPlayerController::IsMenuOpen() const
 {
-	return IsOtherMenuOpen() || (FiringTester && FiringTester->WantsCursor());
+	// (The scoreboard takes the cursor but doesn't pause: a host's pause would freeze everyone.)
+	return IsOtherMenuOpen() || (FiringTester && FiringTester->WantsCursor()) || (Scoreboard && Scoreboard->IsOpen());
 }
 
 bool AWWOPlayerController::IsOtherMenuOpen() const
@@ -721,6 +725,12 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 		if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) LaunchMenu->Back();
 		return;
 	}
+	if (Scoreboard && Scoreboard->IsOpen())
+	{
+		// The scoreboard: Circle / Esc steps back from its map list; nothing else opens over it.
+		if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) Scoreboard->Back();
+		return;
+	}
 	if (FiringTester && FiringTester->IsOpen())
 	{
 		// The tester's pane is its settings: the Settings key hands the cursor back to it.
@@ -730,6 +740,44 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 	}
 	if (Id == EWWOAction::Menu) ToggleSettingsMenu();
 	else if (Id == EWWOAction::CharacterMenu) ToggleCharacterMenu();
+}
+
+void AWWOPlayerController::UpdateScoreboard()
+{
+	// The end of a PvP match (AWWOGameState::bMatchOver, replicated): the scoreboard over everything,
+	// the other menus shut. Not in the scripted test runs, which restart by themselves.
+	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
+	static const bool bScripted = FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) != nullptr;
+	const bool bOver = GS && GS->bMatchOver && !bScripted;
+	if (bOver && !(Scoreboard && Scoreboard->IsOpen()))
+	{
+		if (!Scoreboard)
+		{
+			Scoreboard = CreateWidget<UWWOScoreboard>(this, UWWOScoreboard::StaticClass());
+			Scoreboard->AddToViewport(12); // over the HUD and the other menus
+		}
+		if (SettingsMenu && SettingsMenu->IsOpen()) SettingsMenu->Close();
+		if (CharacterMenu && CharacterMenu->IsOpen()) CharacterMenu->Close();
+		Scoreboard->Open();
+		SetMenuMode(true);
+	}
+	else if (!bOver && Scoreboard && Scoreboard->IsOpen())
+	{
+		Scoreboard->Close();
+		SetMenuMode(IsMenuOpen());
+	}
+	// -WWOTestScoreboard: pictures of the page and of its map list, then NEXT MATCH is pressed.
+	static const bool bTest = FParse::Param(FCommandLine::Get(), TEXT("WWOTestScoreboard"));
+	if (bTest && Scoreboard && Scoreboard->IsOpen())
+	{
+		static int32 Step = 0;
+		const double Open = FPlatformTime::Seconds() - Scoreboard->OpenedAt;
+		const FString Dir = FPaths::ProjectSavedDir() / TEXT("AutoTest");
+		if (Step == 0 && Open > 2.0) { FScreenshotRequest::RequestScreenshot(Dir / TEXT("45_scoreboard.png"), true, false); Step = 1; }
+		else if (Step == 1 && Open > 3.0) { Scoreboard->ShowMaps(); Step = 2; }
+		else if (Step == 2 && Open > 4.0) { FScreenshotRequest::RequestScreenshot(Dir / TEXT("45_scoreboard_maps.png"), true, false); Step = 3; }
+		else if (Step == 3 && Open > 5.0) { Scoreboard->Back(); Scoreboard->NextMatch(); Step = 4; }
+	}
 }
 
 void AWWOPlayerController::ToggleSettingsMenu()

@@ -21,8 +21,27 @@ public:
 	// PvP (team deathmatch): set by the host when the match is PvP; both teams' kills.
 	UPROPERTY(Replicated) bool bPvP = false;
 	UPROPERTY(Replicated) TArray<int32> TeamScores;
+	UPROPERTY(Replicated) bool bMatchOver = false; // the PvP match ended: every machine shows the scoreboard (UWWOScoreboard)
+	UPROPERTY(Replicated) int8 MatchWinner = -1;   // the team that won it (-1: a draw)
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// The kill feed: "killer > killee" lines, newest last. The host reports each credited kill
+	// (ReportKill) and every machine keeps its own short list for the HUD to draw. How is the
+	// method of death, for when the feed says it (nothing sets or shows it yet).
+	struct FKillLine
+	{
+		FString Killer, Victim;
+		int32 KillerTeam = -1, VictimTeam = -1;
+		FName How;        // NAME_None: a plain kill; KillPrecision: the killing hit was a precision (head) hit
+		int32 Points = 1; // what it added to the killer's team's score
+		bool bMine = false; // this machine's own player got it (the HUD's "Kill +1" by the reticle)
+		double At = 0.0; // real seconds (FPlatformTime) it arrived
+	};
+	TArray<FKillLine> KillFeed;
+	static const FName KillPrecision;
+	static constexpr int32 KillPoints = 1, PrecisionKillPoints = 2; // team score for a kill, and for a precision kill
+	void ReportKill(const class AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points);
 
 	// Spawn here and, from the host, on everyone else's screen too. Skip: a player whose own
 	// machine already showed it (its predicted punch), so it isn't drawn twice there.
@@ -38,6 +57,7 @@ public:
 		int32 Arcs, float RadiusM, float Lifetime, AActor* Skip = nullptr);
 
 private:
+	UFUNCTION(NetMulticast, Reliable) void MulticastKill(const class AWWOPlayerState* KillerState, const FString& Killer, int8 KillerTeam, const FString& Victim, int8 VictimTeam, FName How, uint8 Points);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastText(const FString& Words, FVector_NetQuantize At, FLinearColor Color);
 	UFUNCTION(NetMulticast, Reliable) void MulticastPoison(AActor* Target, float DamagePerSecond, float Seconds);

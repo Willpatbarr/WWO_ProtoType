@@ -11,6 +11,7 @@
 #include "Enemies/WWOEnemy.h" // WWONav
 #include "Flora/WWOSporeFog.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOGameState.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/TargetPoint.h"
@@ -588,6 +589,8 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	// tints and markers).
 	static const bool bIdle = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsIdle"));
 	if (bIdle) return;
+	// The match is over (the scoreboard is up): nobody fights on behind it.
+	if (const AWWOGameState* Over = GetWorld()->GetGameState<AWWOGameState>(); Over && Over->bMatchOver) return;
 	AWWOCharacter* Me = Cast<AWWOCharacter>(GetPawn());
 	if (!Me || Me->Health->bDead)
 	{

@@ -136,6 +136,32 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `UWWOBodyComponent::FindAnim` looks in Body first and falls back to `/Game/WWO/Anims/UAL`: Death01 and
   Hit_Knockback have no replacement and still play their Godot bakes, and deleting a Body clip brings its Godot one
   back. The first-person arm paths (`bake_fp_arm_paths.py`) still come from the UAL throw and melee clips.
+- Gamer tags (2026-11-14): the launch screen asks for one before hosting or joining (step "Gamer tag", a text box:
+  letters, digits, _ and -, up to 16; kept in `Saved/WWO/GamerTag.txt`). START / JOIN does nothing without it and
+  the status line says so; Local play does not need one. `UWWONetSubsystem` adds it to every travel URL as `?Tag=`
+  (`WithName`, `JoinAddress`; not the engine's `Name`, which it overwrites with the computer's name) and
+  `AWWOGameMode::InitNewPlayer` names the player from it, so it replicates as the ordinary player name.
+  `-WWOGamerTag=<name>` sets it for one run. Bots are `bot1`, `bot2`... (`AWWOGameMode`, in the order they join). The HUD draws the name
+  above a player's health numbers (`HealthBar` in `WWOHUDWidget.cpp`, enemies and teammates alike); the teammate
+  chevron sits above it. A test run that drives the launch screen gets the tag `tester` (`-WWONoTestTag`: leave it
+  empty, to see the prompt).
+- Kill feed (2026-11-14): `AWWOGameState::ReportKill` (called where a PvP kill is credited, `AWWOGameMode`) multicasts
+  each kill and every machine keeps the last 8 in `KillFeed`; the HUD draws them bottom left, above the ability boxes, as `killer > killee`,
+  names in their team colors, for 6 s each. `FKillLine::How` is there for the method of death, not set or shown yet.
+  Only credited PvP kills are reported: no PvE kills, and no line for a death nobody is credited with.
+  The health bars no longer show numbers; the name sits where they were.
+  Your own kills also show right of the reticle for 2.5 s: `Kill +1`, or `Precision kill +2` in gold when the killing
+  hit was a head hit (`UWWOHealthComponent::bLastAttackCritical`). The number is real: a precision kill now adds 2 to
+  the team score (`AWWOGameState::KillPoints` / `PrecisionKillPoints`; set both to 1 to go back to a point a kill).
+  Test: `-WWOBotShots -WWOTestKills` has the host kill a bot every 4 s and saves `Saved/AutoTest/44_kill_NN.png`.
+- Damage numbers (2026-11-14): `UWWOWorldSubsystem::SpawnDamageNumber` shows a number only for the local player's own
+  damage (`CurrentAttacker` is them, or unset); teammates', bots', other players' and AI allies' hits show none.
+- Match-end scoreboard (2026-11-14): `UI/WWOScoreboard`. `AWWOGameMode::EndMatch` sets `AWWOGameState::bMatchOver` /
+  `MatchWinner` (replicated) and no longer restarts by itself (only `-WWOAutoTest...` runs still do, after 6 s);
+  `AWWOPlayerController::UpdateScoreboard` opens the page on every machine. Rows: name, kills, precision kills
+  (`AWWOPlayerState::PrecisionKills`), by team. Buttons: NEXT MATCH (`Restart`), CHANGE MAP (the PvP maps, `LoadMap`),
+  QUIT (`LeaveToTitle`). Next match and the map are the host's; a joiner sees them dimmed. Bots stand still while it is up.
+  Test: `-WWOTestScoreboard` (with `-WWOKillTarget=N`) saves `45_scoreboard.png` / `45_scoreboard_maps.png`, then presses NEXT MATCH.
 - Robot frame as the player model, and first-person hands (2026-11-13, in progress): `Tools/import_robot_frame.py` imports
   the Blender robot (`SK_RobotFrame.fbx`) to `/Game/WWO/Characters/RobotFrame` and builds `IK_robotframe` /
   `RTG_Manny_robotframe`; `Config/CharacterModels.json` gives it to the three floras (`retargeter` shares one RTG).
