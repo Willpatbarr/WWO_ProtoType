@@ -20,6 +20,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/PackageName.h"
 #include "Player/WWOCharacter.h"
 
 namespace
@@ -28,7 +29,7 @@ namespace
 	// The baked Godot animations that loop (the UAL clips named *_Loop, as Godot's import loops them).
 	const TCHAR* BodyMaterials[] = { TEXT("/Game/WWO/Materials/MI_WWO_Body_01.MI_WWO_Body_01"), TEXT("/Game/WWO/Materials/MI_WWO_Body_02.MI_WWO_Body_02") };
 	const FName RegionTints[] = { "Head Tint", "Arms Tint", "Core Tint", "Legs Tint" };
-	const FName Looping[] = { "Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Spell_Simple_Idle", "Slide", "Pistol_Aim_Neutral" };
+	const FName Looping[] = { "Idle", "Walk", "Idle_Unarmed", "Walk_Unarmed", "Jog_Fwd", "Sprint", "Sprint_Unarmed", "Crouch_Idle", "Crouch_Fwd", "Jump", "Spell_Simple_Idle", "Slide", "Pistol_Aim_Neutral", "Aim_Pistol" };
 
 	// One entry of Config/CharacterModels.json (read each time a model is set: retune with a restart).
 	TSharedPtr<FJsonObject> ModelConfig(FName Key)
@@ -104,7 +105,11 @@ UAnimSequence* UWWOBodyComponent::FindAnim(FName Anim) const
 	if (Anim.IsNone()) return nullptr;
 	if (const TObjectPtr<UAnimSequence>* Found = Anims.Find(Anim)) return *Found;
 	const FString Name = Anim.ToString();
-	UAnimSequence* Seq = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/WWO/Anims/UAL/A_%s.A_%s"), *Name, *Name));
+	// The Unreal-native replacement first (Tools/bake_body_anims.py: stock mannequin, Lyra and Fab clips
+	// baked as drop-in replacements under the same names); a clip without one keeps its Godot bake.
+	const FString BodyPath = FString::Printf(TEXT("/Game/WWO/Anims/Body/A_%s"), *Name);
+	UAnimSequence* Seq = FPackageName::DoesPackageExist(BodyPath) ? LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%s.A_%s"), *BodyPath, *Name)) : nullptr;
+	if (!Seq) Seq = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/WWO/Anims/UAL/A_%s.A_%s"), *Name, *Name));
 	Anims.Add(Anim, Seq);
 	return Seq;
 }
@@ -165,7 +170,7 @@ void UWWOBodyComponent::BeginPlay()
 	}
 	bSetUp = true;
 	ApplyColors();
-	ForcePose("Idle"); // Godot: force_pose("Idle") before measuring hitboxes and gear, then play("Idle")
+	ForcePose("Idle_Unarmed"); // (arms down: the pose hitboxes and gear are measured in; whoever owns the body plays its own idle) Godot: force_pose("Idle") before measuring hitboxes and gear, then play("Idle")
 	if (!ModelKey.IsNone()) SetModel(ModelKey);
 }
 
@@ -178,12 +183,19 @@ void UWWOBodyComponent::SetModel(FName Key)
 	if (!Driver || (Key == ActiveModel && (Model || Key.IsNone()))) return;
 	if (Model) Model->DestroyComponent();
 	Model = nullptr;
+	if (FpBody) FpBody->DestroyComponent();
+	FpBody = nullptr;
+	ModelRetargeter = nullptr;
 	ActiveModel = Key;
 	const TSharedPtr<FJsonObject> Config = ModelConfig(Key);
 	FString MeshPath;
 	USkeletalMesh* Asset = Config.IsValid() && Config->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<USkeletalMesh>(nullptr, *MeshPath) : nullptr;
 	const FString K = Key.ToString();
-	UIKRetargeter* Retargeter = Asset ? LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *K, *K)) : nullptr;
+	// "retargeter": another model's retargeter (several keys sharing one model, as the three floras
+	// sharing the robot frame do); its own RTG_Manny_<key> otherwise.
+	FString RK = K;
+	if (Config.IsValid()) Config->TryGetStringField(TEXT("retargeter"), RK);
+	UIKRetargeter* Retargeter = Asset ? LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *RK, *RK)) : nullptr;
 	if (!Asset || !Retargeter)
 	{
 		if (Config.IsValid()) UE_LOG(LogWWO, Warning, TEXT("Character model '%s': no mesh or retargeter (Config/CharacterModels.json, Tools/build_retargeters.py)"), *K);
@@ -196,6 +208,29 @@ void UWWOBodyComponent::SetModel(FName Key)
 	bModelPinned = false;
 	Config->TryGetBoolField(TEXT("grafts"), bModelGrafts);
 	Config->TryGetBoolField(TEXT("pinned"), bModelPinned);
+	// Your own model in first person: everything from this bone up is hidden, and the body sits
+	// this far behind the camera (cm), so looking down shows your legs and feet and not your chest.
+	FString HideBone = TEXT("spine_02");
+	Config->TryGetStringField(TEXT("fp_hide_bone"), HideBone); // one bone, or several separated by commas
+	FpHideBones.Reset();
+	TArray<FString> Names;
+	HideBone.ParseIntoArray(Names, TEXT(","));
+	for (FString& Name : Names) FpHideBones.Add(FName(*Name.TrimStartAndEnd()));
+	FpHideBone = FpHideBones.Num() > 0 ? FpHideBones[0] : NAME_None;
+	double Back = 22.0;
+	Config->TryGetNumberField(TEXT("fp_body_back"), Back);
+	FpBodyBack = float(Back);
+	// A model whose hands are one rigid piece (no finger bones): which way its right hand's fingers
+	// point and its palm faces in the reference pose (mesh space). The first-person hands lay such
+	// a hand flat against the gun instead of copying a gripping pose it cannot make.
+	const TArray<TSharedPtr<FJsonValue>>* Fingers = nullptr;
+	const TArray<TSharedPtr<FJsonValue>>* Palm = nullptr;
+	bRigidHands = Config->TryGetArrayField(TEXT("hand_fingers"), Fingers) && Config->TryGetArrayField(TEXT("hand_palm"), Palm) && Fingers->Num() >= 3 && Palm->Num() >= 3;
+	if (bRigidHands)
+	{
+		HandFingers = FVector((*Fingers)[0]->AsNumber(), (*Fingers)[1]->AsNumber(), (*Fingers)[2]->AsNumber()).GetSafeNormal();
+		HandPalm = FVector((*Palm)[0]->AsNumber(), (*Palm)[1]->AsNumber(), (*Palm)[2]->AsNumber()).GetSafeNormal();
+	}
 
 	Model = NewObject<USkeletalMeshComponent>(GetOwner());
 	Model->SetupAttachment(Driver);
@@ -212,6 +247,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	Model->RegisterComponent();
 	GetOwner()->AddInstanceComponent(Model);
 	if (UWWOModelAnimInstance* Anim = Cast<UWWOModelAnimInstance>(Model->GetAnimInstance())) Anim->Configure(Retargeter, Driver);
+	ModelRetargeter = Retargeter;
 	// Hidden material slots (VeilSpore's cape): every section using them, in every LOD.
 	if (const FSkeletalMeshRenderData* Render = Asset->GetResourceForRendering())
 	{
@@ -229,9 +265,12 @@ void UWWOBodyComponent::SetModel(FName Key)
 			}
 		}
 	}
-	ApplyShadowOnly(Model);
+	ApplyModelView();
 	UpdateModelExtras();
 	RefreshOverlay(); // a tint moves onto the new body
+	// It copies the mannequin's pose now, not at its first tick (the menu preview may never tick it).
+	Model->TickAnimation(0.f, false);
+	Model->RefreshBoneTransforms();
 }
 
 void UWWOBodyComponent::SetHighlight(float Alpha)
@@ -316,7 +355,7 @@ void UWWOBodyComponent::UpdateModelExtras()
 		// Hidden behind a model it casts no shadow of its own (the model's is the body's shadow; two
 		// skinned shadows per character cost a few ms of shadow-map drawing in a full PvP match).
 		// Your own first-person body is the exception: its model is owner-hidden, so the mannequin's is its shadow.
-		const bool bCast = Model == nullptr || bShadowOnly;
+		const bool bCast = Model == nullptr; // (your own model casts your shadow itself: ApplyModelView)
 		if (Driver->bCastHiddenShadow != bCast)
 		{
 			Driver->bCastHiddenShadow = bCast;
@@ -331,6 +370,46 @@ void UWWOBodyComponent::UpdateModelExtras()
 	{
 		if (C) C->SetVisibility(!Model || bModelPinned || GlowingPinned.Contains(C));
 	}
+}
+
+void UWWOBodyComponent::ApplyModelView()
+{
+	// The model on your own character (shadow only): the whole model is hidden from you and casts
+	// your shadow, and a second copy of it, shown only to you from the hide bone down and set back
+	// behind the camera, is the legs and feet you see when you look down or slide. Everyone else
+	// just sees the one whole model.
+	if (!Model) return;
+	USkeletalMeshComponent* Driver = GetMesh();
+	const bool bLegs = bShadowOnly && Driver && ModelRetargeter && !FpHideBone.IsNone() && Model->GetBoneIndex(FpHideBone) != INDEX_NONE;
+	ApplyShadowOnly(Model);
+	Model->bCastHiddenShadow = bShadowOnly;
+	Model->MarkRenderStateDirty();
+	if (!bLegs)
+	{
+		if (FpBody) FpBody->DestroyComponent();
+		FpBody = nullptr;
+		return;
+	}
+	if (!FpBody)
+	{
+		FpBody = NewObject<USkeletalMeshComponent>(GetOwner());
+		FpBody->SetupAttachment(Driver);
+		FpBody->SetSkeletalMeshAsset(Model->GetSkeletalMeshAsset());
+		FpBody->SetRelativeScale3D(Model->GetRelativeScale3D());
+		FpBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		FpBody->SetCastShadow(false);
+		FpBody->SetOnlyOwnerSee(true);
+		FpBody->LightingChannels = Driver->LightingChannels;
+		FpBody->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		FpBody->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+		FpBody->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());
+		FpBody->AddTickPrerequisiteComponent(Driver);
+		FpBody->RegisterComponent();
+		if (UWWOModelAnimInstance* Anim = Cast<UWWOModelAnimInstance>(FpBody->GetAnimInstance())) Anim->Configure(ModelRetargeter, Driver);
+		for (const FName Bone : FpHideBones) FpBody->HideBoneByName(Bone, PBO_None);
+	}
+	// The model hangs off the mannequin, whose mesh space faces +y.
+	FpBody->SetRelativeLocation(FVector(0.f, -FpBodyBack, 0.f));
 }
 
 void UWWOBodyComponent::ApplyShadowOnly(UPrimitiveComponent* C) const
@@ -439,6 +518,11 @@ void UWWOBodyComponent::ForcePose(FName Anim, float At)
 	A->Play(FindAnim(Anim), IsLooping(Anim), 1.f, 0.f);
 	Mesh->TickAnimation(At, false);
 	Mesh->RefreshBoneTransforms();
+	if (Model)
+	{
+		Model->TickAnimation(0.f, false);
+		Model->RefreshBoneTransforms();
+	}
 }
 
 void UWWOBodyComponent::SetUpperBody(FName Anim, float Weight)
@@ -530,10 +614,10 @@ void UWWOBodyComponent::SetShadowOnly(bool bOn)
 	{
 		Mesh->SetOwnerNoSee(bOn);
 		Mesh->FirstPersonPrimitiveType = bOn ? EFirstPersonPrimitiveType::WorldSpaceRepresentation : EFirstPersonPrimitiveType::None;
-		Mesh->bCastHiddenShadow = Model == nullptr || bOn; // see UpdateModelExtras
+		Mesh->bCastHiddenShadow = Model == nullptr; // see UpdateModelExtras
 		Mesh->MarkRenderStateDirty();
 	}
-	ApplyShadowOnly(Model);
+	ApplyModelView();
 	for (const TArray<TObjectPtr<UPrimitiveComponent>>* List : { &Grafts, &Pinned })
 	{
 		for (UPrimitiveComponent* C : *List)

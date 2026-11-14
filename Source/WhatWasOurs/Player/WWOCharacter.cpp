@@ -816,9 +816,19 @@ void AWWOCharacter::UpdateModel()
 	{
 		const float Step = GetWorld()->GetDeltaSeconds();
 		const bool bPlain = Health->bDead || bUlting || EntrenchLeft > 0.f;
-		ShownRaise = WWO::MoveToward(ShownRaise, bPlain ? 0.f : PoseRaise, 7.f * Step);
+		// (The gun is carried up all the time now, not only while aimed in or firing: PoseRaise still
+		// replicates, but the arms no longer wait for it.)
+		// Sprinting it comes down: the run's own arms carry it (told from the clip, which every machine has).
+		// (And crouched or sliding: those clips hold the gun themselves, and the aimed upper body over
+		// a crouch folds the body forward.)
+		const FName Now = Body->CurrentAnim();
+		const bool bLowered = bPlain || Now == "Sprint" || Now == "Crouch_Idle" || Now == "Crouch_Fwd" || Now == "Slide" || Now == "Slide_Start";
+		ShownRaise = WWO::MoveToward(ShownRaise, bLowered ? 0.f : 1.f, 7.f * Step);
 		ShownPitch = FMath::Lerp(ShownPitch, bPlain ? 0.f : PosePitch, 1.f - FMath::Exp(-12.f * Step));
-		Body->SetUpperBody("Pistol_Aim_Neutral", ShownRaise);
+		// A hand cannon is held in the pistol stance, both hands on the grip; everything else in the rifle's.
+		const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+		const UWWOWeaponData* Held = Loadout ? Loadout->GetWeapon() : nullptr;
+		Body->SetUpperBody(Held && Held->Id == "handcannon" ? FName("Aim_Pistol") : FName("Pistol_Aim_Neutral"), ShownRaise);
 		Body->SetHunch(-ShownPitch * 0.55f, ShownPitch * 0.25f); // (0.55: UWWOWeaponComponent::UpdateWorldGun reads the look back from it)
 	}
 	// Pick the body animation from what you're doing. Playback speeds up or slows to match the

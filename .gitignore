@@ -16,6 +16,14 @@ Content/ParagonWraith/
 Content/Grave_Mercer/
 Content/Robot_scout_R_21/
 Content/ParagonKallari/
+# Fab animation packs (sources for Tools/bake_body_anims.py; the baked clips in Content/WWO/Anims/Body are in git)
+Content/FreeAnimationLibrary/
+Content/OneHand_Throw_Animation/
+Content/MageBundleSamples/
+Content/FirstPersonRifleAnimations/
+Content/FirstPersonGrenadeAnimation/
+Content/FirstPersonBrawler/
+Content/FP_AKS74U_Animation/
 
 # Packaging output (Tools/package_mac.sh, Tools/package_win.bat)
 Builds/

@@ -127,7 +127,33 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   `/Game/WWO/Maps/Arboretum`, glass greenhouse roofs and center skylight, kit crates, red plants on the
   planters, the spring tree, a tunnel 4 m under the map (stairs in Propagation and Lab A, two spiral ramps
   in the center room), warm point lights. It is in the Maps menu and `MapsToCook`.
-- Body animations: `Tools/bake_ual_anims.py` (UnrealEditor-Cmd -run=pythonscript; reads the UAL glb files
+- Body animations, Unreal-native (2026-11-13): `Tools/bake_body_anims.py` (UnrealEditor-Cmd -run=pythonscript, full script
+  path) bakes clips from the stock mannequin set, Lyra (crouch) and three Fab packs (OneHand Throw Animation, Mage
+  Collection Samples, Free Animation Library: add each to the project from the Fab library, Mage with "Show all
+  projects" and version 5.6; they are not in git) onto the mannequin as `/Game/WWO/Anims/Body/A_<Name>`, under the
+  names the code already plays. Each is trimmed and time-scaled to be a drop-in for the Godot clip it replaces (same
+  length, or the same ground speed the playback-rate constants assume), with the root locked.
+  `UWWOBodyComponent::FindAnim` looks in Body first and falls back to `/Game/WWO/Anims/UAL`: Death01 and
+  Hit_Knockback have no replacement and still play their Godot bakes, and deleting a Body clip brings its Godot one
+  back. The first-person arm paths (`bake_fp_arm_paths.py`) still come from the UAL throw and melee clips.
+- Robot frame as the player model, and first-person hands (2026-11-13, in progress): `Tools/import_robot_frame.py` imports
+  the Blender robot (`SK_RobotFrame.fbx`) to `/Game/WWO/Characters/RobotFrame` and builds `IK_robotframe` /
+  `RTG_Manny_robotframe`; `Config/CharacterModels.json` gives it to the three floras (`retargeter` shares one RTG).
+  Your own model in first person: the whole model is owner-hidden and casts your shadow, and a second copy
+  (`UWWOBodyComponent::ApplyModelView`, `FpBody`) is shown to you from `fp_hide_bone` down, `fp_body_back` cm behind the
+  camera, so you see your legs and feet. Hands on the gun (`UWWOWeaponComponent::UpdateHands`): a PoseableMesh of the
+  player's model with only the arms shown, each arm a two-bone reach solved every frame. The gun is placed exactly as
+  before (UpdatePose is untouched) and the hands go to it: a model with rigid hands (`hand_fingers` / `hand_palm` in
+  CharacterModels.json; the robot has no finger bones) lays them flat on the grip and under the fore-end from
+  `Config/WeaponModels.json` (`hand`, anchors `grip` / `magazine`); a model with fingers copies the xidePunk rifle pose.
+  Reloading, the left hand follows the gun's own magazine drop. The punch and the grenade throw play Fab first-person
+  clips (First person brawler `FP_Jab_R`, xidePunk grenade `AS_Player_Grenade_Throw`) at their own speed, placed in
+  time so the fist lands on the melee hit and the grenade leaves at ThrowRelease; the old single arms
+  (`PlaceArm`, `WWOFPArmPaths.h`) are still built but hidden. The Fab packs are referenced in place and are not in
+  git (`Content/FirstPersonRifleAnimations`, `FirstPersonGrenadeAnimation`, `FirstPersonBrawler`): without them the
+  hands do not show. `-WWOAutoTestBody` shots: `32_player_fp_hands_*` (the gun lifted and turned to show each side),
+  `32_player_fp_legs*`, `33_fp_*`.
+- Body animations, Godot originals: `Tools/bake_ual_anims.py` (UnrealEditor-Cmd -run=pythonscript; reads the UAL glb files
   from the Godot project, `WWO_GODOT` or `~/Documents/WhatWasOurs`). It retargets each clip in mesh space:
   the UAL rig rests in a T-pose with three spine bones, Manny in an A-pose with five; mapped bones take the
   UAL bone's world rotation change after a fixed rest alignment, the pelvis moves scaled by the pelvis

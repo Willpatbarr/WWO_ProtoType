@@ -50,8 +50,19 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 			P->Body->SetShadowOnly(false);
 			P->Weapon->SetFirstPersonHidden(true);
 			P->Weapon->bForceWorldGun = true;
-			const FVector Side = P->GetActorLocation() + P->GetActorForwardVector() * 230.f + P->GetActorRightVector() * 230.f + FVector(0, 0, 40.f);
-			Camera = GetWorld()->SpawnActor<ACameraActor>(Side, (P->GetActorLocation() + FVector(0, 0, 30.f) - Side).Rotation());
+			// -WWOPoseWeapon=<id>: with that weapon in hand (this changes the saved loadout: back
+			// Saved/SaveGames/Loadout.sav up first and put it back after).
+			FString Want;
+			if (FParse::Value(FCommandLine::Get(), TEXT("WWOPoseWeapon="), Want))
+			{
+				if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(P))
+				{
+					for (int32 i = 0; i < 12 && Loadout->GetWeapon() && Loadout->GetWeapon()->Id != FName(*Want); ++i) Loadout->CycleWeapon(1);
+				}
+			}
+			// From the right side and a little ahead, close on the upper body: the gun's line against the look shows plainly.
+			const FVector Side = P->GetActorLocation() + P->GetActorForwardVector() * 60.f + P->GetActorRightVector() * 190.f + FVector(0, 0, 55.f);
+			Camera = GetWorld()->SpawnActor<ACameraActor>(Side, (P->GetActorLocation() + P->GetActorForwardVector() * 25.f + FVector(0, 0, 45.f) - Side).Rotation());
 			if (Camera.IsValid()) SetViewTarget(Camera.Get());
 			++TabsStage;
 			TabsClock = 0.f;

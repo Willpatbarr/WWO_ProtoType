@@ -116,6 +116,9 @@ public:
 	// stays as the invisible animation driver the model copies its pose from. None: the mannequin.
 	void SetModel(FName Key);
 	USkeletalMeshComponent* GetModel() const { return Model; }
+	// The model's hands are rigid (Config/CharacterModels.json hand_fingers / hand_palm, right hand, mesh space).
+	bool bRigidHands = false;
+	FVector HandFingers = FVector::ZeroVector, HandPalm = FVector::ZeroVector;
 	// A faint tint over the visible body (the model, else the mannequin): the enemy under the
 	// reticle. 0 takes it off.
 	void SetHighlight(float Alpha);
@@ -156,6 +159,12 @@ private:
 	TSet<TObjectPtr<UPrimitiveComponent>> GlowingPinned;
 	void UpdateModelExtras(); // shows or hides the mannequin, grafts and boxes for the model
 	void ApplyShadowOnly(UPrimitiveComponent* C) const;
+	void ApplyModelView(); // whole for everyone else; from the hide bone down in your own first-person view
+	FName FpHideBone;
+	TArray<FName> FpHideBones;
+	float FpBodyBack = 0.f;
+	UPROPERTY() TObjectPtr<USkeletalMeshComponent> FpBody; // your own legs and feet in first person
+	UPROPERTY() TObjectPtr<class UIKRetargeter> ModelRetargeter;
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);

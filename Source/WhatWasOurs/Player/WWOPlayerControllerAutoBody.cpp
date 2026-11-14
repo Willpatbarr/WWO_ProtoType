@@ -45,7 +45,7 @@ namespace
 		{ TEXT("soldier_flinch"), NAME_None, 1.f, SoldierRed, Joint, 1.f, 0.12f },
 		{ TEXT("death"), "Death01", 1.f, SoldierRed, Joint, 1.f, 0.f },
 		{ TEXT("knockback_death"), "Hit_Knockback", 1.f, SoldierRed, Joint, 1.f, 0.f },
-		{ TEXT("swarm_run"), "Sprint", 1.f, SwarmGreen, FLinearColor(0.2f, 0.15f, 0.1f), 0.95f, 0.f },
+		{ TEXT("swarm_run"), "Sprint_Unarmed", 1.f, SwarmGreen, FLinearColor(0.2f, 0.15f, 0.1f), 0.95f, 0.f },
 		{ TEXT("ult_charge"), "Spell_Simple_Idle", 1.f, PlayerBlue, Joint, 1.f, 0.f },
 		{ TEXT("ult_cast"), "Spell_Simple_Shoot", 1.f, PlayerBlue, Joint, 1.f, 0.2f },
 		{ TEXT("tank_slam_warning"), "Spell_Simple_Enter", 0.6f, TankOlive, FLinearColor(0.12f, 0.12f, 0.14f), 1.55f, 0.f },
@@ -192,10 +192,15 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 		for (AActor* A : AutoBodies) if (A) A->SetActorHiddenInGame(true);
 		P->Body->SetShadowOnly(false); // the whole body shows, as in the ult's third person
 		P->Weapon->SetVisibility(false, true);
+		P->Weapon->bForceWorldGun = true; // the gun other players see in your hands
 		P->SetViewRotation(0.f, 90.f); // facing +Y, down the empty half of the floor
-		Held[(int32)EWWOAction::Crouch] = true;
 	}
-	if (Crossed(PlayerAt + 0.1f)) Held[(int32)EWWOAction::Crouch] = false;
+	// Standing with the gun up, from the front-left and from the side, then crouching.
+	if (Crossed(PlayerAt + 0.3f)) LookAtPlayer(1.f);
+	if (Crossed(PlayerAt + 0.35f)) Shot(TEXT("32_player_stand"));
+	if (Crossed(PlayerAt + 0.4f)) LookAtPlayer(-1.f);
+	if (Crossed(PlayerAt + 0.45f)) { Shot(TEXT("32_player_stand_other")); Held[(int32)EWWOAction::Crouch] = true; }
+	if (Crossed(PlayerAt + 0.55f)) Held[(int32)EWWOAction::Crouch] = false;
 	if (Crossed(PlayerAt + 0.95f)) LookAtPlayer(1.f);
 	if (Crossed(PlayerAt + 1.f)) { LogPlayer(TEXT("crouched")); Shot(TEXT("32_player_crouch")); MoveValue = FVector2D(0.f, 1.f); }
 	if (Crossed(PlayerAt + 1.75f)) LookAtPlayer(1.f);
@@ -209,14 +214,37 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	if (Crossed(PlayerAt + 4.5f))
 	{
 		P->Body->SetShadowOnly(true);
+		P->Weapon->bForceWorldGun = false;
 		P->Weapon->SetVisibility(true, true);
 		SetViewTarget(P);
 		P->SetViewRotation(0.f, 0.f);
 	}
+	// Looking down at your own legs and feet in first person.
+	// The hands on the gun: from the hip and aimed in, with each of the two guns carried, then
+	// looking down at your own legs and feet.
+	// (The guns sit low in the view, so the grip is out of frame: for the pictures the gun is lifted
+	// to the middle and turned to show its right side, then its left.)
+	const FVector Lifted(-0.30f, 0.22f, -0.28f);
+	auto View = [&](float Yaw) { P->Weapon->DebugGunOffset = Yaw == 0.f ? FVector::ZeroVector : Lifted; P->Weapon->DebugGunRotation = FVector(0.f, Yaw, 0.f); };
+	if (Crossed(PlayerAt + 4.6f)) View(1.1f);
+	if (Crossed(PlayerAt + 4.85f)) Shot(TEXT("32_player_fp_hands_a_right"));
+	if (Crossed(PlayerAt + 4.9f)) View(-1.1f);
+	if (Crossed(PlayerAt + 5.15f)) Shot(TEXT("32_player_fp_hands_a_left"));
+	if (Crossed(PlayerAt + 5.2f)) { View(0.f); JustPressed[(int32)EWWOAction::WeaponNext] = true; }
+	if (Crossed(PlayerAt + 6.2f)) View(1.1f);
+	if (Crossed(PlayerAt + 6.45f)) Shot(TEXT("32_player_fp_hands_b_right"));
+	if (Crossed(PlayerAt + 6.5f)) View(-1.1f);
+	if (Crossed(PlayerAt + 6.75f)) Shot(TEXT("32_player_fp_hands_b_left"));
+	if (Crossed(PlayerAt + 6.8f)) View(0.f);
+	if (Crossed(PlayerAt + 6.9f)) P->SetViewRotation(FMath::DegreesToRadians(-60.f), 0.f);
+	if (Crossed(PlayerAt + 7.15f)) Shot(TEXT("32_player_fp_legs_60"));
+	if (Crossed(PlayerAt + 7.2f)) P->SetViewRotation(FMath::DegreesToRadians(-89.f), 0.f);
+	if (Crossed(PlayerAt + 7.45f)) Shot(TEXT("32_player_fp_legs"));
+	if (Crossed(PlayerAt + 7.5f)) P->SetViewRotation(0.f, 0.f);
 	// The first-person arms in slow motion (game time at 1/20, this clock is real time): a grenade
 	// throw (the left arm), then a punch at nothing (the right), a shot every 0.05 s of game time.
 	constexpr float Slow = 0.05f;
-	const float ArmsAt = PlayerAt + 5.f, PunchAt = ArmsAt + 10.f, ArmsEnd = PunchAt + 12.f;
+	const float ArmsAt = PlayerAt + 8.f, PunchAt = ArmsAt + 10.f, ArmsEnd = PunchAt + 12.f;
 	if (Crossed(ArmsAt))
 	{
 		UGameplayStatics::SetGlobalTimeDilation(World, Slow);

@@ -419,8 +419,8 @@ void AWWOSwarm::Animate(float DeltaSeconds)
 	if (Body->CurrentAnim() == "Punch_Jab") return; // let the bite finish
 	const float Speed = GetVelocity().Size2D() / WWO::M;
 	constexpr float RunAnimSpeed = 6.5f; // m/s the Sprint animation looks right at, at full size
-	if (Speed > 0.5f) Body->Play("Sprint", FMath::Clamp(Speed / (RunAnimSpeed * ModelScale), 0.6f, 2.5f));
-	else Body->Play("Idle");
+	if (Speed > 0.5f) Body->Play("Sprint_Unarmed", FMath::Clamp(Speed / (RunAnimSpeed * ModelScale), 0.6f, 2.5f)); // (Sprint itself carries a gun)
+	else Body->Play("Idle_Unarmed");
 }
 
 void AWWOSwarm::AfterMove(float DeltaSeconds)
@@ -689,6 +689,6 @@ void AWWOTank::Animate(float DeltaSeconds)
 	if (SlamTime >= 0.f || Lobbing > 0.f) return; // the slam and throw poses play out
 	const float Speed = GetVelocity().Size2D() / WWO::M;
 	constexpr float WalkAnimSpeed = 1.6f; // m/s the Walk animation looks right at, at full size
-	if (Speed > 0.3f) Body->Play("Walk", FMath::Clamp(Speed / (WalkAnimSpeed * ModelScale), 0.5f, 2.f));
-	else Body->Play("Idle");
+	if (Speed > 0.3f) Body->Play("Walk_Unarmed", FMath::Clamp(Speed / (WalkAnimSpeed * ModelScale), 0.5f, 2.f));
+	else Body->Play("Idle_Unarmed");
 }

@@ -295,13 +295,10 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Row(G, "MeleeKnockback", TEXT("Knockback (m/s)"), 0.f, 30.f, 0.5f),
 		Row(G, "MeleeKillBoost", TEXT("Kills hit harder by (except knockback)"), 1.f, 3.f, 0.05f, Times()),
 		Row(G, "MeleeKillKnockback", TEXT("Killing blow knockback"), 1.f, 4.f, 0.05f, Times()),
+		// (The old single arm's rows, turn / lift / push / FOV / hold / pull-back, went with it: the
+		// punch is the first-person hands' hook now, UWWOWeaponComponent::UpdateHands.)
 		Header(TEXT("First-person arm")),
-		Row(G, "MeleeArmYaw", TEXT("Turn toward center (degrees)"), -45.f, 45.f, 0.5f),
-		Row(G, "MeleeArmPitch", TEXT("Lift (degrees)"), -45.f, 45.f, 0.5f),
-		Row(G, "MeleeArmPush", TEXT("Push forward (m)"), -0.4f, 0.4f, 0.01f),
-		Row(G, "MeleeArmFov", TEXT("Arm FOV"), 40.f, 110.f, 1.f),
-		Row(G, "MeleeArmHold", TEXT("Fist stays out after the hit (s)"), 0.f, 0.3f, 0.01f),
-		Row(G, "MeleeArmRetract", TEXT("Arm pull-back time (s)"), 0.05f, 0.6f, 0.01f),
+		Row(G, "HandsHitHold", TEXT("Fist stays on a hit (s)"), 0.f, 0.3f, 0.01f),
 	});
 	AddGlobal(TEXT("Grenades"), {
 		Row(Th, "ThrowDistance", TEXT("Throw distance (m)"), 3.f, 40.f, 0.5f),

@@ -183,13 +183,9 @@
   },
   "melee_hit": {
    "sounds": [
-    "S_impactPunch_heavy_000",
-    "S_impactPunch_heavy_001",
-    "S_impactPunch_heavy_002",
-    "S_impactPunch_heavy_003",
-    "S_impactPunch_heavy_004"
+    "S_impactPlate_medium_002"
    ],
-   "volume": 0.8,
+   "volume": 1.5,
    "pitch": [
     0.9,
     1.05

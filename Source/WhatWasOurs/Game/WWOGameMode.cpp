@@ -872,6 +872,35 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 			}
 		}
 	}
+	// -WWOBotShots (with -WWOHostPvP -WWOBots=N): the host stands still, unkillable, and keeps
+	// looking at the nearest bot, saving a picture every 1.5 s (Saved/AutoTest/43_bot_NN.png): what
+	// a bot coming at you and aiming at you looks like from where you stand.
+	if (FParse::Param(FCommandLine::Get(), TEXT("WWOBotShots")))
+	{
+		AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer();
+		AWWOCharacter* Near = nullptr;
+		if (Host)
+		{
+			for (TActorIterator<AWWOCharacter> It(GetWorld()); It; ++It)
+			{
+				if (*It == Host || It->Health->bDead) continue;
+				if (!Near || FVector::DistSquared(It->GetActorLocation(), Host->GetActorLocation()) < FVector::DistSquared(Near->GetActorLocation(), Host->GetActorLocation())) Near = *It;
+			}
+			Host->Health->GodMode = 1.f;
+		}
+		if (Host && Near)
+		{
+			const FRotator To = (Near->GetActorLocation() - Host->GetActorLocation()).Rotation();
+			Host->SetViewRotation(FMath::DegreesToRadians(To.Pitch), To.Yaw);
+			static int32 Saved = 0;
+			static float Next = 6.f;
+			if (StressClock >= Next && FVector::Dist(Near->GetActorLocation(), Host->GetActorLocation()) < 1500.f)
+			{
+				Next = StressClock + 1.5f;
+				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("43_bot_%02d.png"), Saved++), true, false);
+			}
+		}
+	}
 	// -WWOFxGallery (with -WWOHostPvP -WWOBots=1 -WWOBotsIdle, on L_TestRange): stages the kit effects
 	// in front of the host one after another and saves each (Saved/AutoTest/42_fx_*.png).
 	if (FParse::Param(FCommandLine::Get(), TEXT("WWOFxGallery")))

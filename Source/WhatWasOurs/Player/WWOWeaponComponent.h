@@ -71,6 +71,10 @@ public:
 	// (1 = fully level, 0 = the gun points straight at the reticle as at the hip). Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float AdsLevel = 1.f;
 
+	// Where the pose clip's rifle (its origin is at the grip) sits on this gun, whose origin is its sight point (cm: forward, right, up).
+	FVector DebugGunOffset = FVector::ZeroVector; // autotest: moves the gun (Godot space, m) to bring the hands into view
+	FVector DebugGunRotation = FVector::ZeroVector; // and turns it (radians: pitch, yaw, roll)
+	UPROPERTY(EditAnywhere, Category = "Hands") FVector HandsGunOffset = FVector(-10.f, 0.f, -13.f);
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeTime = 0.45f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeReach = 2.5f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeDamage = 80.f;
@@ -129,6 +133,7 @@ public:
 	// Config/WeaponModels.json, gripped at the model's "hand" point): lowered at rest, and up along
 	// the look as the body's aim pose comes in. Called for every character, every frame.
 	void UpdateWorldGun(bool bShow);
+	float WorldGunRaise = 1.f; // the gun other players see: 1 up and aimed, 0 carried (UpdateWorldGun)
 	bool bForceWorldGun = false; // the pose test: show it on your own body too
 	// Stops what the gun was in the middle of (a burst, a reload, a punch): when its owner dies or
 	// starts an ult, so none of it carries on by itself afterwards.
@@ -219,6 +224,60 @@ private:
 	float BuiltSightHeight = 0.f; // the sight height the model was built with
 	float TopBelowSight = 0.f;    // cm from the sight line down to the gun's top, as built (0: no mesh model)
 	FVector ModelShift = FVector::ZeroVector; // from it: every part but the sight dot
+	// Hands on the gun: the player's own character model (the mannequin without one), only its arms
+	// shown, each solved every frame to reach where a first-person rifle pose holds the gun.
+	UPROPERTY() TObjectPtr<UPoseableMeshComponent> HandsMesh;
+	UPROPERTY() TObjectPtr<USkeletalMesh> HandsAsset;
+	UPROPERTY() TObjectPtr<UAnimSequence> HandsPose;
+	struct FHandsArm
+	{
+		int32 Upper = INDEX_NONE, Lower = INDEX_NONE, Hand = INDEX_NONE;
+		float UpperLength = 0.f, LowerLength = 0.f;
+		FQuat UpperRef, LowerRef, HandRef;   // reference pose, camera space
+		FVector UpperDir, LowerDir;          // reference pose bone directions, camera space
+		FQuat HandAlign;                     // the model's reference forearm frame onto the clip skeleton's
+		FTransform ClipShoulder, ClipElbow, ClipHand; // the pose clip, camera space
+		FQuat ClipHandRef;                   // the clip skeleton's reference hand, camera space
+		FQuat RigidRef;                      // a rigid hand's frame in the reference pose (x fingers, z out of the palm), camera space
+	};
+	FHandsArm HandsArms[2]; // right, left
+	// A first-person action clip the arms leave the gun to play (the punch, the grenade throw).
+	struct FHandsClip
+	{
+		FTransform ToCamera;      // its arms mesh on its demo camera
+		float Key = 0.f;          // seconds into it: the fist lands, the grenade leaves the hand
+		float Start = 0.f;        // nothing before this is played
+		FQuat HandRef[2];         // its skeleton's reference hands, camera space
+		FQuat HandAlign[2];       // the model's reference forearm frame onto its skeleton's
+		bool bMirror = false;     // played left for right (the throw is authored right-handed; the right hand keeps the gun)
+		FVector Offset = FVector::ZeroVector; // the whole arm (shoulder, elbow and hand alike) moved by this, camera space cm: forward, right, up
+		float Roll = 0.f;         // the whole arm turned as one piece about the view's forward axis, degrees: + lifts its right side (the right elbow up, the fist down)
+		bool bOnReticle = false;  // the whole arm is also moved sideways and up or down so the knuckles are on the reticle at the key moment
+		float Lean = 0.f;         // how much of the reach added by Reach the shoulder goes with (leaning into it), 0 to 1
+		bool bFist = false;       // the hand is held in line with the forearm, back of the hand up (a rigid-handed model's punch)
+		float Reach = 1.f;        // how far the hand travels forward and back from where the clip starts, against the clip's own travel
+		int32 Arms = 3;           // which arms play it: bit 0 the right, bit 1 the left; the others stay on the gun
+		bool bValid = false;
+	};
+	UPROPERTY() TObjectPtr<UAnimSequence> HandsPunchAnim;
+	UPROPERTY() TObjectPtr<UAnimSequence> HandsThrowAnim;
+	FHandsClip HandsPunch, HandsThrow;
+	void BuildHandsClip(FHandsClip& Clip, const UAnimSequence* Anim, const FTransform& ToCamera, float Start, float Key);
+	int32 HandsAction = 0;      // 0 none, 1 punch, 2 throw: the clip being played or faded out
+	float HandsActionTime = 0.f;
+	float HandsActionWeight = 0.f;
+	float HandsDelta = 0.f;
+	float HandsHitTime = 0.f; // seconds since this swing hit
+	UPROPERTY(EditAnywhere, Category = "Hands") float HandsHitHold = 0.06f; // how long the fist stays where it hit before pulling back (s)
+	float HandsCurl[2] = { 0.f, 0.f }; // how far each hand's fingers are closed past the model's own resting curl (0 to 1)
+	TArray<FTransform> HandsRefLocal;
+	TArray<int32> HandsOwner; // per bone: 0 / 1 = hangs off that arm's hand, -1 = hidden, -2 = an arm bone
+	FTransform HandsClipGun; // the pose clip's rifle, camera space
+	bool bHandsRigid = false;
+	FVector HandsGrip, HandsFore, HandsMag; // this gun's grip, the underside of its fore-end and its magazine, gun space (cm)
+	bool bHandsPistol = false;
+	void BuildHands(USkeletalMesh* Asset);
+	void UpdateHands();
 	UPROPERTY() FWWOFPArm MeleeArm;
 	UPROPERTY() FWWOFPArm ThrowArm;
 	FVector MagRest = FVector::ZeroVector; // Godot space
@@ -252,6 +311,7 @@ private:
 	bool bFlashVisible = false;
 	float PunchAge = 1e9f, PunchFovValue = 0.f, PunchRollValue = 0.f, PunchLength = 0.1f;
 	bool bMeleeLanded = false;
+	bool bMeleeConnected = false; // this swing hit something: the first-person hook stops there instead of swinging through
 	TWeakObjectPtr<AActor> MeleeTarget;
 
 	float M(FName Stat, float Base) const;
