@@ -71,7 +71,7 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   system namespace (`WWOFX`, `WWONav`, `WWOTest`, `WWOConfig`, `WWOSwitches`).
 - Unity builds are off (`WhatWasOurs.Build.cs`) because files reuse helper names in anonymous namespaces.
   A helper needed in two files moves to a shared header under a namespace.
-- A large class is split across `.cpp` files by concern (`WWOPlayerControllerAuto*.cpp`,
+- A large class is split across `.cpp` files by concern (`WWOAutoTest*.cpp`,
   `WWOCharacterGunNet.cpp`, `WWOBodyGrafts.cpp`), not by making the header bigger.
 - Platform-only code sits behind `PLATFORM_MAC` and the like. MSVC is stricter than clang: initialise
   out-pointers, one static member per declaration in exported classes.

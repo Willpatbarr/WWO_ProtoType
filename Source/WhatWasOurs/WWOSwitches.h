@@ -4,7 +4,7 @@
 // A new switch is read with WWOSwitches::Has / Value and added to the table below (and, for one a
 // person would type, to docs/TESTING.md).
 //
-// Scripted tests (Player/WWOPlayerControllerAuto*.cpp)
+// Scripted tests (Player/WWOAutoTest*.cpp)
 //   -WWOAutoTest                the full scripted play-through
 //   -WWOAutoTestMenus           menus by injected controller and keyboard input
 //   -WWOAutoTestBody            body states, third person, first-person hands

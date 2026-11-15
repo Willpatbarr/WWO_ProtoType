@@ -9,7 +9,7 @@
 // - It is a friend of the controller: tests write its input arrays and open its menus directly (PC->).
 // - The driver lives exactly as long as its controller, so state that must survive a map load is
 //   file-scope static in the test's own .cpp.
-// - Each test's steps are in their own file: Player/WWOPlayerControllerAuto<Name>.cpp, WWOPerfTest.cpp.
+// - Each test's steps are in their own file: Player/WWOAutoTest<Name>.cpp, WWOPerfTest.cpp.
 
 #include "CoreMinimal.h"
 #include "UObject/GCObject.h"
@@ -60,12 +60,12 @@ private:
 	AWWOPlayerController* PC = nullptr; // the controller this drives (it owns the driver)
 
 	// -WWOAutoTest: a scripted play-through that saves screenshots (for checking the port).
-	// Map steps (WWOPlayerControllerAutoMaps.cpp): the level from fixed cameras.
+	// Map steps (WWOAutoTestMaps.cpp): the level from fixed cameras.
 	int32 AutoMapIndex = -1;
 	float AutoMapClock = 0.f;
 	TObjectPtr<class ACameraActor> AutoMapCamera = nullptr; // referenced: AddReferencedObjects
 	bool UpdateAutoMapTest(class AWWOCharacter* P, float DeltaTime);
-	// Weapon mod steps (WWOPlayerControllerAutoMods.cpp): draft mods, configs, perks.
+	// Weapon mod steps (WWOAutoTestMods.cpp): draft mods, configs, perks.
 	TWeakObjectPtr<AActor> AutoHiddenTarget;
 	float AutoHiddenOff = 0.f;
 	int32 AutoGunIdx = 0;
@@ -77,13 +77,13 @@ private:
 	TArray<float> AutoModBase;
 	float AutoModBaseReload = 0.f, AutoModBaseSwap = 0.f;
 	bool UpdateAutoModTest(class AWWOCharacter* P, float DeltaTime);
-	// -WWOAutoTestTitle / -WWOAutoTestTitleJoin (WWOPlayerControllerAutoTitle.cpp): the launch screen's
+	// -WWOAutoTestTitle / -WWOAutoTestTitleJoin (WWOAutoTestTitle.cpp): the launch screen's
 	// flow, across the map loads it causes.
 	void UpdateAutoTitleTest(float DeltaTime);
-	// -WWOAutoTestTabs (WWOPlayerControllerAutoTabs.cpp): the Weapon and Shell tabs fit on one screen.
+	// -WWOAutoTestTabs (WWOAutoTestTabs.cpp): the Weapon and Shell tabs fit on one screen.
 	void UpdateAutoTabsTest(float DeltaTime);
 	void UpdateAutoTesterTest(float DeltaTime); // -WWOAutoTestTester: the firing tester
-	// -WWOAutoTestNet (WWOPlayerControllerAutoNet.cpp): online play, run on the host and the joiner.
+	// -WWOAutoTestNet (WWOAutoTestNet.cpp): online play, run on the host and the joiner.
 	float AutoNetWait = 0.f;   // seconds since start
 	float AutoNetClock = 0.f; // seconds since both players were in and settled (negative while settling)
 	float AutoNetNextShot = 0.f;
@@ -105,7 +105,7 @@ private:
 	float AutoNetShootHealth = 0.f;
 	int32 AutoNetShotPulls = 0; // joiner: OnDamaged fired from the host's replicated health
 	bool bAutoNetBound = false;
-	// -WWOAutoTestPvP (WWOPlayerControllerAutoPvP.cpp): team deathmatch, host (-WWOHostPvP) and joiner.
+	// -WWOAutoTestPvP (WWOAutoTestPvP.cpp): team deathmatch, host (-WWOHostPvP) and joiner.
 	float AutoPvPHostHealth = 0.f;
 	int32 AutoPvPRejected = 0;
 	void UpdateAutoPvPTest(float DeltaTime);
@@ -120,7 +120,7 @@ private:
 	TArray<FVector2D> PerfSums; // per view: (frame ms, GPU ms) summed
 	TArray<int32> PerfFrames;
 	void UpdatePerfTest(class AWWOCharacter* P, float DeltaTime);
-	// Graft steps (WWOPlayerControllerAutoGrafts.cpp): loadouts shown in the character preview.
+	// Graft steps (WWOAutoTestGrafts.cpp): loadouts shown in the character preview.
 	float AutoGraftClock = 0.f;
 	float AutoGraftCaptureFov = 0.f;
 	TObjectPtr<class UWWOFloraData> AutoGraftFlora = nullptr;
@@ -128,7 +128,7 @@ private:
 	TArray<TObjectPtr<class UWWOAbilityData>> AutoGraftAbilities;
 	TArray<TObjectPtr<class UWWOFramePartData>> AutoGraftFrame;
 	bool UpdateAutoGraftTest(class AWWOCharacter* P, float DeltaTime);
-	// Body steps (WWOPlayerControllerAutoBody.cpp): a row of mannequins in each body state.
+	// Body steps (WWOAutoTestBody.cpp): a row of mannequins in each body state.
 	int32 AutoBodyStep = 0;
 	float AutoBodyClock = 0.f;
 	FVector AutoBodyOrigin = FVector::ZeroVector;
@@ -136,7 +136,7 @@ private:
 	TArray<TObjectPtr<AActor>> AutoBodyProps;
 	TObjectPtr<class ACameraActor> AutoBodyCamera = nullptr;
 	bool UpdateAutoBodyTest(class AWWOCharacter* P, float DeltaTime);
-	// Menu steps (WWOPlayerControllerAutoMenu.cpp): the menus driven by injected DualSense input.
+	// Menu steps (WWOAutoTestMenu.cpp): the menus driven by injected DualSense input.
 	int32 AutoMenuStep = 0;
 	float AutoMenuClock = 0.f;
 	int32 AutoMenuFails = 0;
@@ -171,7 +171,7 @@ private:
 	FVector AutoMeleeFrom = FVector::ZeroVector;
 	float AutoLungeTime = 0.f;
 	bool bAutoSawLunge = false, bAutoMeleeLogged = false, bAutoShotPunch = false;
-	// Ability and ult steps (WWOPlayerControllerAutoAbility.cpp): every ability equipped and
+	// Ability and ult steps (WWOAutoTestAbility.cpp): every ability equipped and
 	// set off in turn, then each flora's ult; the loadout is put back afterwards.
 	TArray<TObjectPtr<class UWWOAbilityData>> AutoAbilities;
 	TArray<TObjectPtr<class UWWOFloraData>> AutoFloras;

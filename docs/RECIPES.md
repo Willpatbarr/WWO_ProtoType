@@ -109,9 +109,13 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 
 ## A scripted test
 
-1. A new `Player/WWOPlayerControllerAuto<Name>.cpp` with an `UpdateAuto<Name>Test`.
-2. Its state and a `bAuto<Name>` flag in `WWOPlayerController.h`, a switch read in `BeginPlay` with
-   `WWOSwitches::Has(TEXT("WWOAutoTest<Name>"))`, a branch in `Tick`.
+1. A new `Player/WWOAutoTest<Name>.cpp` with an `FWWOAutoTest::UpdateAuto<Name>Test`. Nothing goes in the
+   player controller: reach it through `PC->` (the driver is its friend).
+2. Its state in `FWWOAutoTest` and a `bAutoTest<Name>` flag in `FWWOAutoTestModes` (both
+   `Player/WWOAutoTest.h`); in `WWOAutoTest.cpp` the switch read in `FWWOAutoTestModes::Read` with
+   `WWOSwitches::Has(TEXT("WWOAutoTest<Name>"))`, the flag in `Any()`, and a branch in `FWWOAutoTest::Tick`.
+   Pointers get `= nullptr` (the driver is not a UObject, so nothing zeroes it); an actor the test spawns
+   and keeps is added to `AddReferencedObjects`.
 3. Checks go through `WWOTest::Check(TEXT("<name>"), bOk, What)` (it logs `AutoTest <name>: ... ok` or
    `... FAIL`); timed steps through `WWOTest::Crossed(Before, Now, T)`; end with `WWOTest::Exit`.
 4. Screenshots through `Shot("<NN>_<name>")`, with a number prefix no other test uses.

@@ -1,6 +1,6 @@
 // The scripted test driver: which test the command line asks for, the one update a frame, and the
 // full -WWOAutoTest run (a ladder of timed steps) with its grenade and melee steps. The other tests'
-// steps are in Player/WWOPlayerControllerAuto<Name>.cpp and WWOPerfTest.cpp.
+// steps are in Player/WWOAutoTest<Name>.cpp and WWOPerfTest.cpp.
 
 #include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"

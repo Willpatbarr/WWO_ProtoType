@@ -154,5 +154,5 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
 
 ## Tests
 
-Scripted runs live in `Player/WWOPlayerControllerAuto*.cpp`, driven by `-WWOAutoTest...` switches;
+Scripted runs live in the test driver `FWWOAutoTest` (`Player/WWOAutoTest*.cpp`, made by the player controller only for a test run), driven by `-WWOAutoTest...` switches;
 `Player/WWOTestRun.*` counts failures and sets the exit code. See `TESTING.md`.

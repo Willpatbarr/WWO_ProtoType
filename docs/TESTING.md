@@ -78,14 +78,21 @@ if a person would type it, in the tables above.
 
 ## How a scripted test is built
 
-- `AWWOPlayerController::BeginPlay` reads the switches (`WWOSwitches::Has`); `Tick` calls the one `UpdateAuto*Test` for the
-  mode. Each test lives in its own `Player/WWOPlayerControllerAuto<Name>.cpp`.
-- The full run is a ladder of timed steps in `UpdateAutoTest`: a step id is seconds x 10, tested with
-  `At(T)` / `Next(T)`. Sub-tests return `true` when done.
+- All test state and code is in the test driver, `FWWOAutoTest` (`Player/WWOAutoTest.h`), not in the
+  player controller. `AWWOPlayerController::BeginPlay` calls `FWWOAutoTest::MakeIfAsked`, which reads the
+  switches (`FWWOAutoTestModes::Read`, through `WWOSwitches::Has`) and makes a driver only when one asks
+  for a test; the controller keeps that one pointer and calls `AutoTest->Tick` once a frame from its own
+  `Tick`. With no test switch there is no driver. `FWWOAutoTest::Tick` calls the one `UpdateAuto*Test` for
+  the mode. Each test lives in its own `Player/WWOAutoTest<Name>.cpp` (the perf test in `WWOPerfTest.cpp`).
+- The driver reaches its controller through `PC->` and is a `friend` of it: tests write the controller's
+  input arrays (`PC->Held`, `PC->JustPressed`, `PC->MoveValue`, `PC->LookValue`) and use its menus and
+  widgets directly. Actors a test spawns and keeps are referenced in `AddReferencedObjects`.
+- The full run is a ladder of timed steps in `UpdateAutoTest` (`WWOAutoTest.cpp`): a step id is seconds
+  x 10, tested with `At(T)` / `Next(T)`. Sub-tests return `true` when done.
 - Sub-tests with their own clock step with `WWOTest::Crossed(Before, Now, T)`: true on the one frame
   the clock passes `T`.
 - `Shot(name)` saves `Saved/AutoTest/<name>.png` and logs the frame's timings. Leave a gap after it: a
-  screenshot frame is long. Off the controller (game mode test code): `WWOTest::Shot(name)`, or
+  screenshot frame is long. Outside the driver (game mode test code): `WWOTest::Shot(name)`, or
   `WWOTest::ShotPath(name)` for a picture taken later from a timer.
 - A check fails by logging to `LogWWO` a line containing both `AutoTest` and `FAIL`:
   `WWOTest::Check(TEXT("<name>"), bOk, What)` writes `AutoTest <name>: <What> ok` or `... FAIL`.
@@ -100,9 +107,9 @@ if a person would type it, in the tables above.
   only when the command line has a `WWOStress` switch; the wave test is `Game/WWOGameModeWaveTest.cpp`.
   Neither goes through `WWOTest::Exit`: they print no result line and exit 0.
 - Tests run on real time (`FApp::GetDeltaTime`), because menus pause the game.
-- Test state that must survive a map load has to be file-scope static, not a controller member: the
-  controller is recreated with the map.
-- `JustPressed` is cleared at the top of `PlayerTick`; tests set input from `Tick`. `PlayerTick` does not
-  run while paused, `Tick` does.
+- Test state that must survive a map load has to be file-scope static, not a driver member: the
+  controller, and its driver with it, is recreated with the map.
+- `JustPressed` is cleared at the top of `PlayerTick`; tests set input from the controller's `Tick`
+  (where the driver is ticked). `PlayerTick` does not run while paused, `Tick` does.
 
 Adding a test: see `RECIPES.md`.

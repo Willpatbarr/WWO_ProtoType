@@ -61,7 +61,7 @@ packaged Mac build (Windows later). Read HANDOFF.md first for project convention
   host runs their `UpdateModel` so their body replicates.
 
 ## Not done / next steps for phase 1
-1. **Two-instance test: done** (`-WWOAutoTestNet`, `Player/WWOPlayerControllerAutoNet.cpp`). Run the host with
+1. **Two-instance test: done** (`-WWOAutoTestNet`, `Player/WWOAutoTestNet.cpp`). Run the host with
    `-WWOHost -WWOAutoTestNet`, the joiner 45 s later with `-WWOJoin=127.0.0.1 -WWOAutoTestNet` (both
    `-game -windowed -ResX=960 -ResY=540`, separate `-abslog`). Two editor instances fit in 16 GB. The joiner idles, walks,
    sprints, slides, stops, crouch walks, jumps (ground + air) and runs at a crate stack, logging each step's
