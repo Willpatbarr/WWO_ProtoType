@@ -89,3 +89,14 @@ Compare menu screenshots before and after each UI stage (`-WWOAutoTestMenus`, `-
 Build, then the narrowest autotests that cover it (`TESTING.md`), then the full `-WWOAutoTest`. For
 anything touching replication or host checks, also `-WWOAutoTestNet` and `-WWOAutoTestPvP` with two
 copies.
+
+## Known test weaknesses (found while verifying Stages 1 and 2)
+
+- **`AutoTest mods: magazine refilled to N FAIL`** in the full run depends on the saved loadout the run
+  starts from: it fails with Will's loadout as of 2026-11-14 and passes from others. The check reads the
+  rifle's leftover ammunition, which earlier steps and ammo-refund perks change.
+- **Measurement lines vary run to run** (rounds used in the rifle burst ranged 5 to 10 on the same code,
+  from perks refunding rounds on crits). Compare stats and PASS / FAIL between runs, not exact lines.
+- **`-WWOAutoTestPvP`, "after the joiner's shots"** only logs. When the two random spawns on `L_Arena`
+  have a wall between them the joiner's shots cannot land and the run still passes with
+  `joiner kills 0`. It should place the two players in sight of each other and fail on zero kills.
