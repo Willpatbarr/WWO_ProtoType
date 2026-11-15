@@ -13,6 +13,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "Game/WWOGameModeStress.h"
 #include "WWOGameMode.generated.h"
 
 class AWWOEnemy;
@@ -95,11 +96,8 @@ public:
 	void RetireBotFor(AController* Joiner); // a person joined: a bot makes room
 	int32 OptionBots = -1; // ?bots=N from the launch screen (-1: none given); kept across restarts
 	float PublishLeft = 0.f; // host: seconds to the next refresh of the advertised game
-	float BotLogNext = 10.f, BotLogClock = 0.f;
-	float StressGame = 0.f, StressRender = 0.f, StressGpu = 0.f; // ms summed since the last stress line
-	float StressClock = 0.f, StressFrames = 0.f, StressWorst = 0.f, StressNext = 5.f;
+	TUniquePtr<FWWOStressHarness> Stress; // test runs with a WWOStress switch only (WWOGameModeStress.cpp)
 	void UpdateBots();
-	void LogStress(float DeltaSeconds);
 
 	EWWOWaveState State = EWWOWaveState::Idle;
 	int32 Wave = 0;
