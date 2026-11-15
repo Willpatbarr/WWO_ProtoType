@@ -112,9 +112,12 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 1. A new `Player/WWOPlayerControllerAuto<Name>.cpp` with an `UpdateAuto<Name>Test`.
 2. Its state and a `bAuto<Name>` flag in `WWOPlayerController.h`, a switch read in `BeginPlay` with
    `WWOSwitches::Has(TEXT("WWOAutoTest<Name>"))`, a branch in `Tick`.
-3. Checks log a `LogWWO` line with `AutoTest <name>: ... ok` or `... FAIL`; end with `WWOTest::Exit`.
+3. Checks go through `WWOTest::Check(TEXT("<name>"), bOk, What)` (it logs `AutoTest <name>: ... ok` or
+   `... FAIL`); timed steps through `WWOTest::Crossed(Before, Now, T)`; end with `WWOTest::Exit`.
 4. Screenshots through `Shot("<NN>_<name>")`, with a number prefix no other test uses.
-5. Back up and restore `Saved/SaveGames/Loadout.sav` if the test changes the loadout.
+5. Change the loadout freely: the run's loadout guard (`WWOTest::GuardLoadout`, already called for every
+   `-WWOAutoTest...` switch) puts `Saved/SaveGames/Loadout.sav` back when the game closes. Don't write
+   your own backup. If the switch has no `WWOAutoTest` in it, call `WWOTest::GuardLoadout()` yourself first.
 6. Add the switch to the comment table in `WWOSwitches.h` and to the table in `TESTING.md`.
 
 ## A JSON config file

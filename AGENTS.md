@@ -70,7 +70,8 @@ build scripts: `Tools/`.
 8. **Effects stay out of the navmesh.** New effect actors opt out of navigation as `AWWOFXActor` does.
 9. **Tests are part of the contract.** Autotests grep log lines (`AutoTest ... FAIL`, `Net:`) and call
    menu pages by title. A failure counts only if the line has both `AutoTest` and `FAIL`.
-10. **A test that changes the loadout backs up `Saved/SaveGames/Loadout.sav` and restores it.**
+10. **Tests leave `Saved/SaveGames/Loadout.sav` as they found it, through the loadout guard**
+    (`WWOTest::GuardLoadout`, automatic for `-WWOAutoTest...` runs). Don't hand-write a backup.
 11. **Unity builds are off** and files reuse helper names in anonymous namespaces. Shared helpers go in
     a named namespace in a shared header, not a second copy.
 12. **Not in git:** the Fab packs (`.gitignore` lists them). Code must degrade without them.

@@ -43,8 +43,8 @@ L a week or more of agent time including test runs. Risk is the risk of changing
 
 | # | Change | Size | Risk | Status |
 |---|---|---|---|---|
-| 2.1 | Game mode's stress and screenshot harness (`LogStress`, the test half of `UpdateBots`) into its own object and file, created only under `-WWOStress` | S | low | |
-| 2.2 | Shared test kit in `WWOTestRun`: one step clock (`Crossed`, `Step`, `Next`), one `Check`, one `Shot`, one `Exit`, a scoped loadout backup, a two-player session helper | M | low | |
+| 2.1 | Game mode's stress and screenshot harness (`LogStress`, the test half of `UpdateBots`) into its own object and file, created only under `-WWOStress` | S | low | done (`FWWOStressHarness`, `Game/WWOGameModeStress.*`; the game mode calls it from two places). Left: its function-local statics stay statics, because they last across a match restart and members would not; the canned-bot switches in the spawn half of `UpdateBots` (`-WWOBotsPeace`, `-WWOBotsLineUp`) are still inline (4.8) |
+| 2.2 | Shared test kit in `WWOTestRun`: one step clock (`Crossed`, `Step`, `Next`), one `Check`, one `Shot`, one `Exit`, a scoped loadout backup, a two-player session helper | M | low | part: `WWOTest::GuardLoadout` / `RestoreLoadout` (one loadout backup for every test run, put back at shutdown), `Crossed`, `Check`, `Shot` / `ShotPath`. Left: `Step` / `Next` (each test's step counter is a controller member with its own shape: 2.3), the two-player session helper, and the three ways out that are not `WWOTest::Exit` (perf test `quit`, wave test and stress `RequestExit`: they print no result line and always exit 0, which `Exit` would change) |
 | 2.3 | Autotest state and code off `AWWOPlayerController`: a test driver per test owning its own state, the controller keeping one pointer; a narrow scripted-input API instead of writing the controller's private input arrays; compiled out of shipping builds | L | low-med | |
 | 2.4 | Test tallies and probes (`Net*` statics, `ProbeHeadShots`, `SeenRemote`, `DebugGunOffset`) grouped in one non-shipping struct | S | low | |
 

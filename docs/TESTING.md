@@ -11,8 +11,11 @@ pkill -f "WhatWasOurs.uproject.*-game"
   -game -windowed -ResX=1600 -ResY=900 -WWOAutoTest -abslog=/tmp/run.log
 ```
 
-- Result: the last line is `AutoTest result: PASS` or `AutoTest result: FAIL (n)`; the exit code is 1 on
+- Result: the run ends with `AutoTest result: PASS` or `AutoTest result: FAIL (n)`; the exit code is 1 on
   failure. Find the failures with `grep "AutoTest.*FAIL" /tmp/run.log`.
+- Your saved loadout is safe: a test run copies `Saved/SaveGames/Loadout.sav` aside as it starts and puts
+  the same bytes back as the game closes (a `TestRun: saved loadout put back ...` line says when it had
+  to). A run that is killed leaves `Loadout.autotest-backup` beside it; the next test run puts that back.
 - Screenshots: `Saved/AutoTest/<NN>_<name>.png`. The number prefix groups them by test.
 - Pick the narrowest switch that covers your change. The full run takes several minutes.
 
@@ -47,7 +50,7 @@ pkill -f "WhatWasOurs.uproject.*-game"
 | `-WWOStress`, `-WWOStressTime=S` | Timed bot match; logs `Bots:` lines every 10 s. Also turns off mouse, sticks and saved keybinds |
 | `-WWOBotsIdle`, `-WWOBotsPeace`, `-WWOBotsLineUp`, `-WWOBotsMarch`, `-WWOBotsStopGo`, `-WWOBotsBusy` | Canned bot behaviour: stand still, don't fight, line up, walk, stop and go, throw and cast constantly |
 | `-WWOBotShots`, `-WWOStressShots`, `-WWOFxShots`, `-WWOFxGallery` | Screenshot runs: PvP views, gun effects, the effects gallery |
-| `-WWOTestKills`, `-WWOTestFog`, `-WWOTestCharge` | Kill feed and popups; spore fog damage; Static Charge (the last two equip an ability: back up `Loadout.sav`) |
+| `-WWOTestKills`, `-WWOTestFog`, `-WWOTestCharge` | Kill feed and popups; spore fog damage; Static Charge (the last two equip an ability; the loadout guard puts the saved loadout back) |
 
 ### Performance
 
@@ -79,9 +82,23 @@ if a person would type it, in the tables above.
   mode. Each test lives in its own `Player/WWOPlayerControllerAuto<Name>.cpp`.
 - The full run is a ladder of timed steps in `UpdateAutoTest`: a step id is seconds x 10, tested with
   `At(T)` / `Next(T)`. Sub-tests return `true` when done.
-- `Shot(name)` saves `Saved/AutoTest/<name>.png`. Leave a gap after it: a screenshot frame is long.
-- A check fails by logging to `LogWWO` a line containing both `AutoTest` and `FAIL`. `WWOTest::Watch`
-  counts them; `WWOTest::Exit` logs the result and sets the exit code (`Player/WWOTestRun.*`).
+- Sub-tests with their own clock step with `WWOTest::Crossed(Before, Now, T)`: true on the one frame
+  the clock passes `T`.
+- `Shot(name)` saves `Saved/AutoTest/<name>.png` and logs the frame's timings. Leave a gap after it: a
+  screenshot frame is long. Off the controller (game mode test code): `WWOTest::Shot(name)`, or
+  `WWOTest::ShotPath(name)` for a picture taken later from a timer.
+- A check fails by logging to `LogWWO` a line containing both `AutoTest` and `FAIL`:
+  `WWOTest::Check(TEXT("<name>"), bOk, What)` writes `AutoTest <name>: <What> ok` or `... FAIL`.
+  `WWOTest::Watch` counts them; `WWOTest::Exit` logs the result and sets the exit code
+  (`Player/WWOTestRun.*`).
+- The loadout: `WWOTest::GuardLoadout` runs when any `-WWOAutoTest...` run starts (once a process, so it
+  holds over map loads) and restores `Loadout.sav` at shutdown, after the game's own last save. A test
+  equips what it needs and does not back anything up. One that is done with the loadout mid-run can
+  call `WWOTest::RestoreLoadout()` to put the file back at once. Test code under any other switch that
+  changes the loadout calls `GuardLoadout()` first (the stress harness does for `-WWOTestFog` / `-WWOTestCharge`).
+- The game mode's stress and screenshot runs are `FWWOStressHarness` (`Game/WWOGameModeStress.*`), made
+  only when the command line has a `WWOStress` switch; the wave test is `Game/WWOGameModeWaveTest.cpp`.
+  Neither goes through `WWOTest::Exit`: they print no result line and exit 0.
 - Tests run on real time (`FApp::GetDeltaTime`), because menus pause the game.
 - Test state that must survive a map load has to be file-scope static, not a controller member: the
   controller is recreated with the map.

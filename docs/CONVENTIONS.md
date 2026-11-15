@@ -96,6 +96,7 @@ Look here before writing a new one.
 | Basic shapes, materials, lights, ground lookup for effects | `WWOFX::Sphere` / `Cube` / `AddShape` / `AddSoftSphere` / `AddGroundDisc` / `GroundBelow`, `WWOFX::AddPointLight` (any actor), `AWWOFXActor::AddLight` (`FX/WWOFX.*`) |
 | A navmesh path | `WWONav::FindPath` (`Enemies/WWOEnemy.*`) |
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
+| In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
 
 ## Load-bearing names
