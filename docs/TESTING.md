@@ -68,9 +68,14 @@ leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWa
 `WWOAutoTest` marks the run as a test run (keybinds are not loaded or saved, the gamer tag is `tester`,
 the scoreboard is suppressed, the ult starts full).
 
+Code reads switches through `WWOSwitches` (`Has`, `Value`), never `FParse` directly. `WWOSwitches.h`
+lists every switch in a comment table, and has one named predicate for each meaning of "test run"
+(they match different text: read the comments before picking one). A new switch goes in that table and,
+if a person would type it, in the tables above.
+
 ## How a scripted test is built
 
-- `AWWOPlayerController::BeginPlay` reads the switches; `Tick` calls the one `UpdateAuto*Test` for the
+- `AWWOPlayerController::BeginPlay` reads the switches (`WWOSwitches::Has`); `Tick` calls the one `UpdateAuto*Test` for the
   mode. Each test lives in its own `Player/WWOPlayerControllerAuto<Name>.cpp`.
 - The full run is a ladder of timed steps in `UpdateAutoTest`: a step id is seconds x 10, tested with
   `At(T)` / `Next(T)`. Sub-tests return `true` when done.

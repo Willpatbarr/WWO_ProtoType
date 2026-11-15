@@ -110,9 +110,18 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 ## A scripted test
 
 1. A new `Player/WWOPlayerControllerAuto<Name>.cpp` with an `UpdateAuto<Name>Test`.
-2. Its state and a `bAuto<Name>` flag in `WWOPlayerController.h`, a switch read in `BeginPlay`, a branch
-   in `Tick`.
+2. Its state and a `bAuto<Name>` flag in `WWOPlayerController.h`, a switch read in `BeginPlay` with
+   `WWOSwitches::Has(TEXT("WWOAutoTest<Name>"))`, a branch in `Tick`.
 3. Checks log a `LogWWO` line with `AutoTest <name>: ... ok` or `... FAIL`; end with `WWOTest::Exit`.
 4. Screenshots through `Shot("<NN>_<name>")`, with a number prefix no other test uses.
 5. Back up and restore `Saved/SaveGames/Loadout.sav` if the test changes the loadout.
-6. Add the switch to the table in `TESTING.md`.
+6. Add the switch to the comment table in `WWOSwitches.h` and to the table in `TESTING.md`.
+
+## A JSON config file
+
+1. The file in `Config/`, and its name in the list in `WhatWasOurs.Build.cs` so packaged builds stage it.
+2. Read it with `WWOConfig::Load(WWOConfig::Path(TEXT("<Name>.json")))`, or `WWOConfig::LoadCached` if
+   it is asked for often and a restart to pick up edits is fine. A player's own file with a shipped
+   default: `WWOConfig::LoadSavedElseShipped` and `WWOConfig::Save` with `WWOConfig::SavedPath`.
+3. Parse the object's fields in the system that owns them; use `WWOConfig::Vec` / `Color` for vectors
+   and colours.
