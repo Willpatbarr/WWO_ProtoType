@@ -9,6 +9,7 @@
 //   match; the match restarts (still PvP) and both arrive on the fresh map: round 2.
 
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Engine/NetConnection.h"
@@ -185,7 +186,7 @@ void AWWOPlayerController::LogJoinerStress(float DeltaTime)
 	StressFrames = 0.f;
 	StressWorst = 0.f;
 	FString Value;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
+	if (WWOSwitches::Value(TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
 	{
 		UE_LOG(LogWWO, Display, TEXT("Stress joiner: done"));
 		WWOTest::Exit();

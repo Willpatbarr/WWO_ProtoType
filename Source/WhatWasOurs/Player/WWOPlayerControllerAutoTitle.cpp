@@ -10,6 +10,7 @@
 // Logs `AutoTest title: ... ok|FAIL`.
 
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -23,8 +24,6 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
 
 namespace
 {
@@ -39,7 +38,7 @@ namespace
 
 void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 {
-	static const bool bJoiner = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"));
+	static const bool bJoiner = WWOSwitches::Has(TEXT("WWOAutoTestTitleJoin"));
 	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
 	if (!Net) return;
 	TitleClock += DeltaTime;
@@ -51,7 +50,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	// -WWOAutoTestTitleJoinFail: from the title, join an address nobody is hosting at. When the
 	// connection gives up, the game must be back on the launch screen (a freshly loaded start map)
 	// with the reason, not in a solo game.
-	static const bool bJoinFail = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
+	static const bool bJoinFail = WWOSwitches::Has(TEXT("WWOAutoTestTitleJoinFail"));
 	if (bJoinFail)
 	{
 		static uint32 FirstController = 0;
@@ -235,7 +234,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	{
 		// Stay up for a joiner (the second copy), then quit.
 		static float HostTime = -1.f;
-		if (HostTime < 0.f) { HostTime = 0.f; FParse::Value(FCommandLine::Get(), TEXT("WWOTitleHostTime="), HostTime); }
+		if (HostTime < 0.f) { HostTime = 0.f; WWOSwitches::Value(TEXT("WWOTitleHostTime="), HostTime); }
 		if (TitleClock > HostTime)
 		{
 			const AGameStateBase* GS = GetWorld()->GetGameState();

@@ -6,6 +6,7 @@
 // Run it at a few window sizes (-ResX / -ResY): the menus scale with the window.
 
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "UI/WWOCharacterMenu.h"
@@ -14,8 +15,6 @@
 #include "WhatWasOurs.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
 #include "Camera/CameraActor.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOWeaponComponent.h"
@@ -36,7 +35,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 	TabsClock += DeltaTime;
 	// -WWOAutoTestPose: what others see of your upper body. Your own body, shown whole and seen from
 	// outside: gun down, then aimed in looking level, up 35 degrees and down 35 (84_pose_*).
-	static const bool bPose = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPose"));
+	static const bool bPose = WWOSwitches::Has(TEXT("WWOAutoTestPose"));
 	if (bPose)
 	{
 		static const TCHAR* const Names[] = { TEXT("84_pose_hip"), TEXT("84_pose_aim_level"), TEXT("84_pose_aim_up"), TEXT("84_pose_aim_down") };
@@ -53,7 +52,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 			// -WWOPoseWeapon=<id>: with that weapon in hand (this changes the saved loadout: back
 			// Saved/SaveGames/Loadout.sav up first and put it back after).
 			FString Want;
-			if (FParse::Value(FCommandLine::Get(), TEXT("WWOPoseWeapon="), Want))
+			if (WWOSwitches::Value(TEXT("WWOPoseWeapon="), Want))
 			{
 				if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(P))
 				{
@@ -87,7 +86,7 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 	}
 	// -WWOAutoTestVignette: the low-health vignette at full, 75%, 50%, 25% and 8% of health and
 	// shield together, held there for a moment each (83_vignette_<percent>), then healing back.
-	static const bool bVignette = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"));
+	static const bool bVignette = WWOSwitches::Has(TEXT("WWOAutoTestVignette"));
 	if (bVignette)
 	{
 		static const float Levels[] = { 1.f, 0.75f, 0.5f, 0.25f, 0.08f };

@@ -7,6 +7,7 @@
 // Logs `AutoTest mods: ... ok` or `... FAIL`, with screenshots 37_mods_*.
 
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Characters/WWOBodyComponent.h"
@@ -20,7 +21,6 @@
 #include "WhatWasOurs.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
-#include "Misc/CommandLine.h"
 #include "FX/WWOFX.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Kismet/GameplayStatics.h"
@@ -92,7 +92,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 		AutoGunIdx = AutoGunStage = 0;
-		Step(bAutoTestHiddenOnly ? 60 : bAutoTestGunsOnly ? 40 : FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestFrames")) ? 70 : 1);
+		Step(bAutoTestHiddenOnly ? 60 : bAutoTestGunsOnly ? 40 : WWOSwitches::Has(TEXT("WWOAutoTestFrames")) ? 70 : 1);
 		break;
 	}
 	case 1:
@@ -302,7 +302,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		// -WWOFxShots: each gun also fires once from the hip in slow motion, with a second shot drawn
 		// across the view as another player's would be. Screenshots 39_fx_<weapon>_flash (the muzzle
 		// flash) and _trail (the shots in the air a moment later).
-		static const bool bFxShots = FParse::Param(FCommandLine::Get(), TEXT("WWOFxShots"));
+		static const bool bFxShots = WWOSwitches::Has(TEXT("WWOFxShots"));
 		static int32 FxFrames = -1;
 		if (bFxShots && FxFrames >= 0 && AutoGunIdx < (int32)UE_ARRAY_COUNT(Ids))
 		{

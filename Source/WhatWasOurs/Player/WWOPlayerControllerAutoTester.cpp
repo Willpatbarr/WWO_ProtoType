@@ -2,6 +2,7 @@
 // the screen over and plays its buttons, with screenshots 86_tester_*. Logs `AutoTest tester: ... ok|FAIL`.
 
 #include "UI/WWOSettingsMenu.h"
+#include "WWOSwitches.h"
 #include "UI/WWOHUDWidget.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
@@ -49,13 +50,13 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 	{
 		FString Gun;
 		UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-		if (L && FParse::Value(FCommandLine::Get(), TEXT("WWOTesterGun="), Gun))
+		if (L && WWOSwitches::Value(TEXT("WWOTesterGun="), Gun))
 		{
 			TesterGunBefore = L->GetWeapon();
 			for (UWWOWeaponData* W : L->Weapons) if (W && W->Id == FName(*Gun)) L->EquipWeapon(W);
 			// -WWOTesterNoMods: the bare frame, so what is measured is the gun's own numbers (the saved
 			// loadout comes back at the end with the rest).
-			if (FParse::Param(FCommandLine::Get(), TEXT("WWOTesterNoMods")))
+			if (WWOSwitches::Has(TEXT("WWOTesterNoMods")))
 			{
 				for (const TCHAR* Slot : { TEXT("barrel"), TEXT("magazine"), TEXT("stock"), TEXT("sight"), TEXT("chambering"), TEXT("grip") }) L->EquipMod(Slot, nullptr);
 			}
@@ -64,13 +65,13 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 	// -WWOTesterFrames=N (run with -benchmark -fps=60 so every frame is 1/60 s): aim in, fire one
 	// shot, and save N frames in a row from just before it (87_frame_000 ...), to lay beside footage.
 	static int32 Frames = -1, FrameAt = 0;
-	if (Frames < 0) { Frames = 0; FParse::Value(FCommandLine::Get(), TEXT("WWOTesterFrames="), Frames); }
+	if (Frames < 0) { Frames = 0; WWOSwitches::Value(TEXT("WWOTesterFrames="), Frames); }
 	if (Frames > 0)
 	{
-		static bool bStrafeToo = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterStrafe"));
-		static bool bNoShot = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterNoShot"));
+		static bool bStrafeToo = WWOSwitches::Has(TEXT("WWOTesterStrafe"));
+		static bool bNoShot = WWOSwitches::Has(TEXT("WWOTesterNoShot"));
 		if (Crossed(6.f)) { FiringTester->ResetPlayer(); if (bStrafeToo) FiringTester->SetStrafe(true); }
-		static bool bHip = FParse::Param(FCommandLine::Get(), TEXT("WWOTesterHip")); // from the hip instead of aimed in
+		static bool bHip = WWOSwitches::Has(TEXT("WWOTesterHip")); // from the hip instead of aimed in
 		ScriptHold(EWWOAction::Aim, !bHip && TesterClock >= 6.2f);
 		static bool bFired = false;
 		if (TesterClock >= 7.f)

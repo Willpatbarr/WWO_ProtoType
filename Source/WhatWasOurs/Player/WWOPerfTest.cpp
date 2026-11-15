@@ -3,6 +3,7 @@
 // (profilegpu, into the log), logs a summary and quits. Run it before and after render changes.
 
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOCharacter.h"
 #include "WhatWasOurs.h"
 #include "RHI.h"
@@ -49,7 +50,7 @@ bool AWWOPlayerController::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
 	{
 		bParsed = true;
 		FString Arg;
-		if (FParse::Value(FCommandLine::Get(), TEXT("WWOPerfSweep="), Arg, false))
+		if (WWOSwitches::Value(TEXT("WWOPerfSweep="), Arg, false))
 		{
 			bOn = true;
 			Arg.TrimQuotesInline();
@@ -58,7 +59,7 @@ bool AWWOPlayerController::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
 			Arg.ParseIntoArray(Parts, TEXT("|"));
 			Entries.Append(Parts);
 			Entries.Add(FString()); // and again
-			FParse::Value(FCommandLine::Get(), TEXT("WWOPerfView="), WantView);
+			WWOSwitches::Value(TEXT("WWOPerfView="), WantView);
 		}
 	}
 	if (!bOn) return false;
@@ -88,7 +89,7 @@ bool AWWOPlayerController::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
 	Clock += DeltaTime;
 	// -WWOPerfMove: the camera slides 4 m each way and turns 25 degrees each way, once every 3 s
 	// (one whole swing per measure), so what moving costs (fresh shadow pages, culling) is in the numbers.
-	static const bool bMove = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfMove"));
+	static const bool bMove = WWOSwitches::Has(TEXT("WWOPerfMove"));
 	static FVector Home = FVector::ZeroVector;
 	static FRotator HomeTurn = FRotator::ZeroRotator;
 	static float MoveClock = -1.f;
@@ -133,7 +134,7 @@ void AWWOPlayerController::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
 	PerfStartClock += DeltaTime;
 	if (PerfStartClock < 6.f) return; // shaders, streaming and the first sky capture settle
 	// -WWOPerfCsv: the engine's own per-frame timings too (Saved/Profiling/CSV), from here to the end.
-	static const bool bCsv = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfCsv"));
+	static const bool bCsv = WWOSwitches::Has(TEXT("WWOPerfCsv"));
 	static float QuitIn = -1.f;
 	if (QuitIn >= 0.f)
 	{

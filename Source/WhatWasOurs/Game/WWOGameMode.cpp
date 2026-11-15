@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "WWOSwitches.h"
 #include "Player/WWOProf.h"
 #include "Characters/WWOBodyComponent.h"
 #include "FX/WWOFX.h"
@@ -24,7 +25,6 @@
 #include "Components/CapsuleComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "NavigationSystem.h"
-#include "Misc/CommandLine.h"
 #include "Engine/TargetPoint.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/PlayerStartPIE.h"
@@ -86,12 +86,12 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
-	bTester = !bPvP && (UGameplayStatics::HasOption(Options, TEXT("tester")) || FParse::Param(FCommandLine::Get(), TEXT("WWOTester")));
+	bTester = !bPvP && (UGameplayStatics::HasOption(Options, TEXT("tester")) || WWOSwitches::Has(TEXT("WWOTester")));
 	FString Value;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOKillTarget="), Value)) KillTarget = CmdKillTarget = FCString::Atof(*Value); // tests
-	bTestRun = FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) != nullptr;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
-	if (bPvP && FParse::Value(FCommandLine::Get(), TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
+	if (WWOSwitches::Value(TEXT("WWOKillTarget="), Value)) KillTarget = CmdKillTarget = FCString::Atof(*Value); // tests
+	bTestRun = WWOSwitches::HasAutoTestText();
+	if (WWOSwitches::Value(TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
+	if (bPvP && WWOSwitches::Value(TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
 	// ?bots=N: the launch screen's count for this match (a local PvP match fills both teams).
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
 	OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
@@ -241,7 +241,7 @@ void AWWOGameMode::SetTeam(AWWOPlayerState* PS, int32 Team)
 void AWWOGameMode::StartPlay()
 {
 	Super::StartPlay();
-	bWaveTest = FParse::Param(FCommandLine::Get(), TEXT("WWOWaveTest"));
+	bWaveTest = WWOSwitches::Has(TEXT("WWOWaveTest"));
 	if (bWaveTest)
 	{
 		StartDelay = 3.f;
@@ -441,7 +441,7 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 			}
 		}
 	}
-	if (FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogStress(DeltaSeconds);
+	if (WWOSwitches::IsStress()) LogStress(DeltaSeconds);
 	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
 	{
 		FLinearColor Color;
@@ -782,12 +782,12 @@ void AWWOGameMode::UpdateBots()
 {
 	// The diagnostics below (bot states, sight lines, test shots at every head) are for the stress
 	// runs only: a normal match doesn't pay for them or fill its log with them.
-	static const bool bStressRun = FCString::Stristr(FCommandLine::Get(), TEXT("WWOStress")) != nullptr;
+	const bool bStressRun = WWOSwitches::HasStressText();
 	// One a frame, once the host's own player is in.
 	if (bStressRun && BotsSpawned > 0 && (BotLogClock += GetWorld()->GetDeltaSeconds()) >= BotLogNext)
 	{
 		// How the bots are getting on (every 10 s).
-		BotLogNext += FParse::Param(FCommandLine::Get(), TEXT("WWOStressShots")) ? 4.f : 10.f;
+		BotLogNext += WWOSwitches::Has(TEXT("WWOStressShots")) ? 4.f : 10.f;
 		int32 Count[4] = {}, Following = 0;
 		for (TActorIterator<AWWOBotController> It(GetWorld()); It; ++It)
 		{
@@ -800,7 +800,7 @@ void AWWOGameMode::UpdateBots()
 			AWWOBotController::PathsFound, AWWOBotController::PathsFailed, AWWOBotController::StuckJumps, AWWOBotController::Regoals);
 		// -WWOStressShots: the host's player turns to the nearest other player in sight, a teammate and
 		// a foe in turn, and the view is saved a moment later (Saved/AutoTest/41_pvp_view_<t>.png).
-		if (FParse::Param(FCommandLine::Get(), TEXT("WWOStressShots")))
+		if (WWOSwitches::Has(TEXT("WWOStressShots")))
 		{
 			APlayerController* PC = GetWorld()->GetFirstPlayerController();
 			AWWOCharacter* Me = PC ? Cast<AWWOCharacter>(PC->GetPawn()) : nullptr;
@@ -856,7 +856,7 @@ void AWWOGameMode::UpdateBots()
 	BalanceTeam(Bot);
 	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
 	// steady scene of moving characters for performance tests).
-	if (FParse::Param(FCommandLine::Get(), TEXT("WWOBotsPeace"))) SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
+	if (WWOSwitches::Has(TEXT("WWOBotsPeace"))) SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
 	TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
 	RestartPlayer(Bot);
 	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
@@ -865,7 +865,7 @@ void AWWOGameMode::UpdateBots()
 		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
 		// -WWOBotsLineUp: a repeatable scene for performance tests. The bots stand in rows of four in
 		// front of the host, facing it, and do nothing.
-		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer(); Host && FParse::Param(FCommandLine::Get(), TEXT("WWOBotsLineUp")))
+		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer(); Host && WWOSwitches::Has(TEXT("WWOBotsLineUp")))
 		{
 			Bot->bParked = true;
 			const int32 Index = BotsSpawned - 1;
@@ -889,10 +889,10 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	// -WWOProfileGPU: one GPU pass breakdown in the log, 12 s in (or -WWOProfileAt=seconds), and a screenshot 2 s before it.
 	// -WWOFogTest=N: N thick Veil-sized spore fogs around the host 3 s in (-WWOFogAhead=meters: how far in front).
 	int32 FogCount = 0;
-	if (StressClock >= 3.f && StressClock - DeltaSeconds < 3.f && FParse::Value(FCommandLine::Get(), TEXT("WWOFogTest="), FogCount))
+	if (StressClock >= 3.f && StressClock - DeltaSeconds < 3.f && WWOSwitches::Value(TEXT("WWOFogTest="), FogCount))
 	{
 		float Ahead = 0.f;
-		FParse::Value(FCommandLine::Get(), TEXT("WWOFogAhead="), Ahead);
+		WWOSwitches::Value(TEXT("WWOFogAhead="), Ahead);
 		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer())
 		{
 			for (int32 i = 0; i < FogCount; ++i)
@@ -904,7 +904,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	// -WWOBotShots (with -WWOHostPvP -WWOBots=N): the host stands still, unkillable, and keeps
 	// looking at the nearest bot, saving a picture every 1.5 s (Saved/AutoTest/43_bot_NN.png): what
 	// a bot coming at you and aiming at you looks like from where you stand.
-	if (FParse::Param(FCommandLine::Get(), TEXT("WWOBotShots")))
+	if (WWOSwitches::Has(TEXT("WWOBotShots")))
 	{
 		AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer();
 		AWWOCharacter* Near = nullptr;
@@ -919,7 +919,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 		}
 		// -WWOTestKills: every 4 s the host kills an enemy bot, every other one with a precision hit,
 		// and saves a picture half a second later (44_kill_NN.png): the "Kill +1" by the reticle.
-		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestKills")))
+		if (Host && WWOSwitches::Has(TEXT("WWOTestKills")))
 		{
 			static float NextKill = 8.f, ShotAt = -1.f;
 			static int32 Done = 0;
@@ -944,7 +944,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 		}
 		// -WWOTestFog (with -WWOBotsIdle): the host gets Spore Fog Damage, and every 12 s a fog of
 		// theirs (4 m, 8 s) lands on an enemy bot; the bot's shield and health are logged each second.
-		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestFog")))
+		if (Host && WWOSwitches::Has(TEXT("WWOTestFog")))
 		{
 			static float NextFog = 8.f, NextLog = 0.f;
 			static TWeakObjectPtr<AWWOCharacter> Fogged;
@@ -973,7 +973,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 		}
 		// -WWOTestCharge: the host gets Static Charge, filled (so it arms itself); pictures of the
 		// screen with it charged (46_static_N.png).
-		if (Host && FParse::Param(FCommandLine::Get(), TEXT("WWOTestCharge")))
+		if (Host && WWOSwitches::Has(TEXT("WWOTestCharge")))
 		{
 			static int32 Shots = 0;
 			static float NextShot = 9.f;
@@ -1004,7 +1004,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	}
 	// -WWOFxGallery (with -WWOHostPvP -WWOBots=1 -WWOBotsIdle, on L_TestRange): stages the kit effects
 	// in front of the host one after another and saves each (Saved/AutoTest/42_fx_*.png).
-	if (FParse::Param(FCommandLine::Get(), TEXT("WWOFxGallery")))
+	if (WWOSwitches::Has(TEXT("WWOFxGallery")))
 	{
 		auto At = [this, DeltaSeconds](float T) { return StressClock >= T && StressClock - DeltaSeconds < T; };
 		auto Save = [this](const TCHAR* Name, float After)
@@ -1042,10 +1042,9 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 			}
 		}
 	}
-	float ProfileAt = 12.f;
-	FParse::Value(FCommandLine::Get(), TEXT("WWOProfileAt="), ProfileAt);
-	if (StressClock >= ProfileAt - 2.f && StressClock - DeltaSeconds < ProfileAt - 2.f && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
-	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU")))
+	static const float ProfileAt = [] { float At = 12.f; WWOSwitches::Value(TEXT("WWOProfileAt="), At); return At; }(); // read once, not every frame
+	if (StressClock >= ProfileAt - 2.f && StressClock - DeltaSeconds < ProfileAt - 2.f && WWOSwitches::Has(TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
+	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && WWOSwitches::Has(TEXT("WWOProfileGPU")))
 	{
 		// What is casting shadows and can move (each one makes the sun's shadow map redraw around it).
 		TMap<FString, FVector3f> Casters; // name -> count, biggest radius (m), visible count
@@ -1064,7 +1063,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 		Casters.ValueSort([](const FVector3f& A, const FVector3f& B) { return A.X * A.Y > B.X * B.Y; });
 		for (const auto& Pair : Casters) UE_LOG(LogWWO, Display, TEXT("Shadow caster (movable): %3.0f x %s, biggest radius %.1f m"), Pair.Value.X, *Pair.Key, Pair.Value.Y);
 	}
-	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && FParse::Param(FCommandLine::Get(), TEXT("WWOProfileGPU"))) GEngine->Exec(GetWorld(), TEXT("ProfileGPU"));
+	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && WWOSwitches::Has(TEXT("WWOProfileGPU"))) GEngine->Exec(GetWorld(), TEXT("ProfileGPU"));
 	if (StressClock < StressNext) return;
 	StressNext += 5.f;
 	const UNetDriver* Driver = GetWorld()->GetNetDriver();
@@ -1098,7 +1097,7 @@ void AWWOGameMode::LogStress(float DeltaSeconds)
 	StressFrames = 0.f;
 	StressWorst = 0.f;
 	FString Value;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
+	if (WWOSwitches::Value(TEXT("WWOStressTime="), Value) && StressClock >= FCString::Atof(*Value))
 	{
 		UE_LOG(LogWWO, Display, TEXT("Stress host: done"));
 		FPlatformMisc::RequestExit(false);

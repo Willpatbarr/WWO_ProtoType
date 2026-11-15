@@ -1,4 +1,5 @@
 #include "Player/WWOPlayerController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOProf.h"
 #include "UI/WWOFiringTester.h"
 #include "Game/WWOGameMode.h"
@@ -32,7 +33,6 @@
 #include "Widgets/SViewport.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/App.h"
-#include "Misc/CommandLine.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -112,24 +112,24 @@ void AWWOPlayerController::BeginPlay()
 	}
 	SetMenuMode(IsMenuOpen());
 	if (Net) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
-	if (FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest"))) WWOTest::Watch(); // count the FAIL lines of a test run
-	bAutoTest = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTest"));
-	bAutoTestMenusOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMenus"));
-	bAutoTestBodyOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestBody"));
-	bAutoTestGraftsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGrafts"));
-	bAutoTestMapsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMaps"));
-	bPerfTest = FParse::Param(FCommandLine::Get(), TEXT("WWOPerfTest"));
-	bAutoTestNet = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestNet"));
-	bAutoTestTabs = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTabs")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestVignette"))
-		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPose"));
-	bAutoTestTitle = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitle")) || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoin"))
-		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTitleJoinFail"));
-	bAutoTestPvP = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestPvP"));
-	bAutoTestTester = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestTester"));
-	bAutoTestGunsOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestGuns"));
-	bAutoTestHiddenOnly = FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestHidden"));
-	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestMods"))
-		|| FParse::Param(FCommandLine::Get(), TEXT("WWOAutoTestFrames"));
+	if (WWOSwitches::HasAutoTestText()) WWOTest::Watch(); // count the FAIL lines of a test run
+	bAutoTest = WWOSwitches::Has(TEXT("WWOAutoTest"));
+	bAutoTestMenusOnly = WWOSwitches::Has(TEXT("WWOAutoTestMenus"));
+	bAutoTestBodyOnly = WWOSwitches::Has(TEXT("WWOAutoTestBody"));
+	bAutoTestGraftsOnly = WWOSwitches::Has(TEXT("WWOAutoTestGrafts"));
+	bAutoTestMapsOnly = WWOSwitches::Has(TEXT("WWOAutoTestMaps"));
+	bPerfTest = WWOSwitches::Has(TEXT("WWOPerfTest"));
+	bAutoTestNet = WWOSwitches::Has(TEXT("WWOAutoTestNet"));
+	bAutoTestTabs = WWOSwitches::Has(TEXT("WWOAutoTestTabs")) || WWOSwitches::Has(TEXT("WWOAutoTestVignette"))
+		|| WWOSwitches::Has(TEXT("WWOAutoTestPose"));
+	bAutoTestTitle = WWOSwitches::Has(TEXT("WWOAutoTestTitle")) || WWOSwitches::Has(TEXT("WWOAutoTestTitleJoin"))
+		|| WWOSwitches::Has(TEXT("WWOAutoTestTitleJoinFail"));
+	bAutoTestPvP = WWOSwitches::Has(TEXT("WWOAutoTestPvP"));
+	bAutoTestTester = WWOSwitches::Has(TEXT("WWOAutoTestTester"));
+	bAutoTestGunsOnly = WWOSwitches::Has(TEXT("WWOAutoTestGuns"));
+	bAutoTestHiddenOnly = WWOSwitches::Has(TEXT("WWOAutoTestHidden"));
+	bAutoTestModsOnly = bAutoTestGunsOnly || bAutoTestHiddenOnly || WWOSwitches::Has(TEXT("WWOAutoTestMods"))
+		|| WWOSwitches::Has(TEXT("WWOAutoTestFrames"));
 	bAutoTest |= bAutoTestMenusOnly || bAutoTestBodyOnly || bAutoTestGraftsOnly || bAutoTestMapsOnly || bAutoTestModsOnly;
 
 	// Play-in-Editor: the editor takes Esc to stop PIE before the game sees it. Send it to the
@@ -278,7 +278,7 @@ namespace
 {
 	FString BindsPath() { return WWOConfig::SavedPath(TEXT("Keybinds.json")); }
 	// Test runs press the default keys: they neither read nor write anyone's saved bindings.
-	bool BindsTestRun() { return FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) || FParse::Param(FCommandLine::Get(), TEXT("WWOStress")); }
+	bool BindsTestRun() { return WWOSwitches::UsesDefaultBinds(); }
 }
 
 void AWWOPlayerController::SaveBinds() const
@@ -460,8 +460,7 @@ void AWWOPlayerController::OnMove(const FInputActionInstance& Instance)
 // camera following the mouse there would make every run look at a different scene.
 static bool TestRunIgnoresInput()
 {
-	static const bool bIgnore = FParse::Param(FCommandLine::Get(), TEXT("WWOStress"));
-	return bIgnore;
+	return WWOSwitches::IsStress();
 }
 
 void AWWOPlayerController::OnLook(const FInputActionInstance& Instance)
@@ -544,7 +543,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 	else if (bAutoTestTabs) { if (IsLocalController()) UpdateAutoTabsTest(FApp::GetDeltaTime()); }
 	else if (bAutoTestTester) { if (IsLocalController()) UpdateAutoTesterTest(FApp::GetDeltaTime()); }
 	else if (bAutoTestPvP) UpdateAutoPvPTest(FApp::GetDeltaTime());
-	else if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("WWOStress"))) LogJoinerStress(FApp::GetDeltaTime());
+	else if (GetNetMode() == NM_Client && WWOSwitches::IsStress()) LogJoinerStress(FApp::GetDeltaTime());
 	else if (bAutoTestNet) UpdateAutoNetTest(FApp::GetDeltaTime());
 	else if (bAutoTest) UpdateAutoTest(FApp::GetDeltaTime());
 }
@@ -741,7 +740,7 @@ void AWWOPlayerController::UpdateScoreboard()
 	// The end of a PvP match (AWWOGameState::bMatchOver, replicated): the scoreboard over everything,
 	// the other menus shut. Not in the scripted test runs, which restart by themselves.
 	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
-	static const bool bScripted = FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) != nullptr;
+	const bool bScripted = WWOSwitches::HasAutoTestText();
 	const bool bOver = GS && GS->bMatchOver && !bScripted;
 	if (bOver && !(Scoreboard && Scoreboard->IsOpen()))
 	{
@@ -761,7 +760,7 @@ void AWWOPlayerController::UpdateScoreboard()
 		SetMenuMode(IsMenuOpen());
 	}
 	// -WWOTestScoreboard: pictures of the page and of its map list, then NEXT MATCH is pressed.
-	static const bool bTest = FParse::Param(FCommandLine::Get(), TEXT("WWOTestScoreboard"));
+	static const bool bTest = WWOSwitches::Has(TEXT("WWOTestScoreboard"));
 	if (bTest && Scoreboard && Scoreboard->IsOpen())
 	{
 		static int32 Step = 0;

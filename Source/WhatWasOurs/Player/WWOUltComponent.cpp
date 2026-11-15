@@ -1,5 +1,5 @@
 #include "Player/WWOUltComponent.h"
-#include "Misc/CommandLine.h"
+#include "WWOSwitches.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "GameFramework/GameStateBase.h"
 #include "Systems/WWOSound.h"
@@ -246,7 +246,7 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		// Alone and in co-op the ult starts full (handy for trying things); a PvP match starts everyone empty.
 		bStartChecked = true;
-		if (UWWOWorldSubsystem::IsPvP(this) && !FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest"))) Charge = 0.f;
+		if (UWWOWorldSubsystem::IsPvP(this) && !WWOSwitches::HasAutoTestText()) Charge = 0.f;
 	}
 	if (!bActive)
 	{

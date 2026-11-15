@@ -1,4 +1,5 @@
 #include "Net/WWONetSubsystem.h"
+#include "WWOSwitches.h"
 #include "Game/WWOPlayerState.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
@@ -11,8 +12,6 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
 #include "Engine/Engine.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
@@ -92,12 +91,10 @@ bool UWWONetSubsystem::WantsTitle(const UObject* WorldContext)
 	if (!bTitleDecided)
 	{
 		bTitleDecided = true;
-		const TCHAR* Cmd = FCommandLine::Get();
-		const FString Line(Cmd);
 		// A test run or a developer's direct start (a map or a -WWO switch on the command line, or
 		// Play-in-Editor) goes straight into the game, as before there was a launch screen.
-		const bool bDirect = World->WorldType != EWorldType::Game || Line.Contains(TEXT("-WWO")) || Line.Contains(TEXT("/Game/"));
-		bShowTitle = FParse::Param(Cmd, TEXT("WWOTitle")) || Line.Contains(TEXT("-WWOAutoTestTitle")) || !bDirect;
+		const bool bDirect = World->WorldType != EWorldType::Game || WWOSwitches::HasAnyWWOSwitch() || WWOSwitches::NamesGamePath();
+		bShowTitle = WWOSwitches::Has(TEXT("WWOTitle")) || WWOSwitches::HasTitleTestSwitch() || !bDirect;
 		UE_LOG(LogWWO, Display, TEXT("Launch: %s"), bShowTitle ? TEXT("opening on the launch screen") : TEXT("straight into the game (a map or a -WWO switch on the command line, or Play-in-Editor)"));
 	}
 	if (!bShowTitle || World->GetNetMode() != NM_Standalone) return false;
@@ -169,9 +166,9 @@ void UWWONetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// A test run that drives the launch screen has nobody to type one.
 	// -WWOGamerTag=<name>: this run's tag (not saved), for tests with more than one copy of the game.
 	FString Given;
-	if (FParse::Value(FCommandLine::Get(), TEXT("WWOGamerTag="), Given)) SetGamerTag(Given, false);
+	if (WWOSwitches::Value(TEXT("WWOGamerTag="), Given)) SetGamerTag(Given, false);
 	// (-WWONoTestTag: leave it empty, to see the launch screen asking for one.)
-	if (GamerTag.IsEmpty() && FCString::Stristr(FCommandLine::Get(), TEXT("-WWOAutoTest")) && !FParse::Param(FCommandLine::Get(), TEXT("WWONoTestTag"))) GamerTag = TEXT("tester");
+	if (GamerTag.IsEmpty() && WWOSwitches::HasAutoTestSwitch() && !WWOSwitches::Has(TEXT("WWONoTestTag"))) GamerTag = TEXT("tester");
 	if (GEngine)
 	{
 		NetFailureHandle = GEngine->OnNetworkFailure().AddUObject(this, &UWWONetSubsystem::OnNetworkFailure);
@@ -492,21 +489,20 @@ void UWWONetSubsystem::HandleCommandLine(const UObject* WorldContext)
 {
 	if (bCommandLineDone) return;
 	bCommandLineDone = true;
-	const TCHAR* Cmd = FCommandLine::Get();
 	FString Address;
-	if (FParse::Param(Cmd, TEXT("WWOHostPvP")))
+	if (WWOSwitches::Has(TEXT("WWOHostPvP")))
 	{
 		Host(FName(*UGameplayStatics::GetCurrentLevelName(WorldContext)), true);
 	}
-	else if (FParse::Param(Cmd, TEXT("WWOHost")))
+	else if (WWOSwitches::Has(TEXT("WWOHost")))
 	{
 		Host(FName(*UGameplayStatics::GetCurrentLevelName(WorldContext)));
 	}
-	else if (FParse::Value(Cmd, TEXT("WWOJoin="), Address) && !Address.IsEmpty())
+	else if (WWOSwitches::Value(TEXT("WWOJoin="), Address) && !Address.IsEmpty())
 	{
 		JoinAddress(Address);
 	}
-	else if (FParse::Param(Cmd, TEXT("WWOJoin")))
+	else if (WWOSwitches::Has(TEXT("WWOJoin")))
 	{
 		FindAndJoin();
 	}

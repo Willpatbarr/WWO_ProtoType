@@ -1,4 +1,5 @@
 #include "Player/WWOBotController.h"
+#include "WWOSwitches.h"
 #include "Player/WWOProf.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
@@ -16,7 +17,6 @@
 #include "GameFramework/PlayerStart.h"
 #include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
-#include "Misc/CommandLine.h"
 #include "Engine/World.h"
 
 int32 AWWOBotController::Sightings = 0;
@@ -325,7 +325,7 @@ void AWWOBotController::PickLeader(const AWWOCharacter* Me)
 	// StickToPlayer) escort the nearest living human on it; the rest pair up, every second one
 	// following the one before it. Leaders (and anyone whose leader is dead) roam by themselves.
 	Leader = nullptr;
-	static const bool bPeace = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsPeace")); // performance tests: everyone roams alone
+	static const bool bPeace = WWOSwitches::Has(TEXT("WWOBotsPeace")); // performance tests: everyone roams alone
 	if (bPeace) return;
 	const FBotTuning T = TuningFor(this);
 	const int32 Team = UWWOWorldSubsystem::TeamOf(Me);
@@ -587,7 +587,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	Move = FVector2D::ZeroVector;
 	// -WWOBotsIdle: the bots stand where they spawn and do nothing (targets for looking at hits,
 	// tints and markers).
-	static const bool bIdle = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsIdle"));
+	static const bool bIdle = WWOSwitches::Has(TEXT("WWOBotsIdle"));
 	if (bIdle) return;
 	// The match is over (the scoreboard is up): nobody fights on behind it.
 	if (const AWWOGameState* Over = GetWorld()->GetGameState<AWWOGameState>(); Over && Over->bMatchOver) return;
@@ -608,11 +608,11 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	if (bParked)
 	{
 		// -WWOBotsMarch: parked bots pace side to side (a repeatable moving scene).
-		static const bool bMarch = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsMarch"));
+		static const bool bMarch = WWOSwitches::Has(TEXT("WWOBotsMarch"));
 		Clock += DeltaSeconds;
 		if (bMarch) Move = FVector2D(FMath::Fmod(Clock, 3.f) < 1.5f ? 1.f : -1.f, 0.f);
 		// -WWOBotsStopGo: a second of walking, three of standing still, and back (how players move in a fight).
-		static const bool bStopGo = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsStopGo"));
+		static const bool bStopGo = WWOSwitches::Has(TEXT("WWOBotsStopGo"));
 		if (bStopGo)
 		{
 			const float Phase = FMath::Fmod(Clock, 8.f);
@@ -704,7 +704,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	// -WWOBotsBusy (performance runs): every few seconds each bot throws its grenade or sets off an
 	// ability, ready or not and with or without anyone to use it on, so a measured match always has
 	// grenades, fog, walls and ability effects going.
-	static const bool bBusy = FParse::Param(FCommandLine::Get(), TEXT("WWOBotsBusy"));
+	static const bool bBusy = WWOSwitches::Has(TEXT("WWOBotsBusy"));
 	if (bBusy && Clock >= NextBusy && !Gun->bMeleeing)
 	{
 		NextBusy = Clock + FMath::FRandRange(2.f, 5.f);
