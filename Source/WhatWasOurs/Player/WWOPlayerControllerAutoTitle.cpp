@@ -9,6 +9,7 @@
 //   player's own: 71_joiner_settings) and quits.
 // Logs `AutoTest title: ... ok|FAIL`.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "WWOSwitches.h"
 #include "Player/WWOTestRun.h"
@@ -33,15 +34,15 @@ namespace
 	void Check(bool bOk, const FString& What) { WWOTest::Check(TEXT("title"), bOk, What); }
 }
 
-void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
+void FWWOAutoTest::UpdateAutoTitleTest(float DeltaTime)
 {
 	static const bool bJoiner = WWOSwitches::Has(TEXT("WWOAutoTestTitleJoin"));
-	UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
+	UWWONetSubsystem* Net = UWWONetSubsystem::Get(PC);
 	if (!Net) return;
 	TitleClock += DeltaTime;
 	auto Next = [](int32 Stage = -1) { TitleStage = Stage < 0 ? TitleStage + 1 : Stage; TitleClock = 0.f; };
-	UWWOLaunchMenu* Launch = LaunchMenu && LaunchMenu->IsOpen() ? LaunchMenu.Get() : nullptr;
-	const FString Level = UGameplayStatics::GetCurrentLevelName(this);
+	UWWOLaunchMenu* Launch = PC->LaunchMenu && PC->LaunchMenu->IsOpen() ? PC->LaunchMenu.Get() : nullptr;
+	const FString Level = UGameplayStatics::GetCurrentLevelName(PC);
 	auto Quit = [] { UE_LOG(LogWWO, Display, TEXT("AutoTest title: done")); WWOTest::Exit(); };
 
 	// -WWOAutoTestTitleJoinFail: from the title, join an address nobody is hosting at. When the
@@ -56,15 +57,15 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		case 0:
 			if (TitleClock > 8.f && Launch)
 			{
-				FirstController = GetUniqueID();
+				FirstController = PC->GetUniqueID();
 				Net->JoinAddress(TEXT("127.0.0.1:7999"));
 				Next();
 			}
 			break;
 		case 1:
-			if (GetUniqueID() != FirstController && TitleClock > 3.f)
+			if (PC->GetUniqueID() != FirstController && TitleClock > 3.f)
 			{
-				Check(Launch && IsPaused() && GetNetMode() == NM_Standalone && Net->Status.StartsWith(TEXT("Couldn't join")),
+				Check(Launch && PC->IsPaused() && PC->GetNetMode() == NM_Standalone && Net->Status.StartsWith(TEXT("Couldn't join")),
 					FString::Printf(TEXT("a join that fails comes back to the launch screen (%s; status \"%s\")"), Launch ? *Launch->DebugState() : TEXT("no launch screen"), *Net->Status));
 				Shot(TEXT("73_join_failed"));
 				Next();
@@ -80,7 +81,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	{
 		switch (TitleStage)
 		{
-		case 0: if (TitleClock > 8.f) { Check(Launch && Launch->DebugState() == TEXT("title") && IsPaused(), TEXT("opens on the title, paused")); if (Launch) Launch->Play(); Next(); } break;
+		case 0: if (TitleClock > 8.f) { Check(Launch && Launch->DebugState() == TEXT("title") && PC->IsPaused(), TEXT("opens on the title, paused")); if (Launch) Launch->Play(); Next(); } break;
 		case 1: if (TitleClock > 0.5f && Launch) { Launch->ChooseConnection(UWWOLaunchMenu::ConnJoin); Next(); } break;
 		case 2:
 			// The list fills from the searches the screen runs itself.
@@ -96,10 +97,10 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		case 3: if (TitleClock > 0.6f) { Check(Launch && Launch->CanStart(), FString::Printf(TEXT("a picked game can be joined (%s)"), Launch ? *Launch->DebugState() : TEXT("-"))); Shot(TEXT("70_join_list")); Next(); } break;
 		case 4: if (TitleClock > 0.6f && Launch) { Launch->Start(); Next(); } break;
 		case 5:
-			if (GetNetMode() == NM_Client && GetPawn() && TitleClock > 8.f)
+			if (PC->GetNetMode() == NM_Client && PC->GetPawn() && TitleClock > 8.f)
 			{
-				Check(!LaunchMenu, FString::Printf(TEXT("joined the host's game on %s"), *Level));
-				ToggleSettingsMenu();
+				Check(!PC->LaunchMenu, FString::Printf(TEXT("joined the host's game on %s"), *Level));
+				PC->ToggleSettingsMenu();
 				Next();
 			}
 			else if (TitleClock > 45.f) { Check(false, TEXT("joined the host's game")); Quit(); }
@@ -107,14 +108,14 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		case 6:
 			if (TitleClock > 1.5f)
 			{
-				const int32 Pages = SettingsMenu->ShownPageCount();
-				Check(SettingsMenu->IsRestricted() && Pages >= 4 && Pages <= 6, FString::Printf(TEXT("a joiner's settings show only its own (%d pages)"), Pages));
-				SettingsMenu->ShowPage(TEXT("Camera"));
+				const int32 Pages = PC->SettingsMenu->ShownPageCount();
+				Check(PC->SettingsMenu->IsRestricted() && Pages >= 4 && Pages <= 6, FString::Printf(TEXT("a joiner's settings show only its own (%d pages)"), Pages));
+				PC->SettingsMenu->ShowPage(TEXT("Camera"));
 				Shot(TEXT("71_joiner_settings"));
 				Next();
 			}
 			break;
-		case 7: if (TitleClock > 1.f) { SettingsMenu->ShowPage(TEXT("Multiplayer")); Next(); } break;
+		case 7: if (TitleClock > 1.f) { PC->SettingsMenu->ShowPage(TEXT("Multiplayer")); Next(); } break;
 		case 8: if (TitleClock > 0.6f) { Shot(TEXT("72_joiner_multiplayer")); Next(); } break;
 		case 9: if (TitleClock > 1.f) Quit(); break;
 		default: break;
@@ -127,7 +128,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	case 0:
 		if (TitleClock > 8.f) // shaders, the first frames
 		{
-			Check(Launch && Launch->DebugState() == TEXT("title") && IsPaused(), TEXT("opens on the title, paused"));
+			Check(Launch && Launch->DebugState() == TEXT("title") && PC->IsPaused(), TEXT("opens on the title, paused"));
 			Shot(TEXT("60_title"));
 			Next();
 		}
@@ -165,16 +166,16 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		break;
 	case 12:
 		// The local PvP match (a new controller, on the Ring).
-		if (Level == TEXT("L_ArenaRing") && GetPawn() && TitleClock > 22.f)
+		if (Level == TEXT("L_ArenaRing") && PC->GetPawn() && TitleClock > 22.f)
 		{
-			const AGameStateBase* GS = GetWorld()->GetGameState();
+			const AGameStateBase* GS = PC->GetWorld()->GetGameState();
 			int32 Bots = 0, Teams[2] = { 0, 0 };
 			if (GS) for (const APlayerState* PS : GS->PlayerArray)
 			{
 				if (PS && PS->IsABot()) ++Bots;
 				if (const AWWOPlayerState* WPS = Cast<AWWOPlayerState>(PS); WPS && WPS->Team >= 0 && WPS->Team <= 1) ++Teams[WPS->Team];
 			}
-			Check(!LaunchMenu && GetNetMode() == NM_Standalone && UWWOWorldSubsystem::IsPvP(this) && !IsPaused(), TEXT("local PvP runs alone, unpaused, with no launch screen"));
+			Check(!PC->LaunchMenu && PC->GetNetMode() == NM_Standalone && UWWOWorldSubsystem::IsPvP(PC) && !PC->IsPaused(), TEXT("local PvP runs alone, unpaused, with no launch screen"));
 			Check(Bots == 7 && Teams[0] == 4 && Teams[1] == 4, FString::Printf(TEXT("bots fill both teams of the Ring (%d bots, %d v %d)"), Bots, Teams[0], Teams[1]));
 			Shot(TEXT("66_local_pvp"));
 			Next();
@@ -185,7 +186,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 	case 14:
 		if (Launch && TitleClock > 6.f)
 		{
-			Check(Launch->DebugState() == TEXT("title") && IsPaused() && GetNetMode() == NM_Standalone, TEXT("quitting a game comes back to the title"));
+			Check(Launch->DebugState() == TEXT("title") && PC->IsPaused() && PC->GetNetMode() == NM_Standalone, TEXT("quitting a game comes back to the title"));
 			Shot(TEXT("67_title_again"));
 			Launch->ChooseConnection(UWWOLaunchMenu::ConnHost);
 			Launch->ChooseMode(UWWOLaunchMenu::ModePvE);
@@ -196,10 +197,10 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		else if (TitleClock > 60.f) { Check(false, TEXT("came back to the title")); Quit(); }
 		break;
 	case 15:
-		if (GetNetMode() == NM_ListenServer && GetPawn() && TitleClock > 8.f)
+		if (PC->GetNetMode() == NM_ListenServer && PC->GetPawn() && TitleClock > 8.f)
 		{
-			Check(!LaunchMenu && Level == TEXT("L_Arena") && !UWWOWorldSubsystem::IsPvP(this), TEXT("hosting a PvE game on the small arena"));
-			ToggleSettingsMenu();
+			Check(!PC->LaunchMenu && Level == TEXT("L_Arena") && !UWWOWorldSubsystem::IsPvP(PC), TEXT("hosting a PvE game on the small arena"));
+			PC->ToggleSettingsMenu();
 			Next();
 		}
 		else if (TitleClock > 60.f) { Check(false, TEXT("hosted a game")); Quit(); }
@@ -208,25 +209,25 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		if (TitleClock > 0.2f && TitleClock < 1.2f)
 		{
 			// Hosting, the game runs on under the menu: the trigger, held, must not reach the gun.
-			Held[(int32)EWWOAction::Fire] = true;
-			JustPressed[(int32)EWWOAction::Fire] = true;
+			PC->Held[(int32)EWWOAction::Fire] = true;
+			PC->JustPressed[(int32)EWWOAction::Fire] = true;
 		}
 		if (TitleClock > 1.5f)
 		{
-			Held[(int32)EWWOAction::Fire] = false;
-			if (const AWWOCharacter* Me = GetWWOCharacter())
+			PC->Held[(int32)EWWOAction::Fire] = false;
+			if (const AWWOCharacter* Me = PC->GetWWOCharacter())
 			{
-				Check(IsMenuOpen() && !IsPaused() && Me->Weapon->Ammo == Me->Weapon->MagazineSize(),
+				Check(PC->IsMenuOpen() && !PC->IsPaused() && Me->Weapon->Ammo == Me->Weapon->MagazineSize(),
 					FString::Printf(TEXT("online, an open menu keeps the gun quiet (ammo %d of %d after 1 s of trigger)"), Me->Weapon->Ammo, Me->Weapon->MagazineSize()));
 			}
-			const int32 Pages = SettingsMenu->ShownPageCount();
-			Check(!SettingsMenu->IsRestricted() && Pages > 20, FString::Printf(TEXT("the host's settings show everything (%d pages)"), Pages));
-			SettingsMenu->ShowPage(TEXT("Multiplayer"));
+			const int32 Pages = PC->SettingsMenu->ShownPageCount();
+			Check(!PC->SettingsMenu->IsRestricted() && Pages > 20, FString::Printf(TEXT("the host's settings show everything (%d pages)"), Pages));
+			PC->SettingsMenu->ShowPage(TEXT("Multiplayer"));
 			Next();
 		}
 		break;
 	case 17: if (TitleClock > 0.8f) { Shot(TEXT("68_host_settings")); Next(); } break;
-	case 18: if (TitleClock > 1.f) { ToggleSettingsMenu(); Next(); } break;
+	case 18: if (TitleClock > 1.f) { PC->ToggleSettingsMenu(); Next(); } break;
 	case 19:
 	{
 		// Stay up for a joiner (the second copy), then quit.
@@ -234,7 +235,7 @@ void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
 		if (HostTime < 0.f) { HostTime = 0.f; WWOSwitches::Value(TEXT("WWOTitleHostTime="), HostTime); }
 		if (TitleClock > HostTime)
 		{
-			const AGameStateBase* GS = GetWorld()->GetGameState();
+			const AGameStateBase* GS = PC->GetWorld()->GetGameState();
 			UE_LOG(LogWWO, Display, TEXT("AutoTest title: hosted for %.0f s, %d player(s) at the end"), TitleClock, GS ? GS->PlayerArray.Num() : 0);
 			Quit();
 		}

@@ -6,6 +6,7 @@
 
 #include "Systems/WWOSound.h"
 #include "Player/WWOTestRun.h"
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -61,10 +62,10 @@ namespace
 	}
 }
 
-bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTime)
 {
-	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
-	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
+	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(PC);
+	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(PC);
 	if (!Loadout || !WS) return true;
 	P->Health->GodMode = 1.f; // the waves keep running
 	if (P->Health->bDead) P->Health->Respawn();
@@ -96,19 +97,19 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 		}
 		for (UWWOTraitData* T : Loadout->EquippedTraits()) if (!AutoTraitsBefore.Contains(T)) Loadout->ToggleTrait(T);
 		for (UWWOTraitData* T : AutoTraitsBefore) if (!Loadout->IsTraitEquipped(T)) Loadout->ToggleTrait(T);
-		MoveValue = FVector2D::ZeroVector;
+		PC->MoveValue = FVector2D::ZeroVector;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest ability: loadout restored (%s, %s, %s)"), Loadout->GetFlora() ? *Loadout->GetFlora()->Id.ToString() : TEXT("none"),
 			Loadout->GetAbility(0) ? *Loadout->GetAbility(0)->Id.ToString() : TEXT("none"), Loadout->GetAbility(1) ? *Loadout->GetAbility(1)->Id.ToString() : TEXT("none"));
 		return true;
 	}
 
 	// --- Helpers ---
-	auto Press = [this](EWWOAction Action) { JustPressed[(int32)Action] = true; };
+	auto Press = [this](EWWOAction Action) { PC->JustPressed[(int32)Action] = true; };
 	auto TrainingTarget = [&]() -> AActor*
 	{
 		AActor* Best = nullptr;
 		float BestD = 1e9f;
-		for (TActorIterator<AWWOTarget> It(GetWorld()); It; ++It)
+		for (TActorIterator<AWWOTarget> It(PC->GetWorld()); It; ++It)
 		{
 			const float D = FVector::Dist(It->GetActorLocation(), P->GetActorLocation());
 			if (It->StrafeDistance <= 0.f && !It->IsDead() && D < BestD && PlaceForAutoTest(P, *It, 12.f, 0.f, false)) { BestD = D; Best = *It; }
@@ -155,8 +156,8 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 	{
 		AutoAbilityIndex++;
 		AutoAbilityPhase = -1.f;
-		MoveValue = FVector2D::ZeroVector;
-		FMemory::Memzero(Held, sizeof(Held));
+		PC->MoveValue = FVector2D::ZeroVector;
+		FMemory::Memzero(PC->Held, sizeof(PC->Held));
 	};
 
 	const bool bUlt = AutoAbilityIndex >= NumAbilities;
@@ -271,7 +272,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 				int32 Alerted = 0;
 				for (AWWOEnemy* E : WS->LivingEnemies()) Alerted += E->bAlerted;
 				UE_LOG(LogWWO, Display, TEXT("AutoTest ult: veil left %.1f s, invisible %d, in fog %d, melee x%.2f, enemies alerted %d"), P->VeilLeft, P->IsInvisible(),
-					AWWOSporeFog::Contains(GetWorld(), P->GetActorLocation()), P->VeilMeleeMultiplier(), Alerted);
+					AWWOSporeFog::Contains(PC->GetWorld(), P->GetActorLocation()), P->VeilMeleeMultiplier(), Alerted);
 			}
 			else
 			{
@@ -284,7 +285,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 				UE_LOG(LogWWO, Display, TEXT("AutoTest ult: entrench left %.1f s; took 30 damage: vitals %.0f -> %.0f; grenade recharge %.2f s (x%.1f faster than %.2f s)"),
 					P->EntrenchLeft, Before, After, P->Grenades->EffectiveRechargeTime(), P->EntrenchRechargeMultiplier(), Base);
 				AutoAbilityFrom = P->GetActorLocation();
-				MoveValue = FVector2D(0.f, 1.f); // try to walk: rooted
+				PC->MoveValue = FVector2D(0.f, 1.f); // try to walk: rooted
 			}
 			Snapshot();
 			Press(EWWOAction::Melee);
@@ -296,7 +297,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 			Report(bVeil ? TEXT("veiled melee") : TEXT("entrenched melee"));
 			UE_LOG(LogWWO, Display, TEXT("AutoTest ult: %s melee lunged %d; moved %.2f m while holding forward"), *Id.ToString(), bAutoAbilityShot,
 				bVeil ? -1.f : FVector::Dist2D(AutoAbilityFrom, P->GetActorLocation()) / WWO::M);
-			MoveValue = FVector2D::ZeroVector;
+			PC->MoveValue = FVector2D::ZeroVector;
 			if (!bVeil) P->SetViewRotation(FMath::DegreesToRadians(-50.f), P->GetActorRotation().Yaw); // down at the roots
 		}
 		else if (Cross(1.75f) && !bVeil) ShotNamed(TEXT("24_ult"), TEXT("d_roots"));
@@ -304,9 +305,9 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 		else if (Cross(P->Ult->EntrenchTime + 0.6f))
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest ult: entrench over: left %.2f s, roots still up %d, recharge %.2f s"), P->EntrenchLeft,
-				TActorIterator<AWWOEntrenchRoots>(GetWorld()) ? 1 : 0, P->Grenades->EffectiveRechargeTime());
+				TActorIterator<AWWOEntrenchRoots>(PC->GetWorld()) ? 1 : 0, P->Grenades->EffectiveRechargeTime());
 			AutoAbilityFrom = P->GetActorLocation();
-			MoveValue = FVector2D(0.f, 1.f);
+			PC->MoveValue = FVector2D(0.f, 1.f);
 		}
 		else if (Cross(P->Ult->EntrenchTime + 1.f))
 		{
@@ -332,7 +333,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 				if (AWWOEnemy* E = Cast<AWWOEnemy>(Target))
 				{
 					Snapshot();
-					AWWOSporeFog::SpawnFog(GetWorld(), E->FeetLocation() + FVector(0, 0, 80.f), 4.f, 6.f);
+					AWWOSporeFog::SpawnFog(PC->GetWorld(), E->FeetLocation() + FVector(0, 0, 80.f), 4.f, 6.f);
 					UE_LOG(LogWWO, Display, TEXT("AutoTest ability: spore fog (4 m, 6 s) on %s; fog dps %.0f"), *E->GetName(), A->FogDps);
 				}
 				else UE_LOG(LogWWO, Display, TEXT("AutoTest ability: spore fog damage has no enemy"));
@@ -350,7 +351,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 					Spec.Color = A->Color;
 					Spec.Damage = 0.f;
 					Spec.BlastRadius = 2.f;
-					AWWOGrenade::ExplodeAt(GetWorld(), Spec, Mate->GetActorLocation(), P);
+					AWWOGrenade::ExplodeAt(PC->GetWorld(), Spec, Mate->GetActorLocation(), P);
 				}
 				else UE_LOG(LogWWO, Display, TEXT("AutoTest ability: shield share has no teammate"));
 			}
@@ -553,7 +554,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 		if (Cross(0.15f))
 		{
 			int32 Bombs = 0;
-			for (TActorIterator<AWWOGrenade> It(GetWorld()); It; ++It) Bombs += It->Spec.bExplodeOnImpact && It->Spec.SizeScale > 1.5f;
+			for (TActorIterator<AWWOGrenade> It(PC->GetWorld()); It; ++It) Bombs += It->Spec.bExplodeOnImpact && It->Spec.SizeScale > 1.5f;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest ability: root bombs out %d (damage %.0f, radius %.1f m, speed %.0f m/s); charge %.2f"), Bombs, A->BombDamage, A->BombRadius,
 				A->BombSpeed, Abilities->Charge(A));
 		}

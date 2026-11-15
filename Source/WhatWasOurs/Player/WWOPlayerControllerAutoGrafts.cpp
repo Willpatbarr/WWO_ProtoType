@@ -4,6 +4,7 @@
 // preview's camera moved in close (35_grafts_*). The loadout is put back
 // afterwards. Logs `AutoTest grafts:` with what each body wears.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
@@ -44,10 +45,10 @@ namespace
 	}
 }
 
-bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 {
-	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
-	if (!Loadout || !CharacterMenu) return true;
+	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(PC);
+	if (!Loadout || !PC->CharacterMenu) return true;
 	const float Before = AutoGraftClock;
 	// (The saved loadout was copied aside when the run started and is put back at the end, so a run
 	// that stops half way can't leave a test loadout as yours: WWOTest::GuardLoadout.)
@@ -60,7 +61,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 		if (UWWOAbilityData* A = ById(Loadout->Abilities, L.Ability0)) Loadout->EquipAbility(0, A);
 		if (UWWOAbilityData* A = ById(Loadout->Abilities, L.Ability1)) Loadout->EquipAbility(1, A);
 		for (const FName& Part : L.Frame) if (UWWOFramePartData* FP = ById(Loadout->FrameParts, Part)) Loadout->EquipFramePart(FP);
-		const AWWOPreviewActor* Preview = CharacterMenu->GetPreviewActor();
+		const AWWOPreviewActor* Preview = PC->CharacterMenu->GetPreviewActor();
 		int32 Parts = 0;
 		if (Preview) for (UActorComponent* C : Preview->GetInstanceComponents()) Parts += C && C->IsRegistered() ? 1 : 0;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest grafts: %s (%s, %s, %s + %s) preview parts %d"), L.Name, *L.Flora.ToString(), *L.Grenade.ToString(),
@@ -68,7 +69,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	};
 	auto Turn = [&](float Yaw)
 	{
-		if (AWWOPreviewActor* Preview = CharacterMenu->GetPreviewActor()) Preview->Turntable->SetRelativeRotation(FRotator(0.f, Yaw, 0.f));
+		if (AWWOPreviewActor* Preview = PC->CharacterMenu->GetPreviewActor()) Preview->Turntable->SetRelativeRotation(FRotator(0.f, Yaw, 0.f));
 	};
 
 	if (Before == 0.f)
@@ -80,7 +81,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot) AutoGraftAbilities.Add(Loadout->GetAbility(Slot));
 		AutoGraftFrame.Reset();
 		for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots()) AutoGraftFrame.Add(Loadout->GetFramePart(Slot));
-		if (!CharacterMenu->IsOpen()) ToggleCharacterMenu();
+		if (!PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
 	}
 	// The menu preview: front, then from behind.
 	for (int32 k = 0; k < NumGraftLoadouts; ++k)
@@ -94,7 +95,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	const float CloseAt = 0.5f + NumGraftLoadouts * MenuEvery;
 	auto Zoom = [&](bool bIn)
 	{
-		AWWOPreviewActor* Preview = CharacterMenu->GetPreviewActor();
+		AWWOPreviewActor* Preview = PC->CharacterMenu->GetPreviewActor();
 		if (!Preview) return;
 		if (bIn)
 		{
@@ -124,7 +125,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	for (int32 Slot = 0; Slot < AutoGraftAbilities.Num(); ++Slot) if (AutoGraftAbilities[Slot]) Loadout->EquipAbility(Slot, AutoGraftAbilities[Slot]);
 	for (UWWOFramePartData* Part : AutoGraftFrame) if (Part) Loadout->EquipFramePart(Part);
 	Zoom(false);
-	if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
+	if (PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
 	Loadout->FlushSave();
 	WWOTest::RestoreLoadout();
 	UE_LOG(LogWWO, Display, TEXT("AutoTest grafts: loadout restored (%s)"), Loadout->GetFlora() ? *Loadout->GetFlora()->Id.ToString() : TEXT("none"));

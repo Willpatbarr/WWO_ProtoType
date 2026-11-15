@@ -6,6 +6,7 @@
 // set fired, its tile screenshotted). The saved loadout file is put back at the end (WWOTest's guard).
 // Logs `AutoTest mods: ... ok` or `... FAIL`, with screenshots 37_mods_*.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "WWOSwitches.h"
@@ -40,9 +41,9 @@ namespace
 	bool Near(float A, float B) { return FMath::Abs(A - B) <= FMath::Max(0.01f, FMath::Abs(B) * 0.01f); }
 }
 
-bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 {
-	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(PC);
 	if (!L) return true;
 	AutoModClock += DeltaTime;
 	auto Step = [this](int32 Next) { AutoModStep = Next; AutoModClock = 0.f; };
@@ -156,7 +157,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		// Fire the perk set at the nearest target for a few seconds.
 		AActor* Best = nullptr;
 		float BestD = 1e9f;
-		for (AActor* A : UWWOWorldSubsystem::Get(this)->LivingTargets())
+		for (AActor* A : UWWOWorldSubsystem::Get(PC)->LivingTargets())
 		{
 			const float D = FVector::Dist(A->GetActorLocation(), P->GetActorLocation());
 			if (D < BestD && Cast<IWWOTargetable>(A)->FeetLocation().Z < 100.f) { BestD = D; Best = A; }
@@ -170,25 +171,25 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		// Semi-auto guns need fresh trigger pulls: tap it about three times a second.
 		{
 			const bool bDown = AutoModClock > 0.5f && AutoModClock < 3.5f && (!bCannon || FMath::Fmod(AutoModClock, 0.32f) < 0.16f);
-			if (bDown && !Held[(int32)EWWOAction::Fire]) JustPressed[(int32)EWWOAction::Fire] = true;
-			Held[(int32)EWWOAction::Fire] = bDown;
+			if (bDown && !PC->Held[(int32)EWWOAction::Fire]) PC->JustPressed[(int32)EWWOAction::Fire] = true;
+			PC->Held[(int32)EWWOAction::Fire] = bDown;
 		}
 		if (FMath::IsNearlyEqual(AutoModClock, 2.5f, DeltaTime * 0.6f)) Shot(bCannon ? TEXT("37_mods_cannon_perk_firing") : TEXT("37_mods_perk_firing"));
 		if (AutoModClock >= 3.6f)
 		{
-			Held[(int32)EWWOAction::Fire] = false;
+			PC->Held[(int32)EWWOAction::Fire] = false;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest mods: perk HUD after firing '%s', ammo %d / %d"), *Gun->PerkStatus(), Gun->Ammo, Gun->MagazineSize());
 			if (bCannon) Check(Gun->Ammo < Gun->MagazineSize() && !Gun->PerkStatus().Contains(TEXT("Overpressure")), TEXT("hand cannon fired and used up Overpressure"));
 			else Check(!Gun->PerkStatus().IsEmpty(), TEXT("perk status shows on the HUD"));
-			if (!CharacterMenu->IsOpen()) ToggleCharacterMenu();
-			CharacterMenu->AutoTestShow(TEXT("Weapons"), bCannon ? TEXT("mod_magazine:final_round_mag") : FString());
+			if (!PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
+			PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), bCannon ? TEXT("mod_magazine:final_round_mag") : FString());
 			Step(bCannon ? 23 : 4);
 		}
 		break;
 	}
 	case 4:
 		if (AutoModClock < 1.f) break;
-		CharacterMenu->AutoTestScroll(-1.f);
+		PC->CharacterMenu->AutoTestScroll(-1.f);
 		Step(9);
 		break;
 	case 9:
@@ -198,12 +199,12 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 5:
 		if (AutoModClock < 0.5f) break;
-		CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_barrel:long_barrel")); // its popup, previewing Long Barrel
+		PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_barrel:long_barrel")); // its popup, previewing Long Barrel
 		Step(6);
 		break;
 	case 6:
 		if (AutoModClock < 0.5f) break;
-		CharacterMenu->AutoTestScroll(-1.f);
+		PC->CharacterMenu->AutoTestScroll(-1.f);
 		Step(7);
 		break;
 	case 7:
@@ -213,12 +214,12 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 12:
 		if (AutoModClock < 0.3f) break; // let the screenshot happen first
-		CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_chambering:heavy_rounds"));
+		PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), TEXT("mod_chambering:heavy_rounds"));
 		Step(10);
 		break;
 	case 10:
 		if (AutoModClock < 0.5f) break;
-		CharacterMenu->AutoTestScroll(-1.f);
+		PC->CharacterMenu->AutoTestScroll(-1.f);
 		Step(11);
 		break;
 	case 11:
@@ -228,8 +229,8 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 13:
 		if (AutoModClock < 0.3f) break;
-		CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
-		if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
+		PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
+		if (PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
 		// The hand cannon: a bare frame first.
 		EquipWeaponId("handcannon");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
@@ -301,20 +302,20 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			if (FxFrames == 5) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_flash")));
 			if (FxFrames == 70) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_trail")));
 			// Then a little faster, to catch the sparks and the death burst mid-flight (_burst).
-			if (FxFrames == 71) UGameplayStatics::SetGlobalTimeDilation(this, 0.15f);
+			if (FxFrames == 71) UGameplayStatics::SetGlobalTimeDilation(PC, 0.15f);
 			if (FxFrames == 95) Shot(*(TEXT("39_fx_") + Ids[AutoGunIdx].ToString() + TEXT("_burst")));
 		}
 		if (AutoModClock < (bFxShots && FxFrames >= 0 ? 2.f : 0.9f)) break;
 		if (bFxShots && FxFrames >= 0)
 		{
 			FxFrames = -1;
-			UGameplayStatics::SetGlobalTimeDilation(this, 1.f);
-			Held[(int32)EWWOAction::Fire] = false;
+			UGameplayStatics::SetGlobalTimeDilation(PC, 1.f);
+			PC->Held[(int32)EWWOAction::Fire] = false;
 		}
 		AutoModClock = 0.f;
 		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Ids))
 		{
-			Held[(int32)EWWOAction::Aim] = false;
+			PC->Held[(int32)EWWOAction::Aim] = false;
 			Step(8);
 			break;
 		}
@@ -345,35 +346,35 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			if (bFxShots)
 			{
 				FxFrames = 0;
-				UGameplayStatics::SetGlobalTimeDilation(this, 0.02f);
-				JustPressed[(int32)EWWOAction::Fire] = Held[(int32)EWWOAction::Fire] = true;
+				UGameplayStatics::SetGlobalTimeDilation(PC, 0.02f);
+				PC->JustPressed[(int32)EWWOAction::Fire] = PC->Held[(int32)EWWOAction::Fire] = true;
 				const FVector Side = P->EyeLocation() + P->AimForward() * 350.f - P->GetActorRightVector() * 150.f;
-				AWWOFXActor::MuzzleFlash(GetWorld(), Side, P->GetActorRightVector(), FLinearColor(1.f, 0.8f, 0.45f));
-				AWWOFXActor::BulletTrail(GetWorld(), Side, Side + P->GetActorRightVector() * 3000.f, FLinearColor(1.f, 0.8f, 0.45f));
+				AWWOFXActor::MuzzleFlash(PC->GetWorld(), Side, P->GetActorRightVector(), FLinearColor(1.f, 0.8f, 0.45f));
+				AWWOFXActor::BulletTrail(PC->GetWorld(), Side, Side + P->GetActorRightVector() * 3000.f, FLinearColor(1.f, 0.8f, 0.45f));
 				// A body hit, a headshot, a death and a soldier's bolt, in a row in front of you.
 				const FVector Ahead = P->EyeLocation() + P->AimForward() * 400.f;
 				const FVector Right = P->GetActorRightVector();
-				AWWOFXActor::HitSpark(GetWorld(), Ahead - Right * 120.f, -P->AimForward(), false);
-				AWWOFXActor::HitSpark(GetWorld(), Ahead - Right * 40.f, -P->AimForward(), true);
-				AWWOFXActor::DeathBurst(GetWorld(), Ahead + Right * 110.f + P->AimForward() * 200.f - FVector(0, 0, 60.f), FLinearColor(1.f, 0.55f, 0.2f));
-				AWWOEnemyProjectile::Fire(GetWorld(), Ahead - Right * 200.f + FVector(0, 0, 60.f), Right * 5300.f, 0.f, 0.5f);
+				AWWOFXActor::HitSpark(PC->GetWorld(), Ahead - Right * 120.f, -P->AimForward(), false);
+				AWWOFXActor::HitSpark(PC->GetWorld(), Ahead - Right * 40.f, -P->AimForward(), true);
+				AWWOFXActor::DeathBurst(PC->GetWorld(), Ahead + Right * 110.f + P->AimForward() * 200.f - FVector(0, 0, 60.f), FLinearColor(1.f, 0.55f, 0.2f));
+				AWWOEnemyProjectile::Fire(PC->GetWorld(), Ahead - Right * 200.f + FVector(0, 0, 60.f), Right * 5300.f, 0.f, 0.5f);
 				// The mark a blast leaves.
 				const FVector Floor = P->GetActorLocation() - FVector(0, 0, P->GetSimpleCollisionHalfHeight()) + P->AimForward().GetSafeNormal2D() * 450.f;
-				AWWOFXActor::Scorch(GetWorld(), Floor + Right * 250.f, 2.5f);
+				AWWOFXActor::Scorch(PC->GetWorld(), Floor + Right * 250.f, 2.5f);
 			}
 			break;
-		case 2: Held[(int32)EWWOAction::Aim] = true; break;
+		case 2: PC->Held[(int32)EWWOAction::Aim] = true; break;
 		case 3: Shot(*(Tag + TEXT("_ads"))); break;
-		case 4: Held[(int32)EWWOAction::Aim] = false; if (bModded) EquipSet(PlainSet); else AutoGunStage = 99; break;
+		case 4: PC->Held[(int32)EWWOAction::Aim] = false; if (bModded) EquipSet(PlainSet); else AutoGunStage = 99; break;
 		case 5: Shot(*(Tag + TEXT("_plain"))); break;
 		case 6: EquipSet(PerkSet); break;
 		case 7: Shot(*(Tag + TEXT("_perk"))); break;
-		case 8: Held[(int32)EWWOAction::Aim] = true; break;
+		case 8: PC->Held[(int32)EWWOAction::Aim] = true; break;
 		case 9: Shot(*(Tag + TEXT("_perk_ads"))); break;
 		case 10:
 			// The rifle again with the sight height slider at 3 cm: the gun drops below the dot.
 			if (Id == "rifle") { Gun->GetBaseWeaponData()->SightHeight = 3.f; break; }
-			Held[(int32)EWWOAction::Aim] = false;
+			PC->Held[(int32)EWWOAction::Aim] = false;
 			// The hand cannon with a diagonal kick (vertical 8, horizontal 4), shot from the hip.
 			if (Id == "handcannon")
 			{
@@ -386,7 +387,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 11:
 			if (Id == "handcannon")
 			{
-				JustPressed[(int32)EWWOAction::Fire] = true;
+				PC->JustPressed[(int32)EWWOAction::Fire] = true;
 				Shot(*(Tag + TEXT("_kick_diagonal"))); // captured as the gun jolts
 				break;
 			}
@@ -398,7 +399,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 				Gun->GetBaseWeaponData()->HorizontalKick = AutoGunKick.Y;
 			}
 			else Gun->GetBaseWeaponData()->SightHeight = 0.f;
-			Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
+			PC->Held[(int32)EWWOAction::Aim] = false; AutoGunStage = 99; break;
 		}
 		if (AutoGunStage >= 99)
 		{
@@ -425,7 +426,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	{
 		static const FName Frames[] = { "shotgun", "sniper", "burstrifle" };
 		static int32 AmmoBefore = 0;
-		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Frames)) { Held[(int32)EWWOAction::Fire] = false; Step(8); break; }
+		if (AutoGunIdx >= (int32)UE_ARRAY_COUNT(Frames)) { PC->Held[(int32)EWWOAction::Fire] = false; Step(8); break; }
 		const FName Id = Frames[AutoGunIdx];
 		FName PlainSet[6];
 		int32 PlainCount = 0, PerkCount = 0;
@@ -476,11 +477,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			// burst a pull (SemiAuto). The pulls below press and hold, so both fire.
 			Check(W->BurstCount() == 3, FString::Printf(TEXT("burst rifle fires %d-round bursts, %.0f a minute at %.0f rpm inside one, range %.0f m"), W->BurstCount(), W->FireRate, W->BurstRate, W->FireRange));
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true;
+			PC->Held[(int32)EWWOAction::Fire] = PC->JustPressed[(int32)EWWOAction::Fire] = true;
 			Step(74);
 			break;
 		case 74:
-			if (AutoModClock > 0.03f) Held[(int32)EWWOAction::Fire] = false;
+			if (AutoModClock > 0.03f) PC->Held[(int32)EWWOAction::Fire] = false;
 			if (AutoModClock < 0.35f) break;
 			Check(AmmoBefore - Gun->Ammo == 3, FString::Printf(TEXT("one pull fired %d rounds (3)"), AmmoBefore - Gun->Ammo));
 			if (UWWOModData* Mod = ModById(L, "fourth_round")) L->EquipMod(Mod->Slot, Mod);
@@ -489,11 +490,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 75:
 			if (AutoModClock < 0.8f) break;
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true;
+			PC->Held[(int32)EWWOAction::Fire] = PC->JustPressed[(int32)EWWOAction::Fire] = true;
 			Step(76);
 			break;
 		case 76:
-			if (AutoModClock > 0.03f) Held[(int32)EWWOAction::Fire] = false;
+			if (AutoModClock > 0.03f) PC->Held[(int32)EWWOAction::Fire] = false;
 			if (AutoModClock < 0.4f) break;
 			Check(AmmoBefore - Gun->Ammo == 4, FString::Printf(TEXT("with Fourth Round one pull fired %d rounds (4)"), AmmoBefore - Gun->Ammo));
 			Bare();
@@ -502,12 +503,12 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		case 77:
 			if (AutoModClock < 0.8f) break;
 			AmmoBefore = Gun->Ammo;
-			Held[(int32)EWWOAction::Fire] = JustPressed[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
+			PC->Held[(int32)EWWOAction::Fire] = PC->JustPressed[(int32)EWWOAction::Fire] = true; // held: a burst every 60 / fire rate seconds
 			Step(78);
 			break;
 		case 78:
 			if (AutoModClock < 1.9f) break; // bursts start at 0, 0.4, 0.8, 1.2 and 1.6 s
-			Held[(int32)EWWOAction::Fire] = false;
+			PC->Held[(int32)EWWOAction::Fire] = false;
 			{
 				const int32 Fired = AmmoBefore - Gun->Ammo;
 				// Held: a burst every 60 / fire rate seconds; one burst a pull: just the one.
@@ -543,7 +544,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		const bool bOn = AutoModStep == 62;
 		if (AutoModClock <= DeltaTime * 1.5f)
 		{
-			bUsingController = true;
+			PC->bUsingController = true;
 			P->AimAssist->HiddenAssist = bOn ? 1.f : 0.f;
 			P->AimAssist->ShowHiddenAssist = 1.f;
 			if (!bOn)
@@ -551,7 +552,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 				EquipWeaponId("rifle");
 				AActor* Best = nullptr;
 				float BestD = 1e9f;
-				for (AActor* A : UWWOWorldSubsystem::Get(this)->LivingTargets())
+				for (AActor* A : UWWOWorldSubsystem::Get(PC)->LivingTargets())
 				{
 					const float D = FVector::Dist(A->GetActorLocation(), P->GetActorLocation());
 					if (D < BestD && Cast<IWWOTargetable>(A)->FeetLocation().Z < 100.f) { BestD = D; Best = A; }
@@ -577,11 +578,11 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			Gun->Ammo = Gun->MagazineSize();
 		}
 		const bool bFire = AutoModClock > 0.5f && AutoModClock < 1.1f;
-		Held[(int32)EWWOAction::Fire] = bFire;
+		PC->Held[(int32)EWWOAction::Fire] = bFire;
 		if (bOn && FMath::IsNearlyEqual(AutoModClock, 0.9f, DeltaTime * 0.6f)) Shot(TEXT("39_hidden_assist_markers"));
 		if (AutoModClock >= 2.f)
 		{
-			Held[(int32)EWWOAction::Fire] = false;
+			PC->Held[(int32)EWWOAction::Fire] = false;
 			const FVector Dir = (Head - P->EyeLocation()).GetSafeNormal();
 			const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(P->AimForward(), Dir), -1.f, 1.f)));
 			const FVector Aim = P->AimForward();
@@ -594,7 +595,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			{
 				UE_LOG(LogWWO, Display, TEXT("AutoTest hidden: on is %s (%.2f vs %.2f deg)"), Off < AutoHiddenOff ? TEXT("closer ok") : TEXT("not closer FAIL"), Off, AutoHiddenOff);
 				P->AimAssist->ShowHiddenAssist = 0.f;
-				bUsingController = false;
+				PC->bUsingController = false;
 				Step(63);
 			}
 		}
@@ -613,7 +614,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 			// The nearest enemy with a body (the tint goes on bodies), 6 m away.
 			AActor* Best = nullptr;
 			float BestD = 1e9f;
-			for (AActor* A : UWWOWorldSubsystem::Get(this)->LivingTargets())
+			for (AActor* A : UWWOWorldSubsystem::Get(PC)->LivingTargets())
 			{
 				const float D = FVector::Dist(A->GetActorLocation(), P->GetActorLocation());
 				if (D < BestD && A->FindComponentByClass<UWWOBodyComponent>()) { BestD = D; Best = A; }
@@ -627,18 +628,18 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		const FVector Dir = (Chest - P->EyeLocation()).GetSafeNormal();
 		if (AutoModClock < 0.6f) P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
 		if (FMath::IsNearlyEqual(AutoModClock, 0.7f, DeltaTime * 0.6f)) Shot(TEXT("40_readability_hover"));
-		Held[(int32)EWWOAction::Fire] = AutoModClock > 0.9f && AutoModClock < 1.15f;
+		PC->Held[(int32)EWWOAction::Fire] = AutoModClock > 0.9f && AutoModClock < 1.15f;
 		if (FMath::IsNearlyEqual(AutoModClock, 1.3f, DeltaTime * 0.6f)) Shot(TEXT("40_readability_numbers"));
 		if (AutoModClock >= 1.6f)
 		{
-			Held[(int32)EWWOAction::Fire] = false;
+			PC->Held[(int32)EWWOAction::Fire] = false;
 			Step(8);
 		}
 		break;
 	}
 	case 23:
 		if (AutoModClock < 1.f) break;
-		CharacterMenu->AutoTestScroll(-1.f);
+		PC->CharacterMenu->AutoTestScroll(-1.f);
 		Step(24);
 		break;
 	case 24:
@@ -648,13 +649,13 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		break;
 	case 25:
 		if (AutoModClock < 0.3f) break;
-		CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
+		PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
 		EquipWeaponId("rifle");
 		Step(8);
 		break;
 	case 8:
 		if (AutoModClock < 0.5f) break;
-		if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
+		if (PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
 		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
 		WWOTest::RestoreLoadout();
 		UE_LOG(LogWWO, Display, TEXT("AutoTest mods: done (saved loadout restored)"));

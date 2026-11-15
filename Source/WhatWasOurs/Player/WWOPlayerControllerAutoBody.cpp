@@ -7,6 +7,7 @@
 // (32_player_*), driven by the real inputs, and last the first-person arms in slow motion: the
 // grenade throw and the punch (33_fp_*). Logs `AutoTest body:` with the clip each one plays.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
@@ -56,9 +57,9 @@ namespace
 	constexpr float RowShotAt = 3.f, CloseShotEvery = 0.8f;
 }
 
-bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 {
-	UWorld* World = GetWorld();
+	UWorld* World = PC->GetWorld();
 	const float Before = AutoBodyClock;
 	AutoBodyClock += DeltaTime;
 	auto Crossed = [&](float T) { return WWOTest::Crossed(Before, AutoBodyClock, T); };
@@ -131,7 +132,7 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 		AutoBodyCamera = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform(AutoBodyOrigin));
 		AutoBodyCamera->GetCameraComponent()->bConstrainAspectRatio = false;
 		Look(AutoBodyOrigin + FVector(-1150.f, 0.f, 260.f), AutoBodyOrigin + FVector(0.f, 0.f, 80.f), 75.f);
-		SetViewTarget(AutoBodyCamera);
+		PC->SetViewTarget(AutoBodyCamera);
 		// You wait at the far end of the floor, out of the row's way.
 		P->TeleportTo(AutoBodyOrigin + FVector(1500.f, -2000.f, P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), FRotator::ZeroRotator);
 		P->GetCharacterMovement()->StopMovementImmediately();
@@ -200,24 +201,24 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	if (Crossed(PlayerAt + 0.3f)) LookAtPlayer(1.f);
 	if (Crossed(PlayerAt + 0.35f)) Shot(TEXT("32_player_stand"));
 	if (Crossed(PlayerAt + 0.4f)) LookAtPlayer(-1.f);
-	if (Crossed(PlayerAt + 0.45f)) { Shot(TEXT("32_player_stand_other")); Held[(int32)EWWOAction::Crouch] = true; }
-	if (Crossed(PlayerAt + 0.55f)) Held[(int32)EWWOAction::Crouch] = false;
+	if (Crossed(PlayerAt + 0.45f)) { Shot(TEXT("32_player_stand_other")); PC->Held[(int32)EWWOAction::Crouch] = true; }
+	if (Crossed(PlayerAt + 0.55f)) PC->Held[(int32)EWWOAction::Crouch] = false;
 	if (Crossed(PlayerAt + 0.95f)) LookAtPlayer(1.f);
-	if (Crossed(PlayerAt + 1.f)) { LogPlayer(TEXT("crouched")); Shot(TEXT("32_player_crouch")); MoveValue = FVector2D(0.f, 1.f); }
+	if (Crossed(PlayerAt + 1.f)) { LogPlayer(TEXT("crouched")); Shot(TEXT("32_player_crouch")); PC->MoveValue = FVector2D(0.f, 1.f); }
 	if (Crossed(PlayerAt + 1.75f)) LookAtPlayer(1.f);
-	if (Crossed(PlayerAt + 1.8f)) { LogPlayer(TEXT("crouch walking")); Shot(TEXT("32_player_crouch_walk")); JustPressed[(int32)EWWOAction::Sprint] = true; }
-	if (Crossed(PlayerAt + 2.6f)) { LogPlayer(TEXT("sprinting")); Held[(int32)EWWOAction::Crouch] = true; }
-	if (Crossed(PlayerAt + 2.7f)) Held[(int32)EWWOAction::Crouch] = false;
+	if (Crossed(PlayerAt + 1.8f)) { LogPlayer(TEXT("crouch walking")); Shot(TEXT("32_player_crouch_walk")); PC->JustPressed[(int32)EWWOAction::Sprint] = true; }
+	if (Crossed(PlayerAt + 2.6f)) { LogPlayer(TEXT("sprinting")); PC->Held[(int32)EWWOAction::Crouch] = true; }
+	if (Crossed(PlayerAt + 2.7f)) PC->Held[(int32)EWWOAction::Crouch] = false;
 	if (Crossed(PlayerAt + 3.05f)) LookAtPlayer(1.f);
 	if (Crossed(PlayerAt + 3.1f)) { LogPlayer(TEXT("sliding")); Shot(TEXT("32_player_slide")); }
 	if (Crossed(PlayerAt + 3.35f)) LookAtPlayer(-1.f);
-	if (Crossed(PlayerAt + 3.4f)) { LogPlayer(TEXT("sliding")); Shot(TEXT("32_player_slide_late")); MoveValue = FVector2D::ZeroVector; }
+	if (Crossed(PlayerAt + 3.4f)) { LogPlayer(TEXT("sliding")); Shot(TEXT("32_player_slide_late")); PC->MoveValue = FVector2D::ZeroVector; }
 	if (Crossed(PlayerAt + 4.5f))
 	{
 		P->Body->SetShadowOnly(true);
 		P->Weapon->bForceWorldGun = false;
 		P->Weapon->SetVisibility(true, true);
-		SetViewTarget(P);
+		PC->SetViewTarget(P);
 		P->SetViewRotation(0.f, 0.f);
 	}
 	// Looking down at your own legs and feet in first person.
@@ -231,7 +232,7 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	if (Crossed(PlayerAt + 4.85f)) Shot(TEXT("32_player_fp_hands_a_right"));
 	if (Crossed(PlayerAt + 4.9f)) View(-1.1f);
 	if (Crossed(PlayerAt + 5.15f)) Shot(TEXT("32_player_fp_hands_a_left"));
-	if (Crossed(PlayerAt + 5.2f)) { View(0.f); JustPressed[(int32)EWWOAction::WeaponNext] = true; }
+	if (Crossed(PlayerAt + 5.2f)) { View(0.f); PC->JustPressed[(int32)EWWOAction::WeaponNext] = true; }
 	if (Crossed(PlayerAt + 6.2f)) View(1.1f);
 	if (Crossed(PlayerAt + 6.45f)) Shot(TEXT("32_player_fp_hands_b_right"));
 	if (Crossed(PlayerAt + 6.5f)) View(-1.1f);
@@ -251,7 +252,7 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 		UGameplayStatics::SetGlobalTimeDilation(World, Slow);
 		P->Weapon->StartThrowPose(FLinearColor(0.3f, 0.6f, 1.f));
 	}
-	if (Crossed(PunchAt)) JustPressed[(int32)EWWOAction::Melee] = true;
+	if (Crossed(PunchAt)) PC->JustPressed[(int32)EWWOAction::Melee] = true;
 	for (int32 k = 1; k <= 9; ++k)
 	{
 		if (Crossed(ArmsAt + k)) Shot(*FString::Printf(TEXT("33_fp_throw_%02d"), k * 5));

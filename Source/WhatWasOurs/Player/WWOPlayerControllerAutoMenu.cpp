@@ -5,6 +5,7 @@
 // steered onto each button by the left stick, the way a player would. Esc, Tab and I are checked
 // too. Logs `AutoTest menu: ... ok` or `... FAIL`, with screenshots 25_menu_* to 29_menu_*.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
@@ -96,7 +97,7 @@ namespace
 	}
 }
 
-bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 {
 	FSlateApplication& App = FSlateApplication::Get();
 	AutoMenuClock += DeltaTime;
@@ -117,7 +118,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 			return true;
 		}
 		// Ask for about a third of the way this frame, through the cursor's squared response.
-		const TSharedPtr<SViewport> Viewport = GetWorld()->GetGameViewport()->GetGameViewportWidget();
+		const TSharedPtr<SViewport> Viewport = PC->GetWorld()->GetGameViewport()->GetGameViewportWidget();
 		const FVector2D Size = Viewport.IsValid() ? Viewport->GetTickSpaceGeometry().GetAbsoluteSize() : FVector2D(1600, 900);
 		const float FullSpeed = FWWOMenuCursor::Speed * FMath::Min(Size.X / 1600.f, Size.Y / 900.f) * FMath::Max(DeltaTime, 1e-3f);
 		const float Strength = FMath::Sqrt(FMath::Min(FMath::Max(Dist * 0.35f, 1.5f) / FullSpeed, 1.f));
@@ -148,18 +149,18 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		return false;
 	};
 	auto Release = [&](const FKey& Key) { InjectKey(Key, false); };
-	const FString Grenade = UWWOLoadoutSubsystem::Get(this) && UWWOLoadoutSubsystem::Get(this)->GetGrenade()
-		? UWWOLoadoutSubsystem::Get(this)->GetGrenade()->DisplayName : TEXT("?");
-	UWWOSettingsMenu* Settings = SettingsMenu;
-	UWWOCharacterMenu* Character = CharacterMenu;
+	const FString Grenade = UWWOLoadoutSubsystem::Get(PC) && UWWOLoadoutSubsystem::Get(PC)->GetGrenade()
+		? UWWOLoadoutSubsystem::Get(PC)->GetGrenade()->DisplayName : TEXT("?");
+	UWWOSettingsMenu* Settings = PC->SettingsMenu;
+	UWWOCharacterMenu* Character = PC->CharacterMenu;
 	const float Wait = 0.15f; // between presses (real seconds), so each lands on its own frame or two
 
 	switch (AutoMenuStep)
 	{
 	case 0:
-		if (IsMenuOpen()) CloseMenus();
+		if (PC->IsMenuOpen()) PC->CloseMenus();
 		AutoMenuFails = 0;
-		UE_LOG(LogWWO, Display, TEXT("AutoTest menu: start (viewport %s)"), *GetWorld()->GetGameViewport()->GetGameViewportWidget()->GetTickSpaceGeometry().GetAbsoluteSize().ToString());
+		UE_LOG(LogWWO, Display, TEXT("AutoTest menu: start (viewport %s)"), *PC->GetWorld()->GetGameViewport()->GetGameViewportWidget()->GetTickSpaceGeometry().GetAbsoluteSize().ToString());
 		InjectKey(EKeys::Gamepad_Special_Right, true); // Options
 		Next();
 		break;
@@ -168,7 +169,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	case 2:
 		if (AutoMenuClock > Wait)
 		{
-			const TSharedPtr<SViewport> V = GetWorld()->GetGameViewport()->GetGameViewportWidget();
+			const TSharedPtr<SViewport> V = PC->GetWorld()->GetGameViewport()->GetGameViewportWidget();
 			const FVector2D Mid = V->GetTickSpaceGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5f, 0.5f));
 			Check(FVector2D::Distance(Mid, App.GetCursorPos()) < 3.f, FString::Printf(TEXT("cursor starts centered (%s vs %s)"), *App.GetCursorPos().ToString(), *Mid.ToString()));
 			InjectKey(EKeys::Gamepad_RightShoulder, true);
@@ -198,17 +199,17 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 			// The Controls page, with jump moved onto J (sprint's Shift given to crouch swaps the two).
 			else if (Sub == 4 && AutoMenuClock > Wait + 1.3f)
 			{
-				SetBind("jump", false, EKeys::J);
-				SetBind("crouch", false, EKeys::LeftShift);
-				Check(GetBind("jump", false) == EKeys::J && GetBind("crouch", false) == EKeys::LeftShift && GetBind("sprint", false) == EKeys::C, TEXT("rebinding: jump on J, crouch and sprint swapped"));
+				PC->SetBind("jump", false, EKeys::J);
+				PC->SetBind("crouch", false, EKeys::LeftShift);
+				Check(PC->GetBind("jump", false) == EKeys::J && PC->GetBind("crouch", false) == EKeys::LeftShift && PC->GetBind("sprint", false) == EKeys::C, TEXT("rebinding: jump on J, crouch and sprint swapped"));
 				Check(Settings->ShowPage(TEXT("Key Bindings")), TEXT("the Key Bindings page opens"));
 				Sub = 5;
 			}
 			else if (Sub == 5 && AutoMenuClock > Wait + 1.8f) { Shot(TEXT("25_menu_settings_controls")); Sub = 6; }
 			else if (Sub == 6 && AutoMenuClock > Wait + 2.1f)
 			{
-				ResetBinds();
-				Check(GetBind("jump", false) == EKeys::SpaceBar, TEXT("resetting the bindings puts jump back on Space"));
+				PC->ResetBinds();
+				Check(PC->GetBind("jump", false) == EKeys::SpaceBar, TEXT("resetting the bindings puts jump back on Space"));
 				Settings->ShowPage(TEXT("Melee"));
 				Sub = 0;
 				Next();
@@ -308,7 +309,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	case 28:
 		if (AutoMenuClock > Wait)
 		{
-			Check(!Settings->IsOpen() && !IsPaused(), TEXT("circle closes settings and unpauses"));
+			Check(!Settings->IsOpen() && !PC->IsPaused(), TEXT("circle closes settings and unpauses"));
 			Check(P && !P->bIsCrouched, TEXT("closing circle doesn't crouch"));
 			InjectKey(EKeys::Tab, true);
 			Next();
@@ -326,7 +327,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	case 35: if (AutoMenuClock > Wait) { Release(EKeys::Tab); Check(!Settings->IsOpen(), TEXT("Tab closes settings")); Next(); } break;
 	case 36: if (AutoMenuClock > Wait) { InjectKey(EKeys::Gamepad_Special_Left, true); Next(); } break;
 	// Character menu: touchpad opens; stick + cross through the Flora tile and the grenade picker.
-	case 37: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(Character->IsOpen() && IsPaused(), TEXT("touchpad opens the character menu")); Next(); } break;
+	case 37: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(Character->IsOpen() && PC->IsPaused(), TEXT("touchpad opens the character menu")); Next(); } break;
 	case 38:
 	{
 		// The Loadout tab, then with the cursor resting on the grenade tile (its initials), which
@@ -348,7 +349,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		else if (Sub == 5 && AutoMenuClock > SubAt + 0.3f)
 		{
 			FString Other;
-			if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+			if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(PC))
 			{
 				for (const UWWOFramePartData* Part : L->FramePartsFor("head")) if (Part->bUnlocked && Part != L->GetFramePart("head") && Other.IsEmpty()) Other = Part->DisplayName.ToUpper();
 			}
@@ -393,7 +394,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 			Next();
 		}
 		break;
-	case 51: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(!Character->IsOpen() && !IsPaused(), TEXT("touchpad closes the character menu")); Next(); } break;
+	case 51: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(!Character->IsOpen() && !PC->IsPaused(), TEXT("touchpad closes the character menu")); Next(); } break;
 	case 52: if (AutoMenuClock > Wait) { InjectKey(EKeys::I, true); Next(); } break;
 	case 53: if (AutoMenuClock > Wait) { Release(EKeys::I); Check(Character->IsOpen(), TEXT("I opens the character menu")); InjectKey(EKeys::Escape, true); Next(); } break;
 	case 54: if (AutoMenuClock > Wait) { Release(EKeys::Escape); Check(!Character->IsOpen(), TEXT("Esc closes it")); Next(); } break;

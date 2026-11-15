@@ -8,6 +8,7 @@
 // Then the host restarts the run (online that's a ServerTravel): both should arrive on the fresh map
 // together (`AutoTest net: round 2 ...`). The joiner then quits; the host quits once the joiner has left.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
@@ -60,10 +61,10 @@ namespace
 	TWeakObjectPtr<APlayerController> GAutoNetRound1; // the controller that finished round 1 (round 2 runs on the next one)
 }
 
-void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
+void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 {
-	UWorld* World = GetWorld();
-	AWWOCharacter* P = GetWWOCharacter();
+	UWorld* World = PC->GetWorld();
+	AWWOCharacter* P = PC->GetWWOCharacter();
 	const ENetMode Mode = World->GetNetMode();
 	const bool bHost = Mode == NM_ListenServer;
 	AutoNetWait += DeltaTime;
@@ -74,7 +75,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		if (AutoNetWait > WaitLimit) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL never went online")); WWOTest::Exit(); }
 		return;
 	}
-	TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(this)->GetPlayers();
+	TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(PC)->GetPlayers();
 	AWWOCharacter* Other = nullptr;
 	for (AWWOCharacter* C : Players) if (C != P) { Other = C; break; }
 
@@ -106,8 +107,8 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
 	auto Crossed = [Before, T](float At) { return WWOTest::Crossed(Before, T, At); };
-	if (bHost && GAutoNetRound1.Get() == this) return; // restarting: this controller's world is on its way out
-	if (GAutoNetRound > 0 && GAutoNetRound1.Get() != this)
+	if (bHost && GAutoNetRound1.Get() == PC) return; // restarting: this controller's world is on its way out
+	if (GAutoNetRound > 0 && GAutoNetRound1.Get() != PC)
 	{
 		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: round 2 done, joiner leaving")); WWOTest::Exit(); }
 		if (bHost && bAutoNetSawOther && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: host done, the joiner left after the restart")); WWOTest::Exit(); }
@@ -119,7 +120,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (!bHost && !bAutoNetBound)
 	{
 		bAutoNetBound = true;
-		P->Health->OnDamaged.AddWeakLambda(this, [this](float) { ++AutoNetDamageEvents; });
+		P->Health->OnDamaged.AddWeakLambda(PC, [this](float) { ++AutoNetDamageEvents; });
 	}
 	TArray<AWWOTarget*> Dummies;
 	for (TActorIterator<AWWOTarget> It(World); It; ++It) Dummies.Add(*It);
@@ -156,17 +157,17 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	// Both: the Settings menu's Multiplayer tab (status line), and online menus don't pause the match.
 	if (Crossed(2.0f))
 	{
-		ToggleSettingsMenu();
-		const bool bTab = SettingsMenu && SettingsMenu->ShowPage(TEXT("Multiplayer"));
+		PC->ToggleSettingsMenu();
+		const bool bTab = PC->SettingsMenu && PC->SettingsMenu->ShowPage(TEXT("Multiplayer"));
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s opened Settings, Multiplayer tab %d"), bHost ? TEXT("host") : TEXT("joiner"), bTab);
 	}
 	if (Crossed(2.5f))
 	{
-		const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
-		UE_LOG(LogWWO, Display, TEXT("AutoTest net: menu open %d, game paused %d, status \"%s\""), IsMenuOpen(), IsPaused(), Net ? *Net->DescribeStatus(this) : TEXT("-"));
+		const UWWONetSubsystem* Net = UWWONetSubsystem::Get(PC);
+		UE_LOG(LogWWO, Display, TEXT("AutoTest net: menu open %d, game paused %d, status \"%s\""), PC->IsMenuOpen(), PC->IsPaused(), Net ? *Net->DescribeStatus(PC) : TEXT("-"));
 		Shot(bHost ? TEXT("51_net_menu_host") : TEXT("51_net_menu_client"));
 	}
-	if (Crossed(2.8f) && IsMenuOpen()) CloseMenus();
+	if (Crossed(2.8f) && PC->IsMenuOpen()) PC->CloseMenus();
 
 	// Shooting (22 to 25 s): each side picks the nearest dummy it can see and fires at its head.
 	auto ShootDummy = [this, P, World, &Dummies, Crossed, T]()
@@ -197,19 +198,19 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		const FVector Dir = (Dummy->GetAimParts()[0].Position - P->EyeLocation()).GetSafeNormal();
 		P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
 		const int32 Pull = FMath::FloorToInt((T - ShootFrom - 0.4f) / 0.5f) + 1; // the hand cannon is semi-auto: a fresh pull each shot
-		Held[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
-		JustPressed[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		PC->Held[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		PC->JustPressed[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
 		if (Pull > AutoNetShotPulls) AutoNetShotPulls = Pull;
 	};
 	if (T >= ShootFrom && T < ShootTo)
 	{
-		Held[(int32)EWWOAction::Aim] = true; // aimed in: no hip spread at this range
+		PC->Held[(int32)EWWOAction::Aim] = true; // aimed in: no hip spread at this range
 		if (T >= ShootFrom + 0.4f) ShootDummy(); // once the sights are up
 	}
 	if (Crossed(ShootTo))
 	{
-		Held[(int32)EWWOAction::Fire] = false;
-		Held[(int32)EWWOAction::Aim] = false;
+		PC->Held[(int32)EWWOAction::Fire] = false;
+		PC->Held[(int32)EWWOAction::Aim] = false;
 		// A forged shot the host must refuse: far more damage than the gun can do.
 		// (If the real shots already killed the dummy, any other one does.)
 		if (!bHost && !AutoNetShootTarget.IsValid()) { if (TActorIterator<AWWOTarget> It(World); It) AutoNetShootTarget = *It; }
@@ -225,7 +226,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			Fake.Mods = { "no_such_mod" };
 			P->ServerGunShot(Fake);
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner sent a forged 99999-damage hit and a shot with a made-up mod (the host should reject both); mods on its gun %d"),
-				UWWOLoadoutSubsystem::Get(this) ? UWWOLoadoutSubsystem::Get(this)->ModPercent("damage") != 0.f : -1);
+				UWWOLoadoutSubsystem::Get(PC) ? UWWOLoadoutSubsystem::Get(PC)->ModPercent("damage") != 0.f : -1);
 		}
 	}
 	if (Crossed(ShootTo + 0.6f))
@@ -255,7 +256,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		P->SetViewRotation(FMath::Asin(To.GetSafeNormal().Z) + 0.05f, To.Rotation().Yaw);
 		AutoNetGrenadeTarget = Near;
 		AutoNetGrenadeHealth = Near->GetHealth();
-		JustPressed[(int32)EWWOAction::Grenade] = true;
+		PC->JustPressed[(int32)EWWOAction::Grenade] = true;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner throwing its grenade at %s %.1f m away (health %.0f, charge %.2f)"), *Near->GetName(), To.Size() / WWO::M, AutoNetGrenadeHealth, P->Grenades->Charge);
 	}
 	if (!bHost && Crossed(9.8f))
@@ -270,7 +271,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	{
 		const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 		const bool bFirst = L && L->GetAbility(0) && L->GetAbility(0)->Id == "thornfist";
-		JustPressed[(int32)(bFirst ? EWWOAction::Ability1 : EWWOAction::Ability2)] = true;
+		PC->JustPressed[(int32)(bFirst ? EWWOAction::Ability1 : EWWOAction::Ability2)] = true;
 	}
 	// The moves can end anywhere (each machine's own movement settings): before the shooting the host
 	// puts the joiner back where it started, so the rest doesn't depend on where the run ended.
@@ -287,7 +288,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			bHost ? TEXT("host") : TEXT("joiner"), Joiner->Abilities->ThornfistActive() != nullptr, AWWOCharacter::NetAbilitiesUsed);
 	}
 	// Ult (end of the run): the joiner casts its ult; the host runs the blast and everyone sees it.
-	if (!bHost && Crossed(46.7f)) JustPressed[(int32)EWWOAction::Ult] = true;
+	if (!bHost && Crossed(46.7f)) PC->JustPressed[(int32)EWWOAction::Ult] = true;
 	if (Crossed(48.2f))
 	{
 		const AWWOCharacter* Joiner = bHost ? Other : P;
@@ -347,9 +348,9 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			const FVector Dir = (Aim - P->EyeLocation()).GetSafeNormal();
 			if (!P->Weapon->bMeleeing) P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
 			const float Flat = FVector2D(Dummy->GetActorLocation() - P->GetActorLocation()).Size() / WWO::M;
-			MoveValue = Flat > 1.8f && T < MeleePunches[0] + 2.5f ? FVector2D(0.f, 1.f) : FVector2D::ZeroVector;
-			Held[(int32)EWWOAction::Sprint] = Flat > 6.f && T < MeleePunches[0]; // far away: run there
-			for (const float At : MeleePunches) if (Crossed(At)) JustPressed[(int32)EWWOAction::Melee] = true;
+			PC->MoveValue = Flat > 1.8f && T < MeleePunches[0] + 2.5f ? FVector2D(0.f, 1.f) : FVector2D::ZeroVector;
+			PC->Held[(int32)EWWOAction::Sprint] = Flat > 6.f && T < MeleePunches[0]; // far away: run there
+			for (const float At : MeleePunches) if (Crossed(At)) PC->JustPressed[(int32)EWWOAction::Melee] = true;
 			if (Crossed(MeleeForge))
 			{
 				P->ServerMeleeHit(Dummy, 99999.f, P->EyeLocation(), Aim);
@@ -391,12 +392,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		const FVector To = Other->GetActorLocation() - P->GetActorLocation();
 		P->SetViewRotation(-0.5f, To.Rotation().Yaw);
 		const bool bClose = FVector2D(To).Size() <= 1.5f * WWO::M || P->Health->FindReviveTarget() == Other; // in reach (the prompt's own test)
-		MoveValue = bClose ? FVector2D::ZeroVector : FVector2D(0.f, 1.f);
-		Held[(int32)EWWOAction::Sprint] = !bClose && FVector2D(To).Size() > 4.f * WWO::M;
-		const bool bWasHolding = Held[(int32)EWWOAction::Revive];
-		Held[(int32)EWWOAction::Revive] = bClose && Other->Health->bDead;
+		PC->MoveValue = bClose ? FVector2D::ZeroVector : FVector2D(0.f, 1.f);
+		PC->Held[(int32)EWWOAction::Sprint] = !bClose && FVector2D(To).Size() > 4.f * WWO::M;
+		const bool bWasHolding = PC->Held[(int32)EWWOAction::Revive];
+		PC->Held[(int32)EWWOAction::Revive] = bClose && Other->Health->bDead;
 		AutoNetReviveSeen = FMath::Max(AutoNetReviveSeen, Other->Health->BeingRevived);
-		if (Held[(int32)EWWOAction::Revive] && !bWasHolding)
+		if (PC->Held[(int32)EWWOAction::Revive] && !bWasHolding)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner holding Revive %.1f m from the host (host down %d, its clip %s, revive target %s)"),
 				To.Size() / WWO::M, Other->Health->bDead, *Other->Body->CurrentAnim().ToString(), *GetNameSafe(P->Health->FindReviveTarget()));
@@ -404,9 +405,9 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	}
 	if (Crossed(ReviveReport))
 	{
-		Held[(int32)EWWOAction::Revive] = false;
-		Held[(int32)EWWOAction::Sprint] = false;
-		MoveValue = FVector2D::ZeroVector;
+		PC->Held[(int32)EWWOAction::Revive] = false;
+		PC->Held[(int32)EWWOAction::Sprint] = false;
+		PC->MoveValue = FVector2D::ZeroVector;
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host after the revive: dead %d, revived %d, health %.0f shield %.0f"),
@@ -453,7 +454,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		{
 			// Everyone down loses the round, and a lost round restarts the run (online that's a ServerTravel).
 			GAutoNetRound = 1;
-			GAutoNetRound1 = this;
+			GAutoNetRound1 = PC;
 			Other->Health->Kill();
 			P->Health->Kill();
 			const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
@@ -494,14 +495,14 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			const FVector From = P->GetActorLocation();
 			const FVector To = From + FRotator(0.f, Yaw, 0.f).Vector() * 4000.f;
 			FHitResult Hit;
-			const float Len = GetWorld()->SweepSingleByChannel(Hit, From, To, FQuat::Identity, ECC_Pawn, Body, Params) ? Hit.Distance : 4000.f;
+			const float Len = PC->GetWorld()->SweepSingleByChannel(Hit, From, To, FQuat::Identity, ECC_Pawn, Body, Params) ? Hit.Distance : 4000.f;
 			if (Len > BestLen) { BestLen = Len; BestYaw = Yaw; }
 		}
 		P->SetViewRotation(0.f, BestYaw);
 		return BestLen / WWO::M;
 	};
-	auto Press = [this](EWWOAction A) { JustPressed[(int32)A] = true; Held[(int32)A] = true; };
-	auto Release = [this](EWWOAction A) { Held[(int32)A] = false; };
+	auto Press = [this](EWWOAction A) { PC->JustPressed[(int32)A] = true; PC->Held[(int32)A] = true; };
+	auto Release = [this](EWWOAction A) { PC->Held[(int32)A] = false; };
 
 	// End of the step that was running: its corrections.
 	auto EndStep = [this, P]()
@@ -528,17 +529,17 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		else if (Step == TEXT("walk"))
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: clear run %.1f m"), FaceOpen());
-			MoveValue = FVector2D(0.f, 1.f);
+			PC->MoveValue = FVector2D(0.f, 1.f);
 		}
 		else if (Step == TEXT("sprint")) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: clear run %.1f m"), FaceOpen()); Press(EWWOAction::Sprint); }
 		else if (Step == TEXT("slide")) { Press(EWWOAction::Crouch); }
-		else if (Step == TEXT("stop")) { MoveValue = FVector2D::ZeroVector; }
-		else if (Step == TEXT("crouch_walk")) { FaceOpen(); Press(EWWOAction::Crouch); MoveValue = FVector2D(0.f, 1.f); }
+		else if (Step == TEXT("stop")) { PC->MoveValue = FVector2D::ZeroVector; }
+		else if (Step == TEXT("crouch_walk")) { FaceOpen(); Press(EWWOAction::Crouch); PC->MoveValue = FVector2D(0.f, 1.f); }
 		else if (Step == TEXT("jump")) { Press(EWWOAction::Crouch); FaceOpen(); } // stand back up, then run and jump
 		else if (Step == TEXT("mantle"))
 		{
 			// Run at the nearest crate stack tall enough to mantle (a wall at chest height, 1.2 m) and jump at it.
-			MoveValue = FVector2D::ZeroVector;
+			PC->MoveValue = FVector2D::ZeroVector;
 			float BestD = 1e9f;
 			AutoNetCrate = FVector::ZeroVector;
 			AutoNetCrateBox = FBox(ForceInit);
@@ -561,10 +562,10 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 			bAutoNetMantleJumped = false;
 			bAutoNetSawMantle = false;
 		}
-		else if (Step == TEXT("shoot") || Step == TEXT("melee")) { MoveValue = FVector2D::ZeroVector; }
+		else if (Step == TEXT("shoot") || Step == TEXT("melee")) { PC->MoveValue = FVector2D::ZeroVector; }
 		else if (Step == TEXT("end"))
 		{
-			MoveValue = FVector2D::ZeroVector;
+			PC->MoveValue = FVector2D::ZeroVector;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner done, %d corrections in all, saw mantle %d, saw %d enemy shots from the host"),
 				AutoNetTotalCorrections, bAutoNetSawMantle, AWWOEnemyProjectile::SeenRemote);
 		}
@@ -576,12 +577,12 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (Step == TEXT("crouch_walk") && Crossed(12.1f)) Release(EWWOAction::Crouch);
 	if (Step == TEXT("jump"))
 	{
-		if (Crossed(15.1f)) { Release(EWWOAction::Crouch); MoveValue = FVector2D(0.f, 1.f); }
+		if (Crossed(15.1f)) { Release(EWWOAction::Crouch); PC->MoveValue = FVector2D(0.f, 1.f); }
 		if (Crossed(15.6f)) Press(EWWOAction::Jump);
 		if (Crossed(15.7f) || Crossed(17.2f)) Release(EWWOAction::Jump);
 		if (Crossed(17.f) || Crossed(17.3f)) Press(EWWOAction::Jump); // ground jump, then the air jump
 		if (Crossed(17.4f)) Release(EWWOAction::Jump);
-		if (Crossed(18.6f)) MoveValue = FVector2D::ZeroVector;
+		if (Crossed(18.6f)) PC->MoveValue = FVector2D::ZeroVector;
 	}
 	if (Step == TEXT("mantle") && !AutoNetCrate.IsZero())
 	{
@@ -593,7 +594,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		if (FeetZ < AutoNetCrateBox.Max.Z - 20.f && !P->IsMantling())
 		{
 			P->SetViewRotation(0.f, To.Rotation().Yaw);
-			MoveValue = FVector2D(0.f, 1.f);
+			PC->MoveValue = FVector2D(0.f, 1.f);
 		}
 		if (!bAutoNetMantleJumped && P->IsOnFloor())
 		{
@@ -612,7 +613,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 		bAutoNetSawMantle |= P->IsMantling();
 		if (Crossed(21.8f))
 		{
-			MoveValue = FVector2D::ZeroVector;
+			PC->MoveValue = FVector2D::ZeroVector;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: mantle run ended %.0f cm from the stack's middle (top %.0f cm), feet %.0f cm up, jumped %d"), FVector2D(To).Size(), AutoNetCrateBox.Max.Z,
 				P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight(), bAutoNetMantleJumped);
 		}
@@ -630,7 +631,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	if (Crossed(NetSteps[NumNetSteps - 1].At + 1.5f))
 	{
 		GAutoNetRound = 1;
-		GAutoNetRound1 = this;
+		GAutoNetRound1 = PC;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner waiting for the host's restart"));
 	}
 	if (T > RestartAt + 30.f) { UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host's restart never arrived")); WWOTest::Exit(); }

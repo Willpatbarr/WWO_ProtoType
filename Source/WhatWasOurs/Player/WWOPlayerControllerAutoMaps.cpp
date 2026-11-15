@@ -4,6 +4,7 @@
 // like build_maps.py: tile (x, z) at height y, 4 m tiles centered on the map; L_Cascade's in its
 // mockup's meters (x east, y north, z up; Tools/cascade_layout.py).
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
@@ -64,9 +65,9 @@ namespace
 	};
 }
 
-bool AWWOPlayerController::UpdateAutoMapTest(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdateAutoMapTest(AWWOCharacter* P, float DeltaTime)
 {
-	UWorld* World = GetWorld();
+	UWorld* World = PC->GetWorld();
 	const FString Map = World->GetMapName();
 	const bool bLarge = Map.Contains(TEXT("ArenaLarge"));
 	const bool bRange = Map.Contains(TEXT("TestRange"));
@@ -93,13 +94,13 @@ bool AWWOPlayerController::UpdateAutoMapTest(AWWOCharacter* P, float DeltaTime)
 		AutoMapCamera = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform::Identity);
 		AutoMapCamera->GetCameraComponent()->bConstrainAspectRatio = false;
 		AutoMapCamera->GetCameraComponent()->SetFieldOfView(85.f);
-		SetViewTarget(AutoMapCamera);
+		PC->SetViewTarget(AutoMapCamera);
 	}
 	if (AutoMapIndex >= Count)
 	{
 		if (AutoMapCamera) AutoMapCamera->Destroy();
 		AutoMapCamera = nullptr;
-		SetViewTarget(P);
+		PC->SetViewTarget(P);
 		AutoMapIndex = -1;
 		P->Health->GodMode = 0.f;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest maps: %d views of %s"), Count, *Map);

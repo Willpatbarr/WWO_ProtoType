@@ -8,6 +8,7 @@
 // - 13.5 s on: the joiner goes back; the host kills it (credited) until the kill target ends the
 //   match; the match restarts (still PvP) and both arrive on the fresh map: round 2.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "WWOSwitches.h"
 #include "Player/WWOTestRun.h"
@@ -31,10 +32,10 @@ namespace
 	TWeakObjectPtr<APlayerController> GPvPRound1;
 }
 
-void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
+void FWWOAutoTest::UpdateAutoPvPTest(float DeltaTime)
 {
-	UWorld* World = GetWorld();
-	AWWOCharacter* P = GetWWOCharacter();
+	UWorld* World = PC->GetWorld();
+	AWWOCharacter* P = PC->GetWWOCharacter();
 	const ENetMode Mode = World->GetNetMode();
 	const bool bHost = Mode == NM_ListenServer;
 	AutoNetWait += DeltaTime;
@@ -44,7 +45,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 		return;
 	}
 	AWWOCharacter* Other = nullptr;
-	for (AWWOCharacter* C : UWWOWorldSubsystem::Get(this)->GetPlayers()) if (C != P) { Other = C; break; }
+	for (AWWOCharacter* C : UWWOWorldSubsystem::Get(PC)->GetPlayers()) if (C != P) { Other = C; break; }
 	if (!bAutoNetSawOther)
 	{
 		if (!Other)
@@ -55,17 +56,17 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 		AutoNetClock = -PvPSettle;
 		bAutoNetSawOther = true;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: %s%s sees the other player (PvP %d)"), GPvPRound > 0 ? TEXT("round 2: ") : TEXT(""), bHost ? TEXT("host") : TEXT("joiner"),
-			UWWOWorldSubsystem::IsPvP(this));
+			UWWOWorldSubsystem::IsPvP(PC));
 	}
 	const float Before = AutoNetClock;
 	AutoNetClock += DeltaTime;
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
 	auto Crossed = [Before, T](float At) { return WWOTest::Crossed(Before, T, At); };
-	if (bHost && GPvPRound1.Get() == this) return;
-	if (GPvPRound > 0 && GPvPRound1.Get() != this)
+	if (bHost && GPvPRound1.Get() == PC) return;
+	if (GPvPRound > 0 && GPvPRound1.Get() != PC)
 	{
-		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: round 2 done (PvP %d), joiner leaving"), UWWOWorldSubsystem::IsPvP(this)); WWOTest::Exit(); }
+		if (!bHost && T > 1.f) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: round 2 done (PvP %d), joiner leaving"), UWWOWorldSubsystem::IsPvP(PC)); WWOTest::Exit(); }
 		if (bHost && !Other) { UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: host done, the joiner left after the restart")); WWOTest::Exit(); }
 		return;
 	}
@@ -74,7 +75,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 
 	const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
 	auto Score = [GS]() { return FString::Printf(TEXT("BLUE %d ORANGE %d"), GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : -1, GS && GS->TeamScores.Num() > 1 ? GS->TeamScores[1] : -1); };
-	const AWWOPlayerState* MyPS = GetPlayerState<AWWOPlayerState>();
+	const AWWOPlayerState* MyPS = PC->GetPlayerState<AWWOPlayerState>();
 	const AWWOPlayerState* OtherPS = Other->GetPlayerState<AWWOPlayerState>();
 	AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
 	if (Crossed(1.f))
@@ -100,17 +101,17 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	{
 		const FVector Dir = (Other->GetAimParts()[0].Position - P->EyeLocation()).GetSafeNormal();
 		P->SetViewRotation(FMath::Asin(Dir.Z), Dir.Rotation().Yaw);
-		Held[(int32)EWWOAction::Aim] = true;
+		PC->Held[(int32)EWWOAction::Aim] = true;
 		const int32 Pull = FMath::FloorToInt((T - From) / 0.5f) + 1;
-		JustPressed[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
-		Held[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		PC->JustPressed[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
+		PC->Held[(int32)EWWOAction::Fire] = Pull > AutoNetShotPulls;
 		AutoNetShotPulls = FMath::Max(AutoNetShotPulls, Pull);
 	};
 	if (bHost && Crossed(2.f)) AutoPvPHostHealth = P->Health->Health + P->Health->Shield;
 	if (!bHost && T >= 2.4f && T < 8.f && !Other->Health->bDead && (!MyPS || MyPS->Kills < 1)) ShootAt(2.4f); // until the first kill
 	if (Crossed(8.f))
 	{
-		Held[(int32)EWWOAction::Aim] = Held[(int32)EWWOAction::Fire] = false;
+		PC->Held[(int32)EWWOAction::Aim] = PC->Held[(int32)EWWOAction::Fire] = false;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: %s after the joiner's shots: %s; joiner kills %d, host deaths %d; host dead %d"),
 			bHost ? TEXT("host") : TEXT("joiner"), *Score(), bHost ? (OtherPS ? OtherPS->Kills : -1) : (MyPS ? MyPS->Kills : -1),
 			bHost ? (MyPS ? MyPS->Deaths : -1) : (OtherPS ? OtherPS->Deaths : -1), bHost ? P->Health->bDead : Other->Health->bDead);
@@ -129,7 +130,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	if (!bHost && T >= 9.8f && T < 12.f) ShootAt(9.8f);
 	if (Crossed(12.5f))
 	{
-		Held[(int32)EWWOAction::Aim] = Held[(int32)EWWOAction::Fire] = false;
+		PC->Held[(int32)EWWOAction::Aim] = PC->Held[(int32)EWWOAction::Fire] = false;
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: friendly fire: same team %d, host health %.0f -> %.0f, teammate hits refused %d"),
@@ -154,19 +155,19 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	if (bHost && GM && GM->State == EWWOWaveState::MatchOver && GPvPRound == 0)
 	{
 		GPvPRound = 1;
-		GPvPRound1 = this;
+		GPvPRound1 = PC;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: match over at %.1f s: \"%s\"; host kills %d deaths %d, joiner kills %d deaths %d; restarting"), T,
 			GS ? *GS->StatusLine : TEXT("-"), MyPS ? MyPS->Kills : -1, MyPS ? MyPS->Deaths : -1, OtherPS ? OtherPS->Kills : -1, OtherPS ? OtherPS->Deaths : -1);
 	}
 	if (!bHost && GS && GS->StatusLine.Contains(TEXT("WINS")) && GPvPRound == 0)
 	{
 		GPvPRound = 1;
-		GPvPRound1 = this;
+		GPvPRound1 = PC;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: joiner sees \"%s\""), *GS->StatusLine);
 	}
 }
 
-void AWWOPlayerController::LogJoinerStress(float DeltaTime)
+void FWWOAutoTest::LogJoinerStress(float DeltaTime)
 {
 	// A joiner in a busy match: its frame time, what arrives, and how often the host corrects it.
 	UWWOCharacterMovement::bLogNetCorrections = false;
@@ -175,11 +176,11 @@ void AWWOPlayerController::LogJoinerStress(float DeltaTime)
 	StressWorst = FMath::Max(StressWorst, DeltaTime);
 	if (StressClock < StressNext) return;
 	StressNext += 5.f;
-	const UNetConnection* Conn = GetNetConnection();
+	const UNetConnection* Conn = PC->GetNetConnection();
 	const int32 Now = UWWOCharacterMovement::NetCorrections;
-	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
+	const AWWOGameState* GS = PC->GetWorld()->GetGameState<AWWOGameState>();
 	UE_LOG(LogWWO, Display, TEXT("Stress joiner: t=%.0f %d players, frame avg %.1f ms worst %.1f ms, in %.1f KB/s out %.1f KB/s, lost %d, corrections %d, %s"),
-		StressClock, UWWOWorldSubsystem::Get(this)->GetPlayers().Num(), 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
+		StressClock, UWWOWorldSubsystem::Get(PC)->GetPlayers().Num(), 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
 		Conn ? Conn->InBytesPerSecond / 1024.f : 0.f, Conn ? Conn->OutBytesPerSecond / 1024.f : 0.f, Conn ? Conn->InPacketsLost : 0, Now - StressCorrections,
 		GS ? *GS->StatusLine : TEXT("-"));
 	StressCorrections = Now;

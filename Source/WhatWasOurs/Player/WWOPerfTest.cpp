@@ -2,6 +2,7 @@
 // cameras as the map autotest, averages frame time and GPU time at each one, runs one GPU profile
 // (profilegpu, into the log), logs a summary and quits. Run it before and after render changes.
 
+#include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "WWOSwitches.h"
 #include "Player/WWOCharacter.h"
@@ -37,7 +38,7 @@ namespace
 // "cvar value" pairs, comma separated): sets it, lets it settle, averages the frame time, puts the
 // old values back. The plain view is measured first and again last, so drift shows. Each line is
 // "PerfSweep <entry>: frame X ms (change from the first plain measure)". Then it quits.
-bool AWWOPlayerController::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
+bool FWWOAutoTest::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
 {
 	static bool bParsed = false, bOn = false;
 	static TArray<FString> Entries;
@@ -122,14 +123,14 @@ bool AWWOPlayerController::UpdatePerfSweep(AWWOCharacter* P, float DeltaTime)
 	if (++At >= Entries.Num())
 	{
 		bPerfTest = false;
-		ConsoleCommand(TEXT("quit"));
+		PC->ConsoleCommand(TEXT("quit"));
 		return true;
 	}
 	Apply(Entries[At]);
 	return true;
 }
 
-void AWWOPlayerController::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
+void FWWOAutoTest::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
 {
 	PerfStartClock += DeltaTime;
 	if (PerfStartClock < 6.f) return; // shaders, streaming and the first sky capture settle
@@ -139,10 +140,10 @@ void AWWOPlayerController::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
 	if (QuitIn >= 0.f)
 	{
 		QuitIn -= DeltaTime;
-		if (QuitIn < 0.f) { bPerfTest = false; ConsoleCommand(TEXT("quit")); }
+		if (QuitIn < 0.f) { bPerfTest = false; PC->ConsoleCommand(TEXT("quit")); }
 		return;
 	}
-	if (bCsv && !FWWOProf::bOn) ConsoleCommand(TEXT("CsvProfile Start"));
+	if (bCsv && !FWWOProf::bOn) PC->ConsoleCommand(TEXT("CsvProfile Start"));
 	FWWOProf::bOn = true;
 	++ProfFrames;
 
@@ -163,7 +164,7 @@ void AWWOPlayerController::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
 		if (View == 1 && !bPerfProfiled)
 		{
 			bPerfProfiled = true;
-			ConsoleCommand(TEXT("profilegpu"));
+			PC->ConsoleCommand(TEXT("profilegpu"));
 		}
 	}
 	if (!bDone) return;
@@ -182,16 +183,16 @@ void AWWOPlayerController::UpdatePerfTest(AWWOCharacter* P, float DeltaTime)
 	{
 		const FVector2D Avg = Total / Frames;
 		UE_LOG(LogWWO, Display, TEXT("PerfTest %s: frame %.2f ms (%.1f fps), GPU %.2f ms, game thread %.2f ms, render thread %.2f ms over %d frames"),
-			*GetWorld()->GetMapName(), Avg.X, 1000.0 / Avg.X, Avg.Y, PerfGameMs / Frames, PerfRenderMs / Frames, Frames);
+			*PC->GetWorld()->GetMapName(), Avg.X, 1000.0 / Avg.X, Avg.Y, PerfGameMs / Frames, PerfRenderMs / Frames, Frames);
 	}
 	LogProf();
 	FWWOProf::bOn = false;
 	if (bCsv)
 	{
-		ConsoleCommand(TEXT("CsvProfile Stop"));
+		PC->ConsoleCommand(TEXT("CsvProfile Stop"));
 		QuitIn = 3.f; // the file is written in the background
 		return;
 	}
 	bPerfTest = false;
-	ConsoleCommand(TEXT("quit"));
+	PC->ConsoleCommand(TEXT("quit"));
 }
