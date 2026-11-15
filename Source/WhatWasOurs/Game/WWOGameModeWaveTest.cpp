@@ -4,6 +4,7 @@
 // target. Ends with a "WaveTest done" summary line and quits.
 
 #include "Game/WWOGameMode.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
@@ -18,7 +19,6 @@
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
 #include "NavMesh/RecastNavMesh.h"
-#include "UnrealClient.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -100,12 +100,11 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 			}
 		}
 	}
-	const FString Shots = FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("wave_");
 	if (State == EWWOWaveState::Won)
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest done: cleared %d waves; %d stuck, %d blocked by others, %d holding range, %d not facing, %d overlaps; %d enemy shots hit the player"),
 			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, AWWOEnemyProjectile::PlayerHits);
-		FScreenshotRequest::RequestScreenshot(Shots + TEXT("won.png"), true, false);
+		WWOTest::Shot(TEXT("wave_won"));
 		bWaveTest = false;
 		FTimerHandle Quit;
 		GetWorldTimerManager().SetTimer(Quit, []() { FPlatformMisc::RequestExit(false); }, 1.f, false);
@@ -135,7 +134,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	}
 	if (Before < 12.f && WaveTestFight >= 12.f)
 	{
-		FScreenshotRequest::RequestScreenshot(Shots + FString::Printf(TEXT("%d.png"), Wave), true, false);
+		WWOTest::Shot(FString::Printf(TEXT("wave_%d"), Wave));
 	}
 	if (Queue.Num() == 0 && WaveTestFight >= FightTime)
 	{

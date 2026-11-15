@@ -5,6 +5,7 @@
 // screenshots 23_ability_* and 24_ult_*. The loadout is put back at the end.
 
 #include "Systems/WWOSound.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -221,7 +222,7 @@ bool AWWOPlayerController::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTi
 
 	const float Dt = DeltaTime;
 	AutoAbilityPhase += Dt;
-	auto Cross = [&](float T) { return AutoAbilityPhase - Dt < T && AutoAbilityPhase >= T; };
+	auto Cross = [&](float T) { return WWOTest::Crossed(AutoAbilityPhase - Dt, AutoAbilityPhase, T); };
 	auto ShotNamed = [&](const TCHAR* Prefix, const TCHAR* What) { Shot(*FString::Printf(TEXT("%s_%s_%s"), Prefix, *Id.ToString(), What)); };
 	AActor* Target = AutoAbilityTarget.Get();
 

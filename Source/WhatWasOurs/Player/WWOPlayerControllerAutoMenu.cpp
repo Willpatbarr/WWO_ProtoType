@@ -6,6 +6,7 @@
 // too. Logs `AutoTest menu: ... ok` or `... FAIL`, with screenshots 25_menu_* to 29_menu_*.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "UI/WWOSettingsMenu.h"
 #include "UI/WWOCharacterMenu.h"
@@ -102,8 +103,7 @@ bool AWWOPlayerController::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	auto Next = [this] { ++AutoMenuStep; AutoMenuClock = 0.f; };
 	auto Check = [this](bool bOk, const FString& What)
 	{
-		UE_LOG(LogWWO, Display, TEXT("AutoTest menu: %s %s"), *What, bOk ? TEXT("ok") : TEXT("FAIL"));
-		if (!bOk) ++AutoMenuFails;
+		if (!WWOTest::Check(TEXT("menu"), bOk, What)) ++AutoMenuFails;
 	};
 	// Steers the cursor with the left stick onto Target; true once it's there.
 	auto Steer = [&](const FVector2D& Target) -> bool

@@ -16,8 +16,6 @@
 #include "WhatWasOurs.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
-#include "HAL/FileManager.h"
-#include "Misc/Paths.h"
 #include "EngineUtils.h"
 
 namespace
@@ -36,16 +34,10 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 	if (!P || !GM || !FiringTester) return;
 	const float Before = TesterClock;
 	TesterClock += DeltaTime;
-	auto Crossed = [&](float T) { return Before < T && TesterClock >= T; };
-	auto Check = [](bool bOk, const FString& What) { UE_LOG(LogWWO, Display, TEXT("AutoTest tester: %s %s"), *What, bOk ? TEXT("ok") : TEXT("FAIL")); };
+	auto Crossed = [&](float T) { return WWOTest::Crossed(Before, TesterClock, T); };
+	auto Check = [](bool bOk, const FString& What) { WWOTest::Check(TEXT("tester"), bOk, What); };
 	// -WWOTesterGun=<id>: the gun to look at (the saved loadout isn't changed on disk: the run never closes a menu).
-	// The saved loadout is copied aside first and put back at the end, byte for byte.
-	const FString SaveFile = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.sav"), Backup = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.tester-backup");
-	if (Crossed(3.f))
-	{
-		if (IFileManager::Get().FileExists(*Backup)) IFileManager::Get().Copy(*SaveFile, *Backup); // left by a run that stopped half way
-		else if (IFileManager::Get().FileExists(*SaveFile)) IFileManager::Get().Copy(*Backup, *SaveFile);
-	}
+	// The saved loadout was copied aside when the run started and is put back at the end, byte for byte (WWOTest::GuardLoadout).
 	if (Crossed(4.f))
 	{
 		FString Gun;
@@ -83,7 +75,7 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 			{
 				if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); L && TesterGunBefore.IsValid()) L->EquipWeapon(TesterGunBefore.Get());
 				if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this)) L->FlushSave();
-				if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
+				WWOTest::RestoreLoadout();
 				UE_LOG(LogWWO, Display, TEXT("AutoTest tester: %d frames saved"), Frames);
 				WWOTest::Exit();
 			}
@@ -180,7 +172,7 @@ void AWWOPlayerController::UpdateAutoTesterTest(float DeltaTime)
 		Check(TesterAmmo - P->Weapon->Ammo == 2 * Per, FString::Printf(TEXT("semi-auto: a pull 0.12 s early still fired (%d rounds gone, %d wanted)"), TesterAmmo - P->Weapon->Ammo, 2 * Per));
 		if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this); L && TesterGunBefore.IsValid()) L->EquipWeapon(TesterGunBefore.Get()); // the gun you had
 		if (UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this)) L->FlushSave(); // anything due is written now, then replaced
-		if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
+		WWOTest::RestoreLoadout();
 		UE_LOG(LogWWO, Display, TEXT("AutoTest tester: done"));
 		WWOTest::Exit();
 	}

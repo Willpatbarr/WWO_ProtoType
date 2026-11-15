@@ -2,7 +2,7 @@
 // With the fullest case set up (every perk mod on the rifle, four more saved configs), it opens
 // the Weapon tab, the Weapon tab with a slot's mods showing, and the Shell tab, and checks that
 // none of them has anything to scroll to. Shots 80_tab_weapon, 81_tab_weapon_mods, 82_tab_shell;
-// lines `AutoTest tabs: ... ok|FAIL`. The saved loadout is backed up first and put back at the end.
+// lines `AutoTest tabs: ... ok|FAIL`. The saved loadout file is put back at the end (WWOTest's guard).
 // Run it at a few window sizes (-ResX / -ResY): the menus scale with the window.
 
 #include "Player/WWOPlayerController.h"
@@ -13,8 +13,6 @@
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
 #include "WhatWasOurs.h"
-#include "HAL/FileManager.h"
-#include "Misc/Paths.h"
 #include "Camera/CameraActor.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOWeaponComponent.h"
@@ -24,8 +22,6 @@ namespace
 {
 	int32 TabsStage = 0;
 	float TabsClock = 0.f;
-	FString SavePath() { return FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.sav"); }
-	FString BackupPath() { return FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.autotest-backup"); }
 }
 
 void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
@@ -49,8 +45,8 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 			P->Body->SetShadowOnly(false);
 			P->Weapon->SetFirstPersonHidden(true);
 			P->Weapon->bForceWorldGun = true;
-			// -WWOPoseWeapon=<id>: with that weapon in hand (this changes the saved loadout: back
-			// Saved/SaveGames/Loadout.sav up first and put it back after).
+			// -WWOPoseWeapon=<id>: with that weapon in hand (the saved loadout comes back when the
+			// run closes: WWOTest::GuardLoadout).
 			FString Want;
 			if (WWOSwitches::Value(TEXT("WWOPoseWeapon="), Want))
 			{
@@ -128,8 +124,6 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 	{
 	case 0:
 		if (TabsClock < 8.f) break;
-		IFileManager::Get().Delete(*BackupPath());
-		if (IFileManager::Get().FileExists(*SavePath())) IFileManager::Get().Copy(*BackupPath(), *SavePath());
 		// The fullest Weapon tab: six perks' worth of text and a long list of configs.
 		for (UWWOWeaponData* W : L->Weapons) if (W->Id == "rifle") L->EquipWeapon(W);
 		for (UWWOModData* Mod : L->WeaponMods) if (Mod->Frame == "rifle" && !Mod->Perk.IsNone()) L->EquipMod(Mod->Slot, Mod);
@@ -145,13 +139,8 @@ void AWWOPlayerController::UpdateAutoTabsTest(float DeltaTime)
 	case 5: if (TabsClock > 1.f) { Fits(TEXT("the Shell tab"), TEXT("82_tab_shell")); Next(); } break;
 	case 6:
 		if (TabsClock < 1.f) break;
-		// Put the real save back (it's reloaded on the next launch).
-		if (IFileManager::Get().FileExists(*BackupPath()))
-		{
-			IFileManager::Get().Copy(*SavePath(), *BackupPath());
-			IFileManager::Get().Delete(*BackupPath());
-		}
-		else IFileManager::Get().Delete(*SavePath());
+		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
+		WWOTest::RestoreLoadout();
 		UE_LOG(LogWWO, Display, TEXT("AutoTest tabs: done (saved loadout restored)"));
 		WWOTest::Exit();
 		Next();

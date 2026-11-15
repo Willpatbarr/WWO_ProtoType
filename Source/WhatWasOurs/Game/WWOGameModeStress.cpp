@@ -9,6 +9,7 @@
 // times stay where they were. Making them members would change that.
 
 #include "Game/WWOGameModeStress.h"
+#include "Player/WWOTestRun.h"
 #include "Game/WWOGameMode.h"
 #include "Game/WWOGameState.h"
 #include "WWOTypes.h"
@@ -79,7 +80,7 @@ void FWWOStressHarness::LogBots(AWWOGameMode& GM)
 			// And something for the HUD to show: a hit from behind and to the right, and a slow.
 			Me->Health->DamageCameFrom(Me->GetActorLocation() - Dir * 400.f + FVector::CrossProduct(FVector::UpVector, Dir) * 400.f);
 			Me->ApplySlow(0.4f, 3.f);
-			const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("41_pvp_view_%03d_%s.png"), FMath::RoundToInt(BotLogClock), bWantFoe ? TEXT("foe") : TEXT("mate"));
+			const FString Path = WWOTest::ShotPath(FString::Printf(TEXT("41_pvp_view_%03d_%s"), FMath::RoundToInt(BotLogClock), bWantFoe ? TEXT("foe") : TEXT("mate")));
 			FTimerHandle Handle;
 			World->GetTimerManager().SetTimer(Handle, [Path] { FScreenshotRequest::RequestScreenshot(Path, true, false); }, 0.25f, false);
 			UE_LOG(LogWWO, Display, TEXT("Bots view: %s at %.0f m, team %d (mine %d) -> %s"), bWantFoe ? TEXT("foe") : TEXT("teammate"), BestD / 100.f,
@@ -161,7 +162,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			if (ShotAt > 0.f && StressClock >= ShotAt)
 			{
 				ShotAt = -1.f;
-				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("44_kill_%02d.png"), Done), true, false);
+				WWOTest::Shot(FString::Printf(TEXT("44_kill_%02d"), Done));
 			}
 		}
 		// -WWOTestFog (with -WWOBotsIdle): the host gets Spore Fog Damage, and every 12 s a fog of
@@ -173,6 +174,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			if (StressClock >= NextFog)
 			{
 				NextFog = StressClock + 12.f;
+				WWOTest::GuardLoadout(); // the ability equipped here is not left in the saved loadout
 				UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
 				if (Loadout && !Host->Abilities->Equipped("spore_fog_damage"))
 				{
@@ -199,6 +201,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 		{
 			static int32 Shots = 0;
 			static float NextShot = 9.f;
+			WWOTest::GuardLoadout(); // the ability equipped here is not left in the saved loadout
 			UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
 			if (Loadout && !Host->Abilities->Equipped("static_charge"))
 			{
@@ -208,7 +211,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			if (StressClock >= NextShot && Shots < 3)
 			{
 				NextShot = StressClock + 0.7f;
-				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("46_static_%d.png"), Shots++), true, false);
+				WWOTest::Shot(FString::Printf(TEXT("46_static_%d"), Shots++));
 			}
 		}
 		if (Host && Near)
@@ -220,7 +223,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			if (StressClock >= Next && FVector::Dist(Near->GetActorLocation(), Host->GetActorLocation()) < 1500.f)
 			{
 				Next = StressClock + 1.5f;
-				FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("43_bot_%02d.png"), Saved++), true, false);
+				WWOTest::Shot(FString::Printf(TEXT("43_bot_%02d"), Saved++));
 			}
 		}
 	}
@@ -228,10 +231,10 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 	// in front of the host one after another and saves each (Saved/AutoTest/42_fx_*.png).
 	if (WWOSwitches::Has(TEXT("WWOFxGallery")))
 	{
-		auto At = [this, DeltaSeconds](float T) { return StressClock >= T && StressClock - DeltaSeconds < T; };
+		auto At = [this, DeltaSeconds](float T) { return WWOTest::Crossed(StressClock - DeltaSeconds, StressClock, T); };
 		auto Save = [World](const TCHAR* Name, float After)
 		{
-			const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString::Printf(TEXT("42_fx_%s.png"), Name);
+			const FString Path = WWOTest::ShotPath(FString::Printf(TEXT("42_fx_%s"), Name));
 			FTimerHandle Handle;
 			World->GetTimerManager().SetTimer(Handle, [Path] { FScreenshotRequest::RequestScreenshot(Path, true, false); }, FMath::Max(After, 0.03f), false); // (a timer of 0 never fires)
 		};
@@ -265,7 +268,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 		}
 	}
 	static const float ProfileAt = [] { float At = 12.f; WWOSwitches::Value(TEXT("WWOProfileAt="), At); return At; }(); // read once, not every frame
-	if (StressClock >= ProfileAt - 2.f && StressClock - DeltaSeconds < ProfileAt - 2.f && WWOSwitches::Has(TEXT("WWOProfileGPU"))) FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / TEXT("AutoTest") / TEXT("profile_view.png"), true, false);
+	if (StressClock >= ProfileAt - 2.f && StressClock - DeltaSeconds < ProfileAt - 2.f && WWOSwitches::Has(TEXT("WWOProfileGPU"))) WWOTest::Shot(TEXT("profile_view"));
 	if (StressClock >= ProfileAt && StressClock - DeltaSeconds < ProfileAt && WWOSwitches::Has(TEXT("WWOProfileGPU")))
 	{
 		// What is casting shadows and can move (each one makes the sun's shadow map redraw around it).

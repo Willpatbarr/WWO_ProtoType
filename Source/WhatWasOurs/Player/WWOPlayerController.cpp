@@ -112,7 +112,11 @@ void AWWOPlayerController::BeginPlay()
 	}
 	SetMenuMode(IsMenuOpen());
 	if (Net) Net->HandleCommandLine(this); // -WWOHost / -WWOJoin
-	if (WWOSwitches::HasAutoTestText()) WWOTest::Watch(); // count the FAIL lines of a test run
+	if (WWOSwitches::HasAutoTestText())
+	{
+		WWOTest::Watch();        // count the FAIL lines of a test run
+		WWOTest::GuardLoadout(); // and the saved loadout comes back as it was when the run closes
+	}
 	bAutoTest = WWOSwitches::Has(TEXT("WWOAutoTest"));
 	bAutoTestMenusOnly = WWOSwitches::Has(TEXT("WWOAutoTestMenus"));
 	bAutoTestBodyOnly = WWOSwitches::Has(TEXT("WWOAutoTestBody"));
@@ -765,10 +769,9 @@ void AWWOPlayerController::UpdateScoreboard()
 	{
 		static int32 Step = 0;
 		const double Open = FPlatformTime::Seconds() - Scoreboard->OpenedAt;
-		const FString Dir = FPaths::ProjectSavedDir() / TEXT("AutoTest");
-		if (Step == 0 && Open > 2.0) { FScreenshotRequest::RequestScreenshot(Dir / TEXT("45_scoreboard.png"), true, false); Step = 1; }
+		if (Step == 0 && Open > 2.0) { WWOTest::Shot(TEXT("45_scoreboard")); Step = 1; }
 		else if (Step == 1 && Open > 3.0) { Scoreboard->ShowMaps(); Step = 2; }
-		else if (Step == 2 && Open > 4.0) { FScreenshotRequest::RequestScreenshot(Dir / TEXT("45_scoreboard_maps.png"), true, false); Step = 3; }
+		else if (Step == 2 && Open > 4.0) { WWOTest::Shot(TEXT("45_scoreboard_maps")); Step = 3; }
 		else if (Step == 3 && Open > 5.0) { Scoreboard->Back(); Scoreboard->NextMatch(); Step = 4; }
 	}
 }
@@ -845,8 +848,7 @@ void AWWOPlayerController::SetMenuMode(bool bOpen)
 
 void AWWOPlayerController::Shot(const TCHAR* Name)
 {
-	const FString Path = FPaths::ProjectSavedDir() / TEXT("AutoTest") / FString(Name) + TEXT(".png");
-	FScreenshotRequest::RequestScreenshot(Path, true, false);
+	const FString Path = WWOTest::Shot(Name);
 	// With the frame's timings, to see what costs what (menus open, effects...).
 	UE_LOG(LogWWO, Display, TEXT("AutoTest shot %s (frame %.1f ms, game %.1f, render %.1f, gpu %.1f)"), *Path, FApp::GetDeltaTime() * 1000.0,
 		FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));

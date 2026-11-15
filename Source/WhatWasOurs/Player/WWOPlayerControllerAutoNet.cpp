@@ -105,7 +105,7 @@ void AWWOPlayerController::UpdateAutoNetTest(float DeltaTime)
 	AutoNetClock += DeltaTime;
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
-	auto Crossed = [Before, T](float At) { return Before < At && T >= At; };
+	auto Crossed = [Before, T](float At) { return WWOTest::Crossed(Before, T, At); };
 	if (bHost && GAutoNetRound1.Get() == this) return; // restarting: this controller's world is on its way out
 	if (GAutoNetRound > 0 && GAutoNetRound1.Get() != this)
 	{

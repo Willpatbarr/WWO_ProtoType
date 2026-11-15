@@ -8,6 +8,7 @@
 // grenade throw and the punch (33_fp_*). Logs `AutoTest body:` with the clip each one plays.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOWeaponComponent.h"
@@ -60,7 +61,7 @@ bool AWWOPlayerController::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	UWorld* World = GetWorld();
 	const float Before = AutoBodyClock;
 	AutoBodyClock += DeltaTime;
-	auto Crossed = [&](float T) { return Before < T && AutoBodyClock >= T; };
+	auto Crossed = [&](float T) { return WWOTest::Crossed(Before, AutoBodyClock, T); };
 	auto PoseAt = [&](int32 i) { return AutoBodyOrigin + FVector(0.f, (i - (NumPoses - 1) * 0.5f) * Spacing, 0.f); };
 	auto Look = [&](const FVector& From, const FVector& At, float Fov = 70.f)
 	{

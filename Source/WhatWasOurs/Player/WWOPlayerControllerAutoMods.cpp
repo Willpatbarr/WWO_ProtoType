@@ -3,10 +3,11 @@
 // that a saved config comes back when applied (and by the quick-swap cycle), fires the perk
 // config at a target and logs the perk counters, then screenshots the Weapons tile and a slot
 // picker. Then the same for the hand cannon (its stats checked against the mod data, its perk
-// set fired, its tile screenshotted). The saved loadout is backed up first and put back at the end.
+// set fired, its tile screenshotted). The saved loadout file is put back at the end (WWOTest's guard).
 // Logs `AutoTest mods: ... ok` or `... FAIL`, with screenshots 37_mods_*.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "WWOSwitches.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -19,17 +20,12 @@
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WhatWasOurs.h"
-#include "HAL/FileManager.h"
-#include "Misc/Paths.h"
 #include "FX/WWOFX.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
 {
-	FString SavePath() { return FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.sav"); }
-	FString BackupPath() { return FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.autotest-backup"); }
-
 	UWWOModData* ModById(UWWOLoadoutSubsystem* L, FName Id)
 	{
 		for (UWWOModData* M : L->WeaponMods)
@@ -39,10 +35,7 @@ namespace
 		return nullptr;
 	}
 
-	void Check(bool bOk, const FString& What)
-	{
-		UE_LOG(LogWWO, Display, TEXT("AutoTest mods: %s %s"), *What, bOk ? TEXT("ok") : TEXT("FAIL"));
-	}
+	void Check(bool bOk, const FString& What) { WWOTest::Check(TEXT("mods"), bOk, What); }
 
 	bool Near(float A, float B) { return FMath::Abs(A - B) <= FMath::Max(0.01f, FMath::Abs(B) * 0.01f); }
 }
@@ -84,9 +77,7 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	{
 	case 0:
 	{
-		// Back up the real save, then start from a bare rifle.
-		IFileManager::Get().Delete(*BackupPath());
-		if (IFileManager::Get().FileExists(*SavePath())) IFileManager::Get().Copy(*BackupPath(), *SavePath());
+		// The real save is already copied aside (WWOTest::GuardLoadout). Start from a bare rifle.
 		P->Health->GodMode = 1.f;
 		Check(L->WeaponMods.Num() == 60, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
 		EquipWeaponId("rifle");
@@ -664,16 +655,8 @@ bool AWWOPlayerController::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	case 8:
 		if (AutoModClock < 0.5f) break;
 		if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
-		// Put the real save back (it's reloaded on the next launch).
-		if (IFileManager::Get().FileExists(*BackupPath()))
-		{
-			IFileManager::Get().Copy(*SavePath(), *BackupPath());
-			IFileManager::Get().Delete(*BackupPath());
-		}
-		else
-		{
-			IFileManager::Get().Delete(*SavePath());
-		}
+		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
+		WWOTest::RestoreLoadout();
 		UE_LOG(LogWWO, Display, TEXT("AutoTest mods: done (saved loadout restored)"));
 		P->Health->GodMode = 0.f;
 		AutoModStep = 0;

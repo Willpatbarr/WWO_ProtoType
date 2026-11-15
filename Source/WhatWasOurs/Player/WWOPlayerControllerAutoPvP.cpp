@@ -61,7 +61,7 @@ void AWWOPlayerController::UpdateAutoPvPTest(float DeltaTime)
 	AutoNetClock += DeltaTime;
 	if (AutoNetClock < 0.f) return;
 	const float T = AutoNetClock;
-	auto Crossed = [Before, T](float At) { return Before < At && T >= At; };
+	auto Crossed = [Before, T](float At) { return WWOTest::Crossed(Before, T, At); };
 	if (bHost && GPvPRound1.Get() == this) return;
 	if (GPvPRound > 0 && GPvPRound1.Get() != this)
 	{

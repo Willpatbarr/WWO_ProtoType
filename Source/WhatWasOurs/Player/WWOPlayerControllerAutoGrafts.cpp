@@ -5,6 +5,7 @@
 // afterwards. Logs `AutoTest grafts:` with what each body wears.
 
 #include "Player/WWOPlayerController.h"
+#include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Characters/WWOBodyComponent.h"
@@ -15,7 +16,6 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
-#include "HAL/FileManager.h"
 
 namespace
 {
@@ -49,16 +49,10 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	if (!Loadout || !CharacterMenu) return true;
 	const float Before = AutoGraftClock;
-	// The saved loadout is copied aside first and put back at the end, so a run that stops half way
-	// can't leave a test loadout as yours (the next run puts a left-over copy back before it starts).
-	const FString SaveFile = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.sav"), Backup = FPaths::ProjectSavedDir() / TEXT("SaveGames/Loadout.grafts-backup");
-	if (Before <= 0.f)
-	{
-		if (IFileManager::Get().FileExists(*Backup)) IFileManager::Get().Copy(*SaveFile, *Backup);
-		else if (IFileManager::Get().FileExists(*SaveFile)) IFileManager::Get().Copy(*Backup, *SaveFile);
-	}
+	// (The saved loadout was copied aside when the run started and is put back at the end, so a run
+	// that stops half way can't leave a test loadout as yours: WWOTest::GuardLoadout.)
 	AutoGraftClock += DeltaTime;
-	auto Crossed = [&](float T) { return Before < T && AutoGraftClock >= T; };
+	auto Crossed = [&](float T) { return WWOTest::Crossed(Before, AutoGraftClock, T); };
 	auto Equip = [&](const FGraftLoadout& L)
 	{
 		if (UWWOFloraData* F = ById(Loadout->Floras, L.Flora)) Loadout->EquipFlora(F);
@@ -132,7 +126,7 @@ bool AWWOPlayerController::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime
 	Zoom(false);
 	if (CharacterMenu->IsOpen()) ToggleCharacterMenu();
 	Loadout->FlushSave();
-	if (IFileManager::Get().FileExists(*Backup)) { IFileManager::Get().Copy(*SaveFile, *Backup); IFileManager::Get().Delete(*Backup); }
+	WWOTest::RestoreLoadout();
 	UE_LOG(LogWWO, Display, TEXT("AutoTest grafts: loadout restored (%s)"), Loadout->GetFlora() ? *Loadout->GetFlora()->Id.ToString() : TEXT("none"));
 	return true;
 }

@@ -30,10 +30,7 @@ namespace
 	int32 TitleStage = 0;
 	float TitleClock = 0.f; // real seconds in this stage
 
-	void Check(bool bOk, const FString& What)
-	{
-		UE_LOG(LogWWO, Display, TEXT("AutoTest title: %s %s"), *What, bOk ? TEXT("ok") : TEXT("FAIL"));
-	}
+	void Check(bool bOk, const FString& What) { WWOTest::Check(TEXT("title"), bOk, What); }
 }
 
 void AWWOPlayerController::UpdateAutoTitleTest(float DeltaTime)
