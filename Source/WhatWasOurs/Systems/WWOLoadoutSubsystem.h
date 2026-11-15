@@ -165,7 +165,6 @@ public:
 	float Apply(FName Stat, float Base) const;
 	float GroupPoints(FName Group) const;
 	TArray<FString> GroupSummary() const;
-	TArray<FString> NetChanges() const;
 
 	static const TArray<FName>& GroupOrder();
 	static const TArray<FName>& StatsInGroup(FName Group);

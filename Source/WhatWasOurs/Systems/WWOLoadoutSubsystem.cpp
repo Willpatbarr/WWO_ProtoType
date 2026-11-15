@@ -646,22 +646,6 @@ TArray<FString> UWWOLoadoutSubsystem::GroupSummary() const
 	return Lines;
 }
 
-TArray<FString> UWWOLoadoutSubsystem::NetChanges() const
-{
-	TArray<FString> Lines;
-	for (const auto& Pair : StatNames())
-	{
-		const float Scale = Apply(Pair.Key, 1.f) - Apply(Pair.Key, 0.f);
-		const float Flat = Apply(Pair.Key, 0.f) / FMath::Max(Scale, 0.001f);
-		if (FMath::Abs(Scale - 1.f) < 0.001f && FMath::Abs(Flat) < 0.001f) continue;
-		FString Line = Pair.Value;
-		if (FMath::Abs(Flat) >= 0.001f) Line += FString::Printf(TEXT(" %+.2f"), Flat);
-		if (FMath::Abs(Scale - 1.f) >= 0.001f) Line += FString::Printf(TEXT(" x%.2f"), Scale);
-		Lines.Add(Line);
-	}
-	return Lines;
-}
-
 // --- Weapon mods (draft) --------------------------------------------------------------------
 
 void UWWOLoadoutSubsystem::LoadMods()

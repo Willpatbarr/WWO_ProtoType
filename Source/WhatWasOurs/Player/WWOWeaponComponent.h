@@ -24,22 +24,6 @@ struct FHitResult;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWWOHitConfirmed, bool /*bCritical*/, bool /*bKilled*/);
 
-// A first-person arm (fp_arm.gd): the mannequin's right arm (the rest of the body shrunk away),
-// posed from the Godot animation (Melee_Hook, or OverhandThrow mirrored for the left arm).
-USTRUCT()
-struct FWWOFPArm
-{
-	GENERATED_BODY()
-
-	UPROPERTY() TObjectPtr<USceneComponent> Root;
-	UPROPERTY() TObjectPtr<UPoseableMeshComponent> Mesh;
-	UPROPERTY() TObjectPtr<UAnimSequence> Anim;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Ball; // the grenade in the throwing hand
-	TArray<int32> Bones; // skeleton bones, parents first
-	TArray<bool> Shown;  // per entry of Bones: part of the right arm (the rest is shrunk away)
-	bool bLeft = false;
-};
-
 UCLASS(ClassGroup = (WWO), meta = (BlueprintSpawnableComponent))
 class WHATWASOURS_API UWWOWeaponComponent : public USceneComponent
 {
@@ -94,18 +78,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeKnockback = 6.f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeKillBoost = 1.4f;
 	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeKillKnockback = 2.f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmYaw = 16.f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmPitch = 8.f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmPush = 0.05f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmFov = 90.f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmHold = 0.01f;
-	UPROPERTY(EditAnywhere, Category = "Melee") float MeleeArmRetract = 0.2f;
 
 	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowRelease = 0.22f;
 	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowFollow = 0.2f;
-	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowArmYaw = -12.f;
-	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowArmPitch = 8.f;
-	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowArmPush = 0.f;
 
 	UPROPERTY(EditAnywhere, Category = "Handling") float SwapTime = 0.35f;
 	UPROPERTY(EditAnywhere, Category = "Handling") float ReadyTime = 0.07f;
@@ -278,8 +253,7 @@ private:
 	bool bHandsPistol = false;
 	void BuildHands(USkeletalMesh* Asset);
 	void UpdateHands();
-	UPROPERTY() FWWOFPArm MeleeArm;
-	UPROPERTY() FWWOFPArm ThrowArm;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> ThrowBall; // the grenade shown in the throwing hand
 	FVector MagRest = FVector::ZeroVector; // Godot space
 	FDelegateHandle LoadoutHandle;
 	TWeakObjectPtr<class UWWOLoadoutSubsystem> BoundLoadout;
@@ -288,7 +262,6 @@ private:
 	FVector2D LookDelta = FVector2D::ZeroVector;
 	FVector2D SwayValue = FVector2D::ZeroVector;
 	float SprintPose = 0.f, SlidePose = 0.f, AirLag = 0.f, MantlePose = 0.f;
-	float ArmFovRatio = 1.f; // tan(gun half-FOV) / tan(arm half-FOV): see UpdateFov
 	float ThrowTime = 0.f;
 	float ThrowClock = 1e9f;
 	FLinearColor ThrowColor = FLinearColor::White;
@@ -319,9 +292,7 @@ private:
 	bool JustPressed(int32 Action) const;
 
 	void BuildModel();
-	void BuildArms();
-	void BuildArm(FWWOFPArm& Arm, bool bLeft);
-	void UpdateArmColor();
+	void BuildThrowBall();
 	void UpdateMelee(float DeltaSeconds);
 	AActor* FindLungeTarget() const;
 	void MeleeStrike();
@@ -334,10 +305,6 @@ private:
 	void UpdateFov();
 	void UpdateReticleTarget();
 	void UpdatePose(float DeltaSeconds);
-	void PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float PitchDeg, float Push, float Drop, bool bVisible);
-	float MeleeAnimTime(float Progress) const;
-	float MeleeRetracting(float Progress) const;
-	float ThrowAnimTime(float Clock) const;
 	float ThrowPoseLength() const { return ThrowRelease + ThrowFollow + 0.1f; }
 	float PunchAmount() const;
 	UStaticMeshComponent* Part(FName Name) const;

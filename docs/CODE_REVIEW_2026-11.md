@@ -32,7 +32,7 @@ L a week or more of agent time including test runs. Risk is the risk of changing
 
 | # | Change | Size | Risk | Status |
 |---|---|---|---|---|
-| 1.1 | Delete the old single first-person arms (`PlaceArm`, `BuildArm`, `FWWOFPArm` meshes, `WWOFPArmPaths.h`, their settings rows) and other unused members (`IWWOTargetable::IsEnemy`, `UWWOLoadoutSubsystem::NetChanges`) | S | low | |
+| 1.1 | Delete the old single first-person arms (`PlaceArm`, `BuildArm`, `FWWOFPArm` meshes, `WWOFPArmPaths.h`, their settings rows) and other unused members (`IWWOTargetable::IsEnemy`, `UWWOLoadoutSubsystem::NetChanges`) | S | low | done |
 | 1.2 | One config loader (`WWOConfig`: load by name, cached; saved file with shipped fallback) and shared JSON readers (vector, colour) replacing the seven hand-rolled loaders and the two copies of `ModelConfig` | S-M | low | |
 | 1.3 | One home for command-line switches (`WWOSwitches`: cached `IsTestRun()`, `IsStress()`, bot switches), replacing the five spellings of "test run" and the per-frame parses | S-M | low | |
 | 1.4 | Named role predicates on the character (`IsLocalHuman`, `IsJoiner`, `IsHostCopyOfRemote`) and one `IsOnline` | S | low | |

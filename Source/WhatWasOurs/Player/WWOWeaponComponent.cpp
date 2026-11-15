@@ -17,8 +17,6 @@
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
-#include "Player/WWOFPArmPaths.h"
-#include "Misc/PackageName.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PoseableMeshComponent.h"
@@ -62,7 +60,6 @@ namespace
 	constexpr float MeleeImpactAt = 0.4f;  // the hit lands here (fraction of the swing)
 	constexpr float MeleeLungeHold = 0.3f; // the swing waits here (wound up) until the lunge arrives
 	constexpr float MeleeAngle = 35.f;     // degrees off center a melee can still connect
-	constexpr float MeleeArmDrop = 0.45f;
 	const FVector MeleeGunDropOffset(0.03f, -0.3f, 0.12f);
 	const FVector MeleeGunDropRotation(-0.9f, 0.f, 0.25f);
 	constexpr float MuzzleFlashTime = 0.05f;
@@ -73,12 +70,6 @@ namespace
 	bool IsFlashPart(FName Name) { return Name == FlashCore || Name == FlashTongue || Name == FlashCrossA || Name == FlashCrossB; }
 	const FLinearColor SightColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor SightOnTargetColor(1.f, 0.1f, 0.08f);
-
-	// The punch (Melee_Hook, seconds into it): fist chambered, landed, starts pulling back
-	// (fp_arm.gd PUNCH_TIMING), and its length.
-	constexpr float PunchChambered = 0.2f, PunchContact = 0.264f, PunchRetract = 0.3f, PunchEnd = WWOArmPaths::MeleeHookLength;
-	// The overhand throw (left arm: OverhandThrow, mirrored), seconds into it.
-	constexpr float ThrowAnimStart = 0.05f, ThrowAnimCocked = 0.2f, ThrowAnimRelease = 0.363f, ThrowAnimEnd = 0.42f;
 
 	struct FGunPart { const TCHAR* Name; int32 Kind; FVector Size; FVector Pos; FVector RotDeg; FLinearColor Color; float Glow; };
 	enum { Box, Cyl, Sphere };
@@ -203,29 +194,6 @@ namespace
 		if (Id == "sniper") return Sniper;
 		return Rifle;
 	}
-
-	// One arm joint (0 shoulder, 1 elbow, 2 wrist, 3 knuckles) at Seconds into a baked path,
-	// in Godot model space relative to the eyes (see WWOFPArmPaths.h).
-	template <int32 N>
-	FVector ArmJoint(const FVector (&Path)[N][4], int32 Joint, float Seconds)
-	{
-		const float F = FMath::Clamp(Seconds * WWOArmPaths::FrameRate, 0.f, float(N - 1));
-		const int32 I = FMath::Min(FMath::FloorToInt32(F), N - 2);
-		return FMath::Lerp(Path[I][Joint], Path[I + 1][Joint], F - I);
-	}
-
-	// fp_arm.gd place() + pose(): the rig turned to face -z (mirrored for the left arm), aimed by
-	// Basis.from_euler(pitch, yaw) (yaw applied after pitch), with the eyes at the camera,
-	// pushed forward and dropped. Godot camera space out.
-	FVector PlaceJoint(FVector P, bool bMirror, float YawDeg, float PitchDeg, float Push, float Drop)
-	{
-		if (bMirror) P.X = -P.X;
-		P = FVector(-P.X, P.Y, -P.Z); // Basis(UP, PI)
-		const float X = FMath::DegreesToRadians(PitchDeg), Y = FMath::DegreesToRadians(YawDeg);
-		P = FVector(P.X, P.Y * FMath::Cos(X) - P.Z * FMath::Sin(X), P.Y * FMath::Sin(X) + P.Z * FMath::Cos(X));
-		P = FVector(P.X * FMath::Cos(Y) + P.Z * FMath::Sin(Y), P.Y, -P.X * FMath::Sin(Y) + P.Z * FMath::Cos(Y));
-		return P + FVector(0.f, -Drop, -Push);
-	}
 }
 
 UWWOWeaponComponent::UWWOWeaponComponent()
@@ -264,7 +232,7 @@ void UWWOWeaponComponent::BeginPlay()
 	ModelRoot = NewObject<USceneComponent>(GetOwner(), TEXT("WeaponModel"));
 	ModelRoot->SetupAttachment(this);
 	ModelRoot->RegisterComponent();
-	BuildArms();
+	BuildThrowBall();
 	RebindLoadout();
 }
 
@@ -305,10 +273,8 @@ void UWWOWeaponComponent::RebindLoadout()
 					SwapLeft = SwapLength;
 				}
 			}
-			UpdateArmColor();
 		});
 	}
-	UpdateArmColor();
 }
 
 void UWWOWeaponComponent::EndPlay(const EEndPlayReason::Type Reason)
@@ -329,10 +295,7 @@ void UWWOWeaponComponent::SetFirstPersonHidden(bool bHidden)
 	bFirstPersonHidden = bHidden;
 	if (bWas != bHidden && Weapon && ModelRoot) BuildModel(); // built only while shown
 	if (ModelRoot) ModelRoot->SetVisibility(!bHidden, true);
-	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
-	{
-		if (Arm->Root) Arm->Root->SetVisibility(!bHidden, true);
-	}
+	if (ThrowBall) ThrowBall->SetVisibility(!bHidden); // UpdatePose sets it again each frame
 }
 
 int32 UWWOWeaponComponent::MagazineSize() const
@@ -684,78 +647,14 @@ void UWWOWeaponComponent::BuildModel()
 	}
 }
 
-void UWWOWeaponComponent::BuildArm(FWWOFPArm& Arm, bool bLeft)
+void UWWOWeaponComponent::BuildThrowBall()
 {
-	Arm.bLeft = bLeft;
-	Arm.Root = NewObject<USceneComponent>(GetOwner());
-	Arm.Root->SetupAttachment(GetAttachParent()); // the camera
-	Arm.Root->RegisterComponent();
-	// The mannequin, posed bone by bone each frame. Mirrored (the left arm) by a flipped scale.
-	USkeletalMesh* Manny = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
-	Arm.Mesh = NewObject<UPoseableMeshComponent>(GetOwner());
-	Arm.Mesh->SetupAttachment(Arm.Root);
-	Arm.Mesh->SetSkinnedAssetAndUpdate(Manny);
-	Arm.Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Arm.Mesh->SetCastShadow(false);
-	Arm.Mesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
-	Arm.Mesh->SetBoundsScale(2.f); // the posed arm reaches well outside the reference pose's bounds
-	Arm.Mesh->SetRelativeScale3D(FVector(1.f, bLeft ? -1.f : 1.f, 1.f));
-	Arm.Mesh->RegisterComponent();
-	for (int32 i = 0; i < Arm.Mesh->GetNumMaterials(); ++i)
-	{
-		Arm.Mesh->SetMaterial(i, WWOFX::Material(TEXT("M_WWO_Solid"))); // fp_arm.gdshader: flat color, roughness 0.6
-		Arm.Mesh->CreateAndSetMaterialInstanceDynamic(i);
-	}
-	// The same clip the body plays (Tools/bake_body_anims.py, which also writes WWOFPArmPaths.h from
-	// it); the Godot bake if that one is missing.
-	const TCHAR* AnimName = bLeft ? TEXT("A_OverhandThrow") : TEXT("A_Melee_Hook");
-	const FString BodyPath = FString::Printf(TEXT("/Game/WWO/Anims/Body/%s"), AnimName);
-	Arm.Anim = FPackageName::DoesPackageExist(BodyPath) ? LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%s.%s"), *BodyPath, AnimName)) : nullptr;
-	if (!Arm.Anim) Arm.Anim = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/WWO/Anims/UAL/%s.%s"), AnimName, AnimName));
-	// Every bone is posed each frame (parents first): the right arm from the animation, the rest
-	// of the body shrunk away into the shoulder (fp_arm.gd hides it in its shader instead).
-	if (Manny && Manny->GetSkeleton())
-	{
-		const FReferenceSkeleton& Ref = Manny->GetSkeleton()->GetReferenceSkeleton();
-		const int32 Upper = Ref.FindBoneIndex("upperarm_r");
-		for (int32 b = 0; b < Ref.GetNum(); ++b)
-		{
-			const int32 Parent = Ref.GetParentIndex(b);
-			Arm.Bones.Add(b);
-			Arm.Shown.Add(b == Upper || (Parent != INDEX_NONE && Arm.Shown[Parent]));
-		}
-	}
-	Arm.Ball = WWOFX::AddShape(GetOwner(), Arm.Root, WWOFX::Sphere(), TEXT("M_WWO_Solid"), FLinearColor::White);
-	Arm.Ball->SetCastShadow(false);
-	Arm.Ball->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
-	Arm.Ball->MarkRenderStateDirty();
-	Arm.Root->SetVisibility(false, true);
-}
-
-void UWWOWeaponComponent::BuildArms()
-{
-	BuildArm(MeleeArm, false);
-	BuildArm(ThrowArm, true);
-}
-
-void UWWOWeaponComponent::UpdateArmColor()
-{
-	// Same color as the body's arms: the equipped Arms frame part's group color.
-	const FLinearColor Base(0.3f, 0.42f, 0.55f);
-	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
-	const UWWOFramePartData* ArmsPart = Loadout ? Loadout->GetFramePart("arms") : nullptr;
-	const FLinearColor Skin = ArmsPart ? ArmsPart->BodyColor(Base) : Base;
-	for (FWWOFPArm* Arm : { &MeleeArm, &ThrowArm })
-	{
-		if (!Arm->Root) continue;
-		// Godot's arm is the robot's, all in the skin color (its texture shading it). The mannequin's
-		// forearm and hand are mostly its trim (slot 1), so the trim takes a darker shade of the skin
-		// rather than the joint color, or the arm would read as the joint color.
-		for (int32 i = 0; Arm->Mesh && i < Arm->Mesh->GetNumMaterials(); ++i)
-		{
-			if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(Arm->Mesh->GetMaterial(i))) Mat->SetVectorParameterValue("Color", i == 0 ? Skin : Skin * 0.55f);
-		}
-	}
+	// The grenade shown in the throwing hand (UpdatePose places it), on the camera.
+	ThrowBall = WWOFX::AddShape(GetOwner(), GetAttachParent(), WWOFX::Sphere(), TEXT("M_WWO_Solid"), FLinearColor::White);
+	ThrowBall->SetCastShadow(false);
+	ThrowBall->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	ThrowBall->MarkRenderStateDirty();
+	ThrowBall->SetVisibility(false);
 }
 
 // --- Queries ---------------------------------------------------------------------------------
@@ -1422,11 +1321,8 @@ void UWWOWeaponComponent::UpdateFov()
 	const float Fov = FMath::Clamp(HipFov + PunchFovValue * Punch, 1.f, 170.f);
 	const float Half = FMath::Tan(FMath::DegreesToRadians(Fov) * 0.5f) / FMath::Lerp(1.f, Weapon->Zoom, AdsAmount);
 	Camera->SetFieldOfView(FMath::RadiansToDegrees(FMath::Atan(Half) * 2.f));
-	// The gun draws with its own FOV. Both arms draw with the arm FOV in Godot (a per-material
-	// projection); Unreal has one first-person FOV, so PlaceArm squeezes the arms toward the view
-	// center by ArmFovRatio, which projects them exactly as the arm FOV would.
+	// The gun and the hands draw with their own FOV.
 	Camera->FirstPersonFieldOfView = Weapon->ViewmodelFov;
-	ArmFovRatio = FMath::Tan(FMath::DegreesToRadians(Weapon->ViewmodelFov) * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(MeleeArmFov, 1.f, 170.f)) * 0.5f);
 	// Scoped weapons hide the gun once the scope is up (the HUD draws the scope).
 	const bool bShowModel = !(Weapon->ScopeOverlay >= 0.5f && AdsAmount > 0.85f);
 	for (const auto& Pair : Parts)
@@ -1588,28 +1484,25 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	SetRelativeLocationAndRotation(G2U(Pos), GRot(Rot));
 	ModelRoot->SetRelativeScale3D(FVector(FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount))); // the model's origin is its sight point
 
-	// The punch and the throw are played by the hands (UpdateHands); the old single arms stay hidden.
+	// The punch and the throw are played by the hands (UpdateHands).
 	ThrowClock += DeltaSeconds;
 	HandsDelta = DeltaSeconds;
 	UpdateHands();
-	const float MeleeT = bMeleeing ? MeleeAnimTime(MeleeProgress) : 0.f;
-	PlaceArm(MeleeArm, MeleeT, MeleeArmYaw, MeleeArmPitch, MeleeArmPush, 0.f, false);
-	PlaceArm(ThrowArm, 0.f, ThrowArmYaw, ThrowArmPitch, ThrowArmPush, 0.f, false);
 	// The grenade sits in the throwing (right) hand until it leaves.
 	bool bBall = HandsMesh && HandsMesh->IsVisible() && HandsOwner.Num() > 0 && ThrowClock < ThrowRelease;
 	const int32 Thrower = 1; // the left hand
 	const FName ThrowBone = bBall ? HandsAsset->GetRefSkeleton().GetBoneName(HandsArms[Thrower].Hand) : NAME_None;
 	// (Not while the hand is beside your head: that close the ball would fill the view.)
 	if (bBall && HandsMesh->GetBoneTransformByName(ThrowBone, EBoneSpaces::ComponentSpace).GetLocation().X < 25.f) bBall = false;
-	ThrowArm.Ball->SetVisibility(bBall);
+	ThrowBall->SetVisibility(bBall);
 	if (bBall)
 	{
 		const FTransform HandWorld = HandsMesh->GetBoneTransformByName(ThrowBone, EBoneSpaces::WorldSpace);
 		const FQuat FromRef = HandsMesh->GetBoneTransformByName(ThrowBone, EBoneSpaces::ComponentSpace).GetRotation() * HandsArms[Thrower].HandRef.Inverse();
 		const FVector InPalm = bHandsRigid ? FromRef.RotateVector(HandsArms[Thrower].RigidRef.GetAxisX() * 9.f + HandsArms[Thrower].RigidRef.GetAxisZ() * 4.f) : FVector::ZeroVector;
-		ThrowArm.Ball->SetWorldLocation(HandWorld.GetLocation() + HandsMesh->GetComponentTransform().TransformVectorNoScale(InPalm));
+		ThrowBall->SetWorldLocation(HandWorld.GetLocation() + HandsMesh->GetComponentTransform().TransformVectorNoScale(InPalm));
 	}
-	if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(ThrowArm.Ball->GetMaterial(0)))
+	if (UMaterialInstanceDynamic* Mat = Cast<UMaterialInstanceDynamic>(ThrowBall->GetMaterial(0)))
 	{
 		Mat->SetVectorParameterValue("Color", ThrowColor);
 		Mat->SetScalarParameterValue("Glow", 2.f); // Godot: the held ball's glow
@@ -1971,96 +1864,6 @@ void UWWOWeaponComponent::UpdateHands()
 		}
 		HandsMesh->SetBoneTransformByName(Ref.GetBoneName(B), CS[B], EBoneSpaces::ComponentSpace);
 	}
-}
-
-float UWWOWeaponComponent::MeleeAnimTime(float Progress) const
-{
-	// Chamber the fist, throw it so it's fully out exactly when the hit lands, then recover.
-	if (Progress < MeleeLungeHold) return FMath::Lerp(0.f, PunchChambered, WWO::SmoothStep(0.f, 1.f, Progress / MeleeLungeHold));
-	if (Progress < MeleeImpactAt)
-	{
-		const float T = (Progress - MeleeLungeHold) / (MeleeImpactAt - MeleeLungeHold);
-		return FMath::Lerp(PunchChambered, PunchContact, T * T); // the strike snaps in
-	}
-	const float SinceHit = (Progress - MeleeImpactAt) * M("melee_time", MeleeTime);
-	if (SinceHit < MeleeArmHold) return PunchContact;
-	const float T = FMath::Clamp((SinceHit - MeleeArmHold) / FMath::Max(MeleeArmRetract, 0.01f), 0.f, 1.f);
-	return FMath::Lerp(PunchRetract, PunchEnd, WWO::SmoothStep(0.f, 1.f, T)); // skips the animation's own long hold
-}
-
-float UWWOWeaponComponent::MeleeRetracting(float Progress) const
-{
-	const float SinceHit = (Progress - MeleeImpactAt) * M("melee_time", MeleeTime);
-	return FMath::Clamp((SinceHit - MeleeArmHold) / FMath::Max(MeleeArmRetract, 0.01f), 0.f, 1.f);
-}
-
-float UWWOWeaponComponent::ThrowAnimTime(float Clock) const
-{
-	// Wind up (most of the time), whip over the top so the release lands at ThrowRelease,
-	// then follow through and drop out of view.
-	const float Release = FMath::Max(ThrowRelease, 0.01f);
-	if (Clock < Release)
-	{
-		const float Windup = Release * 0.7f;
-		if (Clock < Windup) return FMath::Lerp(ThrowAnimStart, ThrowAnimCocked, WWO::SmoothStep(0.f, 1.f, Clock / Windup));
-		return FMath::Lerp(ThrowAnimCocked, ThrowAnimRelease, (Clock - Windup) / (Release - Windup));
-	}
-	const float T = (Clock - Release) / FMath::Max(ThrowFollow, 0.01f);
-	if (T >= 1.f) return ThrowAnimEnd;
-	return FMath::Lerp(ThrowAnimRelease, ThrowAnimEnd, 1.f - (1.f - T) * (1.f - T));
-}
-
-void UWWOWeaponComponent::PlaceArm(FWWOFPArm& Arm, float AnimT, float Yaw, float PitchDeg, float Push, float Drop, bool bVisible)
-{
-	if (!Arm.Root) return;
-	bVisible = bVisible && !bFirstPersonHidden;
-	Arm.Root->SetVisibility(bVisible, true);
-	if (!bVisible || !Arm.Mesh || !Arm.Anim) return;
-	const USkeletalMesh* Manny = Cast<USkeletalMesh>(Arm.Mesh->GetSkinnedAsset());
-	if (!Manny || !Manny->GetSkeleton()) return;
-	const FReferenceSkeleton& Ref = Manny->GetSkeleton()->GetReferenceSkeleton();
-	// The animation frame, in the mannequin's mesh space (cm; faces +y, left +x, up +z).
-	TArray<FTransform> CS;
-	CS.SetNum(Ref.GetNum());
-	const FAnimExtractContext At(double(FMath::Clamp(AnimT, 0.f, Arm.Anim->GetPlayLength())));
-	for (const int32 B : Arm.Bones)
-	{
-		FTransform Local;
-		Arm.Anim->GetBoneTransform(Local, FSkeletonPoseBoneIndex(B), At, false);
-		const int32 Parent = Ref.GetParentIndex(B);
-		CS[B] = Parent == INDEX_NONE ? Local : Local * CS[Parent];
-	}
-	// Mesh space -> Godot model space (meters, y up, facing +z), the file the Godot arm plays.
-	auto ToGodot = [](const FVector& V) { return FVector(V.X, V.Z, V.Y) / WWO::M; };
-	// The shoulder goes exactly where the Godot arm's shoulder is (the baked path, relative to the
-	// eyes); the rest of the arm hangs off it at the animation's angles.
-	const FVector Shoulder = Arm.bLeft ? ArmJoint(WWOArmPaths::OverhandThrow, 0, AnimT) : ArmJoint(WWOArmPaths::MeleeHook, 0, AnimT);
-	const FVector Eye = ToGodot(CS[Ref.FindBoneIndex("upperarm_r")].GetLocation()) - Shoulder;
-	// Then fp_arm.gd's placement (PlaceJoint), squeezed toward the view axis by the arm FOV (see
-	// UpdateFov; the bones shrink with it, so the arm's thickness does too), into camera space.
-	// The left arm's mesh is mirrored by its scale, so its points are flipped back here.
-	const float K = ArmFovRatio;
-	const FVector Flip(1.f, Arm.bLeft ? -1.f : 1.f, 1.f);
-	auto Point = [&](const FVector& MeshPos) { return G2U(PlaceJoint(ToGodot(MeshPos) - Eye, Arm.bLeft, Yaw, PitchDeg, Push, Drop) * FVector(K, K, 1.f)); };
-	auto Dir = [&](const FVector& MeshDir) { return (G2U(PlaceJoint(ToGodot(MeshDir), Arm.bLeft, Yaw, PitchDeg, 0.f, 0.f) * FVector(K, K, 1.f)) * Flip).GetSafeNormal(); };
-	const FVector Hidden = Point(CS[Ref.FindBoneIndex("upperarm_r")].GetLocation()) * Flip;
-	for (int32 i = 0; i < Arm.Bones.Num(); ++i)
-	{
-		if (!Arm.Shown[i])
-		{
-			// A bone outside the arm: shrunk to nothing at the shoulder, so the body's vertices
-			// vanish and the ones it shares with the arm pull in to close the shoulder.
-			Arm.Mesh->SetBoneTransformByName(Ref.GetBoneName(Arm.Bones[i]), FTransform(FQuat::Identity, Hidden, FVector(0.01f)), EBoneSpaces::ComponentSpace);
-			continue;
-		}
-		const FTransform& T = CS[Arm.Bones[i]];
-		const FQuat Rot = FRotationMatrix::MakeFromXY(Dir(T.GetUnitAxis(EAxis::X)), Dir(T.GetUnitAxis(EAxis::Y))).ToQuat();
-		Arm.Mesh->SetBoneTransformByName(Ref.GetBoneName(Arm.Bones[i]), FTransform(Rot, Point(T.GetLocation()) * Flip, FVector(K)), EBoneSpaces::ComponentSpace);
-	}
-	// Godot: a 4 cm radius ball held at the base of the middle finger (in the palm).
-	if (!Arm.bLeft) Arm.Ball->SetVisibility(false); // only the throwing hand holds a grenade
-	Arm.Ball->SetRelativeScale3D(FVector(0.08f * K));
-	Arm.Ball->SetRelativeLocation(Point(CS[Ref.FindBoneIndex("middle_01_r")].GetLocation()));
 }
 
 // --- Mods and perks (draft) -------------------------------------------------------------------

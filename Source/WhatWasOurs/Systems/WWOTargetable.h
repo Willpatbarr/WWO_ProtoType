@@ -34,7 +34,6 @@ public:
 	virtual float GetMaxShield() const { return 0.f; }
 	virtual float GetBodyHeight() const { return 225.f; } // cm, where the HUD health bar goes
 	virtual FVector FeetLocation() const = 0;          // Godot's origin for targets and enemies
-	virtual bool IsEnemy() const { return false; }
 	virtual void KnockBack(const FVector& Push) {} // cm/s
 	virtual void ResetTarget() {}
 

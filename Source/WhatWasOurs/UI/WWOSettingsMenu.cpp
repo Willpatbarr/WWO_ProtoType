@@ -307,9 +307,6 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 		Header(TEXT("Throw animation (left arm)")),
 		Row(G, "ThrowRelease", TEXT("Grenade leaves your hand after (s)"), 0.f, 0.6f, 0.01f),
 		Row(G, "ThrowFollow", TEXT("Follow-through (s)"), 0.05f, 0.6f, 0.01f),
-		Row(G, "ThrowArmYaw", TEXT("Turn toward center (degrees)"), -45.f, 45.f, 0.5f),
-		Row(G, "ThrowArmPitch", TEXT("Lift (degrees)"), -45.f, 45.f, 0.5f),
-		Row(G, "ThrowArmPush", TEXT("Push forward (m)"), -0.4f, 0.4f, 0.01f),
 	});
 	TWeakObjectPtr<UWWOHealthComponent> WeakH = H;
 	AddGlobal(TEXT("Player"), {

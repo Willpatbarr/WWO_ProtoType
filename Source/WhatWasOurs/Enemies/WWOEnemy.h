@@ -67,7 +67,6 @@ public:
 	virtual float GetHealth() const override { return Health; }
 	virtual float GetMaxHealth() const override { return MaxHealth; }
 	virtual float GetBodyHeight() const override { return BodyHeight() + 25.f; }
-	virtual bool IsEnemy() const override { return true; }
 	virtual void KnockBack(const FVector& Push) override;
 	virtual void ResetTarget() override;
 	virtual FVector FeetLocation() const override;
