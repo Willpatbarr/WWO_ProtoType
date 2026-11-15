@@ -128,9 +128,7 @@ AWWOFXActor::AWWOFXActor()
 
 AWWOFXActor* AWWOFXActor::Spawn(UWorld* World, const FVector& At, float InLifetime)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AWWOFXActor* FX = World->SpawnActor<AWWOFXActor>(At, FRotator::ZeroRotator, Params);
+	AWWOFXActor* FX = World->SpawnActor<AWWOFXActor>(At, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 	if (FX) FX->Lifetime = InLifetime;
 	return FX;
 }
@@ -191,16 +189,23 @@ void AWWOFXActor::LightTween(UPointLightComponent* Light, float From, float To, 
 	Tweens.Add(T);
 }
 
-UPointLightComponent* AWWOFXActor::AddLight(const FLinearColor& Color, float Intensity, float RadiusCm)
+UPointLightComponent* WWOFX::AddPointLight(AActor* Owner, USceneComponent* Parent, const FLinearColor& Color, float Intensity, float RadiusCm, const FVector& Offset)
 {
-	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
-	Light->SetupAttachment(GetRootComponent());
+	UPointLightComponent* Light = NewObject<UPointLightComponent>(Owner);
+	Light->SetupAttachment(Parent);
+	Light->SetRelativeLocation(Offset);
 	Light->SetLightColor(Color);
 	Light->SetIntensityUnits(ELightUnits::Unitless);
 	Light->SetIntensity(Intensity);
 	Light->SetAttenuationRadius(RadiusCm);
 	Light->SetCastShadows(false);
 	Light->RegisterComponent();
+	return Light;
+}
+
+UPointLightComponent* AWWOFXActor::AddLight(const FLinearColor& Color, float Intensity, float RadiusCm)
+{
+	UPointLightComponent* Light = WWOFX::AddPointLight(this, GetRootComponent(), Color, Intensity, RadiusCm);
 	AddInstanceComponent(Light);
 	return Light;
 }
@@ -213,7 +218,7 @@ float AWWOFXActor::EaseValue(EWWOEase Ease, float T)
 	case EWWOEase::QuadOut: return 1.f - (1.f - T) * (1.f - T);
 	case EWWOEase::QuadIn: return T * T;
 	case EWWOEase::ExpoOut: return T >= 1.f ? 1.f : 1.f - FMath::Pow(2.f, -10.f * T);
-	case EWWOEase::BackOut: { const float C1 = 1.70158f, C3 = C1 + 1.f; return 1.f + C3 * FMath::Pow(T - 1.f, 3.f) + C1 * FMath::Pow(T - 1.f, 2.f); }
+	case EWWOEase::BackOut: return WWO::BackOut(T);
 	case EWWOEase::SineInOut: return -(FMath::Cos(UE_PI * T) - 1.f) * 0.5f;
 	default: return T;
 	}
@@ -447,9 +452,7 @@ AWWOParticles::AWWOParticles()
 AWWOParticles* AWWOParticles::Burst(UWorld* World, const FVector& At, const FLinearColor& InColor, int32 InAmount, float LifetimeS,
 	float InSpeedMin, float InSpeedMax, float InSize, const FVector& GravityM, EWWOParticleStyle InStyle, bool bStart)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AWWOParticles* P = World->SpawnActor<AWWOParticles>(At, FRotator::ZeroRotator, Params);
+	AWWOParticles* P = World->SpawnActor<AWWOParticles>(At, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 	if (!P) return nullptr;
 	P->Color = InColor;
 	P->Amount = FMath::Max(InAmount, 1);
@@ -660,9 +663,7 @@ FVector AWWOLightningBolt::CenterOf(const AActor* Actor)
 AWWOLightningBolt* AWWOLightningBolt::Spawn(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& InColor,
 	float InLifetime, AActor* InFrom, AActor* InTo)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AWWOLightningBolt* Bolt = World->SpawnActor<AWWOLightningBolt>((From + To) * 0.5f, FRotator::ZeroRotator, Params);
+	AWWOLightningBolt* Bolt = World->SpawnActor<AWWOLightningBolt>((From + To) * 0.5f, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 	if (!Bolt) return nullptr;
 	Bolt->FromPoint = From;
 	Bolt->ToPoint = To;
@@ -745,9 +746,7 @@ AWWODischarge::AWWODischarge()
 AWWODischarge* AWWODischarge::Spawn(UWorld* World, AActor* InTarget, const FVector& Impact, const FVector& InAway,
 	const FLinearColor& InColor, int32 InArcs, float RadiusM, float InLifetime)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AWWODischarge* D = World->SpawnActor<AWWODischarge>(Impact, FRotator::ZeroRotator, Params);
+	AWWODischarge* D = World->SpawnActor<AWWODischarge>(Impact, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 	if (!D) return nullptr;
 	D->Target = InTarget;
 	D->Offset = InTarget ? Impact - InTarget->GetActorLocation() : FVector::ZeroVector;

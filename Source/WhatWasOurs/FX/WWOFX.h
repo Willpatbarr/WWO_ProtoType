@@ -43,6 +43,10 @@ namespace WWOFX
 	UStaticMeshComponent* AddGroundDisc(AActor* Owner, USceneComponent* Parent, const FLinearColor& Color,
 		float RingWidth = 0.12f, float Fill = 0.f, float Ripple = 0.f);
 
+	// A registered, unitless, shadowless point light on Owner, attached to Parent at Offset (cm).
+	UPointLightComponent* AddPointLight(AActor* Owner, USceneComponent* Parent, const FLinearColor& Color, float Intensity,
+		float RadiusCm, const FVector& Offset = FVector::ZeroVector);
+
 	// The floor point under a spot, if any (within Reach cm).
 	bool GroundBelow(UWorld* World, const FVector& Point, float Reach, FVector& OutGround, const AActor* Ignore = nullptr);
 }

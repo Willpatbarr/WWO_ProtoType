@@ -324,9 +324,7 @@ void UWWOCharacterMenu::Open()
 		Column->AddChildToVerticalBox(Rule(Tree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 
 		// The character, shown on every tab (one render target, two places it can sit).
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, Params);
+		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 		auto MakePreview = [this, Tree]() -> UWidget*
 		{
 			UImage* Image = Tree->ConstructWidget<UImage>();

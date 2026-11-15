@@ -1,5 +1,6 @@
 #include "Net/WWONetSubsystem.h"
 #include "WWOSwitches.h"
+#include "Systems/WWOConfig.h"
 #include "Game/WWOPlayerState.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
@@ -25,6 +26,7 @@ namespace
 	const FName PvPKey("WWOPVP");
 	const FName PlayersKey("WWOPLAYERS");
 	const FName StartMap("L_Arena"); // the launch screen sits over it (GameDefaultMap)
+	FString TagPath() { return WWOConfig::SavedPath(TEXT("GamerTag.txt")); } // Saved/WWO/GamerTag.txt
 }
 
 const TArray<FWWOMapInfo>& UWWONetSubsystem::Maps()
@@ -74,14 +76,14 @@ FString UWWONetSubsystem::CleanTag(const FString& Typed)
 void UWWONetSubsystem::SetGamerTag(const FString& Typed, bool bSave)
 {
 	GamerTag = CleanTag(Typed);
-	if (bSave) FFileHelper::SaveStringToFile(GamerTag, *(FPaths::ProjectSavedDir() / TEXT("WWO/GamerTag.txt")));
+	if (bSave) FFileHelper::SaveStringToFile(GamerTag, *TagPath());
 }
 
 FString UWWONetSubsystem::WithName(const FString& Options) const
 {
 	if (GamerTag.IsEmpty()) return Options;
 	// (Tag, not the engine's Name: the engine overwrites Name with the computer's own name on the way in.)
-	return Options.IsEmpty() ? TEXT("Tag=") + GamerTag : Options + TEXT("?Tag=") + GamerTag;
+	return Options.IsEmpty() ? TEXT("Tag=") + GamerTag : Options + TagOption();
 }
 
 bool UWWONetSubsystem::WantsTitle(const UObject* WorldContext)
@@ -104,7 +106,7 @@ bool UWWONetSubsystem::WantsTitle(const UObject* WorldContext)
 
 void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 {
-	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 	Status = FString();
 	bShowTitle = false;
 	CancelSearch();
@@ -114,7 +116,7 @@ void UWWONetSubsystem::PlayLocal(FName Map, bool bPvP, int32 Bots)
 
 void UWWONetSubsystem::PlayTester()
 {
-	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 	Status = FString();
 	bShowTitle = false;
 	CancelSearch();
@@ -124,7 +126,7 @@ void UWWONetSubsystem::PlayTester()
 
 void UWWONetSubsystem::LeaveToTitle()
 {
-	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 	Status = FString();
 	bShowTitle = true;
 	CancelSearch();
@@ -162,7 +164,7 @@ void UWWONetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	FString Saved;
-	if (FFileHelper::LoadFileToString(Saved, *(FPaths::ProjectSavedDir() / TEXT("WWO/GamerTag.txt")))) GamerTag = CleanTag(Saved);
+	if (FFileHelper::LoadFileToString(Saved, *TagPath())) GamerTag = CleanTag(Saved);
 	// A test run that drives the launch screen has nobody to type one.
 	// -WWOGamerTag=<name>: this run's tag (not saved), for tests with more than one copy of the game.
 	FString Given;
@@ -215,7 +217,7 @@ void UWWONetSubsystem::OnNetworkFailure(UWorld* World, UNetDriver* Driver, ENetw
 	Status = bNeverJoined ? FString::Printf(TEXT("Couldn't join (%s)"), ENetworkFailure::ToString(Type))
 		: FString::Printf(TEXT("Lost the connection (%s)"), ENetworkFailure::ToString(Type));
 	bShowTitle = true; // either way the engine reloads the start map: open it on the launch screen
-	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 	UE_LOG(LogWWO, Warning, TEXT("Net: network failure %s: %s"), ENetworkFailure::ToString(Type), *Error);
 }
 
@@ -231,7 +233,7 @@ void UWWONetSubsystem::OnTravelFailure(UWorld* World, ETravelFailure::Type Type,
 	// stay advertised, and that map opens on the launch screen with the reason.
 	Status = FString::Printf(TEXT("Couldn't join (%s)"), ETravelFailure::ToString(Type));
 	bShowTitle = true;
-	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 }
 
 FString UWWONetSubsystem::LocalAddress()
@@ -283,10 +285,9 @@ IOnlineSessionPtr UWWONetSubsystem::Sessions() const
 	return Online::GetSessionInterface(GetWorld());
 }
 
-bool UWWONetSubsystem::IsOnline(const UObject* WorldContext) const
+void UWWONetSubsystem::EndSession()
 {
-	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
-	return World && World->GetNetMode() != NM_Standalone;
+	if (const IOnlineSessionPtr S = Sessions(); S.IsValid() && S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
 }
 
 void UWWONetSubsystem::Host(FName Map, bool bPvP, int32 Bots)
@@ -438,7 +439,7 @@ void UWWONetSubsystem::JoinGame(int32 Index)
 	}
 	CancelSearch();
 	// An old session (a game you hosted or joined earlier this run) would refuse the new one.
-	if (S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
+	EndSession();
 	Status = TEXT("Joining...");
 	JoinHandle = S->AddOnJoinSessionCompleteDelegate_Handle(FOnJoinSessionCompleteDelegate::CreateUObject(this, &UWWONetSubsystem::OnJoined));
 	bShowTitle = false;
@@ -470,15 +471,12 @@ void UWWONetSubsystem::JoinAddress(const FString& Address)
 	Status = TEXT("Joining ") + Address;
 	bShowTitle = false;
 	UE_LOG(LogWWO, Display, TEXT("Net: joining %s"), *Address);
-	PC->ClientTravel(GamerTag.IsEmpty() ? Address : Address + TEXT("?Tag=") + GamerTag, TRAVEL_Absolute); // the host names you from it
+	PC->ClientTravel(GamerTag.IsEmpty() ? Address : Address + TagOption(), TRAVEL_Absolute); // the host names you from it
 }
 
 void UWWONetSubsystem::Leave()
 {
-	if (const IOnlineSessionPtr S = Sessions())
-	{
-		if (S->GetNamedSession(SessionName)) S->DestroySession(SessionName);
-	}
+	EndSession();
 	Status = FString();
 	const UWorld* World = GetWorld();
 	// The same map alone, in the mode it was (a PvP map's spawn points aren't for waves).

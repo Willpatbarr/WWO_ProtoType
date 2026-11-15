@@ -81,11 +81,8 @@ void AWWOGrenade::OnRep_Stuck()
 
 AWWOGrenade* AWWOGrenade::Throw(UWorld* World, const FWWOGrenadeSpec& InSpec, const FVector& At, const FVector& VelocityCm, AActor* InThrower)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Params.bDeferConstruction = true;
-	Params.Owner = InThrower; // whose loadout it answers to (UWWOLoadoutSubsystem::Get)
-	AWWOGrenade* G = World->SpawnActor<AWWOGrenade>(At, FRotator::ZeroRotator, Params);
+	// Owned by the thrower: whose loadout it answers to (UWWOLoadoutSubsystem::Get).
+	AWWOGrenade* G = World->SpawnActor<AWWOGrenade>(At, FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred(InThrower));
 	if (!G) return nullptr;
 	G->Spec = InSpec;
 	G->Movement->Velocity = VelocityCm;
@@ -159,14 +156,7 @@ void AWWOGrenade::BuildLooks()
 		Ball = WWOFX::AddShape(this, Collision, WWOFX::Sphere(), TEXT("M_WWO_Solid"), Look.Color, 3.f);
 		Ball->SetRelativeScale3D(FVector(Size / 50.f));
 		Ball->SetCastShadow(false);
-		Light = NewObject<UPointLightComponent>(this);
-		Light->SetupAttachment(Collision);
-		Light->SetLightColor(Look.Color);
-		Light->SetIntensityUnits(ELightUnits::Unitless);
-		Light->SetIntensity(1.5f * 1500.f);
-		Light->SetAttenuationRadius(250.f);
-		Light->SetCastShadows(false);
-		Light->RegisterComponent();
+		Light = WWOFX::AddPointLight(this, Collision, Look.Color, 1.5f * 1500.f, 250.f);
 		if (AWWOParticles* T = AWWOParticles::Burst(GetWorld(), GetActorLocation(), WWO::Lightened(Look.Color, 0.2f), 28, 0.25f, 0.f, 0.15f,
 			Size / WWO::M * 1.4f, FVector::ZeroVector, EWWOParticleStyle::Glow, false))
 		{

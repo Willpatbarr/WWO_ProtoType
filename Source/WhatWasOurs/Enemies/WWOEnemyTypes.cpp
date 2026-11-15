@@ -70,15 +70,7 @@ void AWWOSoldier::Setup()
 	Box(FVector(0.06f, 0.045f, 0.12f), FVector(0, 0, -8.f), GunColor, 0.f); // grip
 	UStaticMeshComponent* Muzzle = Box(FVector(0.03f, 0.06f, 0.06f), FVector(23.f, 0, 0), GlowColor, 0.4f);
 	GlowMat = WWOFX::MID(Muzzle);
-	MuzzleLight = NewObject<UPointLightComponent>(this);
-	MuzzleLight->SetupAttachment(Gun);
-	MuzzleLight->SetRelativeLocation(FVector(26.f, 0, 0));
-	MuzzleLight->SetLightColor(GlowColor);
-	MuzzleLight->SetIntensityUnits(ELightUnits::Unitless);
-	MuzzleLight->SetIntensity(0.f);
-	MuzzleLight->SetAttenuationRadius(200.f);
-	MuzzleLight->SetCastShadows(false);
-	MuzzleLight->RegisterComponent();
+	MuzzleLight = WWOFX::AddPointLight(this, Gun, GlowColor, 0.f, 200.f, FVector(26.f, 0, 0));
 	if (const UWWOSoldierData* S = D()) Cooldown = FMath::FRandRange(0.5f, S->BurstCooldown);
 	StrafeDir = FMath::FRand() < 0.5f ? 1.f : -1.f;
 }

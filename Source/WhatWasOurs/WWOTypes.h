@@ -9,6 +9,7 @@
 #include "WWOTypes.generated.h"
 
 class AActor;
+struct FActorSpawnParameters;
 
 namespace WWO
 {
@@ -29,6 +30,27 @@ namespace WWO
 		const float Len = D.Size();
 		return (Len <= Delta || Len < 1e-6f) ? To : From + D / Len * Delta;
 	}
+
+	// The share of the way to a target to move this frame, for an ease that looks the same at any
+	// frame rate: Value = Lerp(Value, Target, Damp(Rate, DeltaSeconds)). A higher rate arrives sooner.
+	inline float Damp(float Rate, float Delta)
+	{
+		return 1.f - FMath::Exp(-Rate * Delta);
+	}
+
+	// Ease out with a small overshoot before settling at 1 ("back out"). T is clamped to 0..1.
+	inline float BackOut(float T)
+	{
+		T = FMath::Clamp(T, 0.f, 1.f);
+		const float C1 = 1.70158f, C3 = C1 + 1.f;
+		return 1.f + C3 * FMath::Pow(T - 1.f, 3.f) + C1 * FMath::Pow(T - 1.f, 2.f);
+	}
+
+	// Spawn parameters that never refuse a spot because something is in the way. Owner: whose kit
+	// made it (its loadout answers for it, its hits go to them).
+	FActorSpawnParameters AlwaysSpawn(AActor* Owner = nullptr);
+	// The same with construction deferred: set the actor up, then call FinishSpawning.
+	FActorSpawnParameters AlwaysSpawnDeferred(AActor* Owner = nullptr);
 
 	inline float SmoothStep(float A, float B, float X)
 	{

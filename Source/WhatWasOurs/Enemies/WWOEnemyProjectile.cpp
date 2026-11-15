@@ -67,9 +67,7 @@ void AWWOEnemyProjectile::EndPlay(const EEndPlayReason::Type Reason)
 AWWOEnemyProjectile* AWWOEnemyProjectile::Fire(UWorld* World, const FVector& From, const FVector& VelocityCm, float InDamage, float InLife,
 	float GravityCm, float SplashRadiusM, const FLinearColor& InColor, float SizeM)
 {
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AWWOEnemyProjectile* Shot = World->SpawnActor<AWWOEnemyProjectile>(From, FRotator::ZeroRotator, Params);
+	AWWOEnemyProjectile* Shot = World->SpawnActor<AWWOEnemyProjectile>(From, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 	if (!Shot) return nullptr;
 	Shot->Velocity = VelocityCm;
 	Shot->Damage = InDamage;
@@ -105,14 +103,7 @@ void AWWOEnemyProjectile::Build()
 		AWWOFXActor::MuzzleFlash(GetWorld(), GetActorLocation(), Velocity.GetSafeNormal(), Color, 0.8f);
 		UWWOSound::Play(this, "soldier_shot", GetActorLocation());
 	}
-	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
-	Light->SetupAttachment(GetRootComponent());
-	Light->SetLightColor(Color);
-	Light->SetIntensityUnits(ELightUnits::Unitless);
-	Light->SetIntensity(0.8f * 1500.f);
-	Light->SetAttenuationRadius(150.f);
-	Light->SetCastShadows(false);
-	Light->RegisterComponent();
+	WWOFX::AddPointLight(this, GetRootComponent(), Color, 0.8f * 1500.f, 150.f);
 }
 
 void AWWOEnemyProjectile::Tick(float DeltaSeconds)

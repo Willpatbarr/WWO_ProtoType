@@ -38,11 +38,7 @@ void AWWOSporeFog::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 
 AWWOSporeFog* AWWOSporeFog::SpawnFog(UWorld* World, const FVector& At, float RadiusM, float Seconds, bool bThick, AActor* InOwner)
 {
-	FActorSpawnParameters Params;
-	Params.Owner = InOwner;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Params.bDeferConstruction = true;
-	AWWOSporeFog* Fog = World->SpawnActor<AWWOSporeFog>(At, FRotator::ZeroRotator, Params);
+	AWWOSporeFog* Fog = World->SpawnActor<AWWOSporeFog>(At, FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred(InOwner));
 	if (!Fog) return nullptr;
 	Fog->Radius = RadiusM;
 	Fog->Duration = Seconds * (1.f + UWWOLoadoutSubsystem::Bonus(InOwner ? static_cast<const UObject*>(InOwner) : World, "fog_longer")); // Longer Fog trait (the owner's)

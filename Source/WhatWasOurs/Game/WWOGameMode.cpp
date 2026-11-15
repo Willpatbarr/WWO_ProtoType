@@ -1,4 +1,5 @@
 #include "Game/WWOGameMode.h"
+#include "WWOTypes.h"
 #include "WWOSwitches.h"
 #include "Player/WWOProf.h"
 #include "Characters/WWOBodyComponent.h"
@@ -46,6 +47,15 @@ namespace
 	constexpr float CorpseCleanup = 4.f;
 
 	AWWOGameMode* WaveMode(UWorld* World) { return World ? Cast<AWWOGameMode>(World->GetAuthGameMode()) : nullptr; }
+
+	// Adds the players and bots on each PvP team to Count, leaving out Except (someone about to be placed).
+	void CountTeams(const AGameStateBase* GameState, int32 Count[2], const AWWOPlayerState* Except = nullptr)
+	{
+		for (const APlayerState* Other : GameState->PlayerArray)
+		{
+			if (const AWWOPlayerState* PS = Cast<AWWOPlayerState>(Other); PS && PS != Except && PS->Team >= 0 && PS->Team <= 1) ++Count[PS->Team];
+		}
+	}
 
 	// Console helpers for testing later waves.
 	FAutoConsoleCommandWithWorld SkipWaveCommand(TEXT("wwo.SkipWave"), TEXT("Kill everything in the current wave"),
@@ -197,10 +207,7 @@ void AWWOGameMode::SwitchTeam(AController* Player)
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Now - PS->LastSwitch < 10.0) return;
 	int32 Count[2] = { 0, 0 };
-	for (const APlayerState* Other : GameState->PlayerArray)
-	{
-		if (const AWWOPlayerState* O = Cast<AWWOPlayerState>(Other); O && O->Team >= 0 && O->Team <= 1) ++Count[O->Team];
-	}
+	CountTeams(GameState, Count);
 	const int32 To = 1 - PS->Team;
 	if (Count[To] + 1 > Count[PS->Team]) return; // it would leave the other side the bigger one
 	PS->LastSwitch = Now;
@@ -223,11 +230,7 @@ void AWWOGameMode::BalanceTeam(AController* Player)
 	AWWOPlayerState* Mine = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
 	if (!Mine || !GameState) return;
 	int32 Count[2] = { 0, 0 };
-	for (APlayerState* Other : GameState->PlayerArray)
-	{
-		const AWWOPlayerState* PS = Cast<AWWOPlayerState>(Other);
-		if (PS && PS != Mine && PS->Team >= 0 && PS->Team <= 1) ++Count[PS->Team];
-	}
+	CountTeams(GameState, Count, Mine);
 	SetTeam(Mine, Count[1] < Count[0] ? 1 : 0);
 }
 
@@ -770,9 +773,7 @@ void AWWOGameMode::UpdateTester()
 	// Stand it on the floor under that point.
 	FHitResult Floor;
 	if (GetWorld()->LineTraceSingleByChannel(Floor, At + FVector(0, 0, 300.f), At - FVector(0, 0, 1000.f), ECC_Visibility)) At = Floor.ImpactPoint;
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	TesterTarget = GetWorld()->SpawnActor<AWWOTarget>(AWWOTarget::StaticClass(), At, FRotator(0.f, TesterHome.Rotator().Yaw + 180.f, 0.f), Params);
+	TesterTarget = GetWorld()->SpawnActor<AWWOTarget>(AWWOTarget::StaticClass(), At, FRotator(0.f, TesterHome.Rotator().Yaw + 180.f, 0.f), WWO::AlwaysSpawn());
 	UE_LOG(LogWWO, Display, TEXT("Tester: target dummy %.0f m ahead of the start (%s)"), TesterTargetDistance, TesterTarget.IsValid() ? TEXT("placed") : TEXT("FAILED"));
 }
 

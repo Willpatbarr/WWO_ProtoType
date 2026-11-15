@@ -455,7 +455,7 @@ void AWWOEnemy::TurnToward(const FVector& Direction, float DeltaSeconds, float S
 	const float Rate = Speed < 0.f ? (Data() ? Data()->TurnSpeed : 8.f) : Speed;
 	const float Current = GetActorRotation().Yaw;
 	const float Target = Direction.Rotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Target) * (1.f - FMath::Exp(-Rate * DeltaSeconds));
+	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Target) * WWO::Damp(Rate, DeltaSeconds);
 	SetActorRotation(FRotator(0.f, Yaw, 0.f));
 }
 

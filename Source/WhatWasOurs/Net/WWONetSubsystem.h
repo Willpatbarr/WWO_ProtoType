@@ -91,7 +91,6 @@ public:
 
 	// What it's doing, for the menu ("Searching...", "No LAN games found", "Lost the connection"...).
 	FString Status;
-	bool IsOnline(const UObject* WorldContext) const;
 	// The menu's status line: hosting / joined / alone, players in the match, this Mac's address, and Status.
 	FString DescribeStatus(const UObject* WorldContext) const;
 	static FString LocalAddress(); // this Mac's LAN address, for others to join by
@@ -124,6 +123,8 @@ private:
 	void OnTravelFailure(UWorld* World, ETravelFailure::Type Type, const FString& Error);
 
 	IOnlineSessionPtr Sessions() const;
+	void EndSession(); // destroys this machine's session, if it has one (a game hosted or joined earlier)
+	FString TagOption() const { return TEXT("?Tag=") + GamerTag; } // appended to a travel URL that already has something in it
 	void CreateSession();
 	void OnDestroyed(FName Name, bool bOk);
 	void OnCreated(FName Name, bool bOk);

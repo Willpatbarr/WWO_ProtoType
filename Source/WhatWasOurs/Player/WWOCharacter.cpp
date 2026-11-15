@@ -1,4 +1,5 @@
 #include "Player/WWOCharacter.h"
+#include "WWOTypes.h"
 #include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "FX/WWOFX.h"
@@ -825,7 +826,7 @@ void AWWOCharacter::UpdateModel()
 		const FName Now = Body->CurrentAnim();
 		const bool bLowered = bPlain || Now == "Sprint" || Now == "Crouch_Idle" || Now == "Crouch_Fwd" || Now == "Slide" || Now == "Slide_Start";
 		ShownRaise = WWO::MoveToward(ShownRaise, bLowered ? 0.f : 1.f, 7.f * Step);
-		ShownPitch = FMath::Lerp(ShownPitch, bPlain ? 0.f : PosePitch, 1.f - FMath::Exp(-12.f * Step));
+		ShownPitch = FMath::Lerp(ShownPitch, bPlain ? 0.f : PosePitch, WWO::Damp(12.f, Step));
 		// A hand cannon is held in the pistol stance, both hands on the grip; everything else in the rifle's.
 		const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 		const UWWOWeaponData* Held = Loadout ? Loadout->GetWeapon() : nullptr;
@@ -1343,11 +1344,11 @@ void AWWOCharacter::UpdateCamera(float DeltaSeconds)
 	if (bFrozen) DeltaSeconds = 0.f;
 	// Eye height eases between standing and crouched.
 	const float Target = bIsCrouched ? CrouchCameraZ : StandCameraZ;
-	CameraBaseZ = FMath::Lerp(CameraBaseZ, Target, 1.f - FMath::Exp(-CameraSmoothing * DeltaSeconds)); // the same ease at any frame rate
+	CameraBaseZ = FMath::Lerp(CameraBaseZ, Target, WWO::Damp(CameraSmoothing, DeltaSeconds)); // the same ease at any frame rate
 
 	// Landing dip: the camera drops quickly toward the kick while the kick eases back.
-	LandOffset = FMath::Lerp(LandOffset, LandKick, 1.f - FMath::Exp(-25.f * DeltaSeconds));
-	LandKick = FMath::Lerp(LandKick, 0.f, 1.f - FMath::Exp(-8.f * DeltaSeconds));
+	LandOffset = FMath::Lerp(LandOffset, LandKick, WWO::Damp(25.f, DeltaSeconds));
+	LandKick = FMath::Lerp(LandKick, 0.f, WWO::Damp(8.f, DeltaSeconds));
 
 	// Head bob: up/down once per step, side to side once per two steps.
 	const float Speed = FVector2D(GetVelocity().X, GetVelocity().Y).Size() / WWO::M;

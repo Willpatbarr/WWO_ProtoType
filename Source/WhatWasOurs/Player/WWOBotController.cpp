@@ -1,4 +1,5 @@
 #include "Player/WWOBotController.h"
+#include "WWOTypes.h"
 #include "WWOSwitches.h"
 #include "Player/WWOProf.h"
 #include "Player/WWOCharacter.h"
@@ -778,7 +779,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 			const float Scale = 1.f + 2.f * FMath::Exp(-OnTarget / 0.5f) + CrossDeg / 45.f;
 			AimErrorGoal = FMath::RandPointInCircle(1.f) * T.AimError * Scale;
 		}
-		AimError = FMath::Lerp(AimError, AimErrorGoal, 1.f - FMath::Exp(-6.f * DeltaSeconds));
+		AimError = FMath::Lerp(AimError, AimErrorGoal, WWO::Damp(6.f, DeltaSeconds));
 		if (!bThrowing) TurnView(Me, FoeSpot + FoeVelocity * (0.8f / TurnGain) - Eye, T.TurnSpeed, DeltaSeconds, AimError);
 
 		// Fire only with the aim on them (a body's width at that distance) and in the gun's range.

@@ -20,22 +20,6 @@
 
 namespace
 {
-	FActorSpawnParameters Always(AActor* Owner = nullptr)
-	{
-		FActorSpawnParameters P;
-		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		P.bDeferConstruction = true;
-		P.Owner = Owner; // whose kit made it (its loadout answers for it, its hits go to them)
-		return P;
-	}
-
-	float BackOut(float T)
-	{
-		T = FMath::Clamp(T, 0.f, 1.f);
-		const float C1 = 1.70158f, C3 = C1 + 1.f;
-		return 1.f + C3 * FMath::Pow(T - 1.f, 3.f) + C1 * FMath::Pow(T - 1.f, 2.f);
-	}
-
 	const FLinearColor BarkColor(0.42f, 0.3f, 0.19f);
 }
 
@@ -70,16 +54,7 @@ void AWWOSporePool::BeginPlay()
 	// A low haze of its color over the surface, and its light on what stands in it.
 	Haze = WWOFX::AddSoftSphere(this, GetRootComponent(), Color, 0.22f, 1.1f, true, false, 0.1f);
 	Haze->SetRelativeLocation(FVector(0, 0, 12.f));
-	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
-	Light->SetupAttachment(GetRootComponent());
-	Light->SetRelativeLocation(FVector(0, 0, 60.f));
-	Light->SetLightColor(Color);
-	Light->SetIntensityUnits(ELightUnits::Unitless);
-	Light->SetIntensity(2200.f);
-	Light->SetAttenuationRadius(Radius * 1.6f * WWO::M);
-	Light->SetCastShadows(false);
-	Light->RegisterComponent();
-	Glow = Light;
+	Glow = WWOFX::AddPointLight(this, GetRootComponent(), Color, 2200.f, Radius * 1.6f * WWO::M, FVector(0, 0, 60.f));
 	if (AWWOParticles* B = AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(Color, 0.3f), 0.8f), FMath::RoundToInt(Radius * 10.f),
 		1.2f, 0.3f, 0.9f, 0.08f, FVector(0, 0, 0.6f), EWWOParticleStyle::Glow, false))
 	{
@@ -95,7 +70,7 @@ void AWWOSporePool::BeginPlay()
 
 AWWOSporePool* AWWOSporePool::Spawn(UWorld* World, const FVector& At, float RadiusM, float InDps, float InDuration, const FLinearColor& InColor, FName InFlavor, AActor* InThrower)
 {
-	AWWOSporePool* Pool = World->SpawnActor<AWWOSporePool>(At, FRotator::ZeroRotator, Always(InThrower));
+	AWWOSporePool* Pool = World->SpawnActor<AWWOSporePool>(At, FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred(InThrower));
 	if (!Pool) return nullptr;
 	Pool->Radius = RadiusM;
 	Pool->Dps = InDps;
@@ -125,7 +100,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 		return;
 	}
 	// Grows in quickly, shrinks and fades at the end.
-	const float Grow = BackOut(Age / 0.25f);
+	const float Grow = WWO::BackOut(Age / 0.25f);
 	const float FadeOut = FMath::Clamp((Duration - Age) / 0.5f, 0.f, 1.f);
 	const float Scale = Radius * WWO::M / 50.f * FMath::Lerp(0.2f, 1.f, Grow) * FadeOut;
 	Disc->SetRelativeScale3D(FVector(Scale, Scale, 1.f));
@@ -189,7 +164,7 @@ void AWWOSporePatch::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 AWWOSporePatch* AWWOSporePatch::Spawn(UWorld* World, const FVector& At, float RadiusM, float InDuration, AActor* InOwner)
 {
-	AWWOSporePatch* Patch = World->SpawnActor<AWWOSporePatch>(At, FRotator::ZeroRotator, Always(InOwner));
+	AWWOSporePatch* Patch = World->SpawnActor<AWWOSporePatch>(At, FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred(InOwner));
 	if (!Patch) return nullptr;
 	Patch->Radius = RadiusM;
 	Patch->Duration = InDuration;
@@ -234,7 +209,7 @@ void AWWOSporePatch::Tick(float DeltaSeconds)
 	WWO_PROF("SporePatch");
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
-	const float In = BackOut(Age / 0.25f);
+	const float In = WWO::BackOut(Age / 0.25f);
 	const float Out = FMath::Clamp(1.f - (Age - Duration) / 0.3f, 0.01f, 1.f);
 	SetActorScale3D(FVector(FMath::Max(In * Out, 0.01f)));
 	if (Age >= Duration + 0.3f && HasAuthority()) Destroy();
@@ -344,7 +319,7 @@ AWWOBarkWall* AWWOBarkWall::Raise(UWorld* World, const FVector& Center, const FV
 	FVector Toward = FacingFrom - Ground;
 	Toward.Z = 0.f;
 	const FRotator Facing = Toward.Size() > 10.f ? Toward.Rotation() : FRotator::ZeroRotator;
-	AWWOBarkWall* Wall = World->SpawnActor<AWWOBarkWall>(Ground, Facing, Always(InOwner));
+	AWWOBarkWall* Wall = World->SpawnActor<AWWOBarkWall>(Ground, Facing, WWO::AlwaysSpawnDeferred(InOwner));
 	if (!Wall) return nullptr;
 	Wall->Width = WidthM;
 	Wall->Height = HeightM;
@@ -409,7 +384,7 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 	};
 	if (!bSinking)
 	{
-		SetRise(BackOut(Age / 0.25f));
+		SetRise(WWO::BackOut(Age / 0.25f));
 		if (Age >= Duration)
 		{
 			bSinking = true;
@@ -435,7 +410,7 @@ AWWOEntrenchRoots::AWWOEntrenchRoots()
 AWWOEntrenchRoots* AWWOEntrenchRoots::Spawn(UWorld* World, AActor* Player, float InDuration)
 {
 	const FVector Feet = Player->GetActorLocation() - FVector(0, 0, 100.f);
-	AWWOEntrenchRoots* Roots = World->SpawnActor<AWWOEntrenchRoots>(Feet, FRotator::ZeroRotator, Always());
+	AWWOEntrenchRoots* Roots = World->SpawnActor<AWWOEntrenchRoots>(Feet, FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred());
 	if (!Roots) return nullptr;
 	Roots->Duration = InDuration;
 	Roots->FinishSpawning(FTransform(Feet));
@@ -483,7 +458,7 @@ void AWWOEntrenchRoots::Tick(float DeltaSeconds)
 	if (RingMat) RingMat->SetScalarParameterValue("Alpha", 0.7f - 0.2f * FMath::Cos(RingAge * UE_PI / 0.8f)); // a slow pulse: 0.5 -> 0.9 -> 0.5 every 1.6 s
 	if (!bEnding)
 	{
-		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(BackOut(Age / 0.2f), 0.01f)));
+		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(WWO::BackOut(Age / 0.2f), 0.01f)));
 		if (Age >= Duration)
 		{
 			bEnding = true;
@@ -505,7 +480,7 @@ AWWOChainLightning::AWWOChainLightning()
 
 AWWOChainLightning* AWWOChainLightning::Spawn(UWorld* World, const UWWOAbilityData* Ability, AActor* First, AActor* InPlayer, const FLinearColor& InColor)
 {
-	AWWOChainLightning* Chain = World->SpawnActor<AWWOChainLightning>(First->GetActorLocation(), FRotator::ZeroRotator, Always());
+	AWWOChainLightning* Chain = World->SpawnActor<AWWOChainLightning>(First->GetActorLocation(), FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred());
 	if (!Chain) return nullptr;
 	Chain->FinishSpawning(FTransform(First->GetActorLocation()));
 	Chain->Player = InPlayer;
@@ -527,7 +502,7 @@ AWWOChainLightning* AWWOChainLightning::SpawnFrom(UWorld* World, AActor* First, 
 	float InDamage, float InRange, float InFalloff, int32 Jumps, float InDelay)
 {
 	if (!World || !First) return nullptr;
-	AWWOChainLightning* Chain = World->SpawnActor<AWWOChainLightning>(First->GetActorLocation(), FRotator::ZeroRotator, Always());
+	AWWOChainLightning* Chain = World->SpawnActor<AWWOChainLightning>(First->GetActorLocation(), FRotator::ZeroRotator, WWO::AlwaysSpawnDeferred());
 	if (!Chain) return nullptr;
 	Chain->FinishSpawning(FTransform(First->GetActorLocation()));
 	Chain->Player = InPlayer;

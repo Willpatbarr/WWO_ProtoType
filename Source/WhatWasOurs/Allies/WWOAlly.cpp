@@ -259,7 +259,7 @@ void AWWOAlly::Face(const FVector& Direction, float DeltaSeconds)
 {
 	if (Direction.Size2D() < 1.f) return;
 	const float Current = GetActorRotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Direction.Rotation().Yaw) * (1.f - FMath::Exp(-10.f * DeltaSeconds));
+	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Direction.Rotation().Yaw) * WWO::Damp(10.f, DeltaSeconds);
 	SetActorRotation(FRotator(0.f, Yaw, 0.f));
 }
 
