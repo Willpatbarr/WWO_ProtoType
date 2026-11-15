@@ -8,10 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-#include "Misc/FileHelper.h"
+#include "Systems/WWOConfig.h"
 #include "Misc/Paths.h"
 #include "HAL/PlatformTime.h"
 
@@ -26,10 +23,8 @@ void UWWOSound::OnWorldBeginPlay(UWorld& InWorld)
 void UWWOSound::Load()
 {
 	bLoaded = true;
-	FString Text;
-	TSharedPtr<FJsonObject> Json;
-	if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("Sounds.json")))
-		|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	const TSharedPtr<FJsonObject> Json = WWOConfig::Load(WWOConfig::Path(TEXT("Sounds.json")));
+	if (!Json.IsValid())
 	{
 		UE_LOG(LogWWO, Warning, TEXT("Sounds: Config/Sounds.json is missing or isn't valid JSON; the game is silent"));
 		return;

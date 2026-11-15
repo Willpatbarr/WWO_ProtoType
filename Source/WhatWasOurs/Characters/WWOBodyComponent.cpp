@@ -15,11 +15,7 @@
 #include "Characters/WWOModelAnimInstance.h"
 #include "Retargeter/IKRetargeter.h"
 #include "Rendering/SkeletalMeshRenderData.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
+#include "Systems/WWOConfig.h"
 #include "Misc/PackageName.h"
 #include "Player/WWOCharacter.h"
 
@@ -31,18 +27,13 @@ namespace
 	const FName RegionTints[] = { "Head Tint", "Arms Tint", "Core Tint", "Legs Tint" };
 	const FName Looping[] = { "Idle", "Walk", "Idle_Unarmed", "Walk_Unarmed", "Jog_Fwd", "Sprint", "Sprint_Unarmed", "Crouch_Idle", "Crouch_Fwd", "Jump", "Spell_Simple_Idle", "Slide", "Pistol_Aim_Neutral", "Aim_Pistol" };
 
-	// One entry of Config/CharacterModels.json (read each time a model is set: retune with a restart).
+	// Config/CharacterModels.json, read and parsed once a run (every body that spawns asks): retune with a restart.
+	TSharedPtr<FJsonObject> CharacterModels() { return WWOConfig::LoadCached(TEXT("CharacterModels.json")); }
+
+	// One entry of its "models".
 	TSharedPtr<FJsonObject> ModelConfig(FName Key)
 	{
-		// Read and parsed once a run (every body that spawns asks).
-		static TSharedPtr<FJsonObject> Json;
-		static bool bRead = false;
-		if (!bRead)
-		{
-			bRead = true;
-			FString Text;
-			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
-		}
+		const TSharedPtr<FJsonObject> Json = CharacterModels();
 		if (Key.IsNone() || !Json.IsValid()) return nullptr;
 		const TSharedPtr<FJsonObject>* Models = nullptr;
 		const TSharedPtr<FJsonObject>* Model = nullptr;
@@ -141,10 +132,9 @@ void UWWOBodyComponent::BeginPlay()
 	bool bOwnMaterials = false;
 	if (GetOwner()->IsA<AWWOCharacter>())
 	{
-		FString Text, Path;
-		TSharedPtr<FJsonObject> Json;
-		if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("CharacterModels.json")))
-			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) && Json.IsValid() && Json->TryGetStringField(TEXT("player_mesh"), Path) && !Path.IsEmpty())
+		FString Path;
+		const TSharedPtr<FJsonObject> Json = CharacterModels();
+		if (Json.IsValid() && Json->TryGetStringField(TEXT("player_mesh"), Path) && !Path.IsEmpty())
 		{
 			if (USkeletalMesh* Own = LoadObject<USkeletalMesh>(nullptr, *Path))
 			{

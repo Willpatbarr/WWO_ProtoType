@@ -22,11 +22,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Misc/Paths.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
-#include "Serialization/JsonReader.h"
-#include "Dom/JsonObject.h"
+#include "Systems/WWOConfig.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
@@ -280,7 +276,7 @@ void AWWOPlayerController::ResetBinds()
 
 namespace
 {
-	FString BindsPath() { return FPaths::ProjectSavedDir() / TEXT("WWO/Keybinds.json"); }
+	FString BindsPath() { return WWOConfig::SavedPath(TEXT("Keybinds.json")); }
 	// Test runs press the default keys: they neither read nor write anyone's saved bindings.
 	bool BindsTestRun() { return FCString::Stristr(FCommandLine::Get(), TEXT("WWOAutoTest")) || FParse::Param(FCommandLine::Get(), TEXT("WWOStress")); }
 }
@@ -290,19 +286,16 @@ void AWWOPlayerController::SaveBinds() const
 	if (BindsTestRun()) return;
 	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
 	for (const auto& Pair : Binds) Json->SetStringField(Pair.Key.ToString(), Pair.Value.GetFName().ToString());
-	FString Text;
-	FJsonSerializer::Serialize(Json, TJsonWriterFactory<>::Create(&Text));
-	FFileHelper::SaveStringToFile(Text, *BindsPath());
+	WWOConfig::Save(BindsPath(), Json);
 }
 
 void AWWOPlayerController::LoadBinds()
 {
 	Binds.Reset();
 	if (BindsTestRun()) return;
-	FString Text;
-	TSharedPtr<FJsonObject> Json;
 	// Your saved bindings, or with none saved yet the ones the build shipped with (Config/ShippedKeybinds.json).
-	if ((!FFileHelper::LoadFileToString(Text, *BindsPath()) && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedKeybinds.json")))) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return;
+	const TSharedPtr<FJsonObject> Json = WWOConfig::LoadSavedElseShipped(BindsPath(), TEXT("ShippedKeybinds.json"));
+	if (!Json.IsValid()) return;
 	for (const auto& Pair : Json->Values)
 	{
 		const FKey Key(FName(*Pair.Value->AsString()));

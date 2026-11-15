@@ -25,11 +25,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
+#include "Systems/WWOConfig.h"
 
 namespace
 {
@@ -81,21 +77,17 @@ namespace
 	TSharedPtr<FJsonObject> ModelConfig(FName WeaponId)
 	{
 		// Read and parsed once a run (every equip, every bot's gun swap and every hand-held gun asks).
-		static TSharedPtr<FJsonObject> Json;
-		static bool bRead = false;
-		if (!bRead)
+		const TSharedPtr<FJsonObject> Json = WWOConfig::LoadCached(TEXT("WeaponModels.json"));
+		static bool bMerged = false;
+		if (!bMerged)
 		{
-			bRead = true;
-			FString Text;
-			if (FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponModels.json")))) FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json);
+			bMerged = true;
 			// Saved/WWO/WeaponModels.local.json (this machine only, never in git or a build): its
 			// "weapons" entries replace the shipped ones, for trying a model that isn't the game's.
-			TSharedPtr<FJsonObject> Local;
+			const TSharedPtr<FJsonObject> Local = Json.IsValid() ? WWOConfig::Load(WWOConfig::SavedPath(TEXT("WeaponModels.local.json"))) : nullptr;
 			const TSharedPtr<FJsonObject>* Ours = nullptr;
 			const TSharedPtr<FJsonObject>* Theirs = nullptr;
-			if (Json.IsValid() && FFileHelper::LoadFileToString(Text, *(FPaths::ProjectSavedDir() / TEXT("WWO/WeaponModels.local.json")))
-				&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Local) && Local.IsValid()
-				&& Json->TryGetObjectField(TEXT("weapons"), Ours) && Local->TryGetObjectField(TEXT("weapons"), Theirs))
+			if (Local.IsValid() && Json->TryGetObjectField(TEXT("weapons"), Ours) && Local->TryGetObjectField(TEXT("weapons"), Theirs))
 			{
 				for (const auto& Pair : (*Theirs)->Values) (*Ours)->SetField(Pair.Key, Pair.Value);
 				UE_LOG(LogWWO, Display, TEXT("Weapon models: %d replaced by Saved/WWO/WeaponModels.local.json"), (*Theirs)->Values.Num());
@@ -106,36 +98,6 @@ namespace
 		const TSharedPtr<FJsonObject>* Model = nullptr;
 		if (Json->TryGetObjectField(TEXT("weapons"), Weapons) && (*Weapons)->TryGetObjectField(WeaponId.ToString(), Model)) return *Model;
 		return nullptr;
-	}
-
-	// A 3-number array field (or one number for all three), else Default.
-	FVector JsonVec(const TSharedPtr<FJsonObject>& O, const TCHAR* Field, const FVector& Default = FVector::ZeroVector)
-	{
-		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
-		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() >= 3) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), (*A)[2]->AsNumber());
-		if (O.IsValid() && O->TryGetArrayField(Field, A) && A->Num() == 2) return FVector((*A)[0]->AsNumber(), (*A)[1]->AsNumber(), 0.0);
-		double N;
-		if (O.IsValid() && O->TryGetNumberField(Field, N)) return FVector(N);
-		return Default;
-	}
-
-	FLinearColor JsonColor(const TSharedPtr<FJsonObject>& O)
-	{
-		FString Name;
-		if (O->TryGetStringField(TEXT("color"), Name))
-		{
-			static const TMap<FString, FLinearColor> Named = {
-				{ TEXT("dark"), FLinearColor(0.12f, 0.12f, 0.13f) }, { TEXT("steel"), FLinearColor(0.22f, 0.24f, 0.28f) },
-				{ TEXT("orange"), FLinearColor(0.95f, 0.5f, 0.1f) }, { TEXT("gold"), FLinearColor(0.78f, 0.6f, 0.25f) },
-				{ TEXT("olive"), FLinearColor(0.22f, 0.27f, 0.2f) }, { TEXT("white"), FLinearColor(0.95f, 0.95f, 0.95f) },
-				{ TEXT("cyan"), FLinearColor(0.2f, 0.8f, 1.f) }, { TEXT("green"), FLinearColor(0.3f, 1.f, 0.4f) },
-				{ TEXT("red"), FLinearColor(1.f, 0.2f, 0.15f) }, { TEXT("yellow"), FLinearColor(1.f, 0.8f, 0.2f) },
-				{ TEXT("purple"), FLinearColor(0.6f, 0.3f, 1.f) },
-			};
-			if (const FLinearColor* C = Named.Find(Name.ToLower())) return *C;
-		}
-		const FVector V = JsonVec(O, TEXT("color"), FVector(0.22, 0.24, 0.28));
-		return FLinearColor(V.X, V.Y, V.Z);
 	}
 
 	// The low-poly weapon models (Godot: tools/build_weapon_models.gd). Origin = the sight point.
@@ -377,10 +339,10 @@ void UWWOWeaponComponent::UpdateWorldGun(bool bShow)
 		FString MeshPath;
 		UStaticMesh* Mesh = Model.IsValid() && Model->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<UStaticMesh>(nullptr, *MeshPath) : nullptr;
 		WorldGun->SetStaticMesh(Mesh);
-		const FVector Rot = JsonVec(Model, TEXT("rot"));
-		WorldGun->SetRelativeScale3D(JsonVec(Model, TEXT("scale"), FVector(1.0)));
+		const FVector Rot = WWOConfig::Vec(Model, TEXT("rot"));
+		WorldGun->SetRelativeScale3D(WWOConfig::Vec(Model, TEXT("scale"), FVector(1.0)));
 		WorldGun->SetRelativeRotation(FRotator(Rot.X, Rot.Y, Rot.Z));
-		WorldGun->SetRelativeLocation(-JsonVec(Model, TEXT("hand"), FVector(0.0, 0.0, -5.0)));
+		WorldGun->SetRelativeLocation(-WWOConfig::Vec(Model, TEXT("hand"), FVector(0.0, 0.0, -5.0)));
 	}
 	WorldGunRoot->SetVisibility(true, true);
 	// In the right hand: pointing down and ahead at rest, along the look once the arms are up.
@@ -497,8 +459,8 @@ void UWWOWeaponComponent::BuildModel()
 	{
 		FString Shape = TEXT("box");
 		O->TryGetStringField(TEXT("shape"), Shape);
-		const FVector Size = JsonVec(O, TEXT("size"), FVector(2.0));
-		const FVector Rot = JsonVec(O, TEXT("rot"));
+		const FVector Size = WWOConfig::Vec(O, TEXT("size"), FVector(2.0));
+		const FVector Rot = WWOConfig::Vec(O, TEXT("rot"));
 		FRotator R(Rot.X, Rot.Y, Rot.Z);
 		UStaticMesh* Mesh = WWOFX::Cube();
 		FVector Scale = Size / 100.0;
@@ -515,8 +477,8 @@ void UWWOWeaponComponent::BuildModel()
 		}
 		double Glow = 0.0;
 		O->TryGetNumberField(TEXT("glow"), Glow);
-		const FLinearColor Color = JsonColor(O);
-		AddPart(Name, Mesh, Scale, Anchor + JsonVec(O, TEXT("offset")), R, &Color, (float)Glow);
+		const FLinearColor Color = WWOConfig::Color(O);
+		AddPart(Name, Mesh, Scale, Anchor + WWOConfig::Vec(O, TEXT("offset")), R, &Color, (float)Glow);
 		bool bHideAds = false;
 		if (O->TryGetBoolField(TEXT("hide_ads"), bHideAds) && bHideAds) AdsHiddenParts.Add(Name);
 	};
@@ -547,7 +509,7 @@ void UWWOWeaponComponent::BuildModel()
 			Rot = Rot + FRotator(90.f, 0.f, 0.f); // the engine cylinder stands along z: lay it along the barrel
 		}
 		FVector Pos = G2U(P.Pos);
-		if (BodyMesh && FName(P.Name) == "MuzzleFlash") Pos = JsonVec(Model, TEXT("offset")) + JsonVec(Model, TEXT("muzzle"), Pos);
+		if (BodyMesh && FName(P.Name) == "MuzzleFlash") Pos = WWOConfig::Vec(Model, TEXT("offset")) + WWOConfig::Vec(Model, TEXT("muzzle"), Pos);
 		UStaticMeshComponent* Comp = AddPart(P.Name, Mesh, Scale, Pos, Rot, &P.Color, P.Glow);
 		if (FName(P.Name) == "MuzzleFlash") Comp->SetVisibility(false);
 		if (FName(P.Name) == "Magazine") MagRest = P.Pos;
@@ -593,16 +555,16 @@ void UWWOWeaponComponent::BuildModel()
 	{
 		// How far the gun's top sits under the sight line (AdsLevel tips the gun by it when aimed).
 		const FBoxSphereBounds MeshBounds = BodyMesh->GetBounds();
-		const float MeshTop = (MeshBounds.Origin.Z + MeshBounds.BoxExtent.Z) * JsonVec(Model, TEXT("scale"), FVector(1.0)).Z;
-		TopBelowSight = FMath::Max(-(JsonVec(Model, TEXT("offset")).Z + MeshTop) + Weapon->SightHeight, 0.f);
-		const FVector Rot = JsonVec(Model, TEXT("rot"));
-		AddPart("Body", BodyMesh, JsonVec(Model, TEXT("scale"), FVector(1.0)), JsonVec(Model, TEXT("offset")), FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
+		const float MeshTop = (MeshBounds.Origin.Z + MeshBounds.BoxExtent.Z) * WWOConfig::Vec(Model, TEXT("scale"), FVector(1.0)).Z;
+		TopBelowSight = FMath::Max(-(WWOConfig::Vec(Model, TEXT("offset")).Z + MeshTop) + Weapon->SightHeight, 0.f);
+		const FVector Rot = WWOConfig::Vec(Model, TEXT("rot"));
+		AddPart("Body", BodyMesh, WWOConfig::Vec(Model, TEXT("scale"), FVector(1.0)), WWOConfig::Vec(Model, TEXT("offset")), FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
 		const TArray<TSharedPtr<FJsonValue>>* Extras = nullptr;
 		if (Model->TryGetArrayField(TEXT("parts"), Extras))
 		{
 			for (int32 i = 0; i < Extras->Num(); ++i)
 			{
-				if ((*Extras)[i]->AsObject().IsValid()) AddJsonPart(FName(*FString::Printf(TEXT("Extra%d"), i)), (*Extras)[i]->AsObject(), JsonVec(Model, TEXT("offset")));
+				if ((*Extras)[i]->AsObject().IsValid()) AddJsonPart(FName(*FString::Printf(TEXT("Extra%d"), i)), (*Extras)[i]->AsObject(), WWOConfig::Vec(Model, TEXT("offset")));
 			}
 		}
 		const TSharedPtr<FJsonObject>* AnchorObj = nullptr;
@@ -611,7 +573,7 @@ void UWWOWeaponComponent::BuildModel()
 			for (const auto& Pair : (*AnchorObj)->Values)
 			{
 				const FString Key(Pair.Key);
-				Anchors.Add(Key, JsonVec(Model, TEXT("offset")) + JsonVec(*AnchorObj, *Key)); // anchors move with the mesh
+				Anchors.Add(Key, WWOConfig::Vec(Model, TEXT("offset")) + WWOConfig::Vec(*AnchorObj, *Key)); // anchors move with the mesh
 			}
 		}
 	}
@@ -1680,10 +1642,10 @@ void UWWOWeaponComponent::UpdateHands()
 		// This gun's grip and fore-end (Config/WeaponModels.json: hand, and the grip mod's anchor).
 		const TSharedPtr<FJsonObject> Model = Weapon ? ModelConfig(Weapon->Id) : nullptr;
 		const TSharedPtr<FJsonObject>* Anchors = nullptr;
-		const FVector Offset = JsonVec(Model, TEXT("offset")) + ModelShift;
-		HandsGrip = Offset + JsonVec(Model, TEXT("hand"), FVector(-3.f, 0.f, -4.f));
-		HandsFore = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? JsonVec(*Anchors, TEXT("grip"), FVector(22.f, 0.f, -1.f)) : FVector(22.f, 0.f, -1.f));
-		HandsMag = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? JsonVec(*Anchors, TEXT("magazine"), FVector(8.f, 0.f, -6.f)) : FVector(8.f, 0.f, -6.f));
+		const FVector Offset = WWOConfig::Vec(Model, TEXT("offset")) + ModelShift;
+		HandsGrip = Offset + WWOConfig::Vec(Model, TEXT("hand"), FVector(-3.f, 0.f, -4.f));
+		HandsFore = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("grip"), FVector(22.f, 0.f, -1.f)) : FVector(22.f, 0.f, -1.f));
+		HandsMag = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("magazine"), FVector(8.f, 0.f, -6.f)) : FVector(8.f, 0.f, -6.f));
 		bHandsPistol = Weapon && Weapon->Id == "handcannon";
 	}
 	// The clip's rifle onto this gun: anything held against the clip's rifle moves to the same place on ours.

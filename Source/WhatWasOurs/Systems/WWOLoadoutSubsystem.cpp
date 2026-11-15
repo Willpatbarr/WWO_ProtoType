@@ -8,11 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
+#include "Systems/WWOConfig.h"
 
 namespace
 {
@@ -494,10 +490,8 @@ void UWWOLoadoutSubsystem::LoadDefaultLoadout()
 {
 	// First run: start from Config/DefaultLoadout.json (the loadout carried over from the
 	// Godot prototype), in the same format Godot's loadout.json used.
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("DefaultLoadout.json")))) return;
-	TSharedPtr<FJsonObject> Json;
-	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid()) return;
+	const TSharedPtr<FJsonObject> Json = WWOConfig::Load(WWOConfig::Path(TEXT("DefaultLoadout.json")));
+	if (!Json.IsValid()) return;
 	UWWOLoadoutSave* Data = NewObject<UWWOLoadoutSave>();
 	Data->Flora = FName(Json->GetStringField(TEXT("flora")));
 	Data->Weapon = FName(Json->GetStringField(TEXT("weapon")));
@@ -650,12 +644,11 @@ TArray<FString> UWWOLoadoutSubsystem::GroupSummary() const
 
 void UWWOLoadoutSubsystem::LoadMods()
 {
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("WeaponMods.json")))) return;
-	TSharedPtr<FJsonObject> Json;
-	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	bool bFileRead = false;
+	const TSharedPtr<FJsonObject> Json = WWOConfig::Load(WWOConfig::Path(TEXT("WeaponMods.json")), &bFileRead);
+	if (!Json.IsValid())
 	{
-		UE_LOG(LogWWO, Warning, TEXT("Config/WeaponMods.json isn't valid JSON"));
+		if (bFileRead) UE_LOG(LogWWO, Warning, TEXT("Config/WeaponMods.json isn't valid JSON")); // a missing file is silent
 		return;
 	}
 	const TArray<TSharedPtr<FJsonValue>>* List = nullptr;

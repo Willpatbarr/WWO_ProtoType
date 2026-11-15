@@ -42,11 +42,7 @@
 #include "Net/WWONetSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformTime.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
+#include "Systems/WWOConfig.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
 
@@ -59,7 +55,7 @@ namespace
 		return Size;
 	}
 
-	FString SavePath() { return FPaths::ProjectSavedDir() / TEXT("WWO/SavedSettings.json"); }
+	FString SavePath() { return WWOConfig::SavedPath(TEXT("SavedSettings.json")); }
 
 	FWWOSettingRow Header(const FString& Text)
 	{
@@ -854,10 +850,7 @@ bool UWWOSettingsMenu::SaveDefaults()
 		// tuning in memory may be the host's (movement in PvP), and it isn't yours to keep. With no
 		// file of your own yet, it starts as the build's shipped values (LoadSaved stops falling back
 		// to those once your file exists).
-		FString Old;
-		TSharedPtr<FJsonObject> Parsed;
-		if ((FFileHelper::LoadFileToString(Old, *SavePath()) || FFileHelper::LoadFileToString(Old, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json"))))
-			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Old), Parsed) && Parsed.IsValid()) Root = Parsed;
+		if (const TSharedPtr<FJsonObject> Parsed = WWOConfig::LoadSavedElseShipped(SavePath(), TEXT("ShippedSettings.json")); Parsed.IsValid()) Root = Parsed;
 	}
 	for (const FWWOSettingSection& S : Sections)
 	{
@@ -874,19 +867,15 @@ bool UWWOSettingsMenu::SaveDefaults()
 		}
 		Root->SetObjectField(S.Key, Values);
 	}
-	FString Text;
-	FJsonSerializer::Serialize(Root.ToSharedRef(), TJsonWriterFactory<>::Create(&Text));
-	return FFileHelper::SaveStringToFile(Text, *SavePath());
+	return WWOConfig::Save(SavePath(), Root.ToSharedRef());
 }
 
 void UWWOSettingsMenu::LoadSaved()
 {
 	// Your saved values, or in a fresh packaged build the ones it shipped with (Config/ShippedSettings.json).
-	FString Text;
-	const bool bMine = FFileHelper::LoadFileToString(Text, *SavePath());
-	if (!bMine && !FFileHelper::LoadFileToString(Text, *(FPaths::ProjectConfigDir() / TEXT("ShippedSettings.json")))) return;
-	TSharedPtr<FJsonObject> Root;
-	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return;
+	bool bMine = false;
+	const TSharedPtr<FJsonObject> Root = WWOConfig::LoadSavedElseShipped(SavePath(), TEXT("ShippedSettings.json"), &bMine);
+	if (!Root.IsValid()) return;
 	for (const auto& SectionPair : Root->Values)
 	{
 		const TSharedPtr<FJsonObject>* Values = nullptr;
