@@ -25,8 +25,12 @@ public:
 	// Whether a shot that landed as Hit, fired from From, counts as a crit. By default that's the
 	// part it met first; players also count a shot whose line goes on through the head.
 	virtual bool IsCriticalHit(const FHitResult& Hit, const FVector& From) const { return IsCriticalComponent(Hit.GetComponent()); }
-	// Returns true if this hit killed it. Color tints the damage number (alpha 0 = default).
-	virtual bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0)) = 0;
+	// Hurts it: ApplyHit unless it is already dead, then the attacker's hit marker
+	// (UWWOWorldSubsystem::ConfirmHit). Returns true if this hit killed it. Color tints the damage
+	// number (alpha 0 = default).
+	bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0));
+	// What TakeHit does to this one. Call TakeHit, not this.
+	virtual bool ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color) = 0;
 	virtual bool IsDead() const = 0;
 	virtual float GetHealth() const = 0;
 	virtual float GetMaxHealth() const = 0;

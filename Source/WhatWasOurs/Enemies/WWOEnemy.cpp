@@ -164,14 +164,6 @@ bool AWWOEnemy::IsCriticalComponent(const UPrimitiveComponent* Component) const
 	return Component == CritBox;
 }
 
-bool AWWOEnemy::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
-{
-	if (IsDead()) return false;
-	const bool bKilled = ApplyHit(Damage, bCritical, Point, Color);
-	UWWOWorldSubsystem::ConfirmHit(this, bCritical, bKilled);
-	return bKilled;
-}
-
 bool AWWOEnemy::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
 	if (bDead) return false;

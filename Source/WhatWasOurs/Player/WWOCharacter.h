@@ -125,9 +125,7 @@ public:
 	virtual TArray<FWWOAimPart> GetAimParts() const override;
 	virtual bool IsCriticalComponent(const UPrimitiveComponent* Component) const override;
 	virtual bool IsCriticalHit(const FHitResult& Hit, const FVector& From) const override;
-	virtual bool TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color = FLinearColor(0, 0, 0, 0)) override;
-	// What TakeHit does to this one; TakeHit itself adds the attacker's hit marker.
-	bool ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color);
+	virtual bool ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color) override;
 	virtual bool IsDead() const override;
 	virtual float GetHealth() const override;
 	virtual float GetMaxHealth() const override;

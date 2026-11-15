@@ -97,14 +97,6 @@ TArray<FWWOAimPart> AWWOTarget::GetAimParts() const
 	return { { HeadBox->GetComponentLocation(), 17.f, true }, { BodyBox->GetComponentLocation(), 40.f, false } };
 }
 
-bool AWWOTarget::TakeHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
-{
-	if (IsDead()) return false;
-	const bool bKilled = ApplyHit(Damage, bCritical, Point, Color);
-	UWWOWorldSubsystem::ConfirmHit(this, bCritical, bKilled);
-	return bKilled;
-}
-
 bool AWWOTarget::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)
 {
 	if (bDead) return false;

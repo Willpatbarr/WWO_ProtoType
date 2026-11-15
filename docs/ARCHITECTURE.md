@@ -36,7 +36,7 @@ For the rules that follow from this, see `CONVENTIONS.md`; for step-by-step addi
 ## Damage
 
 ```
-IWWOTargetable::TakeHit            (character, enemy, target dummy)
+IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skips the dead)
   -> ApplyHit                      each class's own work; on a joiner: flash and number only
        host: Health->TakeDamage    shield first, OnDamaged, Die
   -> UWWOWorldSubsystem::ConfirmHit   hit marker for the attacking player
