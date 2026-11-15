@@ -1,5 +1,9 @@
 # What Was Ours: Unreal port handoff
 
+> **History file.** Dated notes on how each feature was built, kept for the reasons behind decisions.
+> For the current picture start at `AGENTS.md` and `docs/`. Search this file; don't read it whole.
+> New work updates `docs/` in place instead of adding a section here.
+
 The Godot gray-box prototype (`~/Documents/WhatWasOurs`, working copy as of 2026-11-04) rebuilt in
 Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native structure.
 
