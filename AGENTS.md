@@ -79,7 +79,8 @@ build scripts: `Tools/`.
 
 - Look for an existing helper before writing one: `WWOTypes.h` (`WWO::` maths and colour),
   `UWWOWorldSubsystem` (targets, teams, `CanHurt`, `PlayerOf`), `UWWOLoadoutSubsystem` (`FindById`, `M()`),
-  `WWOFX` (shapes, lights, materials). `docs/CONVENTIONS.md` lists them.
+  `WWOFX` (shapes, lights, materials), `WWOConfig` (JSON config files), `WWOSwitches` (command-line
+  switches). `docs/CONVENTIONS.md` lists them.
 - A feature that changes how a system works updates that system's section in `docs/`, in place. Dated
   "what I did" notes go in the commit message, not in a doc.
 - Verify with a build and the narrowest autotest that covers the change; say what you ran.
