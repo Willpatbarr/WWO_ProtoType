@@ -35,7 +35,7 @@ bool UWWOHealthComponent::IsHost() const
 
 bool UWWOHealthComponent::IsOnline() const
 {
-	return GetOwner() && GetOwner()->GetNetMode() != NM_Standalone;
+	return WWO::IsOnline(GetOwner());
 }
 
 void UWWOHealthComponent::OnRep_Health()

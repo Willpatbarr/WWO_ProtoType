@@ -47,7 +47,7 @@ UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::Get(const UObject* WorldContext)
 	{
 		// A copy kept for someone else's character: a joiner's or a bot's on the host, anyone else's on a
 		// joiner (AWWOCharacter::OnRep_NetLook). Never your own character on your own machine.
-		const bool bMine = C->IsLocallyControlled() && C->IsPlayerControlled();
+		const bool bMine = C->IsLocalHuman();
 		if (C->NetLoadout && !bMine) return C->NetLoadout;
 	}
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;

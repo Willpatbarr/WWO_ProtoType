@@ -377,7 +377,7 @@ void AWWOGrenade::Blast(const FVector& Center)
 
 void AWWOGrenade::Finish()
 {
-	if (!IsOnline())
+	if (!WWO::IsOnline(this))
 	{
 		Destroy();
 		return;

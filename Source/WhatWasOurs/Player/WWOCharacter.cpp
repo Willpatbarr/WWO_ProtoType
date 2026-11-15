@@ -124,7 +124,7 @@ void AWWOCharacter::BeginPlay()
 	if (Controller) Pitch = FMath::DegreesToRadians(Controller->GetControlRotation().Pitch);
 	Pitch = FMath::Clamp(FRotator::NormalizeAxis(FMath::RadiansToDegrees(Pitch)), -89.f, 89.f) * UE_PI / 180.f;
 	// Someone else's until a controller on this machine takes it (NotifyControllerChanged).
-	SetupVisuals(IsLocallyControlled() && IsPlayerControlled());
+	SetupVisuals(IsLocalHuman());
 	// Online, a joiner's damage happens on the host (which charges its copy's Static Charge); the
 	// joiner's own copy charges from the damage it's told about, so both agree on when it's ready.
 	Health->OnDamaged.AddWeakLambda(this, [this](float Amount) { if (!HasAuthority()) Abilities->OnDamageTaken(Amount); });
@@ -132,7 +132,7 @@ void AWWOCharacter::BeginPlay()
 	// recoil: your aim stays where it was.)
 	Health->OnDamaged.AddWeakLambda(this, [this](float Amount)
 	{
-		if (IsLocallyControlled() && IsPlayerControlled())
+		if (IsLocalHuman())
 		{
 			Weapon->Shake(Weapon->HitFlinch * FMath::Clamp(Amount / 60.f, 0.2f, 1.f) * 0.6f, 0.2f);
 			UWWOSound::PlayFlat(this, "hurt", FMath::Clamp(Amount / 40.f, 0.4f, 1.f));
@@ -159,14 +159,14 @@ void AWWOCharacter::NotifyControllerChanged()
 void AWWOCharacter::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
-	if (bLocalVisuals != (IsLocallyControlled() && IsPlayerControlled())) UE_LOG(LogWWO, Display, TEXT("Net visuals: %s fixed up by its player state"), *GetName());
+	if (bLocalVisuals != IsLocalHuman()) UE_LOG(LogWWO, Display, TEXT("Net visuals: %s fixed up by its player state"), *GetName());
 	RefreshLocalVisuals(); // a joiner's controller often arrives before its player state
 }
 
 void AWWOCharacter::RefreshLocalVisuals()
 {
 	// A bot is run here but isn't anyone's view: it shows its whole body like another player.
-	const bool bMine = IsLocallyControlled() && IsPlayerControlled();
+	const bool bMine = IsLocalHuman();
 	if (bMine != bLocalVisuals) SetupVisuals(bMine);
 }
 
@@ -239,7 +239,7 @@ void AWWOCharacter::OnRep_NetLook()
 {
 	// A joiner keeps a copy of everyone else's loadout (as the host does for joiners and bots), so
 	// whatever belongs to that character reads what they have on, not what you do.
-	if (IsLocallyControlled() && IsPlayerControlled()) return; // your own comes from your own loadout
+	if (IsLocalHuman()) return; // your own comes from your own loadout
 	if (!HasAuthority())
 	{
 		if (!NetLoadout) NetLoadout = UWWOLoadoutSubsystem::NewCopy(UWWOLoadoutSubsystem::Get(GetWorld()));
@@ -251,7 +251,7 @@ void AWWOCharacter::OnRep_NetLook()
 void AWWOCharacter::OnRep_NetFists()
 {
 	// Someone else's fists, as the host says (your own are lit from your own ability state).
-	if (IsLocallyControlled() && IsPlayerControlled()) return;
+	if (IsLocalHuman()) return;
 	const UWWOLoadoutSubsystem* Data = UWWOLoadoutSubsystem::Get(GetWorld());
 	const UWWOAbilityData* Lit = nullptr;
 	if (Data && !NetFists.IsNone()) for (const UWWOAbilityData* A : Data->Abilities) if (A && A->Id == NetFists) Lit = A;
@@ -350,7 +350,7 @@ void AWWOCharacter::ApplyBlind(float Seconds)
 	if (Seconds <= 0.f) return;
 	BlindLeft = FMath::Max(BlindLeft, Seconds);
 	BlindTotal = FMath::Max(BlindLeft, 0.1f);
-	if (HasAuthority() && !IsLocallyControlled() && GetNetMode() != NM_Standalone) ClientApplyBlind(Seconds);
+	if (IsHostCopyOfRemote()) ClientApplyBlind(Seconds);
 }
 
 void AWWOCharacter::ClientApplyBlind_Implementation(float Seconds)
@@ -1505,7 +1505,7 @@ void AWWOCharacter::ApplySlow(float Amount, float Seconds)
 {
 	SlowAmount = FMath::Max(FMath::Clamp(Amount, 0.f, 0.95f), SlowLeft > 0.f ? SlowAmount : 0.f);
 	SlowLeft = FMath::Max(SlowLeft, Seconds);
-	if (HasAuthority() && !IsLocallyControlled() && GetNetMode() != NM_Standalone) ClientApplySlow(Amount, Seconds);
+	if (IsHostCopyOfRemote()) ClientApplySlow(Amount, Seconds);
 }
 
 bool AWWOCharacter::IsInvisible() const

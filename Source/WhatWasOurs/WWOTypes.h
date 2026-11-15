@@ -8,9 +8,14 @@
 #include "CoreMinimal.h"
 #include "WWOTypes.generated.h"
 
+class AActor;
+
 namespace WWO
 {
 	constexpr float M = 100.f; // centimeters per meter
+
+	// Whether this actor is in a networked game (hosting or joined), not playing alone. False for null.
+	bool IsOnline(const AActor* Actor);
 
 	// Godot's "move_toward".
 	inline float MoveToward(float From, float To, float Delta)

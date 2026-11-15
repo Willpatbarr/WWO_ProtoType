@@ -28,7 +28,8 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 - Vocabulary used in comments and logs: **host** = `HasAuthority()`, **joiner** = `NM_Client`.
 - Actors check `HasAuthority()`; components check the net mode.
 - A bot is locally controlled but not player controlled. "My human player" is
-  `IsLocallyControlled() && IsPlayerControlled()`.
+  `AWWOCharacter::IsLocalHuman()`; the host's copy of a joiner's character is `IsHostCopyOfRemote()`.
+  "In a networked game" is `WWO::IsOnline(Actor)`.
 - Gameplay state changes on the host only. A joiner's `TakeHit` / `ApplyHit` is cosmetic and returns false.
 - Kit follows predict, confirm, refuse: the joiner acts at once, the host checks, `ClientKitRefused`
   undoes it and returns the charge.

@@ -46,7 +46,7 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	// about to be hit can see it coming.
 	// It's known on the host (for everyone) and on your own machine (for you); the host passes it on
 	// to the rest (AWWOCharacter::NetFists).
-	if (P && (P->HasAuthority() || (P->IsLocallyControlled() && P->IsPlayerControlled())))
+	if (P && (P->HasAuthority() || P->IsLocalHuman()))
 	{
 		const UWWOAbilityData* Lit = ThornfistActive();
 		if (!Lit) { if (const UWWOAbilityData* Charge = Equipped("static_charge")) if (Armed.FindRef(Charge->Id)) Lit = Charge; }

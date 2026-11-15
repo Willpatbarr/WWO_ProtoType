@@ -364,6 +364,10 @@ public:
 
 	AWWOPlayerController* GetWWOController() const;
 	class AWWOBotController* GetBot() const; // a bot player (PvP stress tests), else null
+	// This machine's own human player: controlled here, and not a bot.
+	bool IsLocalHuman() const { return IsLocallyControlled() && IsPlayerControlled(); }
+	// Online, the host's copy of a character controlled on another machine (a joiner's).
+	bool IsHostCopyOfRemote() const { return HasAuthority() && !IsLocallyControlled() && GetNetMode() != NM_Standalone; }
 	UWWOLoadoutSubsystem* GetLoadout() const;
 
 private:

@@ -108,7 +108,6 @@ private:
 	void Blast(const FVector& Center); // the looks here and, online, everywhere
 	void Finish();                     // gone (online: hidden for a moment so the blast reaches everyone first)
 	void AddHalo();
-	bool IsOnline() const { return GetNetMode() != NM_Standalone; }
 	float ArmLeft = -1.f;
 	float Age = 0.f;
 	float LifeLimit = 0.f; // fuse or fizzle time

@@ -954,7 +954,7 @@ void UWWOWeaponComponent::MeleeStrike()
 	KickAge = 0.f;
 	AWWOFXActor::HitSpark(GetWorld(), BestPoint, (Origin - BestPoint).GetSafeNormal(), bKilled); // sparks off the hit; the gold flare on a kill
 	UWWOSound::Play(this, "melee_hit", BestPoint);
-	if (bKilled && P->IsLocallyControlled() && P->IsPlayerControlled()) UWWOSound::PlayFlat(this, "kill");
+	if (bKilled && P->IsLocalHuman()) UWWOSound::PlayFlat(this, "kill");
 	MeleeImpact(Best, bKilled, BestPoint);
 }
 
@@ -1216,7 +1216,7 @@ void UWWOWeaponComponent::Shoot()
 		IWWOTargetable* Target = Cast<IWWOTargetable>(Hit.GetActor());
 		if (!Target || Target->IsDead() || !UWWOWorldSubsystem::CanHurt(P, Hit.GetActor())) continue; // PvP: not your team
 		const bool bCritical = Target->IsCriticalHit(Hit, P->EyeLocation());
-		if (P->IsLocallyControlled() && P->IsPlayerControlled()) AWWOFXActor::HitSpark(GetWorld(), Hit.ImpactPoint, -Dir, bCritical); // a bot's: ShowShotFromBody
+		if (P->IsLocalHuman()) AWWOFXActor::HitSpark(GetWorld(), Hit.ImpactPoint, -Dir, bCritical); // a bot's: ShowShotFromBody
 		FTotal& Entry = Totals.FindOrAdd(Hit.GetActor());
 		if (Entry.Damage == 0.f) Entry.Point = Hit.ImpactPoint;
 		// Long Shot: far targets; Point Blank: close ones; Finisher: ones under half their health and shield.
@@ -1231,7 +1231,7 @@ void UWWOWeaponComponent::Shoot()
 	// The shot through the air, on this machine. Yours leaves from where your gun's muzzle shows on
 	// screen (thinner, so it doesn't cover what you're aiming at) with the flash on the gun itself;
 	// a bot's is drawn from its body like any other player's.
-	if (P->IsLocallyControlled() && P->IsPlayerControlled())
+	if (P->IsLocalHuman())
 	{
 		UWWOSound::PlayFlat(this, UWWOSound::HasEvent(this, FName(*(TEXT("fire_") + Weapon->Id.ToString()))) ? FName(*(TEXT("fire_") + Weapon->Id.ToString())) : FName("fire"));
 		const FVector Muzzle = TrailStart();
@@ -1297,7 +1297,7 @@ void UWWOWeaponComponent::Shoot()
 	bLastShotPredictedKill = bAnyKilled;
 	OnShotResult(FirstHit, Totals.Num(), bJoiner ? 0 : Kills, bAnyCritical);
 	if (Totals.Num() > 0) OnHitConfirmed.Broadcast(bAnyCritical, bAnyKilled);
-	if (Totals.Num() > 0 && P->IsLocallyControlled() && P->IsPlayerControlled()) UWWOSound::PlayFlat(this, bAnyKilled ? "kill" : (bAnyCritical ? "hit_crit" : "hit"));
+	if (Totals.Num() > 0 && P->IsLocalHuman()) UWWOSound::PlayFlat(this, bAnyKilled ? "kill" : (bAnyCritical ? "hit_crit" : "hit"));
 	// Recoil kicks the actual view, so you have to pull down to stay on target.
 	const bool bSynced = Weapon->RecoilRecoverySync >= 0.5f;
 	float RecoveryTime = Weapon->RecoilRecoveryTime;

@@ -35,7 +35,7 @@ L a week or more of agent time including test runs. Risk is the risk of changing
 | 1.1 | Delete the old single first-person arms (`PlaceArm`, `BuildArm`, `FWWOFPArm` meshes, `WWOFPArmPaths.h`, their settings rows) and other unused members (`IWWOTargetable::IsEnemy`, `UWWOLoadoutSubsystem::NetChanges`) | S | low | done |
 | 1.2 | One config loader (`WWOConfig`: load by name, cached; saved file with shipped fallback) and shared JSON readers (vector, colour) replacing the seven hand-rolled loaders and the two copies of `ModelConfig` | S-M | low | |
 | 1.3 | One home for command-line switches (`WWOSwitches`: cached `IsTestRun()`, `IsStress()`, bot switches), replacing the five spellings of "test run" and the per-frame parses | S-M | low | |
-| 1.4 | Named role predicates on the character (`IsLocalHuman`, `IsJoiner`, `IsHostCopyOfRemote`) and one `IsOnline` | S | low | |
+| 1.4 | Named role predicates on the character (`IsLocalHuman`, `IsJoiner`, `IsHostCopyOfRemote`) and one `IsOnline` | S | low | part: `IsLocalHuman`, `IsHostCopyOfRemote`, `WWO::IsOnline` |
 | 1.5 | `IWWOTargetable::TakeHit` as one non-virtual wrapper over a virtual `ApplyHit` (three identical copies today) | S | low | done |
 | 1.6 | Small duplicate helpers folded into `WWO::` / `WWOFX`: `BackOut` (3), spawn params (7 files), point-light setup (6), exponential smoothing, team counts and "place at PvP spawn" in the game mode | S | low | |
 
