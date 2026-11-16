@@ -27,6 +27,7 @@ class UTextBlock;
 class USlider;
 class UButton;
 class UWrapBox;
+class UHorizontalBox;
 class UPanelWidget;
 class UProgressBar;
 class AWWOCharacter;
@@ -147,12 +148,33 @@ private:
 	int32 GlobalTab = 0;
 
 	void Build();
+	// What settings exist (WWOSettingsSections.cpp): every section and its rows, registered in the
+	// order the pages, the search and the saved file list them. RegisterSections calls the rest in turn.
 	void RegisterSections(AWWOCharacter* P);
+	void AddGlobal(const FString& Title, TArray<FWWOSettingRow> Rows, TArray<FWWOMenuButton> Buttons = {});
+	void RegisterMovementAndViewSections(AWWOCharacter* P);
+	void RegisterCombatSections(AWWOCharacter* P);
+	void RegisterEnemySections(AWWOCharacter* P);
+	void RegisterMatchSections(AWWOCharacter* P);
+	void RegisterAimAssistSection(AWWOCharacter* P);
+	void RegisterWeaponSections(AWWOCharacter* P);
+	void RegisterShellSections(AWWOCharacter* P);
+	void RegisterAbilitySections(AWWOCharacter* P);
+	void RegisterTraitSections(AWWOCharacter* P);
+	void RegisterGrenadeSections(AWWOCharacter* P);
+	// Defaults, the saved file, reset (WWOSettingsStore.cpp).
 	void RecordDefaults();
 	void LoadSaved();
+	// Prepare's layout steps, in order (WWOSettingsMenu.cpp): the window and its header (returns the
+	// row under it), every page, the sidebar, the page column.
+	UHorizontalBox* BuildFrame();
+	void BuildPages(class UWWOLoadoutSubsystem* L);
+	void BuildSidebar(UHorizontalBox* Body);
+	void BuildPageArea(UHorizontalBox* Body);
 	FWWOSettingSection* Find(const FString& Key);
 	const FWWOSettingSection* Find(const FString& Key) const;
 	const FWWOSettingRow* RowFor(const FString& Key, FName Id) const;
+	// The slider rows, the item browsers and the key bindings (WWOSettingsRows.cpp).
 	void BuildRows(UPanelWidget* Container, const FString& Key);
 	UWidget* MakeRow(const FString& Key, int32 RowIndex);
 	void SyncSliders();
