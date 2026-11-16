@@ -411,11 +411,48 @@ UWWOLoadoutSubsystem* AWWOCharacter::GetLoadout() const
 	return UWWOLoadoutSubsystem::Get(this);
 }
 
+namespace
+{
+	// The movement values a player's machine and the host exchange (ServerSetMoveStats,
+	// ClientSetMoveBase, BaseMoveStats), in the order they go on the wire. Stat: the loadout stat
+	// that modifies it (M()), or null if loadouts don't. Low/High: the host keeps a joiner's value
+	// inside these (twice the Settings sliders' ranges: loadout bonuses go over them).
+	// Adding a movement value is one line here (at the end: tests read some by index).
+	struct FWWOMoveStat
+	{
+		float AWWOCharacter::* Value;
+		const TCHAR* Stat;
+		float Low, High;
+	};
+	const FWWOMoveStat MoveStatTable[] = {
+		{ &AWWOCharacter::WalkSpeed,      TEXT("walk_speed"),     0.5f,  30.f },
+		{ &AWWOCharacter::SprintSpeed,    TEXT("sprint_speed"),   0.5f,  50.f },
+		{ &AWWOCharacter::CrouchSpeed,    TEXT("crouch_speed"),   0.25f, 20.f },
+		{ &AWWOCharacter::SlideSpeed,     TEXT("slide_speed"),    0.5f,  60.f },
+		{ &AWWOCharacter::SlideDistance,  TEXT("slide_distance"), 0.5f,  40.f },
+		{ &AWWOCharacter::JumpHeight1,    TEXT("jump_height"),    0.1f,  10.f },
+		{ &AWWOCharacter::JumpHeight2,    TEXT("jump_height"),    0.f,   10.f },
+		{ &AWWOCharacter::AirControl,     TEXT("air_control"),    0.f,   80.f },
+		{ &AWWOCharacter::AscentGravity,  nullptr,                1.f,   160.f },
+		{ &AWWOCharacter::DescentGravity, nullptr,                1.f,   160.f },
+		{ &AWWOCharacter::ApexHang,       nullptr,                0.f,   0.95f },
+		{ &AWWOCharacter::CoyoteTime,     nullptr,                0.f,   0.6f },
+		{ &AWWOCharacter::MantleReach,    nullptr,                0.f,   7.f },
+		{ &AWWOCharacter::MantleTime,     nullptr,                0.05f, 2.f },
+	};
+	constexpr int32 MoveStatCount = UE_ARRAY_COUNT(MoveStatTable);
+}
+
 float AWWOCharacter::M(FName Stat, float Base) const
 {
 	// The host's copy of a joiner in co-op: its movement values came already modified
 	// (ServerSetMoveStats). Everything else (health, shields, grenades) still takes its loadout here.
-	static const TSet<FName> Sent = { "walk_speed", "sprint_speed", "crouch_speed", "slide_speed", "slide_distance", "jump_height", "air_control" };
+	static const TSet<FName> Sent = []
+	{
+		TSet<FName> Names;
+		for (const FWWOMoveStat& S : MoveStatTable) if (S.Stat) Names.Add(FName(S.Stat));
+		return Names;
+	}();
 	if (bNetStats && Sent.Contains(Stat)) return Base;
 	const UWWOLoadoutSubsystem* Loadout = GetLoadout();
 	return Loadout ? Loadout->Apply(Stat, Base) : Base;
@@ -1053,26 +1090,25 @@ FString FWWOMoveState::ToString() const
 
 TArray<float> AWWOCharacter::LocalMoveStats() const
 {
-	// The order ServerSetMoveStats reads them in.
-	return {
-		M("walk_speed", WalkSpeed), M("sprint_speed", SprintSpeed), M("crouch_speed", CrouchSpeed), M("slide_speed", SlideSpeed),
-		M("slide_distance", SlideDistance), M("jump_height", JumpHeight1), M("jump_height", JumpHeight2), M("air_control", AirControl),
-		AscentGravity, DescentGravity, ApexHang, CoyoteTime, MantleReach, MantleTime,
-	};
+	// MoveStatTable's order, after loadout modifiers.
+	TArray<float> Values;
+	Values.Reserve(MoveStatCount);
+	for (const FWWOMoveStat& S : MoveStatTable) Values.Add(S.Stat ? M(S.Stat, this->*S.Value) : this->*S.Value);
+	return Values;
 }
 
 TArray<float> AWWOCharacter::BaseMoveStats() const
 {
-	return { WalkSpeed, SprintSpeed, CrouchSpeed, SlideSpeed, SlideDistance, JumpHeight1, JumpHeight2, AirControl,
-		AscentGravity, DescentGravity, ApexHang, CoyoteTime, MantleReach, MantleTime };
+	TArray<float> Values;
+	Values.Reserve(MoveStatCount);
+	for (const FWWOMoveStat& S : MoveStatTable) Values.Add(this->*S.Value);
+	return Values;
 }
 
 void AWWOCharacter::ApplyMoveBase(const TArray<float>& V)
 {
-	if (V.Num() < 14) return;
-	WalkSpeed = V[0]; SprintSpeed = V[1]; CrouchSpeed = V[2]; SlideSpeed = V[3];
-	SlideDistance = V[4]; JumpHeight1 = V[5]; JumpHeight2 = V[6]; AirControl = V[7];
-	AscentGravity = V[8]; DescentGravity = V[9]; ApexHang = V[10]; CoyoteTime = V[11]; MantleReach = V[12]; MantleTime = V[13];
+	if (V.Num() < MoveStatCount) return;
+	for (int32 i = 0; i < MoveStatCount; ++i) this->*MoveStatTable[i].Value = V[i];
 }
 
 void AWWOCharacter::ClientSetMoveBase_Implementation(const TArray<float>& V)
@@ -1083,12 +1119,14 @@ void AWWOCharacter::ClientSetMoveBase_Implementation(const TArray<float>& V)
 void AWWOCharacter::ServerSetMoveStats_Implementation(const TArray<float>& V)
 {
 	if (UWWOWorldSubsystem::IsPvP(this)) return; // PvP: the host's settings and the player's loadout, not their word
-	if (V.Num() < 14) return;
-	// As sent, but sane: finite and inside twice the Settings sliders' ranges (loadout bonuses go over them).
-	static const float Low[14] = { 0.5f, 0.5f, 0.25f, 0.5f, 0.5f, 0.1f, 0.f, 0.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.05f };
-	static const float High[14] = { 30.f, 50.f, 20.f, 60.f, 40.f, 10.f, 10.f, 80.f, 160.f, 160.f, 0.95f, 0.6f, 7.f, 2.f };
+	if (V.Num() < MoveStatCount) return;
+	// As sent, but sane: finite and inside the table's Low/High (twice the Settings sliders' ranges).
 	TArray<float> Safe;
-	for (int32 i = 0; i < 14; ++i) Safe.Add(FMath::IsFinite(V[i]) ? FMath::Clamp(V[i], Low[i], High[i]) : Low[i]);
+	for (int32 i = 0; i < MoveStatCount; ++i)
+	{
+		const FWWOMoveStat& S = MoveStatTable[i];
+		Safe.Add(FMath::IsFinite(V[i]) ? FMath::Clamp(V[i], S.Low, S.High) : S.Low);
+	}
 	ApplyMoveBase(Safe);
 	bNetStats = true; // M() now returns these as they are
 }
