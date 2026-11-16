@@ -12,7 +12,9 @@ For the rules that follow from this, see `CONVENTIONS.md`; for step-by-step addi
    `CalcVelocity` copies. `FWWOMoveInput` rides each saved move; `FWWOMoveState` rides corrections.
 3. `AWWOCharacter::Tick` then calls `UpdateX(Delta)` on each component in a fixed order. **Components do
    not tick themselves.** The order mirrors the Godot prototype and matters.
-4. The HUD eases its animated values in `NativeTick` and draws in `NativePaint`.
+4. Once every actor has ticked, the world updates each local player's camera; `AWWOPlayerController::
+   UpdateCameraManager` then has the gun mark targets for the frame (`UWWOWeaponComponent::UpdateMarks`).
+5. The HUD eases its animated values in `NativeTick` and draws in `NativePaint`. It only reads game state.
 
 ## Player
 
@@ -158,8 +160,14 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
   float `UPROPERTY` by name. Saved as `{sectionKey: {rowId: number}}` in `Saved/WWO/SavedSettings.json`,
   falling back to `Config/ShippedSettings.json`. A joiner sees only rows marked as a player's own
   (`OwnSettings()`).
-- **HUD** (`UI/WWOHUDWidget.cpp`): one immediate-mode `NativePaint` through a local `FPainter`, in
-  1600 x 900 units scaled to the window.
+- **HUD** (`UI/WWOHUDWidget.*`, `UI/WWOHUDPaint.cpp`): immediate-mode paint through `FWWOPainter`
+  (`UI/WWOPainter.h`), in 1600 x 900 units scaled to the player's screen (`WWOHUD::Scale`). `NativePaint`
+  builds one `FWWOHUDFrame` (player, gun, world subsystem, layout size, reticle point, `ToScreen`) and
+  calls the element painters in z-order (`PaintScreenEffects`, `PaintWorldLabels`, `PaintReticle`, ...,
+  `PaintFps`). `NativeTick` eases the animated values and lists the status chips. The HUD changes no
+  game state: who is marked (health bars, the PvP outline flash) is decided by
+  `UWWOWeaponComponent::UpdateMarks` every frame, HUD shown or not, from the same reticle and marker
+  range in HUD pixels; the HUD reads `Marked` and `MatesInSight`.
 
 ## Tests
 

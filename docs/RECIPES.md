@@ -77,11 +77,16 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 
 ## A HUD element
 
-1. A block in `UWWOHUDWidget::NativePaint` drawing through `P.Box` / `Line` / `Text` / `Tri`, in
-   1600 x 900 units. Paint order is z-order.
-2. Animated values are members eased in `NativeTick`.
-3. Tunables are float properties on `AWWOCharacter`, exposed as settings rows under HUD.
-4. Read game state; don't change it from paint.
+1. A painter: a private `void PaintX(const FWWOHUDFrame& F) const` on `UWWOHUDWidget`, declared with the
+   others in `WWOHUDWidget.h` and written in `WWOHUDPaint.cpp`. It draws through `F.P` (`FWWOPainter`:
+   `Box` / `Outline` / `Line` / `Tri` / `Circle` / `Text`, ...) in 1600 x 900 units, and finds the player,
+   gun, reticle point (`F.AimAt`) and world-to-screen (`F.ToScreen`) on the frame. Something every
+   painter needs goes on `FWWOHUDFrame`, worked out once in `NativePaint`.
+2. Call it from `NativePaint` at its place in the list: paint order is z-order.
+3. Animated values are members eased in `NativeTick`.
+4. Tunables are float properties on `AWWOCharacter`, exposed as settings rows under HUD.
+5. Read game state; don't change it from paint (paint doesn't run while the HUD is hidden). A decision
+   gameplay also reads belongs in game code, as marking is (`UWWOWeaponComponent::UpdateMarks`).
 
 ## A menu
 
