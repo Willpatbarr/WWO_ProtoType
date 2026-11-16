@@ -392,6 +392,7 @@ void UWWOWeaponComponent::BuildModel()
 	{
 		if (Pair.Key != "SightDot" && Pair.Value) Pair.Value->AddRelativeLocation(ModelShift);
 	}
+	ReadHandsHolds(); // where the hands hold this model (UpdateHands)
 }
 
 void UWWOWeaponComponent::BuildThrowBall()

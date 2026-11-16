@@ -166,6 +166,21 @@ void UWWOWeaponComponent::BuildHands(USkeletalMesh* Asset)
 	HandsPunch.Arms = 1;       // the right hand punches: the left one keeps the gun as it drops out of the way
 }
 
+void UWWOWeaponComponent::ReadHandsHolds()
+{
+	// This gun's grip and fore-end (Config/WeaponModels.json: hand, and the grip mod's anchor).
+	// Read when the model is built (the end of BuildModel, once ModelShift is set), not every frame:
+	// the config is cached for the run, so a rebuild is the only time these can change. Only
+	// UpdateHands reads them, and only while the first-person gun is shown, when it has been built.
+	const TSharedPtr<FJsonObject> Model = Weapon ? ModelConfig(Weapon->Id) : nullptr;
+	const TSharedPtr<FJsonObject>* Anchors = nullptr;
+	const FVector Offset = WWOConfig::Vec(Model, TEXT("offset")) + ModelShift;
+	HandsGrip = Offset + WWOConfig::Vec(Model, TEXT("hand"), FVector(-3.f, 0.f, -4.f));
+	HandsFore = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("grip"), FVector(22.f, 0.f, -1.f)) : FVector(22.f, 0.f, -1.f));
+	HandsMag = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("magazine"), FVector(8.f, 0.f, -6.f)) : FVector(8.f, 0.f, -6.f));
+	bHandsPistol = Weapon && Weapon->Id == "handcannon";
+}
+
 void UWWOWeaponComponent::UpdateHands()
 {
 	AWWOCharacter* P = GetPlayer();
@@ -182,16 +197,6 @@ void UWWOWeaponComponent::UpdateHands()
 	HandsMesh->SetVisibility(bShow);
 	if (!bShow) return;
 	const FReferenceSkeleton& Ref = HandsAsset->GetRefSkeleton();
-	{
-		// This gun's grip and fore-end (Config/WeaponModels.json: hand, and the grip mod's anchor).
-		const TSharedPtr<FJsonObject> Model = Weapon ? ModelConfig(Weapon->Id) : nullptr;
-		const TSharedPtr<FJsonObject>* Anchors = nullptr;
-		const FVector Offset = WWOConfig::Vec(Model, TEXT("offset")) + ModelShift;
-		HandsGrip = Offset + WWOConfig::Vec(Model, TEXT("hand"), FVector(-3.f, 0.f, -4.f));
-		HandsFore = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("grip"), FVector(22.f, 0.f, -1.f)) : FVector(22.f, 0.f, -1.f));
-		HandsMag = Offset + (Model.IsValid() && Model->TryGetObjectField(TEXT("anchors"), Anchors) ? WWOConfig::Vec(*Anchors, TEXT("magazine"), FVector(8.f, 0.f, -6.f)) : FVector(8.f, 0.f, -6.f));
-		bHandsPistol = Weapon && Weapon->Id == "handcannon";
-	}
 	// The clip's rifle onto this gun: anything held against the clip's rifle moves to the same place on ours.
 	const FTransform GunOurs = FTransform(HandsGunOffset) * GetRelativeTransform();
 	const FTransform ClipToOurs = HandsClipGun.Inverse() * GunOurs;

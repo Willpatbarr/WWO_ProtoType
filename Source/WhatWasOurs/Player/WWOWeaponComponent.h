@@ -320,6 +320,7 @@ private:
 	bool bHandsPistol = false;
 	void BuildHands(USkeletalMesh* Asset);
 	void UpdateHands();
+	void ReadHandsHolds(); // HandsGrip, HandsFore, HandsMag, bHandsPistol for the model just built (BuildModel)
 
 	// --- Targeting: the reticle's target and highlight, marks, the sight on screen (WWOWeaponTargeting.cpp) ---
 public:
