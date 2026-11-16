@@ -47,4 +47,7 @@ private:
 	void Release();
 	void ThrowFrom(const FVector& Hand, const FVector& Dir); // build the grenade from the loadout and let go
 	const UWWOGrenadeData* Current(const UWWOGrenadeData* Grenade) const;
+
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) read and reset private state between runs; no gameplay code uses this.
+	friend class FWWORegress;
 };

@@ -211,4 +211,7 @@ private:
 		}
 		return nullptr;
 	}
+
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) read and reset private state between runs; no gameplay code uses this.
+	friend class FWWORegress;
 };

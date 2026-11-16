@@ -482,7 +482,7 @@ void AWWOGameMode::StartWave()
 		const int32 Count = FMath::Max(FMath::RoundToInt(Pair.Value * SizeScale * Growth), 1);
 		for (int32 i = 0; i < Count; ++i) Queue.Add(Pair.Key);
 	}
-	for (int32 i = Queue.Num() - 1; i > 0; --i) Queue.Swap(i, FMath::RandRange(0, i)); // shuffle
+	for (int32 i = Queue.Num() - 1; i > 0; --i) Queue.Swap(i, WWO::RandRange(0, i)); // shuffle
 	Timer = 0.f;
 	State = EWWOWaveState::Spawning;
 }
@@ -528,7 +528,7 @@ AActor* AWWOGameMode::PickPoint(FName Kind) const
 		return true;
 	});
 	if (Far.Num() > 0) Points = Far;
-	return Points.Num() > 0 ? Points[FMath::RandRange(0, Points.Num() - 1)] : nullptr;
+	return Points.Num() > 0 ? Points[WWO::RandRange(0, Points.Num() - 1)] : nullptr;
 }
 
 void AWWOGameMode::SpawnEnemy(FName Kind)
@@ -547,7 +547,7 @@ void AWWOGameMode::SpawnEnemy(FName Kind)
 	FVector Feet = Point->GetActorLocation();
 	for (int32 Try = 0; Try < 8; ++Try)
 	{
-		const FVector Offset = Kind != "tank" ? FVector(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 0.f) : FVector::ZeroVector;
+		const FVector Offset = Kind != "tank" ? FVector(WWO::FRandRange(-150.f, 150.f), WWO::FRandRange(-150.f, 150.f), 0.f) : FVector::ZeroVector;
 		const FVector Spot = Point->GetActorLocation() + Offset;
 		FNavLocation OnMesh;
 		const bool bOnMesh = !Nav || Nav->ProjectPointToNavigation(Spot, OnMesh, FVector(Radius, Radius, 100.f));
@@ -567,7 +567,7 @@ void AWWOGameMode::SpawnEnemy(FName Kind)
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	Params.bDeferConstruction = true;
-	const FTransform Where(FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), Feet + FVector(0, 0, HalfHeight));
+	const FTransform Where(FRotator(0.f, WWO::FRandRange(0.f, 360.f), 0.f), Feet + FVector(0, 0, HalfHeight));
 	AWWOEnemy* Enemy = GetWorld()->SpawnActor<AWWOEnemy>(Class, Where, Params);
 	if (!Enemy) return;
 	Enemy->bRespawns = false; // wave enemies don't respawn
@@ -733,8 +733,8 @@ FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 		Ranked.Add({ Nearest, i });
 	}
 	Ranked.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key > B.Key; });
-	const int32 Best = Ranked.Num() > 0 ? Ranked[FMath::RandRange(0, FMath::Min(Ranked.Num(), Others.Num() > 0 ? 3 : Ranked.Num()) - 1)].Value
-		: FMath::RandRange(0, Spots.Num() - 1);
+	const int32 Best = Ranked.Num() > 0 ? Ranked[WWO::RandRange(0, FMath::Min(Ranked.Num(), Others.Num() > 0 ? 3 : Ranked.Num()) - 1)].Value
+		: WWO::RandRange(0, Spots.Num() - 1);
 	// Facing the middle of the map.
 	FTransform Spot = Spots[Best];
 	FVector ToMiddle = -Spot.GetLocation();

@@ -487,4 +487,7 @@ private:
 	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
 	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight
 	double LastMeleeHitTime = -100.0; // host: when this player's last melee hit was applied
+
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) read and reset private state between runs; no gameplay code uses this.
+	friend class FWWORegress;
 };

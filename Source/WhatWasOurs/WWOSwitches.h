@@ -30,6 +30,10 @@
 //   -WWOTesterNoMods            (tester test) the bare frame
 //   -WWOTesterFrames=<n>        (tester test) save n frames in a row around one shot
 //   -WWOTesterHip / -WWOTesterStrafe / -WWOTesterNoShot   (tester frames) from the hip; strafing; no shot
+//   -WWORegress                 the regression scenarios (Player/WWORegress*.cpp), compared with Tools/regress/golden.json
+//   -WWORegressOnly=<text>      (regress) only the scenarios whose name contains that text
+//   -WWORegressUpdate           (regress) rewrite the golden file from this run (this mode's entries)
+//   -WWORegressReverse          (regress) run the scenarios in reverse order (a check that they are independent)
 //   -WWOWaveTest                all 8 waves with god mode, logging AI state
 //   -WWOTestScoreboard          pictures of the match-end scoreboard, then NEXT MATCH
 //   -WWOKillTarget=<n>          PvP kill target
@@ -110,7 +114,10 @@ namespace WWOSwitches
 	// -WWOStressShots or -WWOStressTime=... on their own. (The game mode's bot diagnostics.)
 	bool HasStressText();
 
-	// HasAutoTestText() or IsStress(): a run that presses the default keys, so it neither reads nor
-	// writes anyone's saved bindings.
+	// Exactly the switch -WWORegress: the regression scenarios. (Shipped settings only, default keys.)
+	bool IsRegress();
+
+	// HasAutoTestText(), IsStress() or IsRegress(): a run that presses the default keys, so it neither
+	// reads nor writes anyone's saved bindings.
 	bool UsesDefaultBinds();
 }

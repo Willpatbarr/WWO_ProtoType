@@ -60,7 +60,7 @@ void UWWOWeaponComponent::Shake(float Strength, float Seconds)
 	// The view widens and tips for a moment (your aim doesn't move) and the controller thumps.
 	if (Strength <= 0.01f) return;
 	Strength = FMath::Min(Strength, 2.f);
-	StartPunch(3.f * Strength, 2.2f * Strength * (FMath::FRand() < 0.5f ? 1.f : -1.f), Seconds);
+	StartPunch(3.f * Strength, 2.2f * Strength * (WWO::FRand() < 0.5f ? 1.f : -1.f), Seconds);
 	Rumble(0.35f * Strength, 0.8f * Strength, Seconds * 0.8f);
 }
 
