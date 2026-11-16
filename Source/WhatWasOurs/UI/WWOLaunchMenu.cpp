@@ -73,8 +73,6 @@ namespace
 void UWWOLaunchMenu::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	// A spare settings menu, never shown: only its MakeText helper is used (as the character menu does).
-	Styler = CreateWidget<UWWOSettingsMenu>(GetOwningPlayer(), UWWOSettingsMenu::StaticClass());
 	WidgetTree->RootWidget = WidgetTree->ConstructWidget<UOverlay>();
 	SetCursor(EMouseCursor::None); // the menu draws the ring cursor instead (NativePaint)
 }
@@ -94,19 +92,9 @@ FLinearColor UWWOLaunchMenu::Accent() const
 	return L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
 }
 
-UTextBlock* UWWOLaunchMenu::Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing, bool bWrap) const
-{
-	// Capitals with wide letter spacing: the menus' label style.
-	UTextBlock* T = Styler->MakeText(Text.ToUpper(), FontPx, Color, bWrap);
-	FSlateFontInfo F = T->GetFont();
-	F.LetterSpacing = Spacing;
-	T->SetFont(F);
-	return T;
-}
-
 UButton* UWWOLaunchMenu::Boxed(UWidget* Inside, const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, TFunction<void()> Fn)
 {
-	UButton* B = Styler->WidgetTree->ConstructWidget<UButton>();
+	UButton* B = WidgetTree->ConstructWidget<UButton>();
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	B->IsFocusable = false; // the cursor drives everything, not focus
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
@@ -131,7 +119,7 @@ UButton* UWWOLaunchMenu::Boxed(UWidget* Inside, const FLinearColor& Fill, const 
 
 UButton* UWWOLaunchMenu::Choice(const FString& Title, const FString& Sub, bool bOn, TFunction<void()> Fn, float TitlePx, const FString& Tag)
 {
-	UWidgetTree* Tree = Styler->WidgetTree;
+	UWidgetTree* Tree = WidgetTree;
 	const FLinearColor A = Accent();
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
 	// The picked one carries the accent: a bar down its left edge, its outline and a tinted fill.
@@ -142,15 +130,15 @@ UButton* UWWOLaunchMenu::Choice(const FString& Title, const FString& Sub, bool b
 	MarkBox->AddChild(Mark);
 	Row->AddChildToHorizontalBox(MarkBox)->SetVerticalAlignment(VAlign_Fill);
 	UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-	Words->AddChildToVerticalBox(Spaced(Title, TitlePx, FLinearColor::White, 220));
-	if (!Sub.IsEmpty()) Words->AddChildToVerticalBox(Spaced(Sub, 11.f, Dim, 90, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+	Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Title, TitlePx, FLinearColor::White, 220));
+	if (!Sub.IsEmpty()) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Sub, 11.f, Dim, 90, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
 	UHorizontalBoxSlot* WordsSlot = Row->AddChildToHorizontalBox(Words);
 	WordsSlot->SetSize(FillSize());
 	WordsSlot->SetVerticalAlignment(VAlign_Center);
 	WordsSlot->SetPadding(FMargin(16.f * K, 0, 8.f * K, 0));
 	if (!Tag.IsEmpty())
 	{
-		UHorizontalBoxSlot* TagSlot = Row->AddChildToHorizontalBox(Spaced(Tag, 12.f, bOn ? A : Dim, 160));
+		UHorizontalBoxSlot* TagSlot = Row->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, Tag, 12.f, bOn ? A : Dim, 160));
 		TagSlot->SetVerticalAlignment(VAlign_Center);
 		TagSlot->SetPadding(FMargin(8.f * K, 0, 4.f * K, 0));
 	}
@@ -159,9 +147,9 @@ UButton* UWWOLaunchMenu::Choice(const FString& Title, const FString& Sub, bool b
 
 UWidget* UWWOLaunchMenu::StepLabel(int32 Number, const FString& Text) const
 {
-	UHorizontalBox* Row = Styler->WidgetTree->ConstructWidget<UHorizontalBox>();
-	Row->AddChildToHorizontalBox(Spaced(FString::Printf(TEXT("%02d"), Number), 13.f, Accent(), 160))->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Spaced(Text, 13.f, Dim, 260));
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Row->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, FString::Printf(TEXT("%02d"), Number), 13.f, Accent(), 160))->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, Text, 13.f, Dim, 260));
 	Slot->SetVerticalAlignment(VAlign_Center);
 	Slot->SetPadding(FMargin(14.f * K, 0, 0, 0));
 	return Row;
@@ -400,7 +388,7 @@ void UWWOLaunchMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 void UWWOLaunchMenu::Rebuild()
 {
 	UOverlay* Root = Cast<UOverlay>(WidgetTree->RootWidget);
-	if (!Root || !Styler) return;
+	if (!Root) return;
 	Root->ClearChildren();
 	Handlers.Reset();
 	StatusText = nullptr;
@@ -410,7 +398,7 @@ void UWWOLaunchMenu::Rebuild()
 		bSeenSearching = Net->bSearching;
 	}
 	ShownGames = GamesSignature();
-	UBorder* Page = Styler->WidgetTree->ConstructWidget<UBorder>();
+	UBorder* Page = WidgetTree->ConstructWidget<UBorder>();
 	Page->SetBrushColor(WWO::Lin(PageColor));
 	Page->SetPadding(FMargin(40.f * K, 12.f * K, 40.f * K, 28.f * K));
 	Page->SetContent(bSetup ? BuildSetup() : BuildTitle());
@@ -421,7 +409,7 @@ void UWWOLaunchMenu::Rebuild()
 
 UWidget* UWWOLaunchMenu::BuildTitle()
 {
-	UWidgetTree* Tree = Styler->WidgetTree;
+	UWidgetTree* Tree = WidgetTree;
 	TWeakObjectPtr<UWWOLaunchMenu> WeakThis = this;
 	TWeakObjectPtr<APlayerController> WeakPC = GetOwningPlayer();
 	const FLinearColor A = Accent();
@@ -430,10 +418,10 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	// The middle: the mark, the name, a rule, then PLAY.
 	UVerticalBox* Middle = Tree->ConstructWidget<UVerticalBox>();
 	// (The old "//" mark above the name is gone; its room is kept so nothing else moves.)
-	UTextBlock* OldMark = Spaced(TEXT("//"), 44.f, A, 0);
+	UTextBlock* OldMark = WWOUI::Spaced(WidgetTree, TEXT("//"), 44.f, A, 0);
 	OldMark->SetVisibility(ESlateVisibility::Hidden);
 	Middle->AddChildToVerticalBox(OldMark)->SetHorizontalAlignment(HAlign_Center);
-	UTextBlock* Name = Spaced(TEXT("WHAT WAS OURS"), 84.f, FLinearColor::White, 520);
+	UTextBlock* Name = WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 84.f, FLinearColor::White, 520);
 	FSlateFontInfo NameFont = Name->GetFont();
 	NameFont.TypefaceFontName = FName("Bold");
 	Name->SetFont(NameFont);
@@ -448,7 +436,7 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	RuleSlot->SetHorizontalAlignment(HAlign_Center);
 	RuleSlot->SetPadding(FMargin(0, 26.f * K, 0, 0));
 
-	UTextBlock* PlayLabel = Spaced(TEXT("PLAY"), 46.f, FLinearColor::White, 700);
+	UTextBlock* PlayLabel = WWOUI::Spaced(WidgetTree, TEXT("PLAY"), 46.f, FLinearColor::White, 700);
 	{
 		// PLAY is set in Poppins Light (Content/WWO/Fonts, SIL Open Font License), read from its file
 		// once and kept. Without the file it stays in the menus' own font.
@@ -483,11 +471,11 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	{
 		if (Links->GetChildrenCount() > 0)
 		{
-			UHorizontalBoxSlot* Bar = Links->AddChildToHorizontalBox(Spaced(TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
+			UHorizontalBoxSlot* Bar = Links->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
 			Bar->SetVerticalAlignment(VAlign_Center);
 			Bar->SetPadding(FMargin(18.f * K, 0));
 		}
-		Links->AddChildToHorizontalBox(Boxed(Spaced(Text, 15.f, FLinearColor(1, 1, 1, 0.8f), 220), FLinearColor(0, 0, 0, 0), FLinearColor(0, 0, 0, 0), 0.f, FMargin(14.f, 9.f, 10.f, 9.f), MoveTemp(Fn)));
+		Links->AddChildToHorizontalBox(Boxed(WWOUI::Spaced(WidgetTree, Text, 15.f, FLinearColor(1, 1, 1, 0.8f), 220), FLinearColor(0, 0, 0, 0), FLinearColor(0, 0, 0, 0), 0.f, FMargin(14.f, 9.f, 10.f, 9.f), MoveTemp(Fn)));
 	};
 	Link(TEXT("Loadout"), [WeakPC] { if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleCharacterMenu(); });
 	Link(TEXT("Settings"), [WeakPC] { if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu(); });
@@ -501,12 +489,12 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	MiddleSlot->SetVerticalAlignment(VAlign_Center);
 
 	// Along the bottom: what happened last (a lost connection), and the keys.
-	StatusText = Spaced(StatusLine(), 13.f, FLinearColor(1.f, 0.72f, 0.4f), 160);
+	StatusText = WWOUI::Spaced(WidgetTree, StatusLine(), 13.f, FLinearColor(1.f, 0.72f, 0.4f), 160);
 	UOverlaySlot* StatusSlot = Whole->AddChildToOverlay(StatusText);
 	StatusSlot->SetHorizontalAlignment(HAlign_Center);
 	StatusSlot->SetVerticalAlignment(VAlign_Bottom);
 	StatusSlot->SetPadding(FMargin(0, 0, 0, 44.f * K));
-	UOverlaySlot* KeysSlot = Whole->AddChildToOverlay(Spaced(TEXT("Stick or mouse  move   ·   Cross or click  select"), 11.f, Faint, 120));
+	UOverlaySlot* KeysSlot = Whole->AddChildToOverlay(WWOUI::Spaced(WidgetTree, TEXT("Stick or mouse  move   ·   Cross or click  select"), 11.f, Faint, 120));
 	KeysSlot->SetHorizontalAlignment(HAlign_Center);
 	KeysSlot->SetVerticalAlignment(VAlign_Bottom);
 	return Whole;
@@ -514,7 +502,7 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 
 UWidget* UWWOLaunchMenu::BuildSetup()
 {
-	UWidgetTree* Tree = Styler->WidgetTree;
+	UWidgetTree* Tree = WidgetTree;
 	TWeakObjectPtr<UWWOLaunchMenu> WeakThis = this;
 	const UWWONetSubsystem* Net = UWWONetSubsystem::Get(this);
 	const FLinearColor A = Accent();
@@ -523,15 +511,15 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	// Header, as on the other menus: the game's name, where you are, the keys.
 	UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-	Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
+	Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 	NameText->SetVerticalAlignment(VAlign_Center);
 	NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
 	UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
 	NameSlot->SetSize(FillSize());
 	NameSlot->SetVerticalAlignment(VAlign_Center);
 	UVerticalBox* Tab = Tree->ConstructWidget<UVerticalBox>();
-	Tab->AddChildToVerticalBox(Spaced(TEXT("GAME SETUP"), 17.f, FLinearColor::White, 180))->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
+	Tab->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("GAME SETUP"), 17.f, FLinearColor::White, 180))->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
 	UBorder* TabLine = Tree->ConstructWidget<UBorder>();
 	TabLine->SetBrushColor(WWO::Lin(A));
 	USizeBox* TabLineBox = Tree->ConstructWidget<USizeBox>();
@@ -539,7 +527,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	TabLineBox->AddChild(TabLine);
 	Tab->AddChildToVerticalBox(TabLineBox);
 	Header->AddChildToHorizontalBox(Tab)->SetVerticalAlignment(VAlign_Center);
-	UTextBlock* Keys = Spaced(TEXT("Cross or click  select   ·   Circle or Esc  back"), 11.f, Faint, 120);
+	UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Cross or click  select   ·   Circle or Esc  back"), 11.f, Faint, 120);
 	Keys->SetJustification(ETextJustify::Right);
 	UHorizontalBoxSlot* KeysSlot = Header->AddChildToHorizontalBox(Keys);
 	KeysSlot->SetSize(FillSize());
@@ -609,7 +597,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	{
 		UHorizontalBox* Title = Tree->ConstructWidget<UHorizontalBox>();
 		Title->AddChildToHorizontalBox(StepLabel(2, TEXT("Games on your network")))->SetSize(FillSize());
-		Title->AddChildToHorizontalBox(Boxed(Spaced(TEXT("Refresh"), 12.f, FLinearColor(1, 1, 1, 0.85f), 180), CardColor, CardEdge, 1.5f, FMargin(14.f, 6.f, 10.f, 6.f),
+		Title->AddChildToHorizontalBox(Boxed(WWOUI::Spaced(WidgetTree, TEXT("Refresh"), 12.f, FLinearColor(1, 1, 1, 0.85f), 180), CardColor, CardEdge, 1.5f, FMargin(14.f, 6.f, 10.f, 6.f),
 			[WeakThis] { if (!WeakThis.IsValid()) return; if (UWWONetSubsystem* N = UWWONetSubsystem::Get(WeakThis.Get())) N->FindGames(); WeakThis->Rebuild(); }));
 		Right->AddChildToVerticalBox(Title)->SetPadding(FMargin(0, 24.f * K, 14.f * K, 8.f * K));
 		const int32 Count = Net ? Net->Games.Num() : 0;
@@ -623,14 +611,14 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 		}
 		if (Count == 0)
 		{
-			AddToList(Spaced(Net && Net->bSearching ? TEXT("Searching...") : TEXT("No games found yet. This list refreshes on its own; a host has to be on the same network."),
+			AddToList(WWOUI::Spaced(WidgetTree, Net && Net->bSearching ? TEXT("Searching...") : TEXT("No games found yet. This list refreshes on its own; a host has to be on the same network."),
 				14.f, Dim, 120, true), 0.f);
 		}
 		if (Net && Net->Games.IsValidIndex(Game)) Summary = FString::Printf(TEXT("Join  ·  %s  ·  %s"), Net->Games[Game].bPvP ? TEXT("PvP") : TEXT("PvE"), *Net->Games[Game].MapTitle);
 	}
 	else if (Connection == ConnTester)
 	{
-		Right->AddChildToVerticalBox(Spaced(TEXT("A range with one target dummy and no enemies. The gun's settings are on the left and the player's view on the right; take control to shoot it yourself, or use the buttons to aim, fire and strafe."),
+		Right->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("A range with one target dummy and no enemies. The gun's settings are on the left and the player's view on the right; take control to shoot it yourself, or use the buttons to aim, fire and strafe."),
 			14.f, Dim, 120, true))->SetPadding(FMargin(0, 34.f * K, 14.f * K, 0));
 		Summary = TEXT("Firing tester  ·  Test Range");
 	}
@@ -653,15 +641,15 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	{
 		// Nothing to list yet: say what comes next.
 		const FString Hint = Connection == ConnNone ? TEXT("Choose how to play.") : TEXT("Choose a mode.");
-		Right->AddChildToVerticalBox(Spaced(Hint, 14.f, Faint, 140))->SetPadding(FMargin(0, 34.f * K, 0, 0));
+		Right->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Hint, 14.f, Faint, 140))->SetPadding(FMargin(0, 34.f * K, 0, 0));
 	}
 	Right->AddChildToVerticalBox(List)->SetSize(FillSize());
 
 	// The bottom row: the status, what you picked, and the big button once everything is picked.
 	UHorizontalBox* Bottom = Tree->ConstructWidget<UHorizontalBox>();
 	UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-	if (!Summary.IsEmpty()) Words->AddChildToVerticalBox(Spaced(Summary, 15.f, FLinearColor::White, 200));
-	StatusText = Spaced(StatusLine(), 12.f, FLinearColor(1.f, 0.72f, 0.4f), 140);
+	if (!Summary.IsEmpty()) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Summary, 15.f, FLinearColor::White, 200));
+	StatusText = WWOUI::Spaced(WidgetTree, StatusLine(), 12.f, FLinearColor(1.f, 0.72f, 0.4f), 140);
 	Words->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 	UHorizontalBoxSlot* WordsSlot = Bottom->AddChildToHorizontalBox(Words);
 	WordsSlot->SetSize(FillSize());
@@ -670,7 +658,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	{
 		const bool bStarting = StartedAt > 0.0;
 		const FString Text = bStarting ? (Connection == ConnJoin ? TEXT("Joining...") : TEXT("Starting...")) : (Connection == ConnJoin ? TEXT("Join game") : TEXT("Start game"));
-		UTextBlock* Label = Spaced(Text, 28.f, bStarting ? Dim : FLinearColor::White, 420);
+		UTextBlock* Label = WWOUI::Spaced(WidgetTree, Text, 28.f, bStarting ? Dim : FLinearColor::White, 420);
 		Label->SetJustification(ETextJustify::Center);
 		UOverlay* Inside = Tree->ConstructWidget<UOverlay>();
 		UOverlaySlot* LabelSlot = Inside->AddChildToOverlay(Label);

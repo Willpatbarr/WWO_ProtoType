@@ -10,7 +10,6 @@
 #include "Blueprint/UserWidget.h"
 #include "WWOScoreboard.generated.h"
 
-class UWWOSettingsMenu;
 class UWidget;
 class UButton;
 
@@ -44,7 +43,6 @@ private:
 	FString Shown;        // what the page was built from (rebuilt when the scores replicate in late)
 	FString Signature() const;
 	void Rebuild();
-	UPROPERTY() TObjectPtr<UWWOSettingsMenu> Styler; // borrows the settings menu's widget helpers
 	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers;
 	UWidget* TeamTable(int32 Team) const;
 	UButton* Button(const FString& Title, const FString& Sub, bool bEnabled, TFunction<void()> Fn);

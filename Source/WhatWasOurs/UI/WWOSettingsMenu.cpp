@@ -129,42 +129,16 @@ namespace
 
 UTextBlock* UWWOSettingsMenu::MakeText(const FString& Text, float FontPx, const FLinearColor& Color, bool bWrap)
 {
-	UTextBlock* T = WidgetTree->ConstructWidget<UTextBlock>();
-	T->SetText(FText::FromString(Text));
-	T->SetFont(WWOUI::Font(FontPx));
-	T->SetColorAndOpacity(FSlateColor(WWO::Lin(Color)));
-	T->SetAutoWrapText(bWrap);
-	return T;
+	return WWOUI::Text(WidgetTree, Text, FontPx, Color, bWrap);
 }
 
 UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx, const FLinearColor& Color,
 	bool bLeftAlign, FMargin Padding, bool bWrap)
 {
-	UButton* B = WidgetTree->ConstructWidget<UButton>();
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	B->IsFocusable = false; // the cursor drives everything, not focus
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	FButtonStyle Style;
-	Style.SetNormal(WWOUI::RoundBrush(Color, 8.f));
-	Style.SetHovered(WWOUI::RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), 8.f));
-	Style.SetPressed(WWOUI::RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), 8.f));
-	Style.SetNormalPadding(FMargin(0.f));
-	Style.SetPressedPadding(FMargin(0.f));
-	B->SetStyle(Style);
 	// Godot buttons don't wrap: the text sets their width. (Auto-wrap in Slate wraps at last
 	// frame's width, which broke two-line list items onto three lines.)
-	UTextBlock* Label = MakeText(Text, FontPx, FLinearColor::White, bWrap);
-	if (bLeftAlign) Label->SetJustification(ETextJustify::Left);
-	else Label->SetJustification(ETextJustify::Center);
-	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Label));
-	Slot->SetPadding(Padding * K);
-	Slot->SetHorizontalAlignment(bLeftAlign ? HAlign_Left : HAlign_Center);
-	Slot->SetVerticalAlignment(VAlign_Center);
-	UWWOClickHandler* H = NewObject<UWWOClickHandler>(Outer ? Outer : this);
-	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
-	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	H->For = B;
-	KeepHandler(H);
+	UButton* B = WWOUI::TextButton(WidgetTree, Text, FontPx, WWOUI::FilledLook(Color, Padding, bLeftAlign), bWrap);
+	KeepHandler(WWOUI::OnClick(B, Outer ? Outer : this, MoveTemp(Fn)));
 	return B;
 }
 
@@ -1270,8 +1244,8 @@ void UWWOSettingsMenu::Prepare()
 		// Header: the name, the five tabs (bumpers or Q / E), the search box.
 		UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBox* Name = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(TEXT("SETTINGS"), 17.f, FLinearColor::White, 420));
+		Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("SETTINGS"), 17.f, FLinearColor::White, 420));
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
 		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
@@ -1282,12 +1256,12 @@ void UWWOSettingsMenu::Prepare()
 		{
 			if (i > 0)
 			{
-				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(Spaced(TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
+				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
 				Bar->SetVerticalAlignment(VAlign_Center);
 				Bar->SetPadding(FMargin(26.f * K, 0));
 			}
 			UVerticalBox* Tab = WidgetTree->ConstructWidget<UVerticalBox>();
-			UTextBlock* Label = Spaced(TopTabNames[i], 17.f, FLinearColor::White, 180);
+			UTextBlock* Label = WWOUI::Spaced(WidgetTree, TopTabNames[i], 17.f, FLinearColor::White, 180);
 			Tab->AddChildToVerticalBox(Label)->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
 			UBorder* Line = WidgetTree->ConstructWidget<UBorder>();
 			USizeBox* LineBox = WidgetTree->ConstructWidget<USizeBox>();
@@ -1447,7 +1421,7 @@ void UWWOSettingsMenu::Prepare()
 				MarkBox->SetWidthOverride(3.f * K);
 				MarkBox->AddChild(Mark);
 				Row->AddChildToHorizontalBox(MarkBox)->SetPadding(FMargin(0, 3.f * K));
-				UTextBlock* Label = Spaced(Pages[p].Title, 15.f, FLinearColor::White, 170);
+				UTextBlock* Label = WWOUI::Spaced(WidgetTree, Pages[p].Title, 15.f, FLinearColor::White, 170);
 				UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
 				LabelSlot->SetPadding(FMargin(16.f * K, 9.f * K, 8.f * K, 9.f * K));
 				LabelSlot->SetVerticalAlignment(VAlign_Center);
@@ -1470,7 +1444,7 @@ void UWWOSettingsMenu::Prepare()
 				if (UWidget* Bar = TopTabWidgets[Tab * 2 + 1]) Bar->SetVisibility(bShown && !bFirstShown ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 				bFirstShown &= !bShown;
 			}
-			UTextBlock* Note = Spaced(TEXT("You're in someone else's game: these are your own settings. The game's tuning is the host's."), 10.f, FLinearColor(1, 1, 1, 0.5f), 90);
+			UTextBlock* Note = WWOUI::Spaced(WidgetTree, TEXT("You're in someone else's game: these are your own settings. The game's tuning is the host's."), 10.f, FLinearColor(1, 1, 1, 0.5f), 90);
 			Note->SetAutoWrapText(true);
 			Side->AddChildToVerticalBox(Note)->SetPadding(FMargin(2.f * K, 0, 0, 6.f * K));
 		}
@@ -1523,7 +1497,7 @@ void UWWOSettingsMenu::Prepare()
 		{
 			if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu();
 		});
-		Side->AddChildToVerticalBox(Spaced(TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, FLinearColor(1, 1, 1, 0.4f), 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
+		Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, FLinearColor(1, 1, 1, 0.4f), 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
 		USizeBox* SideBox = WidgetTree->ConstructWidget<USizeBox>();
 		SideBox->SetWidthOverride(270.f * K);
 		SideBox->AddChild(Side);
@@ -1531,7 +1505,7 @@ void UWWOSettingsMenu::Prepare()
 
 		// Right: the open page, one wide column.
 		UVerticalBox* Main = WidgetTree->ConstructWidget<UVerticalBox>();
-		PageTitle = Spaced(TEXT(""), 20.f, FLinearColor::White, 300);
+		PageTitle = WWOUI::Spaced(WidgetTree, TEXT(""), 20.f, FLinearColor::White, 300);
 		Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
 		Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
@@ -1547,16 +1521,6 @@ void UWWOSettingsMenu::Prepare()
 }
 
 // --- Tabs, pages and search -------------------------------------------------------------------
-
-UTextBlock* UWWOSettingsMenu::Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing)
-{
-	// Capitals with wide letter spacing: the character menu's label style.
-	UTextBlock* T = MakeText(Text.ToUpper(), FontPx, Color);
-	FSlateFontInfo F = T->GetFont();
-	F.LetterSpacing = Spacing;
-	T->SetFont(F);
-	return T;
-}
 
 UButton* UWWOSettingsMenu::PlainButton(UWidget* Inside, TFunction<void()> Fn)
 {
@@ -1614,8 +1578,8 @@ void UWWOSettingsMenu::BuildBinds()
 		}
 		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(BindsList->AddChild(Row))) Slot->SetPadding(FMargin(12.f * K, Top * K, 16.f * K, 0));
 	};
-	Line(Spaced(TEXT("Action"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), Spaced(TEXT("Keyboard / mouse"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220),
-		Spaced(TEXT("Controller"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), 12.f);
+	Line(WWOUI::Spaced(WidgetTree, TEXT("Action"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), WWOUI::Spaced(WidgetTree, TEXT("Keyboard / mouse"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220),
+		WWOUI::Spaced(WidgetTree, TEXT("Controller"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), 12.f);
 	for (const FWWOBindRow& R : AWWOPlayerController::BindRows())
 	{
 		auto Key = [&](bool bPad) -> UWidget*
@@ -1719,7 +1683,7 @@ void UWWOSettingsMenu::OnSearchChanged(const FText& Text)
 			if (!bNamed)
 			{
 				bNamed = true;
-				UTextBlock* Where = Spaced(S.Title, 13.f, FLinearColor(1, 1, 1, 0.55f), 220);
+				UTextBlock* Where = WWOUI::Spaced(WidgetTree, S.Title, 13.f, FLinearColor(1, 1, 1, 0.55f), 220);
 				if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(Where))) Slot->SetPadding(FMargin(12.f * K, (Found == 0 ? 12.f : 26.f) * K, 12.f * K, 0));
 			}
 			if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeRow(S.Key, i)))) Slot->SetPadding(FMargin(12.f * K, 8.f * K, 12.f * K, 0));

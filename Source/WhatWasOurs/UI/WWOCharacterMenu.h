@@ -30,7 +30,6 @@ class UWidgetSwitcher;
 class UTextBlock;
 class UButton;
 class UImage;
-class UWWOSettingsMenu;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UWWOBodyComponent;
@@ -103,7 +102,6 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> ModRowsStart; // the mod slots label (autotest scrolls to it)
 	UPROPERTY() TObjectPtr<UWidget> Preview; // the character beside the editors
 	UPROPERTY() TObjectPtr<AWWOPreviewActor> PreviewActor;
-	UPROPERTY() TObjectPtr<UWWOSettingsMenu> Styler; // borrows the settings menu's widget helpers
 
 	void Build();
 	// The full-window layout: a header with the four tabs over a switcher. Loadout is the overview
@@ -118,6 +116,8 @@ private:
 	UPROPERTY() TArray<TObjectPtr<class UBorder>> TabLines;
 	UPROPERTY() TArray<TObjectPtr<UObject>> CardHandlers; // the overview cards' click forwarders
 	UPROPERTY() TArray<TObjectPtr<UObject>> HeaderHandlers; // the four tabs' (built once; BuildOverview empties CardHandlers)
+	UPROPERTY() TArray<TObjectPtr<UObject>> SlotHandlers; // the editors' slot buttons (Slot), dropped as they leave the page
+	int32 SlotPruneAt = 512;
 	void SetPreviewLive(bool bLive); // the character preview renders only while the menu is open
 	// Turning the character: the right stick, A and D, or dragging it with the mouse.
 	bool bMouseWasDown = false, bDragging = false;

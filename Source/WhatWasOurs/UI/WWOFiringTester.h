@@ -67,8 +67,9 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> HintLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> StrafeLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> ControlLabel;
+	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers; // the click handlers of the pane's buttons (built once)
 
-	UWWOSettingsMenu* Menu() const; // the player's real settings menu: its rows and buttons are used here
+	UWWOSettingsMenu* Menu() const; // the player's real settings menu: its slider rows (MakeRowFor) and SaveDefaults are used here
 	void Build();
 	void BuildRows();
 	void SetViewRect(bool bWindow) const;

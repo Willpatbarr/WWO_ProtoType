@@ -184,7 +184,6 @@ private:
 	UPROPERTY() TObjectPtr<UScrollBox> BindsList;
 	void BuildBinds();
 	void SelectTopTab(int32 Index);
-	UTextBlock* Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing);
 	UButton* PlainButton(UWidget* Inside, TFunction<void()> Fn);
 	UFUNCTION() void OnSearchChanged(const FText& Text);
 	UFUNCTION() void OnSearchCommitted(const FText& Text, ETextCommit::Type Type);

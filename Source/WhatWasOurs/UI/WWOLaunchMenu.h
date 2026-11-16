@@ -15,7 +15,6 @@
 #include "Blueprint/UserWidget.h"
 #include "WWOLaunchMenu.generated.h"
 
-class UWWOSettingsMenu;
 class UTextBlock;
 class UButton;
 class UWidget;
@@ -63,7 +62,6 @@ private:
 	bool bSeenSearching = false;
 	double NextSearch = 0.0; // real time of the next automatic search (Join)
 	double StartedAt = 0.0;  // real time START was pressed (0: not starting)
-	UPROPERTY() TObjectPtr<UWWOSettingsMenu> Styler; // borrows the settings menu's widget helpers
 	UPROPERTY() TArray<TObjectPtr<UObject>> Handlers;
 	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 
@@ -74,7 +72,6 @@ private:
 	UWidget* BuildTitle();
 	UWidget* BuildSetup();
 	FLinearColor Accent() const;
-	UTextBlock* Spaced(const FString& Text, float FontPx, const FLinearColor& Color, int32 Spacing, bool bWrap = false) const;
 	// A bordered box to click: a title and a line under it; bOn draws it as the picked one.
 	UButton* Choice(const FString& Title, const FString& Sub, bool bOn, TFunction<void()> Fn, float TitlePx = 19.f, const FString& Tag = FString());
 	UButton* Boxed(UWidget* Inside, const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, TFunction<void()> Fn);
