@@ -65,7 +65,8 @@ build scripts: `Tools/`.
 5. **Movement must stay deterministic.** `SimulateMove` reads only `MoveIn` and the move state
    (`AWWOCharacter::MoveState`). New movement state is a field in `FWWOMoveState` plus a line in its
    `Serialize` (and `ToString`); see `docs/CONVENTIONS.md`.
-6. **Don't disturb gun feel.** Recoil, ADS pivot, kick and burst timing in `WWOWeaponComponent` and
+6. **Don't disturb gun feel.** Recoil, ADS pivot, kick and burst timing in `UWWOWeaponComponent`
+   (`WWOWeaponFiring.cpp`, `WWOWeaponView.cpp`, and the call order in `UpdateWeapon`) and
    `AWWOCharacter::AddRecoil` were matched to footage frame by frame. Refactors there must be pure moves.
 7. **Shots trace `ECC_Visibility`.** Player, enemy and ally capsules ignore it; hitboxes take shots.
 8. **Effects stay out of the navmesh.** New effect actors opt out of navigation as `AWWOFXActor` does.

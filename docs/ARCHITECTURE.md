@@ -26,6 +26,15 @@ For the rules that follow from this, see `CONVENTIONS.md`; for step-by-step addi
   `UWWOWeaponComponent` (firing, reload, ADS, perks, melee, gun model, viewmodel pose, first-person
   hands, third-person gun), `UWWOHealthComponent`, `UWWOAbilityComponent`, `UWWOUltComponent`,
   `UWWOGrenadeComponent`, `UWWOAimAssistComponent`, `UWWOBodyComponent`.
+- **The weapon component's files** (one class, `Player/WWOWeapon*.cpp`; the header's sections follow them):
+  `WWOWeaponComponent.cpp` construction, the per-frame `UpdateWeapon` driver (its call order is part of
+  the gun feel), equip and swap, reload, ADS, ammo, input; `WWOWeaponFiring.cpp` the trigger, bursts and
+  the shot; `WWOWeaponPerks.cpp` `RefreshStats`, shot results, kill perks, `PerkStatus`;
+  `WWOWeaponMelee.cpp` the swing, lunge target and strike; `WWOWeaponModel.cpp` the first-person model
+  (`ModelConfig`, `ModelParts`, `BuildModel`, mod and flash parts), the throw ball and `UpdateWorldGun`;
+  `WWOWeaponView.cpp` `UpdatePose`, FOV, punch, shake, rumble; `WWOWeaponHands.cpp` the first-person
+  arms (IK and the punch / throw clips); `WWOWeaponTargeting.cpp` `UpdateReticleTarget`, `UpdateMarks`,
+  `SightOnScreen`. What more than one of them uses is in `WWOWeaponPrivate.h` (`namespace WWOWeapon`).
 - **Input**: `AWWOPlayerController` builds Enhanced Input in code. One `UInputAction` per `EWWOAction`
   (`WWOTypes.h`); `BindRows()` is the one table of rebindable rows; `MapKeys` rebuilds mappings from it
   plus `Saved/WWO/Keybinds.json` (fallback `Config/ShippedKeybinds.json`). Gameplay **polls**
@@ -57,7 +66,8 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
 
 ## A shot
 
-`UWWOWeaponComponent::UpdateFiring` -> `FireRound` -> `Shoot`: a line trace per pellet from the eye on
+`UWWOWeaponComponent::UpdateFiring` -> `FireRound` -> `Shoot` (`Player/WWOWeaponFiring.cpp`; the
+shot's perk results, `OnShotResult`, in `WWOWeaponPerks.cpp`): a line trace per pellet from the eye on
 `ECC_Visibility`, falling back to `UWWOAimAssistComponent::Magnetize`; damage summed per target; then
 `TakeHit`. Effects are `AWWOFXActor::BulletTrail` / `HitSpark` / `ImpactMark` and `UWWOSound`. It ends
 with `AWWOCharacter::AddRecoil`, rumble and the view punch.
@@ -68,7 +78,7 @@ Online, a joiner predicts the hit and sends `ServerGunShot(FWWOGunShot)`. The ho
 follow the same shape: predict locally, the host confirms, `ClientKitRefused` undoes a refusal.
 
 **Weapon stats**: the component's `Weapon` is a copy of the data asset. `RefreshStats` re-copies it every
-frame and applies mod percentages and active perks, so never store state on it. Timing stats (reload,
+frame (`WWOWeaponPerks.cpp`) and applies mod percentages and active perks, so never store state on it. Timing stats (reload,
 aim-in, swap, ready) go through `M()` instead. Perk numbers live in `Weapons/WWOPerks.h`.
 
 ## Kit: grenades, abilities, ults, flora effects

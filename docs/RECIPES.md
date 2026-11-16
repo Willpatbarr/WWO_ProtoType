@@ -14,17 +14,18 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
    file has mods for it.
 4. A `fire_<Id>` event in `Config/Sounds.json` (else it plays `fire`).
 5. Its Settings section appears by itself (`weapon/<Id>`).
-6. Id branches to check: the box-model fallback (`ModelParts`, `Player/WWOWeaponComponent.cpp`), the
-   pistol hand pose (`bHandsPistol`, same file; `Aim_Pistol` in `Player/WWOCharacter.cpp`), and
+6. Id branches to check: the box-model fallback (`ModelParts`, `Player/WWOWeaponModel.cpp`), the
+   pistol hand pose (`bHandsPistol`, `Player/WWOWeaponHands.cpp`; `Aim_Pistol` in `Player/WWOCharacter.cpp`), and
    iron-sight marks (`Data/WWOData.h`).
 7. Test: `-WWOAutoTestGuns` and `-WWOAutoTestFrames` on `L_TestRange`.
 
 ## A weapon perk
 
 1. Its numbers in `Weapons/WWOPerks.h`.
-2. Its effect in `UWWOWeaponComponent`: `Shoot` (scales the shot), `RefreshStats` (stat changes while
-   active) or `OnShotResult` (triggers on hits and kills).
-3. Its HUD counter in `PerkStatus`.
+2. Its effect in `UWWOWeaponComponent`: `Shoot` (scales the shot, `Player/WWOWeaponFiring.cpp`),
+   `RefreshStats` (stat changes while active) or `OnShotResult` (triggers on hits and kills), both in
+   `Player/WWOWeaponPerks.cpp`.
+3. Its HUD counter in `PerkStatus` (`WWOWeaponPerks.cpp`).
 4. The host's mirror in `Player/WWOCharacterGunNet.cpp` (`GunLimits`, `CheckGunHit`), or the host will
    cap a joiner's damage below what the perk allows.
 5. A mod carrying it in `Config/WeaponMods.json`. Perks are keyed by name, so any frame can carry one.
