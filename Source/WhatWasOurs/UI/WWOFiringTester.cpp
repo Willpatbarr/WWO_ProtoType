@@ -1,5 +1,6 @@
 #include "UI/WWOFiringTester.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -30,7 +31,7 @@
 
 namespace
 {
-	constexpr float K = UWWOSettingsMenu::K;
+	constexpr float K = WWOUI::K;
 	const FLinearColor PageColor(0.1f, 0.11f, 0.13f);
 	const FLinearColor CardColor(0.2f, 0.21f, 0.25f);
 	const FLinearColor Dim(1.f, 1.f, 1.f, 0.6f);
@@ -94,7 +95,7 @@ int32 UWWOFiringTester::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	const AWWOPlayerController* PC = Cast<AWWOPlayerController>(GetOwningPlayer());
 	// Only when this pane is what the cursor is working (a menu opened over it draws its own).
 	if (!WantsCursor() || !PC || PC->IsOtherMenuOpen()) return Layer;
-	UWWOSettingsMenu::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	WWOUI::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
 	return Layer + 1;
 }
 

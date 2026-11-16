@@ -1,4 +1,5 @@
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "Player/WWOProf.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOCharacter.h"
@@ -48,6 +49,8 @@
 
 namespace
 {
+	constexpr float K = WWOUI::K;
+
 	FSlateChildSize WWOFillSize(float Value)
 	{
 		FSlateChildSize Size(ESlateSizeRule::Fill);
@@ -124,32 +127,11 @@ namespace
 
 // --- Styling -----------------------------------------------------------------------------------
 
-FSlateFontInfo UWWOSettingsMenu::Font(float Px)
-{
-	// Godot font sizes are pixels; Slate's are points at 96 dpi (0.75 pt per px).
-	return FCoreStyle::GetDefaultFontStyle("Medium", Px * 0.75f * K);
-}
-
-void UWWOSettingsMenu::PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer)
-{
-	FWWOMenuCursor::PaintRing(Geometry, Menu->GetTickSpaceGeometry(), Out, Layer, K);
-}
-
-FSlateBrush UWWOSettingsMenu::RoundBrush(const FLinearColor& Color, float Radius, const FLinearColor& Outline, float OutlineWidth)
-{
-	FSlateBrush Brush;
-	Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-	Brush.TintColor = FSlateColor(WWO::Lin(Color));
-	Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius) * K, FSlateColor(WWO::Lin(Outline)), OutlineWidth * K);
-	Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
-	return Brush;
-}
-
 UTextBlock* UWWOSettingsMenu::MakeText(const FString& Text, float FontPx, const FLinearColor& Color, bool bWrap)
 {
 	UTextBlock* T = WidgetTree->ConstructWidget<UTextBlock>();
 	T->SetText(FText::FromString(Text));
-	T->SetFont(Font(FontPx));
+	T->SetFont(WWOUI::Font(FontPx));
 	T->SetColorAndOpacity(FSlateColor(WWO::Lin(Color)));
 	T->SetAutoWrapText(bWrap);
 	return T;
@@ -163,9 +145,9 @@ UButton* UWWOSettingsMenu::MakeButton(UObject* Outer, const FString& Text, TFunc
 	B->IsFocusable = false; // the cursor drives everything, not focus
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	FButtonStyle Style;
-	Style.SetNormal(RoundBrush(Color, 8.f));
-	Style.SetHovered(RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), 8.f));
-	Style.SetPressed(RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), 8.f));
+	Style.SetNormal(WWOUI::RoundBrush(Color, 8.f));
+	Style.SetHovered(WWOUI::RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), 8.f));
+	Style.SetPressed(WWOUI::RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), 8.f));
 	Style.SetNormalPadding(FMargin(0.f));
 	Style.SetPressedPadding(FMargin(0.f));
 	B->SetStyle(Style);
@@ -732,25 +714,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 
 void UWWOSettingsMenu::KeepHandler(UObject* Handler)
 {
-	// Lists, pages and search results are rebuilt often, each time with new buttons and sliders and
-	// a handler apiece. A handler whose widget is no longer under a menu's root is done with.
-	Handlers.Add(Handler);
-	if (Handlers.Num() < PruneAt) return;
-	auto OnPage = [](const UWidget* W)
-	{
-		if (!W) return false;
-		const UWidget* Top = W;
-		while (Top->GetParent()) Top = Top->GetParent();
-		const UWidgetTree* Tree = Cast<UWidgetTree>(Top->GetOuter());
-		return Tree && Tree->RootWidget == Top;
-	};
-	Handlers.RemoveAll([&OnPage](const TObjectPtr<UObject>& H)
-	{
-		if (const UWWOClickHandler* Click = Cast<UWWOClickHandler>(H)) return !OnPage(Click->For.Get());
-		if (const UWWOSliderHandler* Slide = Cast<UWWOSliderHandler>(H)) return !OnPage(Slide->For.Get());
-		return false;
-	});
-	PruneAt = Handlers.Num() * 2 + 256;
+	WWOUI::KeepPruned(Handlers, PruneAt, Handler);
 }
 
 void UWWOSettingsMenu::MarkPreferences()
@@ -943,7 +907,7 @@ int32 UWWOSettingsMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 {
 	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	if (!bOpen) return Layer;
-	PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	WWOUI::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
 	return Layer + 1;
 }
 
@@ -1006,9 +970,9 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	UOverlay* SliderBox = WidgetTree->ConstructWidget<UOverlay>();
 	UProgressBar* Fill = WidgetTree->ConstructWidget<UProgressBar>();
 	FProgressBarStyle BarStyle;
-	BarStyle.SetBackgroundImage(RoundBrush(FLinearColor(0.3f, 0.32f, 0.37f), 3.f));
-	BarStyle.SetFillImage(RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
-	BarStyle.SetMarqueeImage(RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
+	BarStyle.SetBackgroundImage(WWOUI::RoundBrush(FLinearColor(0.3f, 0.32f, 0.37f), 3.f));
+	BarStyle.SetFillImage(WWOUI::RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
+	BarStyle.SetMarqueeImage(WWOUI::RoundBrush(FLinearColor(0.55f, 0.6f, 0.7f), 3.f));
 	Fill->SetWidgetStyle(BarStyle);
 	Fill->SetFillColorAndOpacity(FLinearColor::White);
 	Fill->SetPercent(FMath::GetRangePct(Row.Min, Row.Max, Row.Get()));
@@ -1031,9 +995,9 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	FSliderStyle Style = Slider->GetWidgetStyle();
 	FSlateBrush NoBar;
 	NoBar.DrawAs = ESlateBrushDrawType::NoDrawType;
-	FSlateBrush Grabber = RoundBrush(FLinearColor(0.88f, 0.88f, 0.9f), 8.f);
+	FSlateBrush Grabber = WWOUI::RoundBrush(FLinearColor(0.88f, 0.88f, 0.9f), 8.f);
 	Grabber.ImageSize = FVector2D(Thumb, Thumb);
-	FSlateBrush GrabberHover = RoundBrush(FLinearColor(1.f, 1.f, 1.f), 8.f);
+	FSlateBrush GrabberHover = WWOUI::RoundBrush(FLinearColor(1.f, 1.f, 1.f), 8.f);
 	GrabberHover.ImageSize = Grabber.ImageSize;
 	Style.SetNormalBarImage(NoBar).SetHoveredBarImage(NoBar).SetDisabledBarImage(NoBar);
 	Style.SetNormalThumbImage(Grabber).SetHoveredThumbImage(GrabberHover).SetDisabledThumbImage(Grabber);
@@ -1074,34 +1038,6 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	KeepHandler(H);
 	Live.Add({ Slider, Value, Fill, Key, RowIndex });
 	return Root;
-}
-
-UWidget* UWWOSettingsMenu::MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps)
-{
-	UOverlay* Both = Tree->ConstructWidget<UOverlay>();
-	if (Keeps)
-	{
-		Keeps->SetVisibility(ESlateVisibility::Hidden); // takes its room, draws nothing
-		Both->AddChildToOverlay(Keeps);
-	}
-	UImage* Image = Tree->ConstructWidget<UImage>();
-	if (UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, bWordmark ? TEXT("/Game/WWO/Textures/UI/T_LogoTitle.T_LogoTitle") : TEXT("/Game/WWO/Textures/UI/T_LogoMark.T_LogoMark")))
-	{
-		FSlateBrush Brush;
-		Brush.SetResourceObject(Texture);
-		Brush.ImageSize = Size;
-		Brush.DrawAs = ESlateBrushDrawType::Image;
-		Image->SetBrush(Brush);
-	}
-	else if (Keeps) Keeps->SetVisibility(ESlateVisibility::HitTestInvisible); // no texture: the text it replaced
-	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
-	UOverlaySlot* ImageSlot = Both->AddChildToOverlay(Image);
-	ImageSlot->SetHorizontalAlignment(HAlign_Center);
-	ImageSlot->SetVerticalAlignment(VAlign_Center);
-	// The wordmark's texture is clear above and below the letters (40 of its 256 rows each way):
-	// that part doesn't count for layout, so the text it replaced still decides how tall this is.
-	if (bWordmark && Keeps) ImageSlot->SetPadding(FMargin(0.f, -Size.Y * 40.f / 256.f));
-	return Both;
 }
 
 UWidget* UWWOSettingsMenu::MakeRowFor(const FString& Key, FName Id)
@@ -1369,11 +1305,11 @@ void UWWOSettingsMenu::Prepare()
 		// Search: type part of a setting's name to list every match from every tab.
 		SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 		FEditableTextBoxStyle BoxStyle = SearchBox->WidgetStyle;
-		const FSlateBrush BoxBrush = RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
+		const FSlateBrush BoxBrush = WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
 		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
-		BoxStyle.SetBackgroundImageFocused(RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Accent, 1.5f));
+		BoxStyle.SetBackgroundImageFocused(WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Accent, 1.5f));
 		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
-		BoxStyle.TextStyle.SetFont(Font(15.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		BoxStyle.TextStyle.SetFont(WWOUI::Font(15.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
 		BoxStyle.SetPadding(FMargin(12.f * K, 6.f * K));
 		SearchBox->WidgetStyle = BoxStyle;
 		SearchBox->SetHintText(FText::FromString(TEXT("SEARCH SETTINGS")));
@@ -1542,9 +1478,9 @@ void UWWOSettingsMenu::Prepare()
 		{
 			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 8.f));
 			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f));
-			Style.SetHovered(RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
-			Style.SetPressed(RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			Style.SetNormal(WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f));
+			Style.SetHovered(WWOUI::RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
+			Style.SetPressed(WWOUI::RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
 			B->SetStyle(Style);
 			Side->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 			return B;
@@ -1598,7 +1534,7 @@ void UWWOSettingsMenu::Prepare()
 		PageTitle = Spaced(TEXT(""), 20.f, FLinearColor::White, 300);
 		Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrush(RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
+		Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
 		Panel->SetPadding(FMargin(8.f * K));
 		Panel->SetContent(GlobalSwitcher);
 		Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -1630,9 +1566,9 @@ UButton* UWWOSettingsMenu::PlainButton(UWidget* Inside, TFunction<void()> Fn)
 	B->IsFocusable = false; // the cursor drives everything, not focus
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	FButtonStyle Style;
-	Style.SetNormal(RoundBrush(FLinearColor(0, 0, 0, 0), 5.f));
-	Style.SetHovered(RoundBrush(FLinearColor(1, 1, 1, 0.06f), 5.f));
-	Style.SetPressed(RoundBrush(FLinearColor(1, 1, 1, 0.1f), 5.f));
+	Style.SetNormal(WWOUI::RoundBrush(FLinearColor(0, 0, 0, 0), 5.f));
+	Style.SetHovered(WWOUI::RoundBrush(FLinearColor(1, 1, 1, 0.06f), 5.f));
+	Style.SetPressed(WWOUI::RoundBrush(FLinearColor(1, 1, 1, 0.1f), 5.f));
 	Style.SetNormalPadding(FMargin(0));
 	Style.SetPressedPadding(FMargin(0));
 	B->SetStyle(Style);
@@ -1697,9 +1633,9 @@ void UWWOSettingsMenu::BuildBinds()
 			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
 			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : FLinearColor(1, 1, 1, 0.45f)); // yours, not the default: gold
 			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Edge, bWaiting ? 2.f : 1.5f));
-			Style.SetHovered(RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
-			Style.SetPressed(RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			Style.SetNormal(WWOUI::RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Edge, bWaiting ? 2.f : 1.5f));
+			Style.SetHovered(WWOUI::RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
+			Style.SetPressed(WWOUI::RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
 			B->SetStyle(Style);
 			return B;
 		};

@@ -1,5 +1,6 @@
 #include "UI/WWOStatBars.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "WWOTypes.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
@@ -11,7 +12,7 @@ int32 UWWOStatBars::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, co
 	FSlateWindowElementList& Out, int32 LayerId, const FWidgetStyle& Style, bool bParentEnabled) const
 {
 	const int32 Layer = Super::NativePaint(Args, Geo, Culling, Out, LayerId, Style, bParentEnabled);
-	constexpr float K = UWWOSettingsMenu::K;
+	constexpr float K = WWOUI::K;
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("GenericWhiteBox");
 	auto Box = [&](float X, float Y, float W, float H, const FLinearColor& C, int32 L)
 	{
@@ -21,7 +22,7 @@ int32 UWWOStatBars::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, co
 	};
 	auto Text = [&](const FString& S, float X, float Y, float Px, const FLinearColor& C, float AlignX)
 	{
-		const FSlateFontInfo F = UWWOSettingsMenu::Font(Px);
+		const FSlateFontInfo F = WWOUI::Font(Px);
 		const FVector2D M = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(S, F);
 		FSlateDrawElement::MakeText(Out, Layer + 2, Geo.ToPaintGeometry(FVector2f(M), FSlateLayoutTransform(FVector2f(X * K - M.X * AlignX, Y * K - M.Y * 0.5f))),
 			S, F, ESlateDrawEffect::None, WWO::Lin(C));

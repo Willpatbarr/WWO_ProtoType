@@ -1,6 +1,7 @@
 #include "UI/WWOCharacterMenu.h"
 #include "Systems/WWOSound.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "UI/WWOStatBars.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
@@ -52,7 +53,7 @@ namespace
 		return Size;
 	}
 
-	constexpr float K = UWWOSettingsMenu::K;
+	constexpr float K = WWOUI::K;
 	const FLinearColor PageColor(0.1f, 0.11f, 0.13f); // what the preview's backdrop comes out as
 	const FLinearColor CardColor(0.115f, 0.125f, 0.148f);
 	const FLinearColor CardEdge(1.f, 1.f, 1.f, 0.55f);
@@ -210,7 +211,7 @@ int32 UWWOCharacterMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 {
 	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	if (!bOpen) return Layer;
-	UWWOSettingsMenu::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	WWOUI::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
 	return Layer + 1;
 }
 
@@ -235,9 +236,9 @@ UWidget* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLin
 	const float Width = Border ? BorderWidth : 2.f;
 	UButton* B = Styler->MakeButton(this, Text, MoveTemp(Fn), FontPx, Color, false, FMargin(Width + 4.f, Width), false);
 	FButtonStyle Style = B->GetStyle();
-	Style.SetNormal(UWWOSettingsMenu::RoundBrush(Color, 5.f, Edge, Width)); // the menu's 5 px corners
-	Style.SetHovered(UWWOSettingsMenu::RoundBrush(WWO::Lightened(Color, 0.12f), 5.f, FLinearColor::White, Width));
-	Style.SetPressed(UWWOSettingsMenu::RoundBrush(WWO::Lightened(Color, 0.2f), 5.f, FLinearColor::White, Width));
+	Style.SetNormal(WWOUI::RoundBrush(Color, 5.f, Edge, Width)); // the menu's 5 px corners
+	Style.SetHovered(WWOUI::RoundBrush(WWO::Lightened(Color, 0.12f), 5.f, FLinearColor::White, Width));
+	Style.SetPressed(WWOUI::RoundBrush(WWO::Lightened(Color, 0.2f), 5.f, FLinearColor::White, Width));
 	B->SetStyle(Style);
 	if (!Tooltip.IsEmpty()) B->SetToolTipText(FText::FromString(Tooltip));
 	USizeBox* Box = Styler->WidgetTree->ConstructWidget<USizeBox>();
@@ -284,7 +285,7 @@ void UWWOCharacterMenu::Open()
 		// Header: the game's name, the tabs, the keys.
 		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(UWWOSettingsMenu::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(Styler, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
+		Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(Styler, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(Styler, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
@@ -352,7 +353,7 @@ void UWWOCharacterMenu::Open()
 		// The editors: the open tab's rows beside the character.
 		UHorizontalBox* Editor = Tree->ConstructWidget<UHorizontalBox>();
 		UBorder* ExpandedPanel = Tree->ConstructWidget<UBorder>();
-		ExpandedPanel->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
+		ExpandedPanel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
 		ExpandedPanel->SetPadding(FMargin(28.f * K));
 		ExpandedTitle = Styler->MakeText(TEXT(""), 40.f); // the tabs say where you are; kept for the code that sets it
 		ExpandedScroll = Tree->ConstructWidget<UScrollBox>();
@@ -477,7 +478,7 @@ UWidget* UWWOCharacterMenu::Card(UWidget* Inside, TFunction<void()> Fn, const FL
 	if (!Fn)
 	{
 		UBorder* Box = Tree->ConstructWidget<UBorder>();
-		Box->SetBrush(UWWOSettingsMenu::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
+		Box->SetBrush(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
 		Box->SetPadding(Padding * K);
 		Box->SetContent(Inside);
 		return Box;
@@ -488,9 +489,9 @@ UWidget* UWWOCharacterMenu::Card(UWidget* Inside, TFunction<void()> Fn, const FL
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	FButtonStyle Style;
 	const bool bPlain = Fill.A <= 0.f;
-	Style.SetNormal(UWWOSettingsMenu::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
-	Style.SetHovered(UWWOSettingsMenu::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : FLinearColor(1, 1, 1, 0.9f), EdgeWidth));
-	Style.SetPressed(UWWOSettingsMenu::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
+	Style.SetNormal(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
+	Style.SetHovered(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : FLinearColor(1, 1, 1, 0.9f), EdgeWidth));
+	Style.SetPressed(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
 	Style.SetNormalPadding(FMargin(0));
 	Style.SetPressedPadding(FMargin(0));
 	B->SetStyle(Style);
@@ -558,7 +559,7 @@ void UWWOCharacterMenu::BuildOverview()
 		UTextBlock* Text = Spaced(Styler, Initials(Name), FontPx, Edge, 40);
 		Text->SetJustification(ETextJustify::Center);
 		UBorder* Box = Tree->ConstructWidget<UBorder>();
-		Box->SetBrush(UWWOSettingsMenu::RoundBrush(CardColor, 5.f, Edge, 1.5f));
+		Box->SetBrush(WWOUI::RoundBrush(CardColor, 5.f, Edge, 1.5f));
 		Box->SetHorizontalAlignment(HAlign_Center);
 		Box->SetVerticalAlignment(VAlign_Center);
 		Box->SetContent(Text);
@@ -637,7 +638,7 @@ void UWWOCharacterMenu::BuildOverview()
 		// In a frame that lights up while the cursor is on the item the note comes from
 		// (UpdateNoteOutline). The frame is always there, so nothing moves when it does.
 		UBorder* Frame = Tree->ConstructWidget<UBorder>();
-		Frame->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0, 0, 0, 0), 4.f));
+		Frame->SetBrush(WWOUI::RoundBrush(FLinearColor(0, 0, 0, 0), 4.f));
 		Frame->SetPadding(FMargin(8.f * K, 4.f * K, 4.f * K, 4.f * K));
 		Frame->SetContent(Row);
 		List->AddChild(Frame);
@@ -928,7 +929,7 @@ void UWWOCharacterMenu::UpdateNoteOutline(const FString& Source)
 	for (const TPair<TObjectPtr<UBorder>, FString>& Row : NoteRows)
 	{
 		const bool bOn = !Source.IsEmpty() && Row.Value == Source;
-		if (Row.Key) Row.Key->SetBrush(UWWOSettingsMenu::RoundBrush(bOn ? WWO::WithAlpha(Accent, 0.1f) : FLinearColor(0, 0, 0, 0), 4.f, bOn ? Accent : FLinearColor(0, 0, 0, 0), bOn ? 1.5f : 0.f));
+		if (Row.Key) Row.Key->SetBrush(WWOUI::RoundBrush(bOn ? WWO::WithAlpha(Accent, 0.1f) : FLinearColor(0, 0, 0, 0), 4.f, bOn ? Accent : FLinearColor(0, 0, 0, 0), bOn ? 1.5f : 0.f));
 	}
 }
 
@@ -1109,7 +1110,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	}
 	if (Row->GetChildrenCount() == 0) return;
 	UBorder* Panel = Tree->ConstructWidget<UBorder>();
-	Panel->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0.07f, 0.075f, 0.09f, 0.98f), 6.f, WWO::WithAlpha(Accent, 0.9f), 1.5f));
+	Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.07f, 0.075f, 0.09f, 0.98f), 6.f, WWO::WithAlpha(Accent, 0.9f), 1.5f));
 	Panel->SetPadding(FMargin(10.f * K));
 	Panel->SetContent(Row);
 	// Just under the tile, its left edge on the tile's (pulled in from the window's right edge when
@@ -1502,7 +1503,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		const int32 SlotIndex = UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(OpenSlot);
 		Label(Side, UWWOLoadoutSubsystem::ModSlotTitle(OpenSlot) + TEXT(" mods"));
 		UBorder* Panel = Tree->ConstructWidget<UBorder>();
-		Panel->SetBrush(UWWOSettingsMenu::RoundBrush(FLinearColor(0.12f, 0.13f, 0.16f), 8.f, FLinearColor(0.55f, 0.58f, 0.66f), 2.f));
+		Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.12f, 0.13f, 0.16f), 8.f, FLinearColor(0.55f, 0.58f, 0.66f), 2.f));
 		Panel->SetPadding(FMargin(12.f * K, 12.f * K, 12.f * K, 4.f * K));
 		UVerticalBox* List = Tree->ConstructWidget<UVerticalBox>();
 		const UWWOModData* Current = L->GetMod(OpenSlot);

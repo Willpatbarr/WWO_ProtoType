@@ -2,6 +2,7 @@
 #include "Fonts/CompositeFont.h"
 #include "Misc/Paths.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "UI/WWOMenuCursor.h"
 #include "Net/WWONetSubsystem.h"
 #include "Player/WWOPlayerController.h"
@@ -32,7 +33,7 @@
 
 namespace
 {
-	constexpr float K = UWWOSettingsMenu::K;
+	constexpr float K = WWOUI::K;
 	// The character menu's colors.
 	const FLinearColor PageColor(0.1f, 0.11f, 0.13f);
 	const FLinearColor CardColor(0.115f, 0.125f, 0.148f);
@@ -83,7 +84,7 @@ int32 UWWOLaunchMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Allot
 {
 	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	if (!bOpen) return Layer;
-	UWWOSettingsMenu::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	WWOUI::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
 	return Layer + 1;
 }
 
@@ -111,9 +112,9 @@ UButton* UWWOLaunchMenu::Boxed(UWidget* Inside, const FLinearColor& Fill, const 
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	const bool bPlain = Fill.A <= 0.f;
 	FButtonStyle Style;
-	Style.SetNormal(UWWOSettingsMenu::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
-	Style.SetHovered(UWWOSettingsMenu::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : FLinearColor(1, 1, 1, 0.9f), EdgeWidth));
-	Style.SetPressed(UWWOSettingsMenu::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
+	Style.SetNormal(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
+	Style.SetHovered(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : FLinearColor(1, 1, 1, 0.9f), EdgeWidth));
+	Style.SetPressed(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
 	Style.SetNormalPadding(FMargin(0));
 	Style.SetPressedPadding(FMargin(0));
 	B->SetStyle(Style);
@@ -437,7 +438,7 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	NameFont.TypefaceFontName = FName("Bold");
 	Name->SetFont(NameFont);
 	// The name is the wordmark logo, as wide as the text it replaced (which keeps its room under it).
-	UVerticalBoxSlot* NameSlot = Middle->AddChildToVerticalBox(UWWOSettingsMenu::MakeLogo(Tree, true, FVector2D(1060.f, 132.5f) * K, Name));
+	UVerticalBoxSlot* NameSlot = Middle->AddChildToVerticalBox(WWOUI::MakeLogo(Tree, true, FVector2D(1060.f, 132.5f) * K, Name));
 	NameSlot->SetHorizontalAlignment(HAlign_Center);
 	NameSlot->SetPadding(FMargin(0, 14.f * K, 0, 0));
 	USizeBox* RuleBox = Tree->ConstructWidget<USizeBox>();
@@ -522,7 +523,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	// Header, as on the other menus: the game's name, where you are, the keys.
 	UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-	Name->AddChildToHorizontalBox(UWWOSettingsMenu::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
+	Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Spaced(TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
 	UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(Spaced(TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 	NameText->SetVerticalAlignment(VAlign_Center);
 	NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
@@ -579,11 +580,11 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 		Left->AddChildToVerticalBox(StepLabel(Connection == ConnHost ? 4 : 3, TEXT("Gamer tag")))->SetPadding(FMargin(0, 26.f * K, 0, 12.f * K));
 		TagBox = Tree->ConstructWidget<UEditableTextBox>();
 		FEditableTextBoxStyle BoxStyle = TagBox->WidgetStyle;
-		const FSlateBrush BoxBrush = UWWOSettingsMenu::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
+		const FSlateBrush BoxBrush = WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
 		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
-		BoxStyle.SetBackgroundImageFocused(UWWOSettingsMenu::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, A, 1.5f));
+		BoxStyle.SetBackgroundImageFocused(WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, A, 1.5f));
 		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
-		BoxStyle.TextStyle.SetFont(UWWOSettingsMenu::Font(20.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		BoxStyle.TextStyle.SetFont(WWOUI::Font(20.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
 		BoxStyle.SetPadding(FMargin(14.f * K, 10.f * K));
 		TagBox->WidgetStyle = BoxStyle;
 		TagBox->SetHintText(FText::FromString(TEXT("Type a name (letters, digits, _ -)")));

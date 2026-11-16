@@ -10,6 +10,7 @@
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "UI/WWOCharacterMenu.h"
 #include "UI/WWOMenuCursor.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -237,7 +238,7 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		// Grab the handle where it is (the settings sliders' handle is 16 x 1.2 Slate units).
 		AutoMenuValue = S->GetValue();
 		const FGeometry& G = S->GetCachedGeometry();
-		const float Thumb = 16.f * UWWOSettingsMenu::K;
+		const float Thumb = 16.f * WWOUI::K;
 		const float Pct = FMath::GetRangePct(S->GetMinValue(), S->GetMaxValue(), AutoMenuValue);
 		const FVector2D At = G.LocalToAbsolute(FVector2D(Thumb * 0.5f + Pct * (G.GetLocalSize().X - Thumb), G.GetLocalSize().Y * 0.5f));
 		if (Steer(At) || Timeout(4.f, TEXT("steer to a slider"))) { InjectKey(EKeys::Gamepad_FaceButton_Bottom, true); Next(); }

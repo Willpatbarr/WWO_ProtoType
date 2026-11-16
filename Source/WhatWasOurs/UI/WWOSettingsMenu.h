@@ -17,6 +17,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/WWOUI.h"
 #include "WWOSettingsMenu.generated.h"
 
 class UVerticalBox;
@@ -29,27 +30,6 @@ class UWrapBox;
 class UPanelWidget;
 class UProgressBar;
 class AWWOCharacter;
-
-// Small UObjects that forward UMG's dynamic delegates to C++ lambdas.
-UCLASS()
-class UWWOClickHandler : public UObject
-{
-	GENERATED_BODY()
-public:
-	TFunction<void()> Fn;
-	TWeakObjectPtr<class UWidget> For; // the button it serves (when that's off the page, it can go)
-	UFUNCTION() void Handle() { if (Fn) Fn(); }
-};
-
-UCLASS()
-class UWWOSliderHandler : public UObject
-{
-	GENERATED_BODY()
-public:
-	TFunction<void(float)> Fn;
-	TWeakObjectPtr<class UWidget> For;
-	UFUNCTION() void Handle(float Value) { if (Fn) Fn(Value); }
-};
 
 struct FWWOSettingRow
 {
@@ -133,23 +113,11 @@ public:
 	// firing tester). Null when the section has no such row.
 	UWidget* MakeRowFor(const FString& Key, FName Id);
 
-	// Shared styling helpers (the character menu uses them too). Godot draws every label in its
-	// default font, Open Sans SemiBold; Roboto Medium is the engine's closest weight.
-	static FSlateFontInfo Font(float Px);
-	static FSlateBrush RoundBrush(const FLinearColor& Color, float Radius = 8.f, const FLinearColor& Outline = FLinearColor(0, 0, 0, 0), float OutlineWidth = 0.f);
+	// Text and a filled text button built in this menu's tree (WWOUI::Text / TextButton). The other
+	// menus use WWOUI directly; these stay for the many calls in this file.
 	UButton* MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx = 22.f, const FLinearColor& Color = FLinearColor(0.2f, 0.21f, 0.25f),
 		bool bLeftAlign = false, FMargin Padding = FMargin(10.f, 4.f), bool bWrap = false);
 	UTextBlock* MakeText(const FString& Text, float FontPx, const FLinearColor& Color = FLinearColor::White, bool bWrap = false);
-	// The game's logo as a widget (Tools/import_ui_logos.py): the "WHAT WAS OURS" wordmark (bWordmark)
-	// or the round leaf mark, drawn Size big (the wordmark's texture is 8 : 1 and the letters fill
-	// its width; the mark is square). Keeps, if given, is put under it unseen: the text the logo
-	// stands in for, so everything around stays exactly where it was.
-	static UWidget* MakeLogo(class UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps = nullptr);
-	// Godot's ring cursor, drawn over an open menu (see FWWOMenuCursor).
-	static void PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer);
-
-	static constexpr float K = 1.2f; // Godot's 1600 x 900 sizes -> Unreal's 1080p reference
-
 private:
 	// Collapsible slider groups (BuildRows): open or closed per section and header, and the sections
 	// whose first group has been opened by default.

@@ -1,5 +1,6 @@
 #include "UI/WWOScoreboard.h"
 #include "UI/WWOSettingsMenu.h"
+#include "UI/WWOUI.h"
 #include "Game/WWOGameMode.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
@@ -26,7 +27,7 @@
 
 namespace
 {
-	constexpr float K = UWWOSettingsMenu::K;
+	constexpr float K = WWOUI::K;
 	const FLinearColor PageColor(0.1f, 0.11f, 0.13f, 0.94f);
 	const FLinearColor CardColor(0.115f, 0.125f, 0.148f);
 	const FLinearColor CardEdge(1.f, 1.f, 1.f, 0.45f);
@@ -71,7 +72,7 @@ int32 UWWOScoreboard::NativePaint(const FPaintArgs& Args, const FGeometry& Allot
 {
 	const int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	if (!bOpen) return Layer;
-	UWWOSettingsMenu::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
+	WWOUI::PaintCursor(this, AllottedGeometry, OutDrawElements, Layer + 1);
 	return Layer + 1;
 }
 
@@ -168,9 +169,9 @@ UButton* UWWOScoreboard::Button(const FString& Title, const FString& Sub, bool b
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	const FLinearColor Edge = bEnabled ? CardEdge : FLinearColor(1, 1, 1, 0.15f);
 	FButtonStyle Style;
-	Style.SetNormal(UWWOSettingsMenu::RoundBrush(CardColor, 5.f, Edge, 1.5f));
-	Style.SetHovered(UWWOSettingsMenu::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.08f) : CardColor, 5.f, bEnabled ? FLinearColor(1, 1, 1, 0.9f) : Edge, 1.5f));
-	Style.SetPressed(UWWOSettingsMenu::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.14f) : CardColor, 5.f, bEnabled ? FLinearColor::White : Edge, 1.5f));
+	Style.SetNormal(WWOUI::RoundBrush(CardColor, 5.f, Edge, 1.5f));
+	Style.SetHovered(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.08f) : CardColor, 5.f, bEnabled ? FLinearColor(1, 1, 1, 0.9f) : Edge, 1.5f));
+	Style.SetPressed(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.14f) : CardColor, 5.f, bEnabled ? FLinearColor::White : Edge, 1.5f));
 	Style.SetNormalPadding(FMargin(0));
 	Style.SetPressedPadding(FMargin(0));
 	B->SetStyle(Style);
