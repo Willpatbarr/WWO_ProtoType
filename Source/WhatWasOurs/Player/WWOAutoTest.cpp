@@ -58,6 +58,7 @@
 #include "World/WWOTarget.h"
 #include "Weapons/WWOGrenade.h"
 #include "Enemies/WWOEnemy.h"
+#include "Player/WWORegress.h"
 
 FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller)
 {
@@ -81,17 +82,18 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 		|| WWOSwitches::Has(TEXT("WWOAutoTestFrames"));
 	M.bAutoTest |= M.bAutoTestMenusOnly || M.bAutoTestBodyOnly || M.bAutoTestGraftsOnly || M.bAutoTestMapsOnly || M.bAutoTestModsOnly;
 	M.bJoinerStress = Controller.GetNetMode() == NM_Client && WWOSwitches::IsStress();
+	M.bRegress = WWOSwitches::IsRegress() && Controller.IsLocalController();
 	return M;
 }
 
 bool FWWOAutoTestModes::Any() const
 {
-	return bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestTester || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
+	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestTester || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
 }
 
 TSharedPtr<FWWOAutoTest> FWWOAutoTest::MakeIfAsked(AWWOPlayerController& Controller)
 {
-	if (WWOSwitches::HasAutoTestText())
+	if (WWOSwitches::HasAutoTestText() || WWOSwitches::IsRegress())
 	{
 		WWOTest::Watch();        // count the FAIL lines of a test run
 		WWOTest::GuardLoadout(); // and the saved loadout comes back as it was when the run closes
@@ -105,6 +107,7 @@ FWWOAutoTest::FWWOAutoTest(AWWOPlayerController& Controller, const FWWOAutoTestM
 	: FWWOAutoTestModes(Modes)
 	, PC(&Controller)
 {
+	if (bRegress) Regress = MakeShared<FWWORegress>(Controller);
 }
 
 void FWWOAutoTest::AddReferencedObjects(FReferenceCollector& Collector)
@@ -119,6 +122,11 @@ void FWWOAutoTest::AddReferencedObjects(FReferenceCollector& Collector)
 // JustPressed is cleared, does not).
 void FWWOAutoTest::Tick(float DeltaTime)
 {
+	if (bRegress)
+	{
+		Regress->Tick(); // counts ticks, not DeltaTime
+		return;
+	}
 	if (bPerfTest)
 	{
 		if (AWWOCharacter* P = PC->GetWWOCharacter()) UpdatePerfTest(P, DeltaTime);

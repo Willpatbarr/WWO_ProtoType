@@ -89,12 +89,16 @@ int32 WWOTest::Failures() { return GFailures.load(); }
 
 void WWOTest::Exit()
 {
+	ExitWith(Failures(), TEXT("AutoTest"));
+}
+
+void WWOTest::ExitWith(int32 Failed, const TCHAR* Label)
+{
 	static bool bLeaving = false;
 	if (bLeaving) return;
 	bLeaving = true;
-	const int32 Failed = Failures();
-	if (Failed > 0) { UE_LOG(LogWWO, Warning, TEXT("AutoTest result: FAIL (%d)"), Failed); }
-	else { UE_LOG(LogWWO, Display, TEXT("AutoTest result: PASS")); }
+	if (Failed > 0) { UE_LOG(LogWWO, Warning, TEXT("%s result: FAIL (%d)"), Label, Failed); }
+	else { UE_LOG(LogWWO, Display, TEXT("%s result: PASS"), Label); }
 	GExitFailed = Failed > 0;
 	HookShutdown(); // the guarded loadout goes back, then (off Windows) the exit code is set
 #if PLATFORM_WINDOWS

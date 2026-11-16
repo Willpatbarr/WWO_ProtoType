@@ -37,6 +37,7 @@ struct FWWOAutoTestModes
 	bool bAutoTestPvP = false;        // -WWOAutoTestPvP
 	bool bPerfTest = false;           // -WWOPerfTest
 	bool bJoinerStress = false;       // -WWOStress on a joiner: only logs its frame times
+	bool bRegress = false;            // -WWORegress: the regression scenarios (Player/WWORegress.h)
 
 	static FWWOAutoTestModes Read(const AWWOPlayerController& Controller);
 	bool Any() const;
@@ -58,6 +59,7 @@ public:
 
 private:
 	AWWOPlayerController* PC = nullptr; // the controller this drives (it owns the driver)
+	TSharedPtr<class FWWORegress> Regress; // -WWORegress: the scenario runner (its own file)
 
 	// -WWOAutoTest: a scripted play-through that saves screenshots (for checking the port).
 	// Map steps (WWOAutoTestMaps.cpp): the level from fixed cameras.
