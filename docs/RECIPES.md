@@ -38,8 +38,9 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
    `IsEffectActive`), and wherever else it acts (grep an existing id such as `static_charge` to see the
    places).
 4. The look on the body: a branch in `Characters/WWOBodyGrafts.cpp` (`F.Has("<id>")`).
-5. Text: a line in `UWWOCharacterMenu::BuildOverview` (the Loadout tab's Build notes), and per-ability
-   rows in `UWWOSettingsMenu::RegisterSections`.
+5. Text: a line in `UWWOCharacterMenu::BuildOverview` (`UI/WWOCharacterMenuOverview.cpp`, the Loadout
+   tab's Build notes), and per-ability rows in `UWWOSettingsMenu::RegisterAbilitySections`
+   (`UI/WWOSettingsSections.cpp`).
 6. Bots: a hint in `AWWOBotController::UseKit` if they should use it.
 7. An `ability` / `grenade_throw` sound plays by default.
 8. Test: `-WWOAutoTest` sets off every ability and throws every grenade.
@@ -68,10 +69,13 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 ## A settings slider
 
 1. A `UPROPERTY(EditAnywhere) float` on the class that uses the value.
-2. One `Row(Obj, "PropertyName", label, min, max, step, Show)` line in the right block of
-   `UWWOSettingsMenu::RegisterSections`. Saving, reset and search then work by themselves.
-3. If joiners should have it (a player's own preference), add its id to `OwnSettings()`.
-4. A new section also needs its title in the `Layout` table in `Prepare`, or it lands under Player.
+2. One `Row(Obj, "PropertyName", label, min, max, step, Show)` line in the right block of the right
+   `Register...Sections` function in `UI/WWOSettingsSections.cpp` (`RegisterSections` lists them).
+   Saving, reset and search then work by themselves. Don't move existing sections or rows: their order
+   is the pages', the search's and the saved file's.
+3. If joiners should have it (a player's own preference), add its id to `OwnSettings()` (same file).
+4. A new section also needs its title in the `TabLayout` table in `UI/WWOSettingsMenu.cpp`, or it lands
+   under Player.
 5. To show it in the firing tester, add the id to `GunGroups` / `CameraIds` in `UI/WWOFiringTester.cpp`.
 6. If the shipped default should change, update `Config/ShippedSettings.json`.
 
@@ -103,6 +107,10 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 3. In `AWWOPlayerController`: create it, `AddToViewport` with a z-order, and add it to `IsMenuOpen` /
    `IsOtherMenuOpen`, `HandleMenuPress`, `CloseMenus` and the scoreboard's close list.
 4. A text box must hand keyboard focus back to the viewport when done.
+5. A big menu splits across `.cpp` files by concern, with helpers they share in a private header under a
+   named namespace: see the settings menu (`WWOSettingsSections` / `Store` / `Rows`) and the character
+   menu (a file per tab) in `ARCHITECTURE.md`, UI. A popup that opens on hover and closes a moment after
+   the cursor leaves: `FWWOHoverPopup` (`UI/WWOCharacterMenu.h`).
 
 ## An input action
 

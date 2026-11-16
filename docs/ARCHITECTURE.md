@@ -160,6 +160,20 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
   float `UPROPERTY` by name. Saved as `{sectionKey: {rowId: number}}` in `Saved/WWO/SavedSettings.json`,
   falling back to `Config/ShippedSettings.json`. A joiner sees only rows marked as a player's own
   (`OwnSettings()`).
+  One class over four files: `WWOSettingsSections.cpp` is the table of what exists (`RegisterSections`
+  calls one `Register...Sections` per area in a fixed order, which is the order of the pages, the search
+  and the saved file; `OwnSettings`, `MarkPreferences`), `WWOSettingsStore.cpp` the values (defaults,
+  `LoadSaved`, `SaveDefaults`, reset), `WWOSettingsRows.cpp` the widgets for a page (`BuildRows`,
+  `MakeRow` / `MakeRowFor`, the item browsers, `BuildBinds`), and `WWOSettingsMenu.cpp` the menu itself
+  (`Prepare` and its layout steps `BuildFrame`, `BuildPages`, `BuildSidebar`, `BuildPageArea`; the tab
+  layout table `TabLayout`; tabs, pages, search, open / close). Helpers they share: `WWOSettingsMenuPrivate.h`.
+- **Character menu** (`UI/WWOCharacterMenu.*`): `WWOCharacterMenu.cpp` builds the frame and tabs and
+  handles open / close, back, turning the preview, tick and the autotest hooks; one file per tab:
+  `WWOCharacterMenuOverview.cpp` (Loadout: stat bars, Build notes, cards, the hover pickers),
+  `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, mod slots, configs, the mod hover
+  and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. Both hover popups close through one
+  `FWWOHoverPopup` timer. The character is `AWWOPreviewActor` (`UI/WWOPreviewActor.*`), a mannequin with
+  its own scene capture far below the level. Shared helpers: `WWOCharacterMenuPrivate.h`.
 - **HUD** (`UI/WWOHUDWidget.*`, `UI/WWOHUDPaint.cpp`): immediate-mode paint through `FWWOPainter`
   (`UI/WWOPainter.h`), in 1600 x 900 units scaled to the player's screen (`WWOHUD::Scale`). `NativePaint`
   builds one `FWWOHUDFrame` (player, gun, world subsystem, layout size, reticle point, `ToScreen`) and

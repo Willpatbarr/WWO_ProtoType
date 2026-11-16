@@ -16,7 +16,7 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 ## Tunables and settings
 
 - A tunable is a `UPROPERTY(EditAnywhere) float` on the class that uses it, exposed with one `Row(...)`
-  line in `UWWOSettingsMenu::RegisterSections`.
+  line in one of `UWWOSettingsMenu::RegisterSections`' parts (`UI/WWOSettingsSections.cpp`).
 - Booleans and counts are floats: test with `>= 0.5f`, read counts with `RoundToInt`.
 - **The property name is the saved-file key.** Renaming one drops every saved value for it, in
   `Config/ShippedSettings.json` and on players' machines. If you must rename, add a migration where
