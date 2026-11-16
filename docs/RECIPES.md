@@ -15,7 +15,7 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 4. A `fire_<Id>` event in `Config/Sounds.json` (else it plays `fire`).
 5. Its Settings section appears by itself (`weapon/<Id>`).
 6. Id branches to check: the box-model fallback (`ModelParts`, `Player/WWOWeaponModel.cpp`), the
-   pistol hand pose (`bHandsPistol`, `Player/WWOWeaponHands.cpp`; `Aim_Pistol` in `Player/WWOCharacter.cpp`), and
+   pistol hand pose (`bHandsPistol`, `Player/WWOWeaponHands.cpp`; `Aim_Pistol` in `Player/WWOCharacterLook.cpp`), and
    iron-sight marks (`Data/WWOData.h`).
 7. Test: `-WWOAutoTestGuns` and `-WWOAutoTestFrames` on `L_TestRange`.
 

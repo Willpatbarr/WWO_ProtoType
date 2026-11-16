@@ -51,12 +51,12 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   could differ between machines.
 - The move state is one struct, `FWWOMoveState`, held once by the character (`MoveState`; read it as
   `P->MoveState.bSliding`). `GetMoveState` / `SetMoveState` copy it whole, and the saved moves store it whole.
-  New movement state goes in two places in `Player/WWOCharacter.*`: a field in `FWWOMoveState`, and a line in
-  `FWWOMoveState::Serialize` (the wire: a missing line is a silent desync after corrections). Add it to
-  `ToString` too, for the correction logs. Timers, input edges and easing that a correction need not restore
+  New movement state goes in two places: a field in `FWWOMoveState` (`Player/WWOCharacter.h`), and a line in
+  `FWWOMoveState::Serialize` (`Player/WWOCharacterMove.cpp`; the wire: a missing line is a silent desync after
+  corrections). Add it to `ToString` too, for the correction logs. Timers, input edges and easing that a correction need not restore
   (camera, bob, lunge steering, status timers) stay loose members.
 - Movement values exchanged with the host (`ServerSetMoveStats`, `ClientSetMoveBase`, `BaseMoveStats`) come from
-  `MoveStatTable` in `WWOCharacter.cpp`: one line each (member, loadout stat, host clamp low / high), in wire order.
+  `MoveStatTable` in `WWOCharacterMove.cpp`: one line each (member, loadout stat, host clamp low / high), in wire order.
   Add new ones at the end (tests read the array by index).
 - The joiner's `MoveIn` is quantised (`Quantize`) so both machines simulate the same numbers.
 - Movement ticks before the character; `PreparedFrame` guards against preparing twice in a frame.
@@ -79,8 +79,8 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   system namespace (`WWOFX`, `WWONav`, `WWOTest`, `WWOConfig`, `WWOSwitches`, `WWOUI`).
 - Unity builds are off (`WhatWasOurs.Build.cs`) because files reuse helper names in anonymous namespaces.
   A helper needed in two files moves to a shared header under a namespace.
-- A large class is split across `.cpp` files by concern (`WWOAutoTest*.cpp`,
-  `WWOCharacterGunNet.cpp`, `WWOBodyGrafts.cpp`), not by making the header bigger.
+- A large class is split across `.cpp` files by concern (`WWOAutoTest*.cpp`, `WWOCharacter*.cpp`,
+  `WWOWeapon*.cpp`, `WWOBodyGrafts.cpp`), not by making the header bigger.
 - Platform-only code sits behind `PLATFORM_MAC` and the like. MSVC is stricter than clang: initialise
   out-pointers, one static member per declaration in exported classes.
 

@@ -19,9 +19,25 @@ For the rules that follow from this, see `CONVENTIONS.md`; for step-by-step addi
 
 ## Player
 
-- **`AWWOCharacter`** (`Player/WWOCharacter.*`, `WWOCharacterGunNet.cpp`): camera, eight components,
+- **`AWWOCharacter`** (`Player/WWOCharacter.h`, `Player/WWOCharacter*.cpp`): camera, eight components,
   movement rules, lunge and mantle, the recoil state machine, PvP hitboxes, what other machines see of
   this body, and about 25 RPCs. Implements `IWWOTargetable`.
+- **The character's files** (one class; the header's sections follow them): `WWOCharacter.cpp`
+  construction, `BeginPlay`, the per-frame `Tick` driver and `TickRemoteOnHost` (their call order
+  matters), controllers and input reads (`Pressed`, `JustPressed`); `WWOCharacterMove.cpp`
+  `PrepareMovement`, `CaptureMoveInput`, `SimulateMove` and every rule it calls (sprint, crouch, slide,
+  air, jump, landing, lunge flight, launch, mantle), `FWWOMoveState` / `FWWOMoveInput` on the wire,
+  `MoveStatTable`, the move-stat RPCs and `M()`; `WWOCharacterView.cpp` `Look`, `SetViewRotation`,
+  `TurnToward`, `UpdateCamera` (eye height, landing dip, head bob) and the low reticle (`AimForward`);
+  `WWOCharacterRecoil.cpp` `AddRecoil`, `UpdateRecoil`, `ApplyRecoil` and the `RiseShape` / `FallShape`
+  tables; `WWOCharacterCombat.cpp` the PvP hitboxes, headshots, `ApplyHit` and the status effects
+  (slow, blind, veil, entrench) with their RPCs; `WWOCharacterLook.cpp` what other machines see
+  (`SetupVisuals`, `NetFlora` / `NetLook` / `NetFists`, `ShowLook`, the team tint, `SendPose`,
+  `UpdateModel`, remote footsteps); `WWOCharacterNet.cpp` `GetLifetimeReplicatedProps`, the kit RPCs
+  and revive; `WWOCharacterGunNet.cpp` the host's checks of a joiner's shots and punches. What more
+  than one of them uses is in `WWOCharacterPrivate.h` (`namespace WWOCharacter`). The HUD and audio
+  sliders (`Radar*`, `HealthBar*`, `SoundVolume`...) are still members of the character, in the
+  header's tunables section, because Settings binds them by name.
 - **Components** (all owned by the character, all assume their owner is an `AWWOCharacter`):
   `UWWOWeaponComponent` (firing, reload, ADS, perks, melee, gun model, viewmodel pose, first-person
   hands, third-person gun), `UWWOHealthComponent`, `UWWOAbilityComponent`, `UWWOUltComponent`,
