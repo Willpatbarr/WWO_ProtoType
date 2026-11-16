@@ -2,6 +2,8 @@
 
 // The in-game HUD (Godot: hud.gd), painted directly like the Godot _draw code. Sizes are in
 // the Godot 1600 x 900 layout and scaled by min(width / 1600, height / 900), as Godot's stretch did.
+// State and easing are in WWOHUDWidget.cpp; NativePaint and its element painters (one per part of
+// the HUD, called in z-order through FWWOPainter, UI/WWOPainter.h) in WWOHUDPaint.cpp.
 // - Reticle (red over a target, fades as you aim in), hit / crit / kill markers.
 // - ADS vignette and the sniper scope overlay.
 // - Target health bar (and the Tank's shield bar) under the reticle target.
@@ -18,6 +20,7 @@
 
 class AWWOCharacter;
 class UMaterialInstanceDynamic;
+struct FWWOHUDFrame;
 
 UCLASS()
 class WHATWASOURS_API UWWOHUDWidget : public UUserWidget
@@ -43,6 +46,8 @@ public:
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
 private:
+	static constexpr float HitMarkerTime = 0.18f;
+	static constexpr float KillMarkerTime = 0.4f;
 	TWeakObjectPtr<AWWOCharacter> BoundPlayer;
 	float HitTime = 0.f;
 	bool bHitCritical = false;
@@ -60,4 +65,23 @@ private:
 
 	AWWOCharacter* Player() const;
 	void Bind(AWWOCharacter* P);
+
+	// The element painters (WWOHUDPaint.cpp), in the order NativePaint calls them: later ones
+	// draw over earlier ones.
+	void PaintScreenEffects(const FWWOHUDFrame& F) const; // low-health vignette, Static Charge edges, ADS vignette and scope
+	void PaintWorldLabels(const FWWOHUDFrame& F) const;   // floating damage numbers, AI teammate labels
+	void PaintReticle(const FWWOHUDFrame& F) const;       // reticle, aimed-in mark, hit marker
+	void PaintAssistDebug(const FWWOHUDFrame& F) const;   // aim assist debug cones, hidden assist markers
+	void PaintHealthBars(const FWWOHUDFrame& F) const;    // bars over marked enemies and teammates in sight
+	void PaintMateChevrons(const FWWOHUDFrame& F) const;  // PvP: a chevron over each teammate
+	void PaintKillPopups(const FWWOHUDFrame& F) const;    // your own kills, right of the reticle
+	void PaintKillFeed(const FWWOHUDFrame& F) const;      // killer > killee, bottom left
+	void PaintRadar(const FWWOHUDFrame& F) const;         // top left
+	void PaintAmmo(const FWWOHUDFrame& F) const;          // weapon name, perks, count, reload bar (bottom right), config toast
+	void PaintAbilities(const FWWOHUDFrame& F) const;     // grenade, ability and ult boxes (bottom left)
+	void PaintVitals(const FWWOHUDFrame& F) const;        // shield and health bars, status chips (top center)
+	void PaintDamageSpikes(const FWWOHUDFrame& F) const;  // where damage came from
+	void PaintOverlays(const FWWOHUDFrame& F) const;      // blind, damage flash, down / dead screens, revive prompt
+	void PaintWaveLine(const FWWOHUDFrame& F) const;      // the match line (top center)
+	void PaintFps(const FWWOHUDFrame& F) const;           // frame rate (top left, under the radar)
 };
