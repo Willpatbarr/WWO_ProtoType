@@ -42,7 +42,7 @@ Ranked by expected gain. Each has a cheap test to run before committing to the w
 |---|---|---|---|
 | **Bake the lamp and sky lighting** | 2 to 2.5 ms (about 75 to 90 fps). The lights part is measured, the rest is a guess | Medium to large | Look changes: static lights lose highlights, characters are lit from a volume |
 | **Forward shading** (`r.ForwardShading=1`) | 1 to 3 ms, low confidence | Small to try, medium to restore the look | No screen-space reflections, ambient occlusion or contact shadows; possible Windows parity problem |
-| **Mobile renderer on the Mac** | Possibly the largest; no published numbers | Small to try, large for parity | Mac and Windows would run different renderers; the game uses custom depth |
+| **Mobile renderer on the Mac** | **Measured 2026-11-15: about half the GPU cost at equal resolution** (see below) | One config line and a launch switch; look judged acceptable | Mac and Windows would run different renderers; packaged default and full-screen start untested |
 | **Dynamic resolution** | A frame-rate floor in heavy scenes, not a higher average | Small to medium | Softer image under load |
 | **Effects on Niagara** | Unknown; scalability and spawn spikes, not average fps | Large (rewrite of `FX/WWOFX` and the flora effects) | Re-matching every effect's look |
 
@@ -62,8 +62,30 @@ free, then turn forward on in a branch and run `-WWOPerfTest`.
 Epic's doc: https://dev.epicgames.com/documentation/unreal-engine/forward-shading-renderer-in-unreal-engine
 
 ### Mobile renderer on the Mac
-UE 5.8 defines a "Mac Metal Mobile" shader platform, the path built for Apple's tile-based GPUs.
-Treat as an experiment only: add the shader format to the Mac targeted RHIs in a branch and measure.
+UE 5.8 defines a "Mac Metal Mobile" shader platform (`SF_METAL_ES3_1`), the path built for Apple's
+tile-based GPUs. Tried on the branch `exp/mac-mobile-renderer` (2026-11-15): add
+`+TargetedRHIs=SF_METAL_ES3_1` under `MacTargetSettings` in `Config/DefaultEngine.ini` and launch with
+`-FeatureLevelES31` (it only applies to `-game` runs and packaged builds, not the editor). No code changes.
+
+12-player bot match, bots busy, whole-map average from `-WWOPerfTest`, one run each:
+
+| Map, window | Desktop renderer | Mobile renderer |
+|---|---|---|
+| Arboretum, 1600 x 900 | 11.60 ms (86 fps) | 9.23 ms (108 fps) |
+| Cascade, 1600 x 900 | 11.53 ms (87 fps) | 8.57 ms (117 fps) |
+| Arboretum, 2560 x 1440 | 14.91 ms (67 fps) | 14.15 ms (71 fps) |
+| Cascade, 2560 x 1440 | 14.14 ms (71 fps) | 11.01 ms (91 fps) |
+
+At 2560 x 1440 the two are not drawing the same pixels: by default the desktop renderer draws about 60%
+and upsamples, the mobile renderer draws 100%. GPU time for one heavy Arboretum view by
+`r.ScreenPercentage`: desktop 16.3 / 17.5 / 19.7 / 29.2 ms at 50 / 60 / 75 / 100%, mobile 7.7 / 8.8 /
+10.2 / 13.6 ms. So mobile at native resolution costs about what desktop costs at 60%.
+
+Every scripted test gave the same result as on the desktop renderer, and Will judged the side-by-side
+screenshots acceptable. Not done: how a reduced resolution looks on mobile (no temporal upsampling
+there), a default launch mode for packaged builds (the engine has no project setting; the app's default
+command line is the likely route), and full-screen start from the command line, which hung during the
+test (cause not found, not tried on the desktop renderer). Windows is unaffected.
 
 ### Dynamic resolution
 Nearly every remaining GPU cost scales with pixels, and there is no screen-percentage or
