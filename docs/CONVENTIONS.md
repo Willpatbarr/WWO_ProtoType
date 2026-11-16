@@ -91,6 +91,7 @@ Look here before writing a new one.
 | Need | Use |
 |---|---|
 | Move a value toward a target, smoothstep, lighten / darken, sRGB to linear, alpha, random direction in a cone | `WWO::MoveToward`, `MoveToward2D`, `SmoothStep`, `Lightened`, `Darkened`, `Lin`, `WithAlpha`, `RandomInCone` (`WWOTypes.h`) |
+| A random number that decides gameplay (a shot, a kick, an AI choice) | `WWO::FRand`, `FRandRange`, `RandRange` (`WWOTypes.h`): `FMath`'s in play, a seeded stream in the regression scenarios. Looks-only randomness uses `FMath` |
 | Frame-rate independent easing alpha, ease out with overshoot | `WWO::Damp(Rate, dt)`, `WWO::BackOut(T)` (`WWOTypes.h`) |
 | Spawn parameters that always spawn (optionally owned, optionally deferred) | `WWO::AlwaysSpawn(Owner)`, `WWO::AlwaysSpawnDeferred(Owner)` (`WWOTypes.h`) |
 | Read or write a JSON file in `Config/` or `Saved/WWO/` | `WWOConfig::Load`, `LoadCached` (once a run), `LoadSavedElseShipped`, `Save`, `Path`, `SavedPath`; field readers `Vec`, `Color` (`Systems/WWOConfig.*`) |
@@ -104,6 +105,7 @@ Look here before writing a new one.
 | Basic shapes, materials, lights, ground lookup for effects | `WWOFX::Sphere` / `Cube` / `AddShape` / `AddSoftSphere` / `AddGroundDisc` / `GroundBelow`, `WWOFX::AddPointLight` (any actor), `AWWOFXActor::AddLight` (`FX/WWOFX.*`) |
 | A navmesh path | `WWONav::FindPath` (`Enemies/WWOEnemy.*`) |
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
+| A regression scenario (exact numbers, compared with a golden file) | `FWWORegressScenario` and `FWWORegress`'s helpers (`Player/WWORegress.h`); `Tools/regress.sh` |
 | In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
 | In a menu: a label, spaced capitals, a thin line, a size box, a fill share, the accent colour, the palette | `WWOUI::Text`, `Spaced`, `Rule` / `RuleDown`, `Sized` / `Wide`, `Fill`, `Accent(this)`; `WWOUI::PageColor`, `CardColor`, `CardEdge`, `Dim`, ... (`UI/WWOUI.h`). Each takes the menu's own `WidgetTree` |

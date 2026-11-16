@@ -88,3 +88,5 @@ build scripts: `Tools/`.
 - A feature that changes how a system works updates that system's section in `docs/`, in place. Dated
   "what I did" notes go in the commit message, not in a doc.
 - Verify with a build and the narrowest autotest that covers the change; say what you ran.
+- Before a refactor that touches gameplay logic, run `Tools/regress.sh`; it must pass unchanged before and
+  after (`docs/TESTING.md`, "Regression scenarios"). Update its golden file only for an intended change.

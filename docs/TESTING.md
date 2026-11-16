@@ -19,6 +19,99 @@ pkill -f "WhatWasOurs.uproject.*-game"
 - Screenshots: `Saved/AutoTest/<NN>_<name>.png`. The number prefix groups them by test.
 - Pick the narrowest switch that covers your change. The full run takes several minutes.
 
+## Regression scenarios
+
+`Tools/regress.sh` runs `-WWORegress`: a few hundred tiny scenarios ("one body shot with the rifle at a
+dummy 10 m away", "the poison spike next to an other-team player", "Focus with 5 hits banked"), each set
+up, run for a fixed number of ticks, recorded and torn down, and compared value for value with a golden
+file in git, `Tools/regress/golden.json`. The numbers are exactly the same every run, so a refactor that
+keeps behaviour passes with no differences at all; any difference is a change in behaviour.
+
+**Before a refactor that touches gameplay logic, run `Tools/regress.sh`: it must pass before and after.**
+
+```
+Tools/regress.sh                    # both modes (no rendering, then a small window); about 14 min
+Tools/regress.sh norender           # no rendering only: about 20 s in all (the scenarios take about 12 s)
+Tools/regress.sh render             # the small window only
+Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name contains "perk."
+```
+
+- Output: one `Regress <name>: key=value ...` line per scenario in the log (`Saved/Regress/run-<mode>.log`),
+  `Regress DIFF <name>.<key>: golden X, now Y` for each difference, then `Regress result: PASS` or
+  `FAIL (n)`; exit code 1 on failure. With both modes the script also fails if the two modes disagree on a
+  scenario that should give the same numbers in both (`Regress MODES DIFF ...`). Results:
+  `Saved/Regress/results.json` (and `results-<mode>.json`), sorted, one value per line.
+- Windows: `UnrealEditor.exe <proj> /Game/WWO/Maps/L_TestRange -game -nullrhi -nosound -WWORegress
+  -abslog=<log>` (no rendering), or with `-windowed -ResX=640 -ResY=360` instead of `-nullrhi`; the exit code
+  is the result. (The golden was recorded on the Mac; a Windows run is expected to match, but that has not
+  been checked.)
+- The saved loadout, settings and key bindings are never written; the run checks that `Loadout.sav` has
+  the same bytes at the end (`Regress: saved loadout untouched`).
+
+### What makes it exact
+
+- **A fixed step**: the runner sets `FApp::SetUseFixedTimeStep` with 1/60 s, so every frame is 1/60 s of
+  game time however long it takes, and runs as fast as the machine allows. Scenarios count ticks.
+- **Gameplay's own random numbers**: gameplay draws through `WWO::FRand` / `FRandRange` / `RandRange` and
+  `WWO::RandomInCone` (`WWOTypes.h`). In a normal run those are exactly `FMath`'s; under `-WWORegress`
+  they come from a stream seeded at the start of every scenario from its name, so a scenario's numbers
+  don't depend on what ran before it, on a filter, or on the order. The engine's shared generator is also
+  drawn on by effects, sounds and (when the game draws) other threads, which is why it can't be used.
+  Effects, flashes and sounds stay on `FMath` (they don't change any result).
+- **The same start**: the empty south end of `L_TestRange` (its dummies, enemies and allies are removed as
+  the run starts), the player reset (health, shield, gun, perks, kit charges, status, movement, view) and
+  put on the same spot, a fixed loadout (first flora, first weapon, no mods, grenade, abilities or traits,
+  Standard frame parts), the shipped settings (`Config/ShippedSettings.json` only), no real input (the
+  input mappings are cleared), the HUD hidden, `-nosound` (the sound player's duplicate filter uses real
+  time). Each scenario waits 45 ticks after its setup (the weapon swap, eased values at rest).
+- **Teardown**: everything of this game's classes that wasn't there when the run started is destroyed
+  (what the scenario spawned and what that left: grenades, pools, fog, walls, effects), tuned values put
+  back, the player reset again.
+- Enemies and allies are inert (their data asset's `AiEnabled` is 0 for the scenario) and bots are parked
+  with a fixed kit, except in the `enemy.<kind>.attacks` scenarios (AI on from tick 0).
+- **Values are written exactly** (`%.9g`, every float bit), with three stated exceptions, each found by
+  running the suite in reverse order (`-WWORegressReverse`): positions (`RecordVec`) to 0.01 cm and view
+  angles (`kick_pitch`, `kick_yaw`) to 0.0001 degrees, because the player's eye height carries a float
+  residue of about 6e-5 cm that depends on which scenarios ran before (the camera's relative height after
+  some earlier scenarios; not pinned down further); and status timers (`slow_left`, `blind_left`) to
+  0.1 s, because which of two actors ticks first in a frame is the engine's choice (the order of its tick
+  set) and can change with what ran before, which moves a status by one tick. Within one order every
+  value is bit-identical run to run.
+
+### Modes
+
+The suite runs without rendering (`-nullrhi`) and in a 640 x 360 window. Each scenario says whether its
+numbers hold in both modes (`EWWORegressModes::Same`, the default), legitimately differ (`PerMode`: golden
+keeps `<name>@norender` and `<name>@render`), or need rendering (`RenderOnly`: skipped, and logged as
+skipped, without it). Today 11 scenarios are `PerMode` and none `RenderOnly`; every other scenario gives
+identical numbers in both modes:
+
+- `view.reticle_and_marks.*`: without rendering the viewport has no size, so the low reticle's angle is 0
+  and nothing is marked (marking works in HUD pixels on the screen).
+- `grenade.<id>.throw`: the grenade leaves from a point fixed to the camera, which the reticle angle tilts,
+  so with no viewport it leaves about 5 cm lower and lands elsewhere.
+
+The window mode runs at the display's 60 Hz (about real time: the fixed step doesn't help when each frame
+waits for the screen), so it is the slow half. Never use `-fullscreen` (it hangs on the Mac).
+
+### Adding a scenario
+
+A scenario is an `FWWORegressScenario` (`Player/WWORegress.h`): a name, `bPvP`, `Setup` (spawn what it
+needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `EquipWeapon`, `EquipMod`,
+`EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
+`Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
+numbers; return true when done). Add it to the list in one of the family files
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`), generating from the catalogs
+where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
+friend, so a scenario can set a perk's private state (`G.HitStreak = 5`). See `RECIPES.md`.
+
+### Updating the golden file
+
+`Tools/regress.sh both -WWORegressUpdate` rewrites the golden entries this run produced (a filtered run only
+its own). **Only for an intended behaviour change** (a new scenario, a retune, a fix), in its own commit
+that says what changed and why, never to make a refactor pass: a refactor that needs a new golden changed
+behaviour. Run the suite again afterwards; it must pass.
+
 ## Switches
 
 ### Scripted tests
@@ -39,6 +132,7 @@ pkill -f "WhatWasOurs.uproject.*-game"
 | `-WWOAutoTestNet`, `-WWOAutoTestPvP` | Host and joiner: co-op, and team deathmatch with forged-shot checks | two copies |
 | `-WWOTester -WWOAutoTestTester` | The firing tester (`-WWOTesterGun=<id>`, `-WWOTesterFrames=N`, `-WWOTesterHip`, `-WWOTesterStrafe`, `-WWOTesterNoShot`, `-WWOTesterNoMods`) | `L_TestRange` |
 | `-WWOWaveTest` | All 8 waves with god mode; logs AI state and flags anyone stuck (about 4.5 min) | `L_Arena` |
+| `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<text>`, `-WWORegressUpdate`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |
 | `-WWOTestScoreboard` | Match-end scoreboard (`-WWOKillTarget=N`) | PvP |
 
 ### Bot matches and stress

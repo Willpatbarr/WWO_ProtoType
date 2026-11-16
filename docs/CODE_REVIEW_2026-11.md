@@ -86,6 +86,12 @@ Compare menu screenshots before and after each UI stage (`-WWOAutoTestMenus`, `-
 
 ## How to verify a stage
 
+Every row of Stage 4 (and any other change to gameplay logic) starts and ends with `Tools/regress.sh`
+green: the regression scenarios (`docs/TESTING.md`, "Regression scenarios") give exactly the same
+numbers before and after a pure refactor, so run it before touching the code and again after; a
+difference is a behaviour change. The golden file is updated only in its own commit, for an intended
+change, never to make a refactor pass.
+
 Build, then the narrowest autotests that cover it (`TESTING.md`), then the full `-WWOAutoTest`. For
 anything touching replication or host checks, also `-WWOAutoTestNet` and `-WWOAutoTestPvP` with two
 copies.
