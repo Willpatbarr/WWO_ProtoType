@@ -51,13 +51,6 @@ namespace
 {
 	constexpr float K = WWOUI::K;
 
-	FSlateChildSize WWOFillSize(float Value)
-	{
-		FSlateChildSize Size(ESlateSizeRule::Fill);
-		Size.Value = Value;
-		return Size;
-	}
-
 	FString SavePath() { return WWOConfig::SavedPath(TEXT("SavedSettings.json")); }
 
 	FWWOSettingRow Header(const FString& Text)
@@ -1219,16 +1212,7 @@ void UWWOSettingsMenu::Prepare()
 		UOverlay* Root = Cast<UOverlay>(WidgetTree->RootWidget);
 		TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
 		TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-		const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
-		auto Rule = [this](const FLinearColor& Color) -> UWidget*
-		{
-			UBorder* Line = WidgetTree->ConstructWidget<UBorder>();
-			Line->SetBrushColor(WWO::Lin(Color));
-			USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-			Box->SetHeightOverride(1.5f);
-			Box->AddChild(Line);
-			return Box;
-		};
+		const FLinearColor Accent = WWOUI::Accent(this);
 
 		// The whole window, in the character menu's style. A little see-through, so a slider's
 		// effect on the game behind (field of view, the HUD) can still be watched.
@@ -1249,7 +1233,7 @@ void UWWOSettingsMenu::Prepare()
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
 		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
-		NameSlot->SetSize(WWOFillSize(1.f));
+		NameSlot->SetSize(WWOUI::Fill(1.f));
 		NameSlot->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 		for (int32 i = 0; i < NumTopTabs; ++i)
@@ -1278,14 +1262,7 @@ void UWWOSettingsMenu::Prepare()
 		Header->AddChildToHorizontalBox(Tabs)->SetVerticalAlignment(VAlign_Center);
 		// Search: type part of a setting's name to list every match from every tab.
 		SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-		FEditableTextBoxStyle BoxStyle = SearchBox->WidgetStyle;
-		const FSlateBrush BoxBrush = WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f);
-		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
-		BoxStyle.SetBackgroundImageFocused(WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Accent, 1.5f));
-		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
-		BoxStyle.TextStyle.SetFont(WWOUI::Font(15.f)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
-		BoxStyle.SetPadding(FMargin(12.f * K, 6.f * K));
-		SearchBox->WidgetStyle = BoxStyle;
+		WWOUI::StyleTextBox(SearchBox, 15.f, FMargin(12.f, 6.f), Accent);
 		SearchBox->SetHintText(FText::FromString(TEXT("SEARCH SETTINGS")));
 		SearchBox->OnTextChanged.AddDynamic(this, &UWWOSettingsMenu::OnSearchChanged);
 		SearchBox->OnTextCommitted.AddDynamic(this, &UWWOSettingsMenu::OnSearchCommitted);
@@ -1295,11 +1272,11 @@ void UWWOSettingsMenu::Prepare()
 		UHorizontalBox* RightSide = WidgetTree->ConstructWidget<UHorizontalBox>();
 		RightSide->AddChildToHorizontalBox(SearchSize)->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBoxSlot* RightSlot = Header->AddChildToHorizontalBox(RightSide);
-		RightSlot->SetSize(WWOFillSize(1.f));
+		RightSlot->SetSize(WWOUI::Fill(1.f));
 		RightSlot->SetHorizontalAlignment(HAlign_Right);
 		RightSlot->SetVerticalAlignment(VAlign_Center);
 		Column->AddChildToVerticalBox(Header);
-		Column->AddChildToVerticalBox(Rule(FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+		Column->AddChildToVerticalBox(WWOUI::Rule(WidgetTree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 
 		UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Column->AddChildToVerticalBox(Body)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -1512,7 +1489,7 @@ void UWWOSettingsMenu::Prepare()
 		Panel->SetPadding(FMargin(8.f * K));
 		Panel->SetContent(GlobalSwitcher);
 		Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Body->AddChildToHorizontalBox(Main)->SetSize(WWOFillSize(1.f));
+		Body->AddChildToHorizontalBox(Main)->SetSize(WWOUI::Fill(1.f));
 		// The first page there is (in someone else's game the first of the ones left).
 		int32 First = 0;
 		for (int32 Tab = NumTopTabs - 1; Tab >= 0; --Tab) if (LastPage[Tab] != INDEX_NONE) First = LastPage[Tab];
@@ -1557,7 +1534,7 @@ void UWWOSettingsMenu::BuildBinds()
 	if (!BindsList || !PC) return;
 	BindsList->ClearChildren();
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
+	const FLinearColor Accent = WWOUI::Accent(this);
 	TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
 	TWeakObjectPtr<AWWOPlayerController> WeakPC = PC;
 	const float KeyWidth = 300.f;
@@ -1565,7 +1542,7 @@ void UWWOSettingsMenu::BuildBinds()
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBoxSlot* NameSlot = Row->AddChildToHorizontalBox(Name);
-		NameSlot->SetSize(WWOFillSize(1.f));
+		NameSlot->SetSize(WWOUI::Fill(1.f));
 		NameSlot->SetVerticalAlignment(VAlign_Center);
 		for (UWidget* W : { Kbm, Pad })
 		{
@@ -1624,7 +1601,7 @@ void UWWOSettingsMenu::SelectPage(int32 Index)
 	if (SideSwitcher) SideSwitcher->SetActiveWidgetIndex(TopTab);
 	if (PageTitle) PageTitle->SetText(FText::FromString(Pages[Index].Title.ToUpper()));
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	const FLinearColor Accent = L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : FLinearColor(0.72f, 0.5f, 1.f);
+	const FLinearColor Accent = WWOUI::Accent(this);
 	for (int32 i = 0; i < TopLabels.Num(); ++i)
 	{
 		TopLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == TopTab ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));

@@ -71,7 +71,6 @@ private:
 	bool NeedsTag() const; // hosting or joining with no gamer tag entered yet
 	UWidget* BuildTitle();
 	UWidget* BuildSetup();
-	FLinearColor Accent() const;
 	// A bordered box to click: a title and a line under it; bOn draws it as the picked one.
 	UButton* Choice(const FString& Title, const FString& Sub, bool bOn, TFunction<void()> Fn, float TitlePx = 19.f, const FString& Tag = FString());
 	UButton* Boxed(UWidget* Inside, const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, TFunction<void()> Fn);
