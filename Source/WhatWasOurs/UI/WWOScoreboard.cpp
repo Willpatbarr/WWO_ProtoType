@@ -27,11 +27,6 @@
 namespace
 {
 	constexpr float K = WWOUI::K;
-	const FLinearColor PageColor(0.1f, 0.11f, 0.13f, 0.94f);
-	const FLinearColor CardColor(0.115f, 0.125f, 0.148f);
-	const FLinearColor CardEdge(1.f, 1.f, 1.f, 0.45f);
-	const FLinearColor Dim(1.f, 1.f, 1.f, 0.6f);
-	const FLinearColor Faint(1.f, 1.f, 1.f, 0.35f);
 }
 
 void UWWOScoreboard::NativeOnInitialized()
@@ -135,17 +130,17 @@ UButton* UWWOScoreboard::Button(const FString& Title, const FString& Sub, bool b
 {
 	UWidgetTree* Tree = WidgetTree;
 	UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-	Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Title, 18.f, bEnabled ? FLinearColor::White : Faint, 220))->SetHorizontalAlignment(HAlign_Center);
-	if (!Sub.IsEmpty()) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Sub, 10.f, bEnabled ? Dim : Faint, 90))->SetHorizontalAlignment(HAlign_Center);
+	Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Title, 18.f, bEnabled ? FLinearColor::White : WWOUI::Fainter, 220))->SetHorizontalAlignment(HAlign_Center);
+	if (!Sub.IsEmpty()) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Sub, 10.f, bEnabled ? WWOUI::Dim : WWOUI::Fainter, 90))->SetHorizontalAlignment(HAlign_Center);
 	UButton* B = Tree->ConstructWidget<UButton>();
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	B->IsFocusable = false; // the cursor drives it, not focus
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	const FLinearColor Edge = bEnabled ? CardEdge : FLinearColor(1, 1, 1, 0.15f);
+	const FLinearColor Edge = bEnabled ? WWOUI::CardEdge : FLinearColor(1, 1, 1, 0.15f);
 	FButtonStyle Style;
-	Style.SetNormal(WWOUI::RoundBrush(CardColor, 5.f, Edge, 1.5f));
-	Style.SetHovered(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.08f) : CardColor, 5.f, bEnabled ? FLinearColor(1, 1, 1, 0.9f) : Edge, 1.5f));
-	Style.SetPressed(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(CardColor, 0.14f) : CardColor, 5.f, bEnabled ? FLinearColor::White : Edge, 1.5f));
+	Style.SetNormal(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, Edge, 1.5f));
+	Style.SetHovered(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(WWOUI::CardColor, 0.08f) : WWOUI::CardColor, 5.f, bEnabled ? WWOUI::HoverEdge : Edge, 1.5f));
+	Style.SetPressed(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(WWOUI::CardColor, 0.14f) : WWOUI::CardColor, 5.f, bEnabled ? FLinearColor::White : Edge, 1.5f));
 	Style.SetNormalPadding(FMargin(0));
 	Style.SetPressedPadding(FMargin(0));
 	B->SetStyle(Style);
@@ -208,17 +203,17 @@ UWidget* UWWOScoreboard::TeamTable(int32 Team) const
 	Head->AddChildToHorizontalBox(WWOUI::Text(WidgetTree, FString::FromInt(GS && GS->TeamScores.IsValidIndex(Team) ? GS->TeamScores[Team] : 0), 30.f, TeamColor))->SetVerticalAlignment(VAlign_Center);
 	Column->AddChildToVerticalBox(Head);
 	Column->AddChildToVerticalBox(WWOUI::Rule(Tree, WWO::WithAlpha(TeamColor, 0.8f), 2.f))->SetPadding(FMargin(0, 8.f * K, 0, 10.f * K));
-	Column->AddChildToVerticalBox(Row(WWOUI::Spaced(WidgetTree, TEXT("Player"), 11.f, Dim, 160), WWOUI::Spaced(WidgetTree, TEXT("Kills"), 11.f, Dim, 160), WWOUI::Spaced(WidgetTree, TEXT("Precision"), 11.f, Dim, 160)))
+	Column->AddChildToVerticalBox(Row(WWOUI::Spaced(WidgetTree, TEXT("Player"), 11.f, WWOUI::Dim, 160), WWOUI::Spaced(WidgetTree, TEXT("Kills"), 11.f, WWOUI::Dim, 160), WWOUI::Spaced(WidgetTree, TEXT("Precision"), 11.f, WWOUI::Dim, 160)))
 		->SetPadding(FMargin(0, 0, 0, 6.f * K));
 	for (const AWWOPlayerState* P : Rows)
 	{
 		const bool bMe = P == Me;
 		const FLinearColor Ink = bMe ? FLinearColor::White : FLinearColor(1.f, 1.f, 1.f, 0.82f);
 		Column->AddChildToVerticalBox(Row(WWOUI::Text(WidgetTree, P->GetPlayerName() + (bMe ? TEXT("  (you)") : TEXT("")), 17.f, Ink),
-			WWOUI::Text(WidgetTree, FString::FromInt(P->Kills), 17.f, Ink), WWOUI::Text(WidgetTree, FString::FromInt(P->PrecisionKills), 17.f, P->PrecisionKills > 0 ? Ink : Faint)))
+			WWOUI::Text(WidgetTree, FString::FromInt(P->Kills), 17.f, Ink), WWOUI::Text(WidgetTree, FString::FromInt(P->PrecisionKills), 17.f, P->PrecisionKills > 0 ? Ink : WWOUI::Fainter)))
 			->SetPadding(FMargin(0, 5.f * K));
 	}
-	if (Rows.Num() == 0) Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, TEXT("nobody"), 15.f, Faint));
+	if (Rows.Num() == 0) Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, TEXT("nobody"), 15.f, WWOUI::Fainter));
 	return Column;
 }
 
@@ -232,7 +227,7 @@ void UWWOScoreboard::Rebuild()
 	UWidgetTree* Tree = WidgetTree;
 	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
 	UBorder* Page = Tree->ConstructWidget<UBorder>();
-	Page->SetBrushColor(WWO::Lin(PageColor));
+	Page->SetBrushColor(WWO::Lin(WWO::WithAlpha(WWOUI::PageColor, 0.94f)));
 	UOverlaySlot* PageSlot = Root->AddChildToOverlay(Page);
 	PageSlot->SetHorizontalAlignment(HAlign_Fill);
 	PageSlot->SetVerticalAlignment(VAlign_Fill);
@@ -241,10 +236,10 @@ void UWWOScoreboard::Rebuild()
 	const int32 Winner = GS ? (int32)GS->MatchWinner : -1;
 	const int32 Blue = GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : 0;
 	const int32 Orange = GS && GS->TeamScores.Num() > 1 ? GS->TeamScores[1] : 0;
-	Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Match over"), 13.f, Dim, 300))->SetHorizontalAlignment(HAlign_Center);
+	Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Match over"), 13.f, WWOUI::Dim, 300))->SetHorizontalAlignment(HAlign_Center);
 	Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Winner < 0 ? FString(TEXT("Draw")) : AWWOPlayerState::TeamName(Winner) + TEXT(" wins"), 44.f,
 		Winner < 0 ? FLinearColor(0.9f, 0.9f, 0.9f) : AWWOPlayerState::TeamColor(Winner), 320))->SetHorizontalAlignment(HAlign_Center);
-	Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, FString::Printf(TEXT("%d  –  %d"), Blue, Orange), 22.f, Dim))->SetHorizontalAlignment(HAlign_Center);
+	Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, FString::Printf(TEXT("%d  –  %d"), Blue, Orange), 22.f, WWOUI::Dim))->SetHorizontalAlignment(HAlign_Center);
 
 	if (!bMaps)
 	{
@@ -261,12 +256,12 @@ void UWWOScoreboard::Rebuild()
 		Buttons->AddChildToHorizontalBox(WWOUI::Wide(Tree, Button(TEXT("Change map"), TEXT("Pick another map"), bHost, [Weak] { if (Weak.IsValid()) Weak->ShowMaps(); }), 250.f))->SetPadding(FMargin(18.f * K, 0));
 		Buttons->AddChildToHorizontalBox(WWOUI::Wide(Tree, Button(TEXT("Quit"), TEXT("Back to the title"), true, [Weak] { if (Weak.IsValid()) Weak->Quit(); }), 250.f));
 		Column->AddChildToVerticalBox(Buttons)->SetHorizontalAlignment(HAlign_Center);
-		if (!bHost) Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("The host picks the next match"), 11.f, Dim, 160))->SetPadding(FMargin(0, 14.f * K, 0, 0));
+		if (!bHost) Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("The host picks the next match"), 11.f, WWOUI::Dim, 160))->SetPadding(FMargin(0, 14.f * K, 0, 0));
 	}
 	else
 	{
 		// The PvP maps; the one just played is marked.
-		Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Change map"), 13.f, Dim, 260))->SetPadding(FMargin(0, 34.f * K, 0, 14.f * K));
+		Column->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Change map"), 13.f, WWOUI::Dim, 260))->SetPadding(FMargin(0, 34.f * K, 0, 14.f * K));
 		const FName Now(*UGameplayStatics::GetCurrentLevelName(this));
 		TWeakObjectPtr<UWWOScoreboard> Weak(this);
 		for (const FWWOMapInfo& Info : UWWONetSubsystem::Maps())

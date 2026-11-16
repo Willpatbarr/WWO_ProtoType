@@ -32,9 +32,6 @@
 namespace
 {
 	constexpr float K = WWOUI::K;
-	const FLinearColor PageColor(0.1f, 0.11f, 0.13f);
-	const FLinearColor CardColor(0.2f, 0.21f, 0.25f);
-	const FLinearColor Dim(1.f, 1.f, 1.f, 0.6f);
 	constexpr float StrafeLeg = 0.9f;   // s each way
 	constexpr float AimLead = 0.3f;     // s aimed in (after the aim-in itself) before the first shot
 	constexpr float FireFor = 1.6f;     // s of firing
@@ -284,12 +281,12 @@ void UWWOFiringTester::Build()
 	};
 
 	// Around the window: everything that isn't the player's view is page.
-	Place(Canvas, Fill(PageColor), PaneW, 0.f, 1.f, WinY);
-	Place(Canvas, Fill(PageColor), PaneW, WinY, WinX, WinY + WinH);
-	Place(Canvas, Fill(PageColor), WinX + WinW, WinY, 1.f, WinY + WinH);
+	Place(Canvas, Fill(WWOUI::PageColor), PaneW, 0.f, 1.f, WinY);
+	Place(Canvas, Fill(WWOUI::PageColor), PaneW, WinY, WinX, WinY + WinH);
+	Place(Canvas, Fill(WWOUI::PageColor), WinX + WinW, WinY, 1.f, WinY + WinH);
 
 	// Left: the pane.
-	UBorder* Pane = Fill(PageColor);
+	UBorder* Pane = Fill(WWOUI::PageColor);
 	Pane->SetPadding(FMargin(22.f * K, 16.f * K, 14.f * K, 16.f * K));
 	UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>();
 	Pane->SetContent(Column);
@@ -297,16 +294,16 @@ void UWWOFiringTester::Build()
 	auto Picker = [&](const TCHAR* What, TObjectPtr<UTextBlock>& Label, TFunction<void(int32)> Step)
 	{
 		UHorizontalBox* Line = Tree->ConstructWidget<UHorizontalBox>();
-		Line->AddChildToHorizontalBox(MakeButton(TEXT("<"), [Step] { Step(-1); }, 20.f, CardColor, FMargin(12.f, 4.f)));
+		Line->AddChildToHorizontalBox(MakeButton(TEXT("<"), [Step] { Step(-1); }, 20.f, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
 		UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-		Words->AddChildToVerticalBox(WWOUI::Text(WidgetTree, What, 13.f, Dim));
+		Words->AddChildToVerticalBox(WWOUI::Text(WidgetTree, What, 13.f, WWOUI::Dim));
 		Label = WWOUI::Text(WidgetTree, TEXT("-"), 20.f);
 		Words->AddChildToVerticalBox(Label);
 		UHorizontalBoxSlot* WordsSlot = Line->AddChildToHorizontalBox(Words);
 		WordsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		WordsSlot->SetPadding(FMargin(12.f * K, 0.f));
 		WordsSlot->SetVerticalAlignment(VAlign_Center);
-		Line->AddChildToHorizontalBox(MakeButton(TEXT(">"), [Step] { Step(1); }, 20.f, CardColor, FMargin(12.f, 4.f)));
+		Line->AddChildToHorizontalBox(MakeButton(TEXT(">"), [Step] { Step(1); }, 20.f, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
 		Column->AddChildToVerticalBox(Line)->SetPadding(FMargin(0.f, 10.f * K, 8.f * K, 0.f));
 	};
 	Picker(TEXT("WEAPON"), WeaponLabel, [Weak](int32 Step) { if (Weak.IsValid()) Weak->StepWeapon(Step); });
@@ -318,7 +315,7 @@ void UWWOFiringTester::Build()
 	UHorizontalBox* Foot = Tree->ConstructWidget<UHorizontalBox>();
 	auto FootButton = [&](const TCHAR* Text, TFunction<void()> Fn)
 	{
-		UHorizontalBoxSlot* Slot = Foot->AddChildToHorizontalBox(MakeButton(Text, MoveTemp(Fn), 15.f, CardColor, FMargin(8.f, 8.f)));
+		UHorizontalBoxSlot* Slot = Foot->AddChildToHorizontalBox(MakeButton(Text, MoveTemp(Fn), 15.f, WWOUI::ButtonColor, FMargin(8.f, 8.f)));
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Slot->SetPadding(FMargin(0.f, 0.f, 6.f * K, 0.f));
 	};
@@ -330,7 +327,7 @@ void UWWOFiringTester::Build()
 	Place(Canvas, Pane, 0.f, 0.f, PaneW, 1.f);
 
 	// Under the window: what the player does.
-	UBorder* Strip = Fill(PageColor);
+	UBorder* Strip = Fill(WWOUI::PageColor);
 	Strip->SetPadding(FMargin(22.f * K, 14.f * K, 22.f * K, 14.f * K));
 	UVerticalBox* StripColumn = Tree->ConstructWidget<UVerticalBox>();
 	Strip->SetContent(StripColumn);
@@ -344,13 +341,13 @@ void UWWOFiringTester::Build()
 		Slot->SetPadding(FMargin(0.f, 0.f, 10.f * K, 0.f));
 	};
 	Action(TEXT("TAKE CONTROL"), [Weak] { if (Weak.IsValid()) Weak->SetControl(true); }, FLinearColor(0.2f, 0.34f, 0.5f), &ControlLabel);
-	Action(TEXT("ADS"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::Ads); }, CardColor);
-	Action(TEXT("ADS + FIRE"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::AdsFire); }, CardColor);
-	Action(TEXT("HIP FIRE"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::HipFire); }, CardColor);
-	Action(TEXT("STRAFE"), [Weak] { if (Weak.IsValid()) Weak->SetStrafe(!Weak->IsStrafing()); }, CardColor, &StrafeLabel);
-	Action(TEXT("RESET"), [Weak] { if (Weak.IsValid()) { Weak->StopScript(); Weak->ResetPlayer(); } }, CardColor);
+	Action(TEXT("ADS"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::Ads); }, WWOUI::ButtonColor);
+	Action(TEXT("ADS + FIRE"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::AdsFire); }, WWOUI::ButtonColor);
+	Action(TEXT("HIP FIRE"), [Weak] { if (Weak.IsValid()) Weak->Play(EAct::HipFire); }, WWOUI::ButtonColor);
+	Action(TEXT("STRAFE"), [Weak] { if (Weak.IsValid()) Weak->SetStrafe(!Weak->IsStrafing()); }, WWOUI::ButtonColor, &StrafeLabel);
+	Action(TEXT("RESET"), [Weak] { if (Weak.IsValid()) { Weak->StopScript(); Weak->ResetPlayer(); } }, WWOUI::ButtonColor);
 	StripColumn->AddChildToVerticalBox(Buttons);
-	HintLabel = WWOUI::Text(WidgetTree, TEXT("Take control to play it yourself, or use the buttons to watch one action"), 15.f, Dim);
+	HintLabel = WWOUI::Text(WidgetTree, TEXT("Take control to play it yourself, or use the buttons to watch one action"), 15.f, WWOUI::Dim);
 	StripColumn->AddChildToVerticalBox(HintLabel)->SetPadding(FMargin(0.f, 12.f * K, 0.f, 0.f));
 	Place(Canvas, Strip, PaneW, WinY + WinH, 1.f, 1.f);
 }
@@ -372,7 +369,7 @@ void UWWOFiringTester::BuildRows()
 		{
 			UWidget* Row = S->MakeRowFor(GunKey, Id);
 			if (!Row) continue;
-			if (!bHeader) { Add(WWOUI::Text(WidgetTree, FString(Group.Title).ToUpper(), 14.f, Dim), 16.f); bHeader = true; }
+			if (!bHeader) { Add(WWOUI::Text(WidgetTree, FString(Group.Title).ToUpper(), 14.f, WWOUI::Dim), 16.f); bHeader = true; }
 			Add(Row, 8.f);
 		}
 	}
@@ -381,7 +378,7 @@ void UWWOFiringTester::BuildRows()
 	{
 		UWidget* Row = S->MakeRowFor(TEXT("global/Camera"), Id);
 		if (!Row) continue;
-		if (!bHeader) { Add(WWOUI::Text(WidgetTree, TEXT("EVERY GUN"), 14.f, Dim), 16.f); bHeader = true; }
+		if (!bHeader) { Add(WWOUI::Text(WidgetTree, TEXT("EVERY GUN"), 14.f, WWOUI::Dim), 16.f); bHeader = true; }
 		Add(Row, 8.f);
 	}
 }

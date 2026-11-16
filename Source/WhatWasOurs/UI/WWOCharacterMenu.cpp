@@ -46,9 +46,6 @@
 namespace
 {
 	constexpr float K = WWOUI::K;
-	const FLinearColor PageColor(0.1f, 0.11f, 0.13f); // what the preview's backdrop comes out as
-	const FLinearColor CardColor(0.115f, 0.125f, 0.148f);
-	const FLinearColor CardEdge(1.f, 1.f, 1.f, 0.55f);
 	const FLinearColor TraitFill(0.16f, 0.22f, 0.34f), TraitEdge(0.55f, 0.7f, 1.f);       // an equipped trait, as on the Flora tab
 	const FLinearColor TraitOffFill(0.2f, 0.21f, 0.26f), TraitOffEdge(0.4f, 0.42f, 0.5f); // one that isn't
 	const TCHAR* const TabNames[] = { TEXT("LOADOUT"), TEXT("FLORA"), TEXT("WEAPON"), TEXT("SHELL") }; // the shell is the frame parts
@@ -242,7 +239,7 @@ void UWWOCharacterMenu::Open()
 		TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 		// The whole window, in the preview backdrop's shade so the character has no visible frame.
 		UBorder* Page = Tree->ConstructWidget<UBorder>();
-		Page->SetBrushColor(WWO::Lin(PageColor));
+		Page->SetBrushColor(WWO::Lin(WWOUI::PageColor));
 		Page->SetPadding(FMargin(40.f * K, 12.f * K, 40.f * K, 28.f * K));
 		UOverlaySlot* PageSlot = Root->AddChildToOverlay(Page);
 		PageSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -253,7 +250,7 @@ void UWWOCharacterMenu::Open()
 		// Header: the game's name, the tabs, the keys.
 		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0)))->SetVerticalAlignment(VAlign_Center);
+		Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, WWOUI::DefaultAccent, 0)))->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
@@ -265,7 +262,7 @@ void UWWOCharacterMenu::Open()
 		{
 			if (i > 0)
 			{
-				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
+				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, WWOUI::TabBar, 0));
 				Bar->SetVerticalAlignment(VAlign_Center);
 				Bar->SetPadding(FMargin(26.f * K, 0));
 			}
@@ -284,13 +281,13 @@ void UWWOCharacterMenu::Open()
 		}
 		UHorizontalBoxSlot* TabsSlot = Header->AddChildToHorizontalBox(Tabs);
 		TabsSlot->SetVerticalAlignment(VAlign_Center);
-		UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Q / E  TABS   ·   A / D  OR DRAG  TURN   ·   ESC  BACK"), 11.f, FLinearColor(1, 1, 1, 0.4f), 120);
+		UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Q / E  TABS   ·   A / D  OR DRAG  TURN   ·   ESC  BACK"), 11.f, WWOUI::Faint, 120);
 		Keys->SetJustification(ETextJustify::Right);
 		UHorizontalBoxSlot* KeysSlot = Header->AddChildToHorizontalBox(Keys);
 		KeysSlot->SetSize(WWOUI::Fill(1.f));
 		KeysSlot->SetVerticalAlignment(VAlign_Center);
 		Column->AddChildToVerticalBox(Header);
-		Column->AddChildToVerticalBox(WWOUI::Rule(Tree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+		Column->AddChildToVerticalBox(WWOUI::Rule(Tree, WWOUI::RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 
 		// The character, shown on every tab (one render target, two places it can sit).
 		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
@@ -321,7 +318,7 @@ void UWWOCharacterMenu::Open()
 		// The editors: the open tab's rows beside the character.
 		UHorizontalBox* Editor = Tree->ConstructWidget<UHorizontalBox>();
 		UBorder* ExpandedPanel = Tree->ConstructWidget<UBorder>();
-		ExpandedPanel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
+		ExpandedPanel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, 6.f, WWOUI::PanelEdge, 1.f));
 		ExpandedPanel->SetPadding(FMargin(28.f * K));
 		ExpandedTitle = WWOUI::Text(WidgetTree, TEXT(""), 40.f); // the tabs say where you are; kept for the code that sets it
 		ExpandedScroll = Tree->ConstructWidget<UScrollBox>();
@@ -502,7 +499,7 @@ void UWWOCharacterMenu::UpdateTabs()
 	const int32 Now = TabIndex();
 	for (int32 i = 0; i < TabLabels.Num(); ++i)
 	{
-		TabLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Now ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));
+		TabLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Now ? FLinearColor::White : WWOUI::TabDim)));
 		TabLines[i]->SetBrushColor(WWO::Lin(i == Now ? Accent : FLinearColor(0, 0, 0, 0)));
 	}
 }
@@ -519,7 +516,7 @@ void UWWOCharacterMenu::BuildOverview()
 	Overview->ClearChildren();
 	const UWWOFloraData* Flora = L->GetFlora();
 	const FLinearColor Accent = WWOUI::Accent(this);
-	const FLinearColor Dim(1, 1, 1, 0.62f);
+	const FLinearColor Dim = WWOUI::DimBright;
 	auto Open = [WeakThis](const TCHAR* Tile) { return [WeakThis, Tile] { if (WeakThis.IsValid()) WeakThis->Expand(Tile); }; };
 	// An icon's stand-in: the item's initials in a bordered square.
 	auto Icon = [&](const FString& Name, float Side, float FontPx, const FLinearColor& Edge) -> UWidget*
@@ -527,7 +524,7 @@ void UWWOCharacterMenu::BuildOverview()
 		UTextBlock* Text = WWOUI::Spaced(WidgetTree, Initials(Name), FontPx, Edge, 40);
 		Text->SetJustification(ETextJustify::Center);
 		UBorder* Box = Tree->ConstructWidget<UBorder>();
-		Box->SetBrush(WWOUI::RoundBrush(CardColor, 5.f, Edge, 1.5f));
+		Box->SetBrush(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, Edge, 1.5f));
 		Box->SetHorizontalAlignment(HAlign_Center);
 		Box->SetVerticalAlignment(VAlign_Center);
 		Box->SetContent(Text);
@@ -576,12 +573,12 @@ void UWWOCharacterMenu::BuildOverview()
 	}
 	PreviewPart = nullptr;
 	UpdateStatPreview(nullptr, false);
-	Left->AddChildToVerticalBox(WWOUI::Rule(Tree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(-24.f * K, 38.f * K, 0, 0));
+	Left->AddChildToVerticalBox(WWOUI::Rule(Tree, WWOUI::RuleColor))->SetPadding(FMargin(-24.f * K, 38.f * K, 0, 0));
 	UHorizontalBox* BuildTitle = Tree->ConstructWidget<UHorizontalBox>();
 	BuildTitle->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("//"), 20.f, Accent, 0))->SetVerticalAlignment(VAlign_Center);
 	BuildTitle->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("BUILD"), 18.f, FLinearColor::White, 380))->SetPadding(FMargin(16.f * K, 0, 0, 0));
 	Left->AddChildToVerticalBox(BuildTitle)->SetPadding(FMargin(-18.f * K, 16.f * K, 0, 16.f * K));
-	Left->AddChildToVerticalBox(WWOUI::Rule(Tree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(-24.f * K, 0, 0, 12.f * K));
+	Left->AddChildToVerticalBox(WWOUI::Rule(Tree, WWOUI::RuleColor))->SetPadding(FMargin(-24.f * K, 0, 0, 12.f * K));
 	// Notes on the build: what it does to things, and what it does for you, each with where it
 	// comes from. (What each item is belongs to the Flora tab.)
 	UScrollBox* List = Tree->ConstructWidget<UScrollBox>();
@@ -718,7 +715,7 @@ void UWWOCharacterMenu::BuildOverview()
 		In->AddChildToVerticalBox(Label);
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
 		Size->SetWidthOverride(172.f * K);
-		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), CardColor, Accent, 2.f, FMargin(8.f, 10.f));
+		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), WWOUI::CardColor, Accent, 2.f, FMargin(8.f, 10.f));
 		HoverTiles.Add({ FloraCard, FString(TEXT("flora")) });
 		Size->AddChild(FloraCard);
 		Top->AddChildToHorizontalBox(Size);
@@ -732,7 +729,7 @@ void UWWOCharacterMenu::BuildOverview()
 		UVerticalBoxSlot* TextSlot = In->AddChildToVerticalBox(Text);
 		TextSlot->SetSize(WWOUI::Fill(1.f));
 		TextSlot->SetVerticalAlignment(VAlign_Center);
-		UWidget* Box = Card(In, Open(TEXT("Flora")), Name.IsEmpty() ? CardColor : Fill, Name.IsEmpty() ? FLinearColor(1, 1, 1, 0.2f) : Edge, Name.IsEmpty() ? 1.5f : 2.f, FMargin(2.f));
+		UWidget* Box = Card(In, Open(TEXT("Flora")), Name.IsEmpty() ? WWOUI::CardColor : Fill, Name.IsEmpty() ? FLinearColor(1, 1, 1, 0.2f) : Edge, Name.IsEmpty() ? 1.5f : 2.f, FMargin(2.f));
 		HoverTiles.Add({ Box, PickerName }); // hovering it offers the other choices (UpdateHoverPicker)
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Box);
 		S->SetSize(WWOUI::Fill(1.f));
@@ -742,12 +739,12 @@ void UWWOCharacterMenu::BuildOverview()
 	// The same colors as on the Flora tab: each item's own, darkened, inside an edge of it; traits blue.
 	{
 		const UWWOGrenadeData* G = L->GetGrenade();
-		Tile(Kit, G ? G->DisplayName : FString(), G ? WWO::Darkened(G->Color, 0.6f) : CardColor, G ? G->Color : CardEdge, TEXT("grenade"));
+		Tile(Kit, G ? G->DisplayName : FString(), G ? WWO::Darkened(G->Color, 0.6f) : WWOUI::CardColor, G ? G->Color : WWOUI::CardEdgeStrong, TEXT("grenade"));
 	}
 	for (int32 i = 0; i < 2; ++i)
 	{
 		const UWWOAbilityData* A = L->GetAbility(i);
-		Tile(Kit, A ? A->DisplayName : FString(), A ? WWO::Darkened(A->Color, 0.6f) : CardColor, A ? A->Color : CardEdge, FString::Printf(TEXT("ability%d"), i));
+		Tile(Kit, A ? A->DisplayName : FString(), A ? WWO::Darkened(A->Color, 0.6f) : WWOUI::CardColor, A ? A->Color : WWOUI::CardEdgeStrong, FString::Printf(TEXT("ability%d"), i));
 	}
 	UHorizontalBox* TraitRow = Tree->ConstructWidget<UHorizontalBox>();
 	const TArray<UWWOTraitData*> Traits = L->EquippedTraits();
@@ -794,7 +791,7 @@ void UWWOCharacterMenu::BuildOverview()
 		UHorizontalBoxSlot* WordsSlot = Row->AddChildToHorizontalBox(Words);
 		WordsSlot->SetPadding(FMargin(18.f * K, 0, 0, 0));
 		WordsSlot->SetVerticalAlignment(VAlign_Center);
-		UWidget* Bar = Card(Row, Open(TEXT("Weapons")), CardColor, CardEdge, 1.5f, FMargin(16.f, 10.f));
+		UWidget* Bar = Card(Row, Open(TEXT("Weapons")), WWOUI::CardColor, WWOUI::CardEdgeStrong, 1.5f, FMargin(16.f, 10.f));
 		HoverTiles.Add({ Bar, FString::Printf(TEXT("weapon%d"), WeaponSlot) });
 		Right->AddChildToVerticalBox(Bar)->SetPadding(FMargin(0, 26.f * K, 0, 0));
 	}
@@ -816,7 +813,7 @@ void UWWOCharacterMenu::BuildOverview()
 		UOverlaySlot* WordsSlot = In->AddChildToOverlay(Words);
 		WordsSlot->SetHorizontalAlignment(HAlign_Fill);
 		WordsSlot->SetVerticalAlignment(VAlign_Bottom);
-		UWidget* PartCard = Card(In, Open(TEXT("Frame Parts")), CardColor, CardEdge, 1.5f, FMargin(18.f, 12.f));
+		UWidget* PartCard = Card(In, Open(TEXT("Frame Parts")), WWOUI::CardColor, WWOUI::CardEdgeStrong, 1.5f, FMargin(18.f, 12.f));
 		HoverTiles.Add({ PartCard, FString(TEXT("part_")) + PartSlots[i] });
 		UUniformGridSlot* Cell = Parts->AddChildToUniformGrid(PartCard, i / 2, i % 2);
 		Cell->SetHorizontalAlignment(HAlign_Fill);
@@ -842,7 +839,7 @@ void UWWOCharacterMenu::UpdateStatPreview(const UWWOFramePartData* Part, bool bE
 	// No points is a quarter of the bar; eight fills it (two a part).
 	auto Fill = [](float Points) { return FMath::Clamp(0.25f + Points * 0.75f / 8.f, 0.04f, 1.f); };
 	static const FLinearColor Green(0.35f, 0.9f, 0.4f), Red(1.f, 0.25f, 0.2f), Yellow(1.f, 0.82f, 0.2f), FaintRed(1.f, 0.25f, 0.2f, 0.35f);
-	const FLinearColor Dim(1, 1, 1, 0.62f);
+	const FLinearColor Dim = WWOUI::DimBright;
 	for (const FStatBar& Bar : StatBars4)
 	{
 		if (!Bar.Have || !Bar.Shift || !Bar.Rest) continue;
@@ -1054,7 +1051,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 			for (const UWWOWeaponData* W : L->Weapons) if (W->Id == Configs[i].Weapon) Gun = W;
 			const FString GunName = Gun ? Gun->DisplayName : Configs[i].Weapon.ToString();
 			Option(GunName, Configs[i].Name, GunName + TEXT(" · ") + Configs[i].Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
-				L->GetSlotConfig(WeaponSlot) == i, CardColor, L->GetSlotConfig(WeaponSlot) == i ? FLinearColor::White : CardEdge, [WL, WeaponSlot, i] { if (WL.IsValid()) WL->SetSlotConfig(WeaponSlot, i); });
+				L->GetSlotConfig(WeaponSlot) == i, WWOUI::CardColor, L->GetSlotConfig(WeaponSlot) == i ? FLinearColor::White : WWOUI::CardEdgeStrong, [WL, WeaponSlot, i] { if (WL.IsValid()) WL->SetSlotConfig(WeaponSlot, i); });
 		}
 		if (Configs.Num() == 0)
 		{
@@ -1071,7 +1068,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		{
 			if (!Part->bUnlocked) continue;
 			const bool bOn = Part == L->GetFramePart(PartSlot);
-			UWidget* Box = Option(Part->DisplayName, Part->Summary().Replace(TEXT("\n"), TEXT("  ")), Part->DisplayName, bOn, CardColor, bOn ? FLinearColor::White : CardEdge,
+			UWidget* Box = Option(Part->DisplayName, Part->Summary().Replace(TEXT("\n"), TEXT("  ")), Part->DisplayName, bOn, WWOUI::CardColor, bOn ? FLinearColor::White : WWOUI::CardEdgeStrong,
 				[WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); });
 			HoverParts.Add({ Box, Part });
 		}
@@ -1274,7 +1271,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 	for (int32 i = 0; i < UWWOLoadoutSubsystem::TraitSlots; ++i)
 	{
 		const bool bHas = i < Equipped.Num();
-		Slots->AddChild(Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(170, 90), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.25f), 16.f,
+		Slots->AddChild(Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(170, 90), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : WWOUI::ButtonColor, 16.f,
 			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("traits")); }, bHas ? &TraitEdge : nullptr, 2.f, bHas ? Equipped[i]->Description : FString()));
 	}
 	AddContent(Slots);
@@ -1458,7 +1455,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		const FLinearColor Edge = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
 		const bool bOpenSlot = OpenSlot == ModSlot;
 		UWidget* W = Slot(UWWOLoadoutSubsystem::ModSlotTitle(ModSlot) + TEXT("\n") + (Mod ? Mod->DisplayName : FString(TEXT("Empty"))),
-			FVector2D(SlotColumn, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : FLinearColor(0.2f, 0.21f, 0.25f), 16.f,
+			FVector2D(SlotColumn, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : WWOUI::ButtonColor, 16.f,
 			[WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); }, bOpenSlot ? &OnEdge : &Edge, bOpenSlot ? 5.f : 2.f);
 		if (USizeBox* Box = Cast<USizeBox>(W)) SlotButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), ModSlot });
 		Slots->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
@@ -1484,7 +1481,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 			const FLinearColor Base = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
 			const FString Title = (Mod ? Mod->DisplayName : FString(TEXT("Empty"))) + (bOn ? TEXT("   ✓ equipped") : TEXT(""));
 			const FString Body = Mod ? Mod->Summary() : FString(TEXT("No changes"));
-			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(SideColumn - 28.f, 84), Mod ? WWO::Darkened(Base, 0.7f) : FLinearColor(0.2f, 0.21f, 0.25f), 15.f,
+			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(SideColumn - 28.f, 84), Mod ? WWO::Darkened(Base, 0.7f) : WWOUI::ButtonColor, 15.f,
 				[WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); },
 				bOn ? &OnEdge : &Base, bOn ? 5.f : 2.f, FString(), true);
 			if (USizeBox* Box = Cast<USizeBox>(W)) PopupButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), Mod });
@@ -1684,7 +1681,7 @@ void UWWOCharacterMenu::BuildFrameRows()
 		{
 			if (!Part->bUnlocked) continue;
 			const bool bOn = Part == L->GetFramePart(FrameSlot);
-			UHorizontalBoxSlot* PartSlot = Row->AddChildToHorizontalBox(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(140, 104), CardColor, 15.f,
+			UHorizontalBoxSlot* PartSlot = Row->AddChildToHorizontalBox(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(140, 104), WWOUI::CardColor, 15.f,
 				[WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f));
 			PartSlot->SetSize(WWOUI::Fill(1.f));
 			PartSlot->SetPadding(FMargin(10.f * K, 0, 0, 0));

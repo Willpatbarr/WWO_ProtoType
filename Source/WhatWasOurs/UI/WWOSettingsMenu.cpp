@@ -1217,7 +1217,7 @@ void UWWOSettingsMenu::Prepare()
 		// The whole window, in the character menu's style. A little see-through, so a slider's
 		// effect on the game behind (field of view, the HUD) can still be watched.
 		UBorder* Page = WidgetTree->ConstructWidget<UBorder>();
-		Page->SetBrushColor(WWO::Lin(FLinearColor(0.1f, 0.11f, 0.13f, 0.95f)));
+		Page->SetBrushColor(WWO::Lin(WWO::WithAlpha(WWOUI::PageColor, 0.95f)));
 		Page->SetPadding(FMargin(40.f * K, 12.f * K, 40.f * K, 28.f * K));
 		UOverlaySlot* PageSlot = Root->AddChildToOverlay(Page);
 		PageSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -1228,7 +1228,7 @@ void UWWOSettingsMenu::Prepare()
 		// Header: the name, the five tabs (bumpers or Q / E), the search box.
 		UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBox* Name = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, FLinearColor(0.72f, 0.5f, 1.f), 0))->SetVerticalAlignment(VAlign_Center);
+		Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, WWOUI::DefaultAccent, 0))->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("SETTINGS"), 17.f, FLinearColor::White, 420));
 		NameText->SetVerticalAlignment(VAlign_Center);
 		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
@@ -1240,7 +1240,7 @@ void UWWOSettingsMenu::Prepare()
 		{
 			if (i > 0)
 			{
-				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, FLinearColor(1, 1, 1, 0.25f), 0));
+				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, WWOUI::TabBar, 0));
 				Bar->SetVerticalAlignment(VAlign_Center);
 				Bar->SetPadding(FMargin(26.f * K, 0));
 			}
@@ -1276,7 +1276,7 @@ void UWWOSettingsMenu::Prepare()
 		RightSlot->SetHorizontalAlignment(HAlign_Right);
 		RightSlot->SetVerticalAlignment(VAlign_Center);
 		Column->AddChildToVerticalBox(Header);
-		Column->AddChildToVerticalBox(WWOUI::Rule(WidgetTree, FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+		Column->AddChildToVerticalBox(WWOUI::Rule(WidgetTree, WWOUI::RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 
 		UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Column->AddChildToVerticalBox(Body)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -1427,11 +1427,11 @@ void UWWOSettingsMenu::Prepare()
 		}
 		auto SideButton = [&](const FString& Text, TFunction<void()> Fn) -> UButton*
 		{
-			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 8.f));
+			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, WWOUI::CardColor, false, FMargin(10.f, 8.f));
 			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(WWOUI::RoundBrush(FLinearColor(0.115f, 0.125f, 0.148f), 5.f, FLinearColor(1, 1, 1, 0.45f), 1.5f));
-			Style.SetHovered(WWOUI::RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
-			Style.SetPressed(WWOUI::RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			Style.SetNormal(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, WWOUI::CardEdge, 1.5f));
+			Style.SetHovered(WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f));
+			Style.SetPressed(WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f));
 			B->SetStyle(Style);
 			Side->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 			return B;
@@ -1474,7 +1474,7 @@ void UWWOSettingsMenu::Prepare()
 		{
 			if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu();
 		});
-		Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, FLinearColor(1, 1, 1, 0.4f), 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
+		Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, WWOUI::Faint, 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
 		USizeBox* SideBox = WidgetTree->ConstructWidget<USizeBox>();
 		SideBox->SetWidthOverride(270.f * K);
 		SideBox->AddChild(Side);
@@ -1485,7 +1485,7 @@ void UWWOSettingsMenu::Prepare()
 		PageTitle = WWOUI::Spaced(WidgetTree, TEXT(""), 20.f, FLinearColor::White, 300);
 		Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.13f, 0.14f, 0.165f), 6.f, FLinearColor(1, 1, 1, 0.18f), 1.f));
+		Panel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, 6.f, WWOUI::PanelEdge, 1.f));
 		Panel->SetPadding(FMargin(8.f * K));
 		Panel->SetContent(GlobalSwitcher);
 		Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -1570,13 +1570,13 @@ void UWWOSettingsMenu::BuildBinds()
 				if (!WeakThis.IsValid() || !WeakPC.IsValid()) return;
 				WeakPC->BeginKeyCapture(Id, bPad, [WeakThis] { if (WeakThis.IsValid()) WeakThis->BuildBinds(); });
 				WeakThis->BuildBinds(); // shows which one is waiting
-			}, 18.f, FLinearColor(0.115f, 0.125f, 0.148f), false, FMargin(10.f, 7.f));
+			}, 18.f, WWOUI::CardColor, false, FMargin(10.f, 7.f));
 			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
-			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : FLinearColor(1, 1, 1, 0.45f)); // yours, not the default: gold
+			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : WWOUI::CardEdge); // yours, not the default: gold
 			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(WWOUI::RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : FLinearColor(0.115f, 0.125f, 0.148f), 5.f, Edge, bWaiting ? 2.f : 1.5f));
-			Style.SetHovered(WWOUI::RoundBrush(FLinearColor(0.17f, 0.18f, 0.21f), 5.f, FLinearColor(1, 1, 1, 0.9f), 1.5f));
-			Style.SetPressed(WWOUI::RoundBrush(FLinearColor(0.22f, 0.23f, 0.26f), 5.f, FLinearColor::White, 1.5f));
+			Style.SetNormal(WWOUI::RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : WWOUI::CardColor, 5.f, Edge, bWaiting ? 2.f : 1.5f));
+			Style.SetHovered(WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f));
+			Style.SetPressed(WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f));
 			B->SetStyle(Style);
 			return B;
 		};
@@ -1604,12 +1604,12 @@ void UWWOSettingsMenu::SelectPage(int32 Index)
 	const FLinearColor Accent = WWOUI::Accent(this);
 	for (int32 i = 0; i < TopLabels.Num(); ++i)
 	{
-		TopLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == TopTab ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));
+		TopLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == TopTab ? FLinearColor::White : WWOUI::TabDim)));
 		TopLines[i]->SetBrushColor(WWO::Lin(i == TopTab ? Accent : FLinearColor(0, 0, 0, 0)));
 	}
 	for (int32 i = 0; i < Pages.Num(); ++i)
 	{
-		if (Pages[i].Label.IsValid()) Pages[i].Label->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Index ? FLinearColor::White : FLinearColor(1, 1, 1, 0.6f))));
+		if (Pages[i].Label.IsValid()) Pages[i].Label->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Index ? FLinearColor::White : WWOUI::TabDim)));
 		if (Pages[i].Mark.IsValid()) Pages[i].Mark->SetBrushColor(WWO::Lin(i == Index ? Accent : FLinearColor(1, 1, 1, 0.12f)));
 	}
 }
