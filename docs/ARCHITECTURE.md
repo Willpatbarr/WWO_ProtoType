@@ -145,6 +145,15 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
 - **Menus** are driven by a synthetic mouse, not focus: `FWWOMenuCursor` is a Slate input pre-processor
   (left stick moves the pointer, Cross clicks, right stick scrolls). Every button has
   `IsFocusable = false`.
+- **Shared style** (`UI/WWOUI.*`, `namespace WWOUI`): the palette, `Font`, `RoundBrush`, the logo, the ring
+  cursor, and builders that take the widget tree to build into (`Text`, `Spaced`, `Rule`, `Sized`, `Fill`,
+  `Button` / `TextButton` with a look, `StyleTextBox`, `Accent`) and the page header (`HeaderName`,
+  `TabStrip`, `AddPageHeader`, `SetActiveTab`: settings, character, launch setup). Each menu builds in its own `WidgetTree`
+  through it; no menu needs another to build a label or button. A click goes through a
+  `UWWOClickHandler` (`OnClick`, which plays ui_click); the menu keeps the handler alive in a `UPROPERTY`
+  array: for good (built once: tester, the character menu's tabs), until the next rebuild (launch,
+  scoreboard, the character overview's cards), or pruned as its button leaves the page (`KeepPruned`:
+  settings, the character editors' slots).
 - **Settings** (`UI/WWOSettingsMenu.*`): `RegisterSections` fills sections of rows, each row bound to a
   float `UPROPERTY` by name. Saved as `{sectionKey: {rowId: number}}` in `Saved/WWO/SavedSettings.json`,
   falling back to `Config/ShippedSettings.json`. A joiner sees only rows marked as a player's own

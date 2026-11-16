@@ -9,7 +9,8 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   Convert with `* WWO::M` (100 cm per metre) at the point of use, not when storing.
 - Pitch and recoil are radians; yaw is degrees. `ApplyRecoil` yaw is positive to the left.
 - Colours are written as sRGB. Convert with `WWO::Lin` where the value meets a material or Slate.
-- Menu sizes are Godot pixels x `K` (1.2); menu fonts are pixels x 0.75 x `K`. The HUD paints in
+- Menu sizes are Godot pixels x `WWOUI::K` (1.2); menu fonts are pixels x 0.75 x `K` (`WWOUI::Font`).
+  Menu colours are the named ones in `WWOUI` (`PageColor`, `CardColor`, `CardEdge`, ...). The HUD paints in
   1600 x 900 units through `FPainter`.
 
 ## Tunables and settings
@@ -68,7 +69,7 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 ## Files and names
 
 - Classes are `WWO`-prefixed (`AWWO...`, `UWWO...`, `FWWO...`); free helpers live in `namespace WWO` or a
-  system namespace (`WWOFX`, `WWONav`, `WWOTest`, `WWOConfig`, `WWOSwitches`).
+  system namespace (`WWOFX`, `WWONav`, `WWOTest`, `WWOConfig`, `WWOSwitches`, `WWOUI`).
 - Unity builds are off (`WhatWasOurs.Build.cs`) because files reuse helper names in anonymous namespaces.
   A helper needed in two files moves to a shared header under a namespace.
 - A large class is split across `.cpp` files by concern (`WWOAutoTest*.cpp`,
@@ -98,6 +99,8 @@ Look here before writing a new one.
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
 | In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
+| In a menu: a label, spaced capitals, a thin line, a size box, a fill share, the accent colour, the palette | `WWOUI::Text`, `Spaced`, `Rule` / `RuleDown`, `Sized` / `Wide`, `Fill`, `Accent(this)`; `WWOUI::PageColor`, `CardColor`, `CardEdge`, `Dim`, ... (`UI/WWOUI.h`). Each takes the menu's own `WidgetTree` |
+| In a menu: a button, its click (plays ui_click), keeping its handler alive; a text box; fonts, rounded brushes, the logo, the ring cursor | `WWOUI::Button` / `TextButton` with a look (`FilledLook`, `CardLook`, `PlainLook`, `StillLook`), `OnClick`, `KeepPruned`; `StyleTextBox`; `Font`, `RoundBrush`, `MakeLogo`, `PaintCursor`, `K` (`UI/WWOUI.h`) |
 
 ## Load-bearing names
 

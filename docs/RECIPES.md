@@ -85,11 +85,19 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 
 ## A menu
 
-1. A `UUserWidget` built in code, with `Open` / `Close` / `Back` / `IsOpen`, `IsFocusable = false` on
-   every button, the OS cursor hidden and the ring cursor painted in `NativePaint`.
-2. In `AWWOPlayerController`: create it, `AddToViewport` with a z-order, and add it to `IsMenuOpen` /
+1. A `UUserWidget` built in code into its own `WidgetTree`, with `Open` / `Close` / `Back` / `IsOpen`, the
+   OS cursor hidden (`SetCursor(EMouseCursor::None)`) and the ring cursor painted in `NativePaint`
+   (`WWOUI::PaintCursor`).
+2. Build it with `WWOUI` (`UI/WWOUI.h`): `Text` / `Spaced` labels, `Rule`, `Sized` / `Wide`, `Fill`, the
+   palette (`PageColor`, `CardColor`, `CardEdge`, `Dim`, ...), `Accent(this)`. Buttons: `WWOUI::Button` (or
+   `TextButton`) with a look (`CardLook`, `FilledLook`, `PlainLook`) sets `IsFocusable = false`;
+   `WWOUI::OnClick(B, this, Fn)` plays ui_click and returns the handler, which the menu keeps in a
+   `UPROPERTY() TArray<TObjectPtr<UObject>>` (reset on rebuild, or `WWOUI::KeepPruned` for pages rebuilt in
+   pieces). A text box: `WWOUI::StyleTextBox`. A full-window page's header (name, tabs, keys, rule):
+   `WWOUI::HeaderName`, `TabStrip`, `AddPageHeader`, and `SetActiveTab` when the tab changes.
+3. In `AWWOPlayerController`: create it, `AddToViewport` with a z-order, and add it to `IsMenuOpen` /
    `IsOtherMenuOpen`, `HandleMenuPress`, `CloseMenus` and the scoreboard's close list.
-3. A text box must hand keyboard focus back to the viewport when done.
+4. A text box must hand keyboard focus back to the viewport when done.
 
 ## An input action
 
