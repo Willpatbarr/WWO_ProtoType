@@ -132,29 +132,13 @@ UButton* UWWOScoreboard::Button(const FString& Title, const FString& Sub, bool b
 	UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
 	Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Title, 18.f, bEnabled ? FLinearColor::White : WWOUI::Fainter, 220))->SetHorizontalAlignment(HAlign_Center);
 	if (!Sub.IsEmpty()) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Sub, 10.f, bEnabled ? WWOUI::Dim : WWOUI::Fainter, 90))->SetHorizontalAlignment(HAlign_Center);
-	UButton* B = Tree->ConstructWidget<UButton>();
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	B->IsFocusable = false; // the cursor drives it, not focus
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	const FLinearColor Edge = bEnabled ? WWOUI::CardEdge : FLinearColor(1, 1, 1, 0.15f);
-	FButtonStyle Style;
-	Style.SetNormal(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, Edge, 1.5f));
-	Style.SetHovered(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(WWOUI::CardColor, 0.08f) : WWOUI::CardColor, 5.f, bEnabled ? WWOUI::HoverEdge : Edge, 1.5f));
-	Style.SetPressed(WWOUI::RoundBrush(bEnabled ? WWO::Lightened(WWOUI::CardColor, 0.14f) : WWOUI::CardColor, 5.f, bEnabled ? FLinearColor::White : Edge, 1.5f));
-	Style.SetNormalPadding(FMargin(0));
-	Style.SetPressedPadding(FMargin(0));
-	B->SetStyle(Style);
-	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Words));
-	Slot->SetPadding(FMargin(18.f, 13.f) * K);
-	Slot->SetHorizontalAlignment(HAlign_Center);
-	Slot->SetVerticalAlignment(VAlign_Center);
-	if (bEnabled)
-	{
-		UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
-		H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOScoreboard>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
-		B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-		Handlers.Add(H);
-	}
+	// A card; one this machine can't press (a joiner's NEXT MATCH) is dimmed, the same in every state, and silent.
+	WWOUI::FButtonLook Look = bEnabled ? WWOUI::CardLook(WWOUI::CardColor, WWOUI::CardEdge, 1.5f, FMargin(18.f, 13.f))
+		: WWOUI::StillLook(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, FLinearColor(1, 1, 1, 0.15f), 1.5f), FMargin(18.f, 13.f));
+	Look.HAlign = HAlign_Center;
+	Look.VAlign = VAlign_Center;
+	UButton* B = WWOUI::Button(Tree, Words, Look);
+	if (bEnabled) Handlers.Add(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 	return B;
 }
 

@@ -175,6 +175,11 @@ namespace WWOUI
 		return Look;
 	}
 
+	FButtonLook PlainLook()
+	{
+		return CardLook(FLinearColor(0, 0, 0, 0), FLinearColor(0, 0, 0, 0), 0.f, FMargin(0.f));
+	}
+
 	FButtonLook StillLook(const FSlateBrush& Brush, const FMargin& Padding)
 	{
 		FButtonLook Look;

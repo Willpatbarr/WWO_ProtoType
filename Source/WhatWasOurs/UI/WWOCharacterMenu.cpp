@@ -201,13 +201,12 @@ UWidget* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLin
 	// a 2 px border in the color lightened 35% (or _set_slot_border's), lighter when hovered/pressed.
 	const FLinearColor Edge = Border ? *Border : WWO::Lightened(Color, 0.35f);
 	const float Width = Border ? BorderWidth : 2.f;
-	UButton* B = WWOUI::TextButton(WidgetTree, Text, FontPx, WWOUI::FilledLook(Color, FMargin(Width + 4.f, Width)));
+	WWOUI::FButtonLook Look = WWOUI::FilledLook(Color, FMargin(Width + 4.f, Width));
+	Look.Normal = WWOUI::RoundBrush(Color, 5.f, Edge, Width); // the menu's 5 px corners
+	Look.Hovered = WWOUI::RoundBrush(WWO::Lightened(Color, 0.12f), 5.f, FLinearColor::White, Width);
+	Look.Pressed = WWOUI::RoundBrush(WWO::Lightened(Color, 0.2f), 5.f, FLinearColor::White, Width);
+	UButton* B = WWOUI::TextButton(WidgetTree, Text, FontPx, Look);
 	WWOUI::KeepPruned(SlotHandlers, SlotPruneAt, WWOUI::OnClick(B, this, MoveTemp(Fn)));
-	FButtonStyle Style = B->GetStyle();
-	Style.SetNormal(WWOUI::RoundBrush(Color, 5.f, Edge, Width)); // the menu's 5 px corners
-	Style.SetHovered(WWOUI::RoundBrush(WWO::Lightened(Color, 0.12f), 5.f, FLinearColor::White, Width));
-	Style.SetPressed(WWOUI::RoundBrush(WWO::Lightened(Color, 0.2f), 5.f, FLinearColor::White, Width));
-	B->SetStyle(Style);
 	if (!Tooltip.IsEmpty()) B->SetToolTipText(FText::FromString(Tooltip));
 	USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 	Box->SetMinDesiredWidth(Size.X * K);
@@ -448,26 +447,8 @@ UWidget* UWWOCharacterMenu::Card(UWidget* Inside, TFunction<void()> Fn, const FL
 		Box->SetContent(Inside);
 		return Box;
 	}
-	UButton* B = Tree->ConstructWidget<UButton>();
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	B->IsFocusable = false; // the cursor drives everything, not focus
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	FButtonStyle Style;
-	const bool bPlain = Fill.A <= 0.f;
-	Style.SetNormal(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
-	Style.SetHovered(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : FLinearColor(1, 1, 1, 0.9f), EdgeWidth));
-	Style.SetPressed(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
-	Style.SetNormalPadding(FMargin(0));
-	Style.SetPressedPadding(FMargin(0));
-	B->SetStyle(Style);
-	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Inside));
-	Slot->SetPadding(Padding * K);
-	Slot->SetHorizontalAlignment(HAlign_Fill);
-	Slot->SetVerticalAlignment(VAlign_Fill);
-	UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
-	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOCharacterMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
-	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	CardHandlers.Add(H);
+	UButton* B = WWOUI::Button(Tree, Inside, WWOUI::CardLook(Fill, Edge, EdgeWidth, Padding));
+	CardHandlers.Add(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 	return B;
 }
 

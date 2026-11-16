@@ -125,6 +125,8 @@ namespace WWOUI
 	// A card: Fill inside an Edge EdgeWidth wide, 5 px corners. Hovered and pressed it lightens and
 	// its edge goes white; a see-through one (Fill.A == 0) gets only a faint wash and keeps its edge.
 	FButtonLook CardLook(const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, EVerticalAlignment VAlign = VAlign_Fill);
+	// No box of its own (a tab, a sidebar line): only a faint wash when hovered (CardLook with nothing).
+	FButtonLook PlainLook();
 	// The same brush in every state (a button that can't be pressed).
 	FButtonLook StillLook(const FSlateBrush& Brush, const FMargin& Padding);
 

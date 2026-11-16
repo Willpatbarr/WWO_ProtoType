@@ -56,26 +56,8 @@ int32 UWWOLaunchMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Allot
 
 UButton* UWWOLaunchMenu::Boxed(UWidget* Inside, const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, TFunction<void()> Fn)
 {
-	UButton* B = WidgetTree->ConstructWidget<UButton>();
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	B->IsFocusable = false; // the cursor drives everything, not focus
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	const bool bPlain = Fill.A <= 0.f;
-	FButtonStyle Style;
-	Style.SetNormal(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
-	Style.SetHovered(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : WWOUI::HoverEdge, EdgeWidth));
-	Style.SetPressed(WWOUI::RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth));
-	Style.SetNormalPadding(FMargin(0));
-	Style.SetPressedPadding(FMargin(0));
-	B->SetStyle(Style);
-	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Inside));
-	Slot->SetPadding(Padding * K);
-	Slot->SetHorizontalAlignment(HAlign_Fill);
-	Slot->SetVerticalAlignment(VAlign_Center);
-	UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
-	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOLaunchMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
-	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	Handlers.Add(H);
+	UButton* B = WWOUI::Button(WidgetTree, Inside, WWOUI::CardLook(Fill, Edge, EdgeWidth, Padding, VAlign_Center));
+	Handlers.Add(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 	return B;
 }
 

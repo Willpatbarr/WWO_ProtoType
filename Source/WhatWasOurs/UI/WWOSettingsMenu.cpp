@@ -96,6 +96,17 @@ namespace
 		return Own;
 	}
 
+	// The side buttons and the key buttons: a card whose hovered and pressed shades are fixed (not
+	// lightened from its own fill), with the filled button's centered text.
+	WWOUI::FButtonLook KeyLook(const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding)
+	{
+		WWOUI::FButtonLook Look = WWOUI::FilledLook(Fill, Padding);
+		Look.Normal = WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth);
+		Look.Hovered = WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f);
+		Look.Pressed = WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f);
+		return Look;
+	}
+
 	TFunction<FString(float)> Percent() { return [](float V) { return FString::Printf(TEXT("%d%%"), FMath::RoundToInt(V * 100.f)); }; }
 	TFunction<FString(float)> Times(int32 Digits = 2) { return [Digits](float V) { return Digits == 1 ? FString::Printf(TEXT("x%.1f"), V) : FString::Printf(TEXT("x%.2f"), V); }; }
 	TFunction<FString(float)> SignedPercent() { return [](float V) { return FString::Printf(TEXT("%+d%%"), FMath::RoundToInt(V * 100.f)); }; }
@@ -1427,12 +1438,8 @@ void UWWOSettingsMenu::Prepare()
 		}
 		auto SideButton = [&](const FString& Text, TFunction<void()> Fn) -> UButton*
 		{
-			UButton* B = MakeButton(this, Text, MoveTemp(Fn), 15.f, WWOUI::CardColor, false, FMargin(10.f, 8.f));
-			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(WWOUI::RoundBrush(WWOUI::CardColor, 5.f, WWOUI::CardEdge, 1.5f));
-			Style.SetHovered(WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f));
-			Style.SetPressed(WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f));
-			B->SetStyle(Style);
+			UButton* B = WWOUI::TextButton(WidgetTree, Text, 15.f, KeyLook(WWOUI::CardColor, WWOUI::CardEdge, 1.5f, FMargin(10.f, 8.f)));
+			KeepHandler(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 			Side->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 			return B;
 		};
@@ -1502,26 +1509,8 @@ void UWWOSettingsMenu::Prepare()
 UButton* UWWOSettingsMenu::PlainButton(UWidget* Inside, TFunction<void()> Fn)
 {
 	// A button with no box of its own (a tab, a sidebar line): only a faint wash when hovered.
-	UButton* B = WidgetTree->ConstructWidget<UButton>();
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	B->IsFocusable = false; // the cursor drives everything, not focus
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-	FButtonStyle Style;
-	Style.SetNormal(WWOUI::RoundBrush(FLinearColor(0, 0, 0, 0), 5.f));
-	Style.SetHovered(WWOUI::RoundBrush(FLinearColor(1, 1, 1, 0.06f), 5.f));
-	Style.SetPressed(WWOUI::RoundBrush(FLinearColor(1, 1, 1, 0.1f), 5.f));
-	Style.SetNormalPadding(FMargin(0));
-	Style.SetPressedPadding(FMargin(0));
-	B->SetStyle(Style);
-	UButtonSlot* Slot = Cast<UButtonSlot>(B->AddChild(Inside));
-	Slot->SetPadding(FMargin(0));
-	Slot->SetHorizontalAlignment(HAlign_Fill);
-	Slot->SetVerticalAlignment(VAlign_Fill);
-	UWWOClickHandler* H = NewObject<UWWOClickHandler>(this);
-	H->Fn = [Fn = MoveTemp(Fn), Weak = TWeakObjectPtr<UWWOSettingsMenu>(this)] { if (Weak.IsValid()) UWWOSound::PlayFlat(Weak.Get(), "ui_click"); if (Fn) Fn(); };
-	B->OnClicked.AddDynamic(H, &UWWOClickHandler::Handle);
-	H->For = B;
-	KeepHandler(H);
+	UButton* B = WWOUI::Button(WidgetTree, Inside, WWOUI::PlainLook());
+	KeepHandler(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 	return B;
 }
 
@@ -1565,19 +1554,16 @@ void UWWOSettingsMenu::BuildBinds()
 			if (!bHas) return MakeText(bPad && R.MoveDir >= 0 ? TEXT("Left stick") : TEXT("—"), 18.f, FLinearColor(1, 1, 1, 0.4f));
 			const bool bWaiting = PC->IsCapturing(R.Id, bPad);
 			const FName Id = R.Id;
-			UButton* B = MakeButton(this, bWaiting ? FString(TEXT("Press a key  ·  Esc cancels")) : AWWOPlayerController::KeyName(PC->GetBind(R.Id, bPad)), [WeakThis, WeakPC, Id, bPad]
+			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
+			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : WWOUI::CardEdge); // yours, not the default: gold
+			UButton* B = WWOUI::TextButton(WidgetTree, bWaiting ? FString(TEXT("Press a key  ·  Esc cancels")) : AWWOPlayerController::KeyName(PC->GetBind(R.Id, bPad)),
+				18.f, KeyLook(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : WWOUI::CardColor, Edge, bWaiting ? 2.f : 1.5f, FMargin(10.f, 7.f)));
+			KeepHandler(WWOUI::OnClick(B, this, [WeakThis, WeakPC, Id, bPad]
 			{
 				if (!WeakThis.IsValid() || !WeakPC.IsValid()) return;
 				WeakPC->BeginKeyCapture(Id, bPad, [WeakThis] { if (WeakThis.IsValid()) WeakThis->BuildBinds(); });
 				WeakThis->BuildBinds(); // shows which one is waiting
-			}, 18.f, WWOUI::CardColor, false, FMargin(10.f, 7.f));
-			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
-			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : WWOUI::CardEdge); // yours, not the default: gold
-			FButtonStyle Style = B->GetStyle();
-			Style.SetNormal(WWOUI::RoundBrush(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : WWOUI::CardColor, 5.f, Edge, bWaiting ? 2.f : 1.5f));
-			Style.SetHovered(WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f));
-			Style.SetPressed(WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f));
-			B->SetStyle(Style);
+			}));
 			return B;
 		};
 		Line(MakeText(R.Label, 20.f), Key(false), Key(true), 8.f);
