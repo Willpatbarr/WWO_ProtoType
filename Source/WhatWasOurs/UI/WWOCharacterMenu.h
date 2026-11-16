@@ -20,7 +20,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "GameFramework/Actor.h"
+#include "UI/WWOPreviewActor.h"
 #include "WWOCharacterMenu.generated.h"
 
 class UVerticalBox;
@@ -30,42 +30,30 @@ class UWidgetSwitcher;
 class UTextBlock;
 class UButton;
 class UImage;
-class USceneCaptureComponent2D;
-class UTextureRenderTarget2D;
-class UWWOBodyComponent;
 
-// The mannequin the character menu shows, far away from the level, with its own camera.
-UCLASS()
-class WHATWASOURS_API AWWOPreviewActor : public AActor
+// The "hover opens it, leaving closes it a moment later" timer both of the menu's hover popups use
+// (the Loadout tab's row of choices, the Weapon tab's mod list). The caller decides when one opens;
+// this says when an open one closes: after CloseAfter seconds with the cursor on neither the
+// thing that opened it nor the popup.
+struct FWWOHoverPopup
 {
-	GENERATED_BODY()
+	explicit FWWOHoverPopup(float InCloseAfter) : CloseAfter(InCloseAfter) {}
+	void Reset() { Idle = 0.f; }
+	// Called each frame. While it's closed, or the cursor is on the anchor or the popup, the wait starts over.
+	bool ShouldClose(bool bIsOpen, bool bOverAnchorOrPopup, float DeltaTime)
+	{
+		if (!bIsOpen || bOverAnchorOrPopup)
+		{
+			Idle = 0.f;
+			return false;
+		}
+		Idle += DeltaTime;
+		return Idle > CloseAfter;
+	}
 
-public:
-	AWWOPreviewActor();
-	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaSeconds) override;
-
-	UPROPERTY(VisibleAnywhere) TObjectPtr<USkeletalMeshComponent> Mesh;
-	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> Capture;
-	UPROPERTY(VisibleAnywhere) TObjectPtr<UWWOBodyComponent> Body;
-	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> Target;
-	UPROPERTY() TObjectPtr<USceneComponent> Turntable;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Backdrop;
-
-	// The preview's area in the Godot layout: what's left of the menu row beside the tiles.
-	static inline const FVector2D Size = FVector2D(600.f, 780.f);
-	// The backdrop's color, so it comes out as the panel's (0.1, 0.11, 0.13) after the capture's
-	// tonemapping, at BackdropBias; at another exposure it's scaled to match (BackdropFor).
-	static inline const FLinearColor BackdropColor = FLinearColor(0.0366f, 0.0381f, 0.0417f) * 0.92f;
-	static constexpr float BackdropBias = 5.5f;
-	static constexpr float ExposureBias = 1.f;
-	static FLinearColor BackdropFor(float Bias) { return BackdropColor * FMath::Pow(2.f, (BackdropBias - Bias) / 2.2f); }
-	// Godot's preview lights: a DirectionalLight3D (energy 1, no shadows) and an ambient color of
-	// (0.5, 0.5, 0.55), here a key light and a fill from the camera. They light only lighting
-	// channel 2, which only the preview body and its grafts are on (the level sits above them and
-	// would shade the level's own sun).
-	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> KeyLight;
-	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> FillLight;
+private:
+	float CloseAfter = 0.f;
+	float Idle = 0.f;
 };
 
 UCLASS()
@@ -96,7 +84,6 @@ private:
 	FString Expanded;  // "", "Flora", "Weapons" or "Frame Parts"
 	FString Picker;    // "", "flora", "grenade", "ability0", "ability1" or "traits"
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> TileSwitcher;
-	UPROPERTY() TObjectPtr<UTextBlock> ExpandedTitle;
 	UPROPERTY() TObjectPtr<UScrollBox> ExpandedScroll;
 	UPROPERTY() TObjectPtr<UVerticalBox> Content;
 	UPROPERTY() TObjectPtr<UWidget> ModRowsStart; // the mod slots label (autotest scrolls to it)
@@ -127,7 +114,7 @@ private:
 	// traits and the two weapon slots), and the row of choices that's open.
 	TArray<TPair<TWeakObjectPtr<UWidget>, FString>> HoverTiles;
 	FString HoverPicker;
-	float HoverIdle = 0.f;
+	FWWOHoverPopup HoverClose{ 0.25f }; // the row closes this long after the cursor leaves it and its tile
 	UPROPERTY() TObjectPtr<UWidget> HoverPopup;
 	void UpdateHoverPicker(float DeltaTime);
 	void OpenHoverPicker(const FString& Name, UWidget* Tile);
@@ -172,7 +159,7 @@ private:
 	static constexpr float SideColumn = 440.f;
 	static constexpr float ConfigListHeight = 540.f; // the config list scrolls inside this, the page never
 	FName OpenSlot;
-	float PopupIdle = 0.f;
+	FWWOHoverPopup ModClose{ 0.35f }; // the open slot's mods close this long after the cursor leaves them and the slots
 	FName AutoTestPreview; // set by the autotest: a mod id to preview as if hovered
 	UPROPERTY() TObjectPtr<class UWWOStatBars> StatBars;
 	UPROPERTY() TObjectPtr<UWidget> PopupPanel;
