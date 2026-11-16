@@ -49,8 +49,15 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 
 - `SimulateMove` reads only `MoveIn` and the move state: no other member, no world query whose answer
   could differ between machines.
-- New movement state must be added in five places in `Player/WWOCharacter.*`: the member, `FWWOMoveState`,
-  `GetMoveState` / `SetMoveState`, `Serialize`, `ToString`. Missing one is a silent desync.
+- The move state is one struct, `FWWOMoveState`, held once by the character (`MoveState`; read it as
+  `P->MoveState.bSliding`). `GetMoveState` / `SetMoveState` copy it whole, and the saved moves store it whole.
+  New movement state goes in two places in `Player/WWOCharacter.*`: a field in `FWWOMoveState`, and a line in
+  `FWWOMoveState::Serialize` (the wire: a missing line is a silent desync after corrections). Add it to
+  `ToString` too, for the correction logs. Timers, input edges and easing that a correction need not restore
+  (camera, bob, lunge steering, status timers) stay loose members.
+- Movement values exchanged with the host (`ServerSetMoveStats`, `ClientSetMoveBase`, `BaseMoveStats`) come from
+  `MoveStatTable` in `WWOCharacter.cpp`: one line each (member, loadout stat, host clamp low / high), in wire order.
+  Add new ones at the end (tests read the array by index).
 - The joiner's `MoveIn` is quantised (`Quantize`) so both machines simulate the same numbers.
 - Movement ticks before the character; `PreparedFrame` guards against preparing twice in a frame.
 

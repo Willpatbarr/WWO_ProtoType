@@ -8,8 +8,9 @@ For the rules that follow from this, see `CONVENTIONS.md`; for step-by-step addi
 1. `UWWOCharacterMovement` ticks first and calls `AWWOCharacter::PrepareMovement`: health, look, recoil,
    then `CaptureMoveInput` fills `MoveIn` (`FWWOMoveInput`).
 2. Every move (your own, the host's copy of a joiner, a replay after a correction) runs
-   `AWWOCharacter::SimulateMove` from `MoveIn` and the move state only. It sets `WishVelocity`, which
-   `CalcVelocity` copies. `FWWOMoveInput` rides each saved move; `FWWOMoveState` rides corrections.
+   `AWWOCharacter::SimulateMove` from `MoveIn` and the move state (`MoveState`, an `FWWOMoveState`) only.
+   It sets `WishVelocity`, which `CalcVelocity` copies. `FWWOMoveInput` rides each saved move;
+   `FWWOMoveState` is saved with each move and rides corrections.
 3. `AWWOCharacter::Tick` then calls `UpdateX(Delta)` on each component in a fixed order. **Components do
    not tick themselves.** The order mirrors the Godot prototype and matters.
 4. Once every actor has ticked, the world updates each local player's camera; `AWWOPlayerController::

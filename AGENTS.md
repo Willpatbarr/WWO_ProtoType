@@ -62,8 +62,9 @@ build scripts: `Tools/`.
 4. **Damage needs an attacker scope.** Wrap host-side hits in `FWWODamageBy`, or kill credit, hit markers
    and damage numbers are wrong. Spawned kit (grenades, pools, fog) must set Owner or Instigator, or the
    loadout and team lookups resolve the wrong player.
-5. **Movement must stay deterministic.** `SimulateMove` reads only `MoveIn` and the move state. New
-   movement state goes in `FWWOMoveState` everywhere it is listed (see `docs/CONVENTIONS.md`).
+5. **Movement must stay deterministic.** `SimulateMove` reads only `MoveIn` and the move state
+   (`AWWOCharacter::MoveState`). New movement state is a field in `FWWOMoveState` plus a line in its
+   `Serialize` (and `ToString`); see `docs/CONVENTIONS.md`.
 6. **Don't disturb gun feel.** Recoil, ADS pivot, kick and burst timing in `WWOWeaponComponent` and
    `AWWOCharacter::AddRecoil` were matched to footage frame by frame. Refactors there must be pure moves.
 7. **Shots trace `ECC_Visibility`.** Player, enemy and ally capsules ignore it; hitboxes take shots.
