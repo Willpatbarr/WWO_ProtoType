@@ -22,6 +22,15 @@ class AWWOCharacter;
 class UMaterialInstanceDynamic;
 struct FWWOHUDFrame;
 
+// A status chip under the vitals: what's on you (slowed, poisoned, in fog...) and for how long.
+struct FWWOStatusChip
+{
+	FString Label;
+	FLinearColor Color;
+	float Left = 0.f; // seconds left (0: no timer)
+	float Of = 0.f;   // its full time when known up front (0: not known)
+};
+
 UCLASS()
 class WHATWASOURS_API UWWOHUDWidget : public UUserWidget
 {
@@ -51,7 +60,8 @@ private:
 	TWeakObjectPtr<AWWOCharacter> BoundPlayer;
 	float HitTime = 0.f;
 	bool bHitCritical = false;
-	mutable TMap<FString, float> ChipPeak; // status chips: the longest time each has shown (its bar drains against it)
+	TArray<FWWOStatusChip> Chips; // the status chips showing this frame (NativeTick lists them)
+	TMap<FString, float> ChipPeak; // status chips: the longest time each has shown (its bar drains against it)
 	bool bHitKilled = false;
 	float DamageFlash = 0.f;
 	float StaticShown = 0.f; // 0-1: Static Charge is charged and waiting (the blue edges and the arcs)

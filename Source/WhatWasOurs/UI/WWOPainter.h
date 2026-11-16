@@ -2,7 +2,7 @@
 
 // Immediate-mode drawing in the Godot 1600 x 900 layout, scaled to the real size: what the HUD
 // paints with (UWWOHUDWidget, UI/WWOHUDPaint.cpp). Build one per paint with the widget's
-// geometry, the layer, the scale and the layout size (WWOHUD::Scale gives the scale).
+// geometry, the layer, the scale and the layout size (WWOHUD::Scale, UI/WWOHUDLayout.h, gives the scale).
 
 #include "CoreMinimal.h"
 #include "WWOTypes.h"
@@ -12,17 +12,7 @@
 #include "Rendering/DrawElements.h"
 #include "Rendering/SlateRenderer.h"
 #include "Styling/CoreStyle.h"
-
-namespace WWOHUD
-{
-	// Godot's canvas_items stretch with aspect "expand": the 1600 x 900 layout scales by the
-	// tighter of the two ratios, and the extra width or height is added to the canvas.
-	// LocalSize is the widget's size in Slate units; the result is Slate units per layout pixel.
-	inline float Scale(const FVector2D& LocalSize)
-	{
-		return FMath::Min(LocalSize.X / 1600.f, LocalSize.Y / 900.f);
-	}
-}
+#include "UI/WWOHUDLayout.h"
 
 // Paints in the Godot 1600 x 900 layout, scaled to the real size.
 struct FWWOPainter

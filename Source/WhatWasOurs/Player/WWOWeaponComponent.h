@@ -189,9 +189,16 @@ private:
 	TSet<FName> AdsHiddenParts; // mod parts hidden while aiming
 public:
 	// The targets you have marked (picked up under the reticle, or inside the marker range while
-	// aimed in; dropped on leaving the range) and the world time each was picked up. The HUD keeps
-	// it as it draws; AWWOCharacter::UpdateTeamTint flashes a player's outline from that time.
-	mutable TMap<TWeakObjectPtr<const AActor>, double> Marked;
+	// aimed in; dropped on leaving the range) and the world time each was picked up. UpdateMarks keeps
+	// it; the HUD shows enemies' bars while they're marked, and AWWOCharacter::UpdateTeamTint flashes
+	// a player's outline from that time.
+	TMap<TWeakObjectPtr<const AActor>, double> Marked;
+	// PvP: your teammates in sight this frame (the HUD shows their bars), kept by UpdateMarks.
+	TSet<TWeakObjectPtr<const AActor>> MatesInSight;
+	// Works out Marked and MatesInSight for your own player, every frame whether or not the HUD shows:
+	// your player controller calls it once the camera has moved for the frame
+	// (AWWOPlayerController::UpdateCameraManager), so it judges the view the HUD then draws.
+	void UpdateMarks(APlayerController* PC);
 private:
 	TMap<FName, FVector> FlareSizes; // the muzzle flash flares' built sizes (each shot varies them)
 	FVector TrailStart() const;      // where your own shot's trail starts, to look like it leaves the muzzle

@@ -465,6 +465,16 @@ FVector2D AWWOPlayerController::GetLookAxis() const
 
 // --- Each frame ---------------------------------------------------------------------------
 
+void AWWOPlayerController::UpdateCameraManager(float DeltaSeconds)
+{
+	Super::UpdateCameraManager(DeltaSeconds);
+	// Your marked targets (health bars, the outline flash) are worked out here, once every actor has
+	// ticked and the camera has its view for the frame: the view the HUD then draws. Game code, so it
+	// runs whether or not the HUD is showing.
+	AWWOCharacter* Me = IsLocalController() ? Cast<AWWOCharacter>(GetPawn()) : nullptr;
+	if (Me && Me->Weapon) Me->Weapon->UpdateMarks(this);
+}
+
 void AWWOPlayerController::PlayerTick(float DeltaTime)
 {
 	WWO_PROF("PlayerController.PlayerTick");

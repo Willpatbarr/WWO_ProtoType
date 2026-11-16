@@ -5,6 +5,8 @@
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOAbilityComponent.h"
 #include "FX/WWOFX.h"
+#include "Flora/WWOSporeFog.h"
+#include "Flora/WWOFloraEffects.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
@@ -57,6 +59,27 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		Hurt = Most > 0.f ? 1.f - FMath::Clamp((P->Health->Health + P->Health->Shield) / Most, 0.f, 1.f) : 0.f;
 	}
 	HurtShown = WWO::MoveToward(HurtShown, Hurt, (Hurt > HurtShown ? 6.f : 1.5f) * InDeltaTime);
+	// What's on you right now (the chips under the vitals), and the longest time each chip has
+	// shown: its bar drains against that.
+	if (P && P->Health)
+	{
+		Chips.Reset();
+		if (!P->Health->bDead)
+		{
+			if (P->SlowLeft > 0.f) Chips.Add({ FString::Printf(TEXT("SLOWED %d%%"), FMath::RoundToInt(P->SlowAmount * 100.f)), FLinearColor(0.6f, 0.85f, 1.f), P->SlowLeft, 0.f });
+			if (const UWWODamageOverTime* Dot = P->FindComponentByClass<UWWODamageOverTime>()) Chips.Add({ TEXT("POISONED"), UWWODamageOverTime::Color(), Dot->TimeLeft, 0.f });
+			if (AWWOSporeFog::Contains(P->GetWorld(), P->GetActorLocation())) Chips.Add({ P->IsInvisible() ? TEXT("VEILED") : TEXT("IN FOG"), FLinearColor(0.8f, 0.65f, 1.f), P->IsInvisible() ? P->VeilLeft : 0.f, 0.f });
+			if (P->EntrenchLeft > 0.f) Chips.Add({ TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f), P->EntrenchLeft, 0.f });
+			if (P->Abilities->GuardTimeLeft() > 0.f) Chips.Add({ TEXT("GUARD"), FLinearColor(0.75f, 0.9f, 0.6f), P->Abilities->GuardTimeLeft(), 0.f });
+		}
+		TMap<FString, float> Seen;
+		for (const FWWOStatusChip& Chip : Chips)
+		{
+			const FString Key = Chip.Label.Left(6);
+			Seen.Add(Key, Chip.Of > 0.f ? Chip.Of : FMath::Max(ChipPeak.FindRef(Key), Chip.Left));
+		}
+		ChipPeak = MoveTemp(Seen);
+	}
 	FpsClock += FApp::GetDeltaTime(); // real time, so hit-stops and pauses don't skew it
 	++FpsFrames;
 	if (FpsClock >= 0.25f)

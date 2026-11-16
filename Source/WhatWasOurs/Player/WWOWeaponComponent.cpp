@@ -26,6 +26,12 @@
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "Systems/WWOConfig.h"
+#include "Player/WWOUltComponent.h"
+#include "UI/WWOHUDLayout.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
+#include "SceneView.h"
 
 namespace
 {
@@ -1324,6 +1330,92 @@ void UWWOWeaponComponent::UpdateReticleTarget()
 			Mat->SetVectorParameterValue("Color", bTargetUnderReticle ? SightOnTargetColor : SightColor);
 		}
 	}
+}
+
+void UWWOWeaponComponent::UpdateMarks(APlayerController* PC)
+{
+	// Who is marked: a target is picked up when the reticle comes over it (at the hip) or as soon as
+	// it is inside the marker range (aimed in: within HealthBarRadius of the reticle on screen, and
+	// in sight), and dropped when it leaves the marker range. Enemies show their bars while marked.
+	// A PvP player's outline flashes once at the moment they're picked up (Marked holds when;
+	// AWWOCharacter::UpdateTeamTint plays it). Teammates' bars show whenever they're in sight
+	// (MatesInSight). Nobody is marked in the ult's third person.
+	AWWOCharacter* Pl = GetPlayer();
+	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(Pl);
+	const ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
+	TMap<TWeakObjectPtr<const AActor>, double> StillMarked;
+	MatesInSight.Reset();
+	if (!WS || !LP || !LP->ViewportClient || Pl->Ult->bActive)
+	{
+		Marked = MoveTemp(StillMarked);
+		return;
+	}
+	// The marker range is in HUD pixels, measured from the HUD's reticle: the HUD's 1600 x 900 layout
+	// over this player's part of the screen (UWWOHUDWidget::NativePaint), worked out the same way here.
+	// The HUD widget is as big as the player's view rectangle in whole pixels (the one the engine
+	// lays the player's widgets out in, SGameLayerManager), in Slate units.
+	FSceneViewProjectionData Projection;
+	if (!LP->ViewportClient->Viewport || !LP->GetProjectionData(LP->ViewportClient->Viewport, Projection))
+	{
+		Marked = MoveTemp(StillMarked);
+		return;
+	}
+	const FIntRect ViewRect = Projection.GetConstrainedViewRect();
+	const FVector2D Local = FVector2D(ViewRect.Width(), ViewRect.Height()) / FMath::Max(UWidgetLayoutLibrary::GetViewportScale(PC), 0.01f);
+	const float S = WWOHUD::Scale(Local);
+	if (S <= 0.f)
+	{
+		Marked = MoveTemp(StillMarked);
+		return;
+	}
+	const FVector2D Size = Local / S;
+	const float DropPx = Size.Y * Pl->ReticleDrop; // the low reticle
+	const FVector2D AimAt = Size * 0.5f + FVector2D(0.f, DropPx);
+	auto ToScreen = [PC, S](const FVector& World, FVector2D& Out2D) -> bool
+	{
+		FVector2D Screen;
+		if (!UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, World, Screen, true)) return false;
+		Out2D = Screen / S;
+		return true;
+	};
+	const AActor* Under = ReticleTarget.Get();
+	const bool bAimedIn = AdsAmount > 0.5f;
+	const double MarkNow = Pl->GetWorld()->GetTimeSeconds();
+	// The range widens as you aim in (eased with the aim, so it doesn't jump).
+	const float MarkRange = Pl->HealthBarRadius * FMath::Lerp(1.f, FMath::Max(Pl->HealthBarAdsScale, 1.f), AdsAmount);
+	auto Track = [&](const AActor* Actor, const IWWOTargetable* Target, bool& bInSight) -> bool
+	{
+		const FVector Middle = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.5f);
+		FVector2D At;
+		FHitResult Hit;
+		bInSight = Actor == Under || !CastRayTo(Middle, Hit) || Hit.GetActor() == Actor;
+		const bool bInRange = Actor == Under
+			|| (MarkRange > 0.f && bInSight && ToScreen(Middle, At) && FVector2D::Distance(At, AimAt) <= MarkRange);
+		const double* Since = Marked.Find(Actor);
+		if (Since ? bInRange : (Actor == Under || (bAimedIn && bInRange)))
+		{
+			StillMarked.Add(Actor, Since ? *Since : MarkNow);
+			return true;
+		}
+		return false;
+	};
+	for (AActor* Actor : WS->LivingTargets(Pl))
+	{
+		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
+		bool bInSight = false;
+		if (Target && !Target->IsDead()) Track(Actor, Target, bInSight);
+	}
+	if (UWWOWorldSubsystem::IsPvP(Pl))
+	{
+		for (AWWOCharacter* Mate : WS->GetPlayers())
+		{
+			if (Mate == Pl || Mate->Health->bDead || UWWOWorldSubsystem::CanHurt(Pl, Mate)) continue;
+			bool bInSight = false;
+			Track(Mate, Mate, bInSight);
+			if (bInSight) MatesInSight.Add(Mate);
+		}
+	}
+	Marked = MoveTemp(StillMarked);
 }
 
 void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)

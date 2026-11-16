@@ -174,7 +174,7 @@ void AWWOCharacter::RefreshLocalVisuals()
 void AWWOCharacter::UpdateTeamTint()
 {
 	// PvP, on each machine: when the one playing here marks a player (the reticle comes over them,
-	// or they enter the marker range while aimed in; the HUD decides, UWWOWeaponComponent::Marked),
+	// or they enter the marker range while aimed in; UWWOWeaponComponent::UpdateMarks decides),
 	// that player's outline flashes once: a strong outline over a faint tint, fading out. Red for
 	// the other team, blue for theirs, whichever team that is. Nobody is tinted otherwise.
 	static constexpr float Fill = 0.1f, Rim = 1.7f; // the outline saturates well in from the edge

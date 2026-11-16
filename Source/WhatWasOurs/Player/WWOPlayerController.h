@@ -61,6 +61,7 @@ public:
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 	virtual void Tick(float DeltaSeconds) override; // runs while paused too (PlayerTick doesn't)
+	virtual void UpdateCameraManager(float DeltaSeconds) override; // after every actor has ticked: marks targets (UWWOWeaponComponent::UpdateMarks)
 
 	// With a menu open your buttons work the menu, not your character: nothing reads as held or
 	// pressed (online the game doesn't pause under a menu, so this is what keeps the gun quiet).

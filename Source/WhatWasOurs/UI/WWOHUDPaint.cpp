@@ -377,7 +377,6 @@ void UWWOHUDWidget::PaintHealthBars(const FWWOHUDFrame& F) const
 	AWWOCharacter* Pl = F.Pl;
 	UWWOWeaponComponent* Gun = F.Gun;
 	UWWOWorldSubsystem* WS = F.WS;
-	const FVector2D AimAt = F.AimAt;
 	// Health bars: the target under the reticle, and every other visible enemy whose middle is
 	// within HealthBarRadius of the reticle on screen. A thin shield bar sits right on top of the
 	// health bar (no gap, no border), and the pair floats a little clear of the head.
@@ -404,55 +403,26 @@ void UWWOHUDWidget::PaintHealthBars(const FWWOHUDFrame& F) const
 		const APlayerState* PS = Pawn ? Pawn->GetPlayerState() : nullptr;
 		return PS ? PS->GetPlayerName() : FString();
 	};
-	// Who is marked: a target is picked up when the reticle comes over it (at the hip) or as soon as
-	// it is inside the marker range (aimed in: within HealthBarRadius of the reticle on screen, and
-	// in sight), and dropped when it leaves the marker range. Enemies show their bars while marked.
-	// A PvP player's outline flashes once at the moment they're picked up (Gun->Marked holds when;
-	// AWWOCharacter::UpdateTeamTint plays it). Teammates' bars show whenever they're in sight, in
-	// near-white (light grey health, a see-through white shield) so the only red bars are the
-	// other team's.
-	const AActor* Under = Gun->ReticleTarget.Get();
-	const bool bAimedIn = Gun->AdsAmount > 0.5f;
-	const double MarkNow = Pl->GetWorld()->GetTimeSeconds();
-	// The range widens as you aim in (eased with the aim, so it doesn't jump).
-	const float MarkRange = Pl->HealthBarRadius * FMath::Lerp(1.f, FMath::Max(Pl->HealthBarAdsScale, 1.f), Gun->AdsAmount);
-	TMap<TWeakObjectPtr<const AActor>, double> StillMarked;
-	auto Track = [&](const AActor* Actor, const IWWOTargetable* Target, bool& bInSight) -> bool
-	{
-		const FVector Middle = Target->FeetLocation() + FVector(0, 0, Target->GetBodyHeight() * 0.5f);
-		FVector2D At;
-		FHitResult Hit;
-		bInSight = Actor == Under || !Gun->CastRayTo(Middle, Hit) || Hit.GetActor() == Actor;
-		const bool bInRange = Actor == Under
-			|| (MarkRange > 0.f && bInSight && F.ToScreen(Middle, At) && FVector2D::Distance(At, AimAt) <= MarkRange);
-		const double* Since = Gun->Marked.Find(Actor);
-		if (Since ? bInRange : (Actor == Under || (bAimedIn && bInRange)))
-		{
-			StillMarked.Add(Actor, Since ? *Since : MarkNow);
-			return true;
-		}
-		return false;
-	};
+	// Bars over the enemies you have marked, and over your teammates in sight: who that is, is
+	// worked out in game code each frame (UWWOWeaponComponent::UpdateMarks), not here. Teammates'
+	// bars are near-white (light grey health, a see-through white shield) so the only red bars are
+	// the other team's.
 	if (!Pl->Ult->bActive)
 	{
 		for (AActor* Actor : WS->LivingTargets(Pl))
 		{
 			const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-			bool bInSight = false;
-			if (Target && !Target->IsDead() && Track(Actor, Target, bInSight)) HealthBar(Target, FoeRedBox, FLinearColor(0.9f, 0.9f, 0.92f), TagOf(Actor));
+			if (Target && !Target->IsDead() && Gun->Marked.Contains(Actor)) HealthBar(Target, FoeRedBox, FLinearColor(0.9f, 0.9f, 0.92f), TagOf(Actor));
 		}
 		if (UWWOWorldSubsystem::IsPvP(Pl))
 		{
 			for (AWWOCharacter* Mate : WS->GetPlayers())
 			{
 				if (Mate == Pl || Mate->Health->bDead || UWWOWorldSubsystem::CanHurt(Pl, Mate)) continue;
-				bool bInSight = false;
-				Track(Mate, Mate, bInSight);
-				if (bInSight) HealthBar(Mate, FLinearColor(0.82f, 0.83f, 0.85f), FLinearColor(1.f, 1.f, 1.f, 0.6f), TagOf(Mate));
+				if (Gun->MatesInSight.Contains(Mate)) HealthBar(Mate, FLinearColor(0.82f, 0.83f, 0.85f), FLinearColor(1.f, 1.f, 1.f, 0.6f), TagOf(Mate));
 			}
 		}
 	}
-	Gun->Marked = MoveTemp(StillMarked);
 }
 
 void UWWOHUDWidget::PaintMateChevrons(const FWWOHUDFrame& F) const
@@ -756,28 +726,17 @@ void UWWOHUDWidget::PaintVitals(const FWWOHUDFrame& F) const
 	P.Box(HAt, FVector2D(FullH * Frac, 16), Frac < 0.35f ? HealthLowColor : HealthColor);
 	P.Outline(HAt, FVector2D(FullH, 16), FLinearColor(1, 1, 1, 0.5f), 1.f);
 
-	// What's on you right now: a row of chips under the vitals, each with its name, the seconds
-	// left where it has a timer, and a bar that drains with it.
-	struct FChip { FString Label; FLinearColor Color; float Left; float Of; };
-	TArray<FChip> Chips;
-	if (!H->bDead)
-	{
-		if (Pl->SlowLeft > 0.f) Chips.Add({ FString::Printf(TEXT("SLOWED %d%%"), FMath::RoundToInt(Pl->SlowAmount * 100.f)), FLinearColor(0.6f, 0.85f, 1.f), Pl->SlowLeft, 0.f });
-		if (const UWWODamageOverTime* Dot = Pl->FindComponentByClass<UWWODamageOverTime>()) Chips.Add({ TEXT("POISONED"), UWWODamageOverTime::Color(), Dot->TimeLeft, 0.f });
-		if (AWWOSporeFog::Contains(Pl->GetWorld(), Pl->GetActorLocation())) Chips.Add({ Pl->IsInvisible() ? TEXT("VEILED") : TEXT("IN FOG"), FLinearColor(0.8f, 0.65f, 1.f), Pl->IsInvisible() ? Pl->VeilLeft : 0.f, 0.f });
-		if (Pl->EntrenchLeft > 0.f) Chips.Add({ TEXT("ENTRENCHED"), FLinearColor(0.85f, 0.65f, 0.4f), Pl->EntrenchLeft, 0.f });
-		if (Pl->Abilities->GuardTimeLeft() > 0.f) Chips.Add({ TEXT("GUARD"), FLinearColor(0.75f, 0.9f, 0.6f), Pl->Abilities->GuardTimeLeft(), 0.f });
-	}
-	// A chip's bar drains against the longest time it has shown (Of 0 = not known up front).
-	TMap<FString, float> Seen;
+	// What's on you right now: a row of chips under the vitals (NativeTick lists them), each with
+	// its name, the seconds left where it has a timer, and a bar that drains with it.
+	// A chip's bar drains against the longest time it has shown (Of 0 = not known up front; ChipPeak
+	// keeps the longest, NativeTick updates it).
 	const FVector2D ChipSize(128.f, 26.f);
 	const float Gap = 8.f;
 	float X = Center.X - (Chips.Num() * ChipSize.X + FMath::Max(Chips.Num() - 1, 0) * Gap) * 0.5f;
-	for (const FChip& Chip : Chips)
+	for (const FWWOStatusChip& Chip : Chips)
 	{
 		const FString Key = Chip.Label.Left(6);
-		const float Of = Chip.Of > 0.f ? Chip.Of : FMath::Max(ChipPeak.FindRef(Key), Chip.Left);
-		Seen.Add(Key, Of);
+		const float Of = Chip.Of > 0.f ? Chip.Of : ChipPeak.FindRef(Key);
 		const FVector2D At(X, Origin.Y + 40.f);
 		P.Box(At, ChipSize, FLinearColor(0, 0, 0, 0.55f));
 		P.Box(At, FVector2D(4.f, ChipSize.Y), Chip.Color);
@@ -786,7 +745,6 @@ void UWWOHUDWidget::PaintVitals(const FWWOHUDFrame& F) const
 		P.Text(Text, At + FVector2D(ChipSize.X * 0.5f + 2.f, 3.f), 14.f, Chip.Color, 0.5f);
 		X += ChipSize.X + Gap;
 	}
-	ChipPeak = MoveTemp(Seen);
 }
 
 void UWWOHUDWidget::PaintDamageSpikes(const FWWOHUDFrame& F) const
