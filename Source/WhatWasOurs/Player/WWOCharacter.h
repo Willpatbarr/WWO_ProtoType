@@ -62,14 +62,31 @@ struct FWWOMoveInput
 	void Quantize(); // round to what Serialize sends, so your machine simulates the same input as the host
 };
 
-// The movement rules' own state, sent back with a correction so a replay starts from the host's.
+// The movement rules' own state: the character holds one (AWWOCharacter::MoveState) and
+// SimulateMove reads and writes it directly. Saved with each move (rewound when moves combine) and
+// sent back with a correction so a replay starts from the host's. A new field here also needs a
+// line in Serialize (the wire) and in ToString (the correction logs); nothing else.
 struct FWWOMoveState
 {
-	bool bSprinting = false, bCrouching = false, bSliding = false, bCrouchToggled = false, bSlideQueued = false;
-	bool bCrouchWasHeld = false, bLandedSprinting = false, bMantling = false, bLungeFlight = false;
-	uint8 JumpsUsed = 0;
-	float TakeoffSpeed = 0.f, SlideSpeedNow = 0.f, LaunchTime = 0.f, AirTime = 0.f, SinceLanded = 99.f, MantleT = 0.f;
-	FVector SlideDir = FVector::ForwardVector, MantleFrom = FVector::ZeroVector, MantleTo = FVector::ZeroVector;
+	bool bSprinting = false;
+	bool bCrouching = false;      // wants to be crouched (Unreal keeps you crouched under a low ceiling)
+	bool bSliding = false;
+	bool bCrouchToggled = false;
+	bool bSlideQueued = false;    // crouch tapped in the air: slide on landing
+	bool bCrouchWasHeld = false;  // crouch button last move (edge detection inside the simulation)
+	bool bLandedSprinting = false;
+	bool bMantling = false;
+	bool bLungeFlight = false;    // moving as a lunge this move (both machines, from MoveLunge)
+	int32 JumpsUsed = 0;          // a byte on the wire
+	float TakeoffSpeed = 0.f;     // m/s, keeps sprint/slide momentum while airborne
+	float SlideSpeedNow = 0.f;    // m/s
+	float LaunchTime = 0.f;
+	float AirTime = 0.f;
+	float SinceLanded = 99.f;
+	float MantleT = 0.f;
+	FVector SlideDir = FVector::ForwardVector;
+	FVector MantleFrom = FVector::ZeroVector;
+	FVector MantleTo = FVector::ZeroVector;
 	void Serialize(FArchive& Ar);
 	FString ToString() const; // for logs
 };
@@ -217,12 +234,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Camera") float SprintStride = 4.2f;
 
 	// --- State (read by the gun, HUD and abilities) ---
-	bool bSprinting = false;
-	bool bCrouching = false;
-	bool bSliding = false;
+	FWWOMoveState MoveState;        // the movement rules' state (sprinting, sliding, jumps...): see FWWOMoveState
 	bool bUlting = false;           // the ult is playing: no moving or looking
-	int32 JumpsUsed = 0;
-	float TakeoffSpeed = 0.f;       // m/s, keeps sprint/slide momentum while airborne
 	float SlowLeft = 0.f;
 	float SlowAmount = 0.f;
 	float VeilLeft = 0.f;
@@ -234,8 +247,8 @@ public:
 	FVector LungeVelocity = FVector::ZeroVector; // cm/s, while lunging or mantling
 
 	bool IsLunging() const { return bLunging; }
-	bool IsInLungeFlight() const { return bLungeFlight; } // the movement side of a lunge (from the move input)
-	bool IsMantling() const { return bMantling; }
+	bool IsInLungeFlight() const { return MoveState.bLungeFlight; } // the movement side of a lunge (from the move input)
+	bool IsMantling() const { return MoveState.bMantling; }
 	bool IsOnFloor() const;
 	bool IsInvisible() const;
 	float SlowMultiplier() const { return SlowLeft > 0.f ? 1.f - SlowAmount : 1.f; }
@@ -279,8 +292,8 @@ public:
 	// your replays after a correction.
 	FWWOMoveInput MoveIn;
 	void SimulateMove(float DeltaSeconds);
-	FWWOMoveState GetMoveState() const;
-	void SetMoveState(const FWWOMoveState& State);
+	FWWOMoveState GetMoveState() const { return MoveState; }
+	void SetMoveState(const FWWOMoveState& S) { MoveState = S; }
 	// Your movement values (after loadout modifiers and your Settings sliders), sent to the host once
 	// and whenever they change, so it simulates you with them.
 	UFUNCTION(Server, Reliable) void ServerSetMoveStats(const TArray<float>& Values);
@@ -401,28 +414,15 @@ private:
 
 	float Pitch = 0.f;
 	bool bLunging = false;     // your machine steering a lunge at its target (it sends the velocity)
-	bool bLungeFlight = false; // moving as a lunge this move (both machines, from MoveLunge)
 	bool bLaunchPending = false;
 	FVector PendingLaunch = FVector::ZeroVector;
 	void EndLungeFlight();
 	void ApplyLaunch(const FVector& NewVelocityCm);
-	bool bMantling = false;
 	TWeakObjectPtr<AActor> LungeTarget;
 	float LungeTime = 0.f;
 	float LungeLastFlat = TNumericLimits<float>::Max();
-	FVector MantleFrom, MantleTo;
-	float MantleT = 0.f;
-	FVector SlideDir = FVector::ForwardVector;
-	float SlideSpeedNow = 0.f; // m/s
-	float LaunchTime = 0.f;
-	bool bCrouchWasHeld = false;
-	bool bCrouchToggled = false;
-	bool bSlideQueued = false;
-	float SinceLanded = 99.f;
-	bool bLandedSprinting = false;
 	float CameraBaseZ = 60.f; // cm above the capsule center
 	float SprintBlend = 0.f;
-	float AirTime = 0.f;
 	float LandKick = 0.f;
 	float LastFallSpeed = 0.f; // m/s
 	uint64 PreparedFrame = 0; // GFrameCounter of the last PrepareMovement

@@ -187,7 +187,7 @@ bool FWWOAutoTest::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	auto LogPlayer = [&](const TCHAR* What)
 	{
 		UE_LOG(LogWWO, Display, TEXT("AutoTest body: player %s plays %s (crouched %d sliding %d, %.2f m/s)"), What, *P->Body->CurrentAnim().ToString(),
-			P->bIsCrouched, P->bSliding, P->GetVelocity().Size2D() / WWO::M);
+			P->bIsCrouched, P->MoveState.bSliding, P->GetVelocity().Size2D() / WWO::M);
 	};
 	if (Crossed(PlayerAt))
 	{

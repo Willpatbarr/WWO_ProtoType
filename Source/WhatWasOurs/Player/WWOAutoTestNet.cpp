@@ -436,7 +436,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 			// its own locally, and the host's arrives from the host.
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: t=%.0f %s joiner at %s speed %.2f crouched %d sliding %d on floor %d, joiner clip %s, other clip %s"), FMath::FloorToFloat(T),
 				bHost ? TEXT("host's copy:") : TEXT("own:"), *Joiner->GetActorLocation().ToCompactString(),
-				FVector2D(Joiner->GetVelocity()).Size() / WWO::M, Joiner->bIsCrouched, Joiner->bSliding, Joiner->IsOnFloor(),
+				FVector2D(Joiner->GetVelocity()).Size() / WWO::M, Joiner->bIsCrouched, Joiner->MoveState.bSliding, Joiner->IsOnFloor(),
 				*Joiner->Body->CurrentAnim().ToString(), Other ? *Other->Body->CurrentAnim().ToString() : TEXT("-"));
 		}
 	}

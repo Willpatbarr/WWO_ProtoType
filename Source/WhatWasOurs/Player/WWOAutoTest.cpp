@@ -177,7 +177,7 @@ void FWWOAutoTest::UpdateAutoTest(float DeltaTime)
 		P->SetViewRotation(0.f, BestYaw);
 		return BestLen / WWO::M;
 	};
-	if (bAutoTrackSlide && !P->bSliding && AutoTestClock > 26.85f)
+	if (bAutoTrackSlide && !P->MoveState.bSliding && AutoTestClock > 26.85f)
 	{
 		bAutoTrackSlide = false;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide covered %.2f m"), FVector2D(P->GetActorLocation() - AutoSlideFrom).Size() / WWO::M);
@@ -209,7 +209,7 @@ void FWWOAutoTest::UpdateAutoTest(float DeltaTime)
 			{
 				bAutoTrackJump = false;
 				UE_LOG(LogWWO, Display, TEXT("AutoTest jump: apex %.3f m at %.3f s, landed at %.3f s (%.3f m from takeoff), jumps used %d, mantled %d, dip %.3f m"),
-					AutoJumpPeak, AutoJumpPeakTime, AutoJumpLandTime, Rise, P->JumpsUsed, bAutoSawMantle, AutoJumpDip);
+					AutoJumpPeak, AutoJumpPeakTime, AutoJumpLandTime, Rise, P->MoveState.JumpsUsed, bAutoSawMantle, AutoJumpDip);
 			}
 		}
 	}
@@ -275,7 +275,7 @@ void FWWOAutoTest::UpdateAutoTest(float DeltaTime)
 		bAutoTrackSlide = true;
 		Next(26.9f);
 	}
-	else if (At(26.9f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide %.2f sliding %d"), Speed2D(), P->bSliding); PC->Held[(int32)EWWOAction::Crouch] = false; Next(28.5f); }
+	else if (At(26.9f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: slide %.2f sliding %d"), Speed2D(), P->MoveState.bSliding); PC->Held[(int32)EWWOAction::Crouch] = false; Next(28.5f); }
 	else if (At(28.5f)) { PC->MoveValue = FVector2D::ZeroVector; Next(28.6f); }
 	else if (At(28.6f)) { UE_LOG(LogWWO, Display, TEXT("AutoTest move: stopped %.2f"), Speed2D()); Next(29.5f); }
 	else if (At(29.5f))

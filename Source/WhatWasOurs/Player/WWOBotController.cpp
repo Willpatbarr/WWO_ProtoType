@@ -914,7 +914,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	}
 
 	// Sprint latches: one press starts it (sprinting would cancel a reload).
-	if (bWantSprint && !Me->bSprinting && !Me->bSliding && !Gun->bReloading) Press(EWWOAction::Sprint);
+	if (bWantSprint && !Me->MoveState.bSprinting && !Me->MoveState.bSliding && !Gun->bReloading) Press(EWWOAction::Sprint);
 
 	// Stuck on something: hop (that also mantles a ledge), then give up on this way.
 	const float Speed = DeltaSeconds > 0.f ? FVector::Dist2D(LastSpot, Here) / DeltaSeconds : 0.f;

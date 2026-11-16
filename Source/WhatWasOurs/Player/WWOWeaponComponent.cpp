@@ -697,7 +697,7 @@ void UWWOWeaponComponent::StartReload()
 	if (bReloading || Ammo >= MagazineSize()) return;
 	bReloading = true;
 	ReloadProgress = 0.f;
-	GetPlayer()->bSprinting = false; // reloading stops a sprint
+	GetPlayer()->MoveState.bSprinting = false; // reloading stops a sprint
 	UWWOSound::PlayFor(GetOwner(), "reload_start");
 }
 
@@ -802,7 +802,7 @@ void UWWOWeaponComponent::UpdateMelee(float DeltaSeconds)
 		bMeleeLanded = false;
 		bMeleeConnected = false; // (the swing's whoosh is a miss's sound: MeleeStrike plays it when nothing was hit)
 		CancelReload(); // meleeing cancels a reload, like Destiny
-		P->bSprinting = false;
+		P->MoveState.bSprinting = false;
 		AActor* Target = FindLungeTarget();
 		MeleeTarget = Target;
 		// Online, the punch shows on your full body for everyone else (the host's copy replicates it).
@@ -996,7 +996,7 @@ void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 	Ammo = FMath::Min(Ammo, MagazineSize()); // in case the slider shrank the magazine
 	// Square is Revive too: next to a downed teammate it revives instead.
 	if (JustPressed((int32)EWWOAction::Reload) && !GetPlayer()->Health->FindReviveTarget()) StartReload();
-	if (bReloading && GetPlayer()->bSprinting) CancelReload(); // sprinting cancels a reload, like Destiny
+	if (bReloading && GetPlayer()->MoveState.bSprinting) CancelReload(); // sprinting cancels a reload, like Destiny
 	if (!bReloading) return;
 	const float Adrenal = AdrenalLeft > 0.f ? 1.4f : 1.f; // Adrenal: reloads 40% faster after a kill
 	ReloadProgress += DeltaSeconds * Adrenal / FMath::Max(M("reload_time", Weapon->ReloadTime), 0.05f);
@@ -1063,10 +1063,10 @@ void UWWOWeaponComponent::UpdateFiring(float DeltaSeconds)
 	}
 	// Handling: the gun needs a moment to come up after a sprint or mantle. A trigger pull
 	// meanwhile fires as soon as it's up.
-	if (P->bSprinting || P->IsMantling()) ReadyLeft = M("ready_time", ReadyTime);
+	if (P->MoveState.bSprinting || P->IsMantling()) ReadyLeft = M("ready_time", ReadyTime);
 	if (ReadyLeft > 0.f)
 	{
-		if (!(P->bSprinting || P->IsMantling())) ReadyLeft -= DeltaSeconds;
+		if (!(P->MoveState.bSprinting || P->IsMantling())) ReadyLeft -= DeltaSeconds;
 		if (Weapon->IsSemiAuto() && JustPressed((int32)EWWOAction::Fire)) bReadyShotQueued = true;
 		FireCooldown = FMath::Max(FireCooldown, 0.f); // don't bank shots while waiting
 		return;
@@ -1432,8 +1432,8 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	SwayValue = FMath::Lerp(SwayValue, Target, FMath::Min(10.f * DeltaSeconds, 1.f));
 
 	// Action poses fade in and out; aiming mostly cancels them.
-	SprintPose = WWO::MoveToward(SprintPose, P->bSprinting ? 1.f : 0.f, 5.f * DeltaSeconds);
-	SlidePose = WWO::MoveToward(SlidePose, P->bSliding ? 1.f : 0.f, 6.f * DeltaSeconds);
+	SprintPose = WWO::MoveToward(SprintPose, P->MoveState.bSprinting ? 1.f : 0.f, 5.f * DeltaSeconds);
+	SlidePose = WWO::MoveToward(SlidePose, P->MoveState.bSliding ? 1.f : 0.f, 6.f * DeltaSeconds);
 	const float HipOnly = 1.f - AdsAmount;
 	const float SprintAmount = WWO::SmoothStep(0.f, 1.f, SprintPose) * HipOnly;
 	const float SlideAmount = WWO::SmoothStep(0.f, 1.f, SlidePose) * (1.f - 0.8f * AdsAmount); // the tilt
@@ -1953,7 +1953,7 @@ void UWWOWeaponComponent::RefreshStats()
 	// Perks that change stats while they're active.
 	const AWWOCharacter* Pl = GetPlayer();
 	if (L->HasPerk("focus") && HitStreak >= 5) Weapon->Damage *= Focus;
-	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding))
+	if (L->HasPerk("brace") && Pl && (Pl->MoveState.bCrouching || Pl->MoveState.bSliding))
 	{
 		Weapon->RecoilUp *= 0.6f;
 		Weapon->RecoilSide *= 0.6f;
@@ -1971,7 +1971,7 @@ void UWWOWeaponComponent::RefreshStats()
 		Weapon->RecoilUp *= 0.7f;
 		Weapon->RecoilSide *= 0.7f;
 	}
-	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding)
+	if (L->HasPerk("slide_shot") && Pl && Pl->MoveState.bSliding)
 	{
 		Weapon->PelletSpread *= 0.5f;
 		Weapon->Damage *= SlideShot;
@@ -2050,7 +2050,7 @@ FString UWWOWeaponComponent::PerkStatus() const
 	if (L->HasPerk("static")) Active.Add(FString::Printf(TEXT("Static %d/10"), StaticHits));
 	if (L->HasPerk("adrenal") && AdrenalLeft > 0.f) Active.Add(FString::Printf(TEXT("Adrenal %.1fs"), AdrenalLeft));
 	const AWWOCharacter* Pl = GetPlayer();
-	if (L->HasPerk("brace") && Pl && (Pl->bCrouching || Pl->bSliding)) Active.Add(TEXT("Braced"));
+	if (L->HasPerk("brace") && Pl && (Pl->MoveState.bCrouching || Pl->MoveState.bSliding)) Active.Add(TEXT("Braced"));
 	if (L->HasPerk("hunter") && AdsAmount > 0.5f) Active.Add(TEXT("Hunter"));
 	if (L->HasPerk("overpressure") && bOverpressure) Active.Add(TEXT("Overpressure READY"));
 	if (L->HasPerk("final_round") && Ammo == 1) Active.Add(TEXT("Final Round"));
@@ -2070,7 +2070,7 @@ FString UWWOWeaponComponent::PerkStatus() const
 		if (L->HasPerk("executioner") && Aimed->GetHealth() + Aimed->GetShield() < 0.5f * (Aimed->GetMaxHealth() + Aimed->GetMaxShield())) Active.Add(TEXT("Finisher"));
 	}
 	if (L->HasPerk("breath") && AdsAmount > 0.5f) Active.Add(AimHeld >= BreathTime ? FString(TEXT("Breath HELD")) : FString(TEXT("Breath")));
-	if (L->HasPerk("slide_shot") && Pl && Pl->bSliding) Active.Add(TEXT("Slideshot"));
+	if (L->HasPerk("slide_shot") && Pl && Pl->MoveState.bSliding) Active.Add(TEXT("Slideshot"));
 	if (L->HasPerk("full_burst") && (bFullBurst || bBurstBoosted)) Active.Add(TEXT("Full Burst READY"));
 	return FString::Join(Active, TEXT("  ·  "));
 }
