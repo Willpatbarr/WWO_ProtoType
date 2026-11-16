@@ -201,30 +201,27 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		if (!G) continue;
 		const FName Id = G->Id, Flora = G->Flora;
 		const float Radius = G->BlastRadius;
-		// The Poison Spike lying still only counts a body within reach of it as a touch: 0.6 m.
+		// The Poison Spike lying still only counts a body within reach of it as a touch: 0.6 m from an
+		// enemy, 0.45 m from a player. (At 0.6 m a player's body is just out of reach, and where the
+		// spike then rolls follows the player's idle animation, whose phase depends on what ran before.)
 		const float NearM = G->Kind == EWWOGrenadeKind::Spike ? 0.6f : 1.5f;
+		const float NearPlayerM = G->Kind == EWWOGrenadeKind::Spike ? 0.45f : 1.5f;
 		const bool bLingers = G->Kind == EWWOGrenadeKind::Pool || G->Kind == EWWOGrenadeKind::Spike;
 		for (const EVictims Set : AllSets)
 		{
 			FWWORegressScenario S;
 			S.Name = FString::Printf(TEXT("grenade.%s.%s"), *Id.ToString(), VictimsName(Set));
 			S.bPvP = IsPvPSet(Set);
-			if (G->Kind == EWWOGrenadeKind::Spike && Set == EVictims::Foe)
-			{
-				// Where the fizzling spike ends up differs by 18 cm: it curves toward the other-team
-				// player's aim parts, whose head follows its animated head bone.
-				S.Modes = EWWORegressModes::PerMode;
-				S.ModeReason = TEXT("the spike curves toward a player's animated head");
-			}
+
 			S.MaxTicks = Ticks(20.f);
 			TSharedRef<FKitState> St = MakeShared<FKitState>();
-			S.Setup = [St, Id, Flora, Radius, Set, NearM](FWWORegress& R)
+			S.Setup = [St, Id, Flora, Radius, Set, NearM, NearPlayerM](FWWORegress& R)
 			{
 				*St = FKitState();
 				R.EquipFlora(Flora);
 				R.EquipGrenade(Id);
 				St->Point = R.Ahead(10.f);
-				PlaceVictims(R, *St, Set, St->Point, Radius, NearM);
+				PlaceVictims(R, *St, Set, St->Point, Radius, IsPvPSet(Set) ? NearPlayerM : NearM);
 				R.Tune(R.Player()->Grenades, "ThrowDistance", 0.05f);
 			};
 			S.Step = [St, bLingers](FWWORegress& R, int32 Tick)
