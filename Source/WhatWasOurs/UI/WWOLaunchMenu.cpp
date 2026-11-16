@@ -15,7 +15,6 @@
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
-#include "Components/ButtonSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
@@ -452,32 +451,12 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 	const FLinearColor A = WWOUI::Accent(this);
 	UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>();
 
-	// Header, as on the other menus: the game's name, where you are, the keys.
-	UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-	Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, WWOUI::DefaultAccent, 0)))->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
-	NameText->SetVerticalAlignment(VAlign_Center);
-	NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
-	UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
-	NameSlot->SetSize(WWOUI::Fill());
-	NameSlot->SetVerticalAlignment(VAlign_Center);
-	UVerticalBox* Tab = Tree->ConstructWidget<UVerticalBox>();
-	Tab->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("GAME SETUP"), 17.f, FLinearColor::White, 180))->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
-	UBorder* TabLine = Tree->ConstructWidget<UBorder>();
-	TabLine->SetBrushColor(WWO::Lin(A));
-	USizeBox* TabLineBox = Tree->ConstructWidget<USizeBox>();
-	TabLineBox->SetHeightOverride(3.f * K);
-	TabLineBox->AddChild(TabLine);
-	Tab->AddChildToVerticalBox(TabLineBox);
-	Header->AddChildToHorizontalBox(Tab)->SetVerticalAlignment(VAlign_Center);
+	// Header, as on the other menus: the game's name, where you are (one tab, open), the keys.
+	WWOUI::FTabStrip Where = WWOUI::TabStrip(Tree, TArray<FString>{ FString(TEXT("GAME SETUP")) }, [](UWidget* Tab, int32) { return Tab; });
+	Where.Lines[0]->SetBrushColor(WWO::Lin(A));
 	UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Cross or click  select   ·   Circle or Esc  back"), 11.f, WWOUI::Faint, 120);
 	Keys->SetJustification(ETextJustify::Right);
-	UHorizontalBoxSlot* KeysSlot = Header->AddChildToHorizontalBox(Keys);
-	KeysSlot->SetSize(WWOUI::Fill());
-	KeysSlot->SetVerticalAlignment(VAlign_Center);
-	Column->AddChildToVerticalBox(Header);
-	Column->AddChildToVerticalBox(WWOUI::Rule(Tree, WWOUI::RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+	WWOUI::AddPageHeader(Tree, Column, WWOUI::HeaderName(Tree, TEXT("WHAT WAS OURS"), true), Where.Box, Keys);
 
 	UHorizontalBox* Body = Tree->ConstructWidget<UHorizontalBox>();
 	Column->AddChildToVerticalBox(Body)->SetSize(WWOUI::Fill());

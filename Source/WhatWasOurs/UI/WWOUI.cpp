@@ -10,6 +10,10 @@
 #include "Components/Button.h"
 #include "Components/ButtonSlot.h"
 #include "Components/EditableTextBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
@@ -149,6 +153,73 @@ namespace WWOUI
 		BoxStyle.TextStyle.SetFont(Font(FontPx)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
 		BoxStyle.SetPadding(FMargin(PaddingPx.Left * K, PaddingPx.Top * K, PaddingPx.Right * K, PaddingPx.Bottom * K));
 		Box->WidgetStyle = BoxStyle;
+	}
+
+	UWidget* HeaderName(UWidgetTree* Tree, const FString& Title, bool bLogo)
+	{
+		UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
+		UTextBlock* Mark = Spaced(Tree, TEXT("//"), 26.f, DefaultAccent, 0);
+		Name->AddChildToHorizontalBox(bLogo ? MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, Mark) : Mark)->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* TitleSlot = Name->AddChildToHorizontalBox(Spaced(Tree, Title, 17.f, FLinearColor::White, 420));
+		TitleSlot->SetVerticalAlignment(VAlign_Center);
+		TitleSlot->SetPadding(FMargin(18.f * K, 0, 0, 0));
+		return Name;
+	}
+
+	FTabStrip TabStrip(UWidgetTree* Tree, const TArray<FString>& Names, TFunctionRef<UWidget*(UWidget* Content, int32 Index)> Wrap)
+	{
+		FTabStrip Strip;
+		Strip.Box = Tree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < Names.Num(); ++i)
+		{
+			UWidget* Bar = nullptr;
+			if (i > 0)
+			{
+				Bar = Spaced(Tree, TEXT("|"), 15.f, TabBar, 0);
+				UHorizontalBoxSlot* BarSlot = Strip.Box->AddChildToHorizontalBox(Bar);
+				BarSlot->SetVerticalAlignment(VAlign_Center);
+				BarSlot->SetPadding(FMargin(26.f * K, 0));
+			}
+			UVerticalBox* Tab = Tree->ConstructWidget<UVerticalBox>();
+			UTextBlock* Label = Spaced(Tree, Names[i], 17.f, FLinearColor::White, 180);
+			Tab->AddChildToVerticalBox(Label)->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
+			UBorder* Line = Tree->ConstructWidget<UBorder>();
+			USizeBox* LineBox = Tree->ConstructWidget<USizeBox>();
+			LineBox->SetHeightOverride(3.f * K);
+			LineBox->AddChild(Line);
+			Tab->AddChildToVerticalBox(LineBox);
+			UWidget* Clicked = Wrap(Tab, i);
+			Strip.Box->AddChildToHorizontalBox(Clicked)->SetVerticalAlignment(VAlign_Center);
+			Strip.Labels.Add(Label);
+			Strip.Lines.Add(Line);
+			Strip.Tabs.Add(Clicked);
+			Strip.Bars.Add(Bar);
+		}
+		return Strip;
+	}
+
+	void SetActiveTab(const TArray<TObjectPtr<UTextBlock>>& Labels, const TArray<TObjectPtr<UBorder>>& Lines, int32 Active, const FLinearColor& AccentColor)
+	{
+		for (int32 i = 0; i < Labels.Num(); ++i)
+		{
+			Labels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Active ? FLinearColor::White : TabDim)));
+			if (Lines.IsValidIndex(i)) Lines[i]->SetBrushColor(WWO::Lin(i == Active ? AccentColor : FLinearColor(0, 0, 0, 0)));
+		}
+	}
+
+	void AddPageHeader(UWidgetTree* Tree, UVerticalBox* Column, UWidget* Name, UWidget* Middle, UWidget* Right, EHorizontalAlignment RightAlign)
+	{
+		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
+		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
+		NameSlot->SetSize(Fill(1.f));
+		NameSlot->SetVerticalAlignment(VAlign_Center);
+		Header->AddChildToHorizontalBox(Middle)->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* RightSlot = Header->AddChildToHorizontalBox(Right);
+		RightSlot->SetSize(Fill(1.f));
+		RightSlot->SetHorizontalAlignment(RightAlign);
+		RightSlot->SetVerticalAlignment(VAlign_Center);
+		Column->AddChildToVerticalBox(Header);
+		Column->AddChildToVerticalBox(Rule(Tree, RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
 	}
 
 	FButtonLook FilledLook(const FLinearColor& Color, const FMargin& Padding, bool bLeftAlign)

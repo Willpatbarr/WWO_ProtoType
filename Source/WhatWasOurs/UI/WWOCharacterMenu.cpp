@@ -12,7 +12,6 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
-#include "Components/ButtonSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
@@ -247,46 +246,20 @@ void UWWOCharacterMenu::Open()
 		Page->SetContent(Column);
 
 		// Header: the game's name, the tabs, the keys.
-		UHorizontalBox* Header = Tree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBox* Name = Tree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(WWOUI::MakeLogo(Tree, false, FVector2D(30.f, 30.f) * K, WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, WWOUI::DefaultAccent, 0)))->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 17.f, FLinearColor::White, 420));
-		NameText->SetVerticalAlignment(VAlign_Center);
-		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
-		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
-		NameSlot->SetSize(WWOUI::Fill(1.f));
-		NameSlot->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBox* Tabs = Tree->ConstructWidget<UHorizontalBox>();
-		for (int32 i = 0; i < UE_ARRAY_COUNT(TabNames); ++i)
+		TArray<FString> TabTitles;
+		for (const TCHAR* Title : TabNames) TabTitles.Add(Title);
+		WWOUI::FTabStrip Tabs = WWOUI::TabStrip(Tree, TabTitles, [this, WeakThis](UWidget* Tab, int32 i) -> UWidget*
 		{
-			if (i > 0)
-			{
-				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, WWOUI::TabBar, 0));
-				Bar->SetVerticalAlignment(VAlign_Center);
-				Bar->SetPadding(FMargin(26.f * K, 0));
-			}
-			UVerticalBox* Tab = Tree->ConstructWidget<UVerticalBox>();
-			UTextBlock* Label = WWOUI::Spaced(WidgetTree, TabNames[i], 17.f, FLinearColor::White, 180);
-			Tab->AddChildToVerticalBox(Label)->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
-			UBorder* Line = Tree->ConstructWidget<UBorder>();
-			USizeBox* LineBox = Tree->ConstructWidget<USizeBox>();
-			LineBox->SetHeightOverride(3.f * K);
-			LineBox->AddChild(Line);
-			Tab->AddChildToVerticalBox(LineBox);
-			TabLabels.Add(Label);
-			TabLines.Add(Line);
-			Tabs->AddChildToHorizontalBox(Card(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SetTab(i); }, FLinearColor(0, 0, 0, 0), FLinearColor(0, 0, 0, 0), 0.f, FMargin(0)))
-				->SetVerticalAlignment(VAlign_Center);
+			return Card(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SetTab(i); }, FLinearColor(0, 0, 0, 0), FLinearColor(0, 0, 0, 0), 0.f, FMargin(0));
+		});
+		for (int32 i = 0; i < Tabs.Labels.Num(); ++i)
+		{
+			TabLabels.Add(Tabs.Labels[i]);
+			TabLines.Add(Tabs.Lines[i]);
 		}
-		UHorizontalBoxSlot* TabsSlot = Header->AddChildToHorizontalBox(Tabs);
-		TabsSlot->SetVerticalAlignment(VAlign_Center);
 		UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Q / E  TABS   ·   A / D  OR DRAG  TURN   ·   ESC  BACK"), 11.f, WWOUI::Faint, 120);
 		Keys->SetJustification(ETextJustify::Right);
-		UHorizontalBoxSlot* KeysSlot = Header->AddChildToHorizontalBox(Keys);
-		KeysSlot->SetSize(WWOUI::Fill(1.f));
-		KeysSlot->SetVerticalAlignment(VAlign_Center);
-		Column->AddChildToVerticalBox(Header);
-		Column->AddChildToVerticalBox(WWOUI::Rule(Tree, WWOUI::RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+		WWOUI::AddPageHeader(Tree, Column, WWOUI::HeaderName(Tree, TEXT("WHAT WAS OURS"), true), Tabs.Box, Keys);
 
 		// The character, shown on every tab (one render target, two places it can sit).
 		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
@@ -475,14 +448,7 @@ void UWWOCharacterMenu::CycleTab(int32 Step)
 void UWWOCharacterMenu::UpdateTabs()
 {
 	// The open tab is white over a line in the flora's color; the others are dim.
-	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	const FLinearColor Accent = WWOUI::Accent(this);
-	const int32 Now = TabIndex();
-	for (int32 i = 0; i < TabLabels.Num(); ++i)
-	{
-		TabLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Now ? FLinearColor::White : WWOUI::TabDim)));
-		TabLines[i]->SetBrushColor(WWO::Lin(i == Now ? Accent : FLinearColor(0, 0, 0, 0)));
-	}
+	WWOUI::SetActiveTab(TabLabels, TabLines, TabIndex(), WWOUI::Accent(this));
 }
 
 void UWWOCharacterMenu::BuildOverview()
@@ -870,7 +836,6 @@ void UWWOCharacterMenu::UpdateStatPreview(const UWWOFramePartData* Part, bool bE
 void UWWOCharacterMenu::UpdateNoteOutline(const FString& Source)
 {
 	OutlinedSource = Source;
-	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	const FLinearColor Accent = WWOUI::Accent(this);
 	for (const TPair<TObjectPtr<UBorder>, FString>& Row : NoteRows)
 	{

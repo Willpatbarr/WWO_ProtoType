@@ -26,6 +26,8 @@ class UUserWidget;
 class UTextBlock;
 class UButton;
 class UBorder;
+class UHorizontalBox;
+class UVerticalBox;
 class UEditableTextBox;
 class FSlateWindowElementList;
 struct FGeometry;
@@ -111,6 +113,26 @@ namespace WWOUI
 	// The text box style (the settings search box, the launch screen's gamer tag): a card with the
 	// card edge, the accent's edge while typing in it.
 	void StyleTextBox(UEditableTextBox* Box, float FontPx, const FMargin& PaddingPx, const FLinearColor& AccentColor);
+
+	// --- Page header and tabs ----------------------------------------------------------------------
+	// The left of a page header: the "//" mark (the round logo over it, with bLogo) and Title in spaced capitals.
+	UWidget* HeaderName(UWidgetTree* Tree, const FString& Title, bool bLogo);
+	// A row of tabs: each a spaced label over a 3 px line, with a "|" between them. Wrap puts a tab's
+	// content in what gets clicked (a button whose click handler the menu keeps) or returns it as it is.
+	struct FTabStrip
+	{
+		UHorizontalBox* Box = nullptr;
+		TArray<UTextBlock*> Labels;
+		TArray<UBorder*> Lines;
+		TArray<UWidget*> Tabs; // each tab as Wrap returned it
+		TArray<UWidget*> Bars; // the "|" before each tab (null for the first)
+	};
+	FTabStrip TabStrip(UWidgetTree* Tree, const TArray<FString>& Names, TFunctionRef<UWidget*(UWidget* Content, int32 Index)> Wrap);
+	// The open tab white over a line in the accent; the others dim, with no line.
+	void SetActiveTab(const TArray<TObjectPtr<UTextBlock>>& Labels, const TArray<TObjectPtr<UBorder>>& Lines, int32 Active, const FLinearColor& AccentColor);
+	// A page header (Name, then Middle, then Right filling the rest with RightAlign) and the rule under
+	// it, added to the page's Column.
+	void AddPageHeader(UWidgetTree* Tree, UVerticalBox* Column, UWidget* Name, UWidget* Middle, UWidget* Right, EHorizontalAlignment RightAlign = HAlign_Fill);
 
 	// --- Buttons ------------------------------------------------------------------------------------
 	struct FButtonLook

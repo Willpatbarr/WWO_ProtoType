@@ -18,12 +18,9 @@
 #include "Components/Border.h"
 #include "Components/BorderSlot.h"
 #include "Components/Button.h"
-#include "Components/ButtonSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
-#include "Components/Image.h"
-#include "Engine/Texture2D.h"
 #include "Components/ProgressBar.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
@@ -38,7 +35,6 @@
 #include "Components/WrapBoxSlot.h"
 #include "Components/EditableTextBox.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Styling/CoreStyle.h"
 #include "UI/WWOMenuCursor.h"
 #include "Net/WWONetSubsystem.h"
 #include "Kismet/GameplayStatics.h"
@@ -1236,58 +1232,29 @@ void UWWOSettingsMenu::Prepare()
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		Page->SetContent(Column);
 
-		// Header: the name, the five tabs (bumpers or Q / E), the search box.
-		UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBox* Name = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("//"), 26.f, WWOUI::DefaultAccent, 0))->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* NameText = Name->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("SETTINGS"), 17.f, FLinearColor::White, 420));
-		NameText->SetVerticalAlignment(VAlign_Center);
-		NameText->SetPadding(FMargin(18.f * K, 0, 0, 0));
-		UHorizontalBoxSlot* NameSlot = Header->AddChildToHorizontalBox(Name);
-		NameSlot->SetSize(WWOUI::Fill(1.f));
-		NameSlot->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+		// Header: the name, the six tabs (bumpers or Q / E), the search box.
+		TArray<FString> TabTitles;
+		for (const TCHAR* Title : TopTabNames) TabTitles.Add(Title);
+		WWOUI::FTabStrip Tabs = WWOUI::TabStrip(WidgetTree, TabTitles, [this, WeakThis](UWidget* Tab, int32 i) -> UWidget*
+		{
+			return PlainButton(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SelectTopTab(i); });
+		});
 		for (int32 i = 0; i < NumTopTabs; ++i)
 		{
-			if (i > 0)
-			{
-				UHorizontalBoxSlot* Bar = Tabs->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("|"), 15.f, WWOUI::TabBar, 0));
-				Bar->SetVerticalAlignment(VAlign_Center);
-				Bar->SetPadding(FMargin(26.f * K, 0));
-			}
-			UVerticalBox* Tab = WidgetTree->ConstructWidget<UVerticalBox>();
-			UTextBlock* Label = WWOUI::Spaced(WidgetTree, TopTabNames[i], 17.f, FLinearColor::White, 180);
-			Tab->AddChildToVerticalBox(Label)->SetPadding(FMargin(8.f * K, 6.f * K, 4.f * K, 6.f * K));
-			UBorder* Line = WidgetTree->ConstructWidget<UBorder>();
-			USizeBox* LineBox = WidgetTree->ConstructWidget<USizeBox>();
-			LineBox->SetHeightOverride(3.f * K);
-			LineBox->AddChild(Line);
-			Tab->AddChildToVerticalBox(LineBox);
-			TopLabels.Add(Label);
-			TopLines.Add(Line);
-			UButton* TabButton = PlainButton(Tab, [WeakThis, i] { if (WeakThis.IsValid()) WeakThis->SelectTopTab(i); });
-			Tabs->AddChildToHorizontalBox(TabButton)->SetVerticalAlignment(VAlign_Center);
-			TopTabWidgets.Add(TabButton);
-			TopTabWidgets.Add(i > 0 ? Tabs->GetChildAt(Tabs->GetChildrenCount() - 2) : nullptr);
+			TopLabels.Add(Tabs.Labels[i]);
+			TopLines.Add(Tabs.Lines[i]);
+			TopTabWidgets.Add(Tabs.Tabs[i]);
+			TopTabWidgets.Add(Tabs.Bars[i]);
 		}
-		Header->AddChildToHorizontalBox(Tabs)->SetVerticalAlignment(VAlign_Center);
 		// Search: type part of a setting's name to list every match from every tab.
 		SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 		WWOUI::StyleTextBox(SearchBox, 15.f, FMargin(12.f, 6.f), Accent);
 		SearchBox->SetHintText(FText::FromString(TEXT("SEARCH SETTINGS")));
 		SearchBox->OnTextChanged.AddDynamic(this, &UWWOSettingsMenu::OnSearchChanged);
 		SearchBox->OnTextCommitted.AddDynamic(this, &UWWOSettingsMenu::OnSearchCommitted);
-		USizeBox* SearchSize = WidgetTree->ConstructWidget<USizeBox>();
-		SearchSize->SetWidthOverride(250.f * K);
-		SearchSize->AddChild(SearchBox);
 		UHorizontalBox* RightSide = WidgetTree->ConstructWidget<UHorizontalBox>();
-		RightSide->AddChildToHorizontalBox(SearchSize)->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* RightSlot = Header->AddChildToHorizontalBox(RightSide);
-		RightSlot->SetSize(WWOUI::Fill(1.f));
-		RightSlot->SetHorizontalAlignment(HAlign_Right);
-		RightSlot->SetVerticalAlignment(VAlign_Center);
-		Column->AddChildToVerticalBox(Header);
-		Column->AddChildToVerticalBox(WWOUI::Rule(WidgetTree, WWOUI::RuleColor))->SetPadding(FMargin(0, 4.f * K, 0, 0));
+		RightSide->AddChildToHorizontalBox(WWOUI::Wide(WidgetTree, SearchBox, 250.f))->SetVerticalAlignment(VAlign_Center);
+		WWOUI::AddPageHeader(WidgetTree, Column, WWOUI::HeaderName(WidgetTree, TEXT("SETTINGS"), false), Tabs.Box, RightSide, HAlign_Right);
 
 		UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Column->AddChildToVerticalBox(Body)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -1522,7 +1489,6 @@ void UWWOSettingsMenu::BuildBinds()
 	AWWOPlayerController* PC = Cast<AWWOPlayerController>(GetOwningPlayer());
 	if (!BindsList || !PC) return;
 	BindsList->ClearChildren();
-	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	const FLinearColor Accent = WWOUI::Accent(this);
 	TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
 	TWeakObjectPtr<AWWOPlayerController> WeakPC = PC;
@@ -1586,13 +1552,8 @@ void UWWOSettingsMenu::SelectPage(int32 Index)
 	GlobalSwitcher->SetActiveWidgetIndex(Index);
 	if (SideSwitcher) SideSwitcher->SetActiveWidgetIndex(TopTab);
 	if (PageTitle) PageTitle->SetText(FText::FromString(Pages[Index].Title.ToUpper()));
-	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	const FLinearColor Accent = WWOUI::Accent(this);
-	for (int32 i = 0; i < TopLabels.Num(); ++i)
-	{
-		TopLabels[i]->SetColorAndOpacity(FSlateColor(WWO::Lin(i == TopTab ? FLinearColor::White : WWOUI::TabDim)));
-		TopLines[i]->SetBrushColor(WWO::Lin(i == TopTab ? Accent : FLinearColor(0, 0, 0, 0)));
-	}
+	WWOUI::SetActiveTab(TopLabels, TopLines, TopTab, Accent);
 	for (int32 i = 0; i < Pages.Num(); ++i)
 	{
 		if (Pages[i].Label.IsValid()) Pages[i].Label->SetColorAndOpacity(FSlateColor(WWO::Lin(i == Index ? FLinearColor::White : WWOUI::TabDim)));
