@@ -96,7 +96,18 @@ Tools/regress.sh render             # the small window, every scenario
   value is bit-identical run to run. One known exception to "any order": `move.bot.wall` and
   `move.bot.roam` differ by a few millimetres in a reversed run, because there the `wave.*` scenarios
   (which spawn Soldiers through the game mode) run before them; in the normal order they pass. Every
-  other scenario, `wave.*` and `loadout.*` included, gives the same numbers reversed.
+  other scenario, `wave.*` and `loadout.*` included, gives the same numbers reversed. Narrowed down
+  (not fixed): `-WWORegressReverse -WWORegressOnly=wave.spawn.soldier,move.bot.wall` alone reproduces it
+  (24 differences from the first 30 ticks: a few mm, 0.02 degrees); `wave.spawn.swarm` or `wave.queue.1`
+  before it don't, nor does `move.soldier.open` before it in the normal order (a Soldier the harness
+  spawns, which lives and walks for 6 s). Ruled out: the navmesh (the body's shapes and the Soldier's gun
+  have no collision, `WWOFX::AddShape` opts out of navigation, and the walk's count of ticks with a build
+  in progress stays 0); the random streams (seeded per scenario); the Soldier's one static,
+  `NextBurstTime` (read only by Soldiers that fire). What differs is a Soldier made by the game mode's
+  deferred spawn and destroyed in the tick it was made. Remaining suspect, not confirmed: the engine's
+  tick-function set (the Soldier's many component tick functions added and removed in one frame leave
+  their slots free in another order, so the bot spawned later ticks at another place relative to the
+  player). Nothing found in the harness's teardown or navmesh wait to fix.
 - **The loadout scenarios** mute the loadout's `OnChanged` listeners while they equip (the body's grafts
   and the gun would rebuild), work on an empty set of saved configs (the owner's are put back in the same
   tick), hash a save from the class name on (the header before it lists the engine's custom versions loaded
