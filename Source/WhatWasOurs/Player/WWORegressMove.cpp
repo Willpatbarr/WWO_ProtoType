@@ -11,6 +11,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOBotController.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Enemies/WWOEnemy.h"
@@ -78,8 +79,7 @@ namespace
 
 	UWWOEnemyData* DataOf(FWWORegress& R, FName Kind)
 	{
-		UWWOLoadoutSubsystem* L = R.Loadout();
-		return Kind == "tank" ? (UWWOEnemyData*)L->TankData : (Kind == "soldier" ? (UWWOEnemyData*)L->SoldierData : (UWWOEnemyData*)L->SwarmData);
+		return R.Loadout()->EnemyDataFor(WWOEnemyKinds::FindOrSwarm(Kind).Id);
 	}
 
 	// The map's south edge along the home line: the last Y (cm, 1 cm steps) with floor under it.
@@ -267,7 +267,7 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		FWalk W;
 		W.Name = TEXT("move.soldier.ledge");
 		W.Setup = [](FWWORegress& R, FMoveState& St) { St.Mover = R.SpawnEnemy("soldier", R.Ahead(-12.f)); };
-		W.Start = [](FWWORegress& R, FMoveState& St) { R.Tune(R.Loadout()->SoldierData, "AiEnabled", 1.f); };
+		W.Start = [](FWWORegress& R, FMoveState& St) { R.Tune(R.Loadout()->EnemyDataFor("soldier"), "AiEnabled", 1.f); };
 		W.End = EnemyEnd;
 		Out.Add(MakeWalk(W));
 	}

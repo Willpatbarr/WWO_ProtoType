@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Systems/WWOConfig.h"
+#include "Enemies/WWOEnemyKinds.h"
 
 namespace
 {
@@ -100,18 +101,20 @@ void UWWOLoadoutSubsystem::LoadAllData()
 	LoadType(FPrimaryAssetType("WWOEnemy"), Enemies);
 	for (UWWOEnemyData* Enemy : Enemies)
 	{
-		if (UWWOSoldierData* S = Cast<UWWOSoldierData>(Enemy)) SoldierData = S;
-		if (UWWOSwarmData* S = Cast<UWWOSwarmData>(Enemy)) SwarmData = S;
-		if (UWWOTankData* T = Cast<UWWOTankData>(Enemy)) TankData = T;
+		for (const FWWOEnemyKind& Kind : WWOEnemyKinds::All())
+		{
+			if (Enemy && Enemy->IsA(Kind.DataClass)) EnemyData.Add(Kind.Id, Enemy); // the last asset of a kind's class wins
+		}
 	}
 	TArray<TObjectPtr<UWWOAllyData>> Allies;
 	LoadType(FPrimaryAssetType("WWOAlly"), Allies);
 	if (Allies.Num() > 0) AllyData = Allies[0];
 
 	// Missing assets (first run before Tools/create_assets.py): fall back to code defaults.
-	if (!SoldierData) SoldierData = NewObject<UWWOSoldierData>(this);
-	if (!SwarmData) SwarmData = NewObject<UWWOSwarmData>(this);
-	if (!TankData) TankData = NewObject<UWWOTankData>(this);
+	for (const FWWOEnemyKind& Kind : WWOEnemyKinds::All())
+	{
+		if (!EnemyDataFor(Kind.Id)) EnemyData.Add(Kind.Id, NewObject<UWWOEnemyData>(this, Kind.DataClass));
+	}
 	if (!AllyData) AllyData = NewObject<UWWOAllyData>(this);
 	if (Weapons.Num() == 0)
 	{
@@ -446,9 +449,7 @@ UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::NewCopy(const UWWOLoadoutSubsystem* 
 	Copy->Floras = Source->Floras;
 	Copy->Traits = Source->Traits;
 	Copy->WeaponMods = Source->WeaponMods;
-	Copy->SoldierData = Source->SoldierData;
-	Copy->SwarmData = Source->SwarmData;
-	Copy->TankData = Source->TankData;
+	Copy->EnemyData = Source->EnemyData;
 	Copy->AllyData = Source->AllyData;
 	Copy->EquippedAbilities.SetNum(AbilitySlots);
 	return Copy;

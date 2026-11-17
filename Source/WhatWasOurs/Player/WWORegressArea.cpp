@@ -468,7 +468,7 @@ void FWWORegress::AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			AWWOEnemy* Tank = R.SpawnEnemy("tank", R.Ahead(10.f));
 			St.Thing = Tank;
 			St.Point = Tank ? Tank->GetActorLocation() : R.Ahead(10.f);
-			const UWWOTankData* T = R.Loadout()->TankData;
+			const UWWOTankData* T = R.Loadout()->EnemyDataAs<UWWOTankData>("tank");
 			const float Rc = (T ? T->SlamRadius : 4.5f) * WWO::M;
 			AddVictim(R, St, TEXT("player"), "player", St.Point, SideOf(R), Rc + (bPlayerIn ? -3.f : 3.f), ToFlatCentre);
 			AddVictim(R, St, TEXT("ally"), "ally", St.Point, -SideOf(R), Rc + (bPlayerIn ? 3.f : -3.f), ToFlatCentre);

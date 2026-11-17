@@ -274,7 +274,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 	const FWWOMenuButton ResetTargets = ResetTargetsButton(UWWOWorldSubsystem::Get(P));
-	UWWOSoldierData* SD = L->SoldierData;
+	UWWOSoldierData* SD = L->EnemyDataAs<UWWOSoldierData>(WWOIds::Enemy::Soldier);
 	AddGlobal(TEXT("Soldier"), {
 		Header(TEXT("Enemy: Soldier (shared by all soldiers)")),
 		Row(SD, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -297,7 +297,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 		Header(TEXT("Cover")),
 		Row(SD, "CoverHealth", TEXT("Seeks cover below health"), 0.f, 1.f, 0.05f, Percent()),
 	}, { ResetTargets });
-	UWWOSwarmData* SW = L->SwarmData;
+	UWWOSwarmData* SW = L->EnemyDataAs<UWWOSwarmData>(WWOIds::Enemy::Swarm);
 	AddGlobal(TEXT("Swarm"), {
 		Header(TEXT("Enemy: Swarm (shared by all swarm)")),
 		Row(SW, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -317,7 +317,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 		Row(SW, "BiteDamage", TEXT("Bite damage"), 0.f, 100.f, 1.f),
 		Row(SW, "BiteInterval", TEXT("Time between bites (s)"), 0.1f, 4.f, 0.05f),
 	}, { ResetTargets });
-	UWWOTankData* TK = L->TankData;
+	UWWOTankData* TK = L->EnemyDataAs<UWWOTankData>(WWOIds::Enemy::Tank);
 	AddGlobal(TEXT("Tank"), {
 		Header(TEXT("Enemy: Tank")),
 		Row(TK, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),

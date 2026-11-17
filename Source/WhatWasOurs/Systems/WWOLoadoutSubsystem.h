@@ -105,11 +105,12 @@ public:
 	UPROPERTY() TArray<TObjectPtr<UWWOTraitData>> Traits;
 	UPROPERTY() TArray<TObjectPtr<UWWOModData>> WeaponMods; // Config/WeaponMods.json
 
-	// Shared enemy and ally tuning (one asset each).
-	UPROPERTY() TObjectPtr<UWWOSoldierData> SoldierData;
-	UPROPERTY() TObjectPtr<UWWOSwarmData> SwarmData;
-	UPROPERTY() TObjectPtr<UWWOTankData> TankData;
+	// Shared enemy tuning, one asset per kind of the enemy registry (WWOEnemyKinds, by id), and the allies'.
+	UPROPERTY() TMap<FName, TObjectPtr<UWWOEnemyData>> EnemyData;
 	UPROPERTY() TObjectPtr<UWWOAllyData> AllyData;
+	UWWOEnemyData* EnemyDataFor(FName Kind) const { const TObjectPtr<UWWOEnemyData>* Found = EnemyData.Find(Kind); return Found ? Found->Get() : nullptr; }
+	template <typename T>
+	T* EnemyDataAs(FName Kind) const { return Cast<T>(EnemyDataFor(Kind)); }
 
 	UWWOWeaponData* GetWeapon() const { return Weapon; }
 	UWWOGrenadeData* GetGrenade() const { return Grenade; }

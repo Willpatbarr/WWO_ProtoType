@@ -7,6 +7,7 @@
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOAbilityComponent.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Systems/WWOTargetable.h"
@@ -417,7 +418,8 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 			{
 				St->Before = FWWORegress::HealthOf(P);
 				UWWOLoadoutSubsystem* L = R.Loadout();
-				UWWOEnemyData* Data = Cast<AWWOSoldier>(E) ? (UWWOEnemyData*)L->SoldierData : (Cast<AWWOTank>(E) ? (UWWOEnemyData*)L->TankData : (UWWOEnemyData*)L->SwarmData);
+				const FWWOEnemyKind* Kind = WWOEnemyKinds::Of(E);
+				UWWOEnemyData* Data = L->EnemyDataFor(Kind ? Kind->Id : FName("swarm"));
 				R.Tune(Data, "AiEnabled", 1.f);
 			}
 			if (Tick == Ticks(1.f)) R.Record(TEXT("taken_1s"), St->Before - FWWORegress::HealthOf(P));
@@ -543,13 +545,13 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 						UWWOLoadoutSubsystem* L = R.Loadout();
 						if (Attack == TEXT("bite") || Attack == TEXT("leap"))
 						{
-							R.Tune(L->SwarmData, "AiEnabled", 1.f);
+							R.Tune(L->EnemyDataFor("swarm"), "AiEnabled", 1.f);
 							if (AWWOSwarm* Sw = Cast<AWWOSwarm>(E)) Sw->LeapCooldown = Attack == TEXT("leap") ? 0.f : 99.f;
 						}
 						else if (Attack == TEXT("bolt"))
 						{
 							// A Soldier's shot, at the victim's chest from 5 m in front, at its speed and damage.
-							const UWWOSoldierData* D = L->SoldierData;
+							const UWWOSoldierData* D = L->EnemyDataAs<UWWOSoldierData>("soldier");
 							const FVector Chest = V->GetActorLocation() + FVector(0, 0, P ? 0.f : 30.f);
 							const FVector From = Chest + Out * Hit.Meters;
 							AWWOEnemyProjectile::Fire(R.World(), From, (Chest - From).GetSafeNormal() * D->ProjectileSpeed * WWO::M, D->ProjectileDamage);
@@ -557,7 +559,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 						else if (Attack == TEXT("splash"))
 						{
 							// A Tank's shell, its damage and radius, coming straight down 1 m in front of the victim.
-							const UWWOTankData* D = L->TankData;
+							const UWWOTankData* D = L->EnemyDataAs<UWWOTankData>("tank");
 							const FVector Ground = (P ? P->FeetLocation() : A->GetActorLocation() - FVector(0, 0, 100.f)) + Out * Hit.Meters;
 							AWWOEnemyProjectile::Fire(R.World(), Ground + FVector(0, 0, 300.f), FVector(0, 0, -2000.f), D->LobDamage, 3.f, 0.f, D->LobRadius);
 						}

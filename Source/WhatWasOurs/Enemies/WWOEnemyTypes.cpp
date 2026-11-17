@@ -1,4 +1,5 @@
 #include "Enemies/WWOEnemyTypes.h"
+#include "WWOIds.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemyProjectile.h"
@@ -45,7 +46,7 @@ UWWOEnemyData* AWWOSoldier::Data() const { return D(); }
 UWWOSoldierData* AWWOSoldier::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->SoldierData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOSoldierData>(WWOIds::Enemy::Soldier) : nullptr;
 }
 
 void AWWOSoldier::Setup()
@@ -324,7 +325,7 @@ UWWOEnemyData* AWWOSwarm::Data() const { return D(); }
 UWWOSwarmData* AWWOSwarm::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->SwarmData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOSwarmData>(WWOIds::Enemy::Swarm) : nullptr;
 }
 
 void AWWOSwarm::Setup()
@@ -467,7 +468,7 @@ UWWOEnemyData* AWWOTank::Data() const { return D(); }
 UWWOTankData* AWWOTank::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->TankData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOTankData>(WWOIds::Enemy::Tank) : nullptr;
 }
 
 void AWWOTank::Setup()

@@ -8,7 +8,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
-#include "Enemies/WWOEnemyTypes.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Allies/WWOAlly.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -218,14 +218,15 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 			UE_LOG(LogWWO, Warning, TEXT("WaveTest STUCK IN THE AIR: %s (%s) at %s for %.1f s"), *C->GetName(), *What, *Pos.ToCompactString(), T.Air);
 		}
 		if (T.Air == 0.f) T.bAirLogged = false;
-		// Facing: the Tank turns slowly on purpose and plants itself to slam, so give it more slack.
+		// Facing: each kind has its own slack (WaveTestFacing: the Tank turns slowly on purpose and plants itself to slam).
 		const AActor* Target = E ? E->GetTargetActor() : nullptr;
 		if (Target && !What.StartsWith(TEXT("leap")) && !What.StartsWith(TEXT("slam")))
 		{
-			const bool bTank = Cast<AWWOTank>(E) != nullptr;
+			const FWWOEnemyKind* Kind = WWOEnemyKinds::Of(E);
+			const float Slack = Kind ? Kind->WaveTestFacing : 30.f;
 			const FVector To = (Target->GetActorLocation() - Pos).GetSafeNormal2D();
 			const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(To, C->GetActorForwardVector().GetSafeNormal2D()), -1.f, 1.f)));
-			T.Off = Off > (bTank ? 60.f : 30.f) ? T.Off + Step : 0.f;
+			T.Off = Off > Slack ? T.Off + Step : 0.f;
 			if (T.Off >= 1.5f && !T.bTurnLogged)
 			{
 				T.bTurnLogged = true;

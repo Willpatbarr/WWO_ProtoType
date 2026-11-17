@@ -60,6 +60,15 @@ namespace WWOIds
 		inline const FName Scavenger(TEXT("scavenger"));
 	}
 
+	// Enemy kinds (a wave's entries, a spawn point's tag, the key of the enemy registry: WWOEnemyKinds::All(),
+	// Enemies/WWOEnemyKinds.cpp).
+	namespace Enemy
+	{
+		inline const FName Soldier(TEXT("soldier"));
+		inline const FName Swarm(TEXT("swarm"));
+		inline const FName Tank(TEXT("tank"));
+	}
+
 	// Grenades (UWWOGrenadeData::Id). Their behaviour goes by kind (EWWOGrenadeKind), not id; only
 	// looks test an id.
 	namespace Grenade

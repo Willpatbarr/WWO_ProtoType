@@ -13,7 +13,8 @@
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
-#include "Enemies/WWOEnemyTypes.h"
+#include "Enemies/WWOEnemyKinds.h"
+#include "WWOIds.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Net/WWONetSubsystem.h"
 #include "WhatWasOurs.h"
@@ -52,15 +53,15 @@ namespace
 			if (AWWOGameMode* GM = WaveMode(World)) GM->JumpToWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : GM->Wave + 1);
 		}));
 
-	// The waves, in order. Past the last one, it repeats the last wave 25% bigger each time.
+	// The waves, in order: kinds of the enemy registry (WWOEnemyKinds) and how many. Past the last one, it repeats the last wave 25% bigger each time.
 	const TArray<TMap<FName, int32>>& Waves()
 	{
 		static const TArray<TMap<FName, int32>> List = {
-			{ { "swarm", 6 } },
-			{ { "swarm", 6 }, { "soldier", 2 } },
-			{ { "swarm", 8 }, { "soldier", 3 } },
-			{ { "soldier", 4 }, { "tank", 1 } },
-			{ { "swarm", 10 }, { "soldier", 3 }, { "tank", 1 } },
+			{ { WWOIds::Enemy::Swarm, 6 } },
+			{ { WWOIds::Enemy::Swarm, 6 }, { WWOIds::Enemy::Soldier, 2 } },
+			{ { WWOIds::Enemy::Swarm, 8 }, { WWOIds::Enemy::Soldier, 3 } },
+			{ { WWOIds::Enemy::Soldier, 4 }, { WWOIds::Enemy::Tank, 1 } },
+			{ { WWOIds::Enemy::Swarm, 10 }, { WWOIds::Enemy::Soldier, 3 }, { WWOIds::Enemy::Tank, 1 } },
 		};
 		return List;
 	}
@@ -535,8 +536,9 @@ void AWWOGameMode::SpawnEnemy(FName Kind)
 {
 	const AActor* Point = PickPoint(Kind);
 	if (!Point) return;
-	UClass* Class = Kind == "tank" ? AWWOTank::StaticClass() : (Kind == "soldier" ? AWWOSoldier::StaticClass() : AWWOSwarm::StaticClass());
-	// Godot drops the enemy within 1.5 m of the marker (the Tank right on it) with its feet on
+	const FWWOEnemyKind& Entry = WWOEnemyKinds::FindOrSwarm(Kind);
+	UClass* Class = Entry.Class;
+	// Godot drops the enemy within 1.5 m of the marker (the Tank right on it: the kind's SpawnScatter) with its feet on
 	// the marker, wherever that lands. Here the actor is its capsule's center, and a spot inside a
 	// crate stack or off the navmesh is tried again (up to 8 times), so nobody starts boxed in.
 	const UCapsuleComponent* Capsule = Class->GetDefaultObject<AWWOEnemy>()->GetCapsuleComponent();
@@ -547,7 +549,8 @@ void AWWOGameMode::SpawnEnemy(FName Kind)
 	FVector Feet = Point->GetActorLocation();
 	for (int32 Try = 0; Try < 8; ++Try)
 	{
-		const FVector Offset = Kind != "tank" ? FVector(WWO::FRandRange(-150.f, 150.f), WWO::FRandRange(-150.f, 150.f), 0.f) : FVector::ZeroVector;
+		const float Scatter = Entry.SpawnScatter;
+		const FVector Offset = Scatter > 0.f ? FVector(WWO::FRandRange(-Scatter, Scatter), WWO::FRandRange(-Scatter, Scatter), 0.f) : FVector::ZeroVector;
 		const FVector Spot = Point->GetActorLocation() + Offset;
 		FNavLocation OnMesh;
 		const bool bOnMesh = !Nav || Nav->ProjectPointToNavigation(Spot, OnMesh, FVector(Radius, Radius, 100.f));

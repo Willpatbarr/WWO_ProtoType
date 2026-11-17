@@ -52,9 +52,9 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 	// The AI off for every kind (wave enemies come alerted: they would walk at once).
 	auto Inert = [](FWWORegress& R)
 	{
-		UWWOLoadoutSubsystem* Lo = R.Loadout();
-		for (UWWOEnemyData* D : { (UWWOEnemyData*)Lo->SoldierData, (UWWOEnemyData*)Lo->SwarmData, (UWWOEnemyData*)Lo->TankData })
+		for (const auto& Pair : R.Loadout()->EnemyData)
 		{
+			UWWOEnemyData* D = Pair.Value;
 			if (D && D->AiEnabled >= 0.5f) R.Tune(D, "AiEnabled", 0.f);
 		}
 	};

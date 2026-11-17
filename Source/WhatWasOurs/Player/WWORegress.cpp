@@ -18,6 +18,7 @@
 #include "Game/WWOGameMode.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Systems/WWOTargetable.h"
@@ -545,8 +546,9 @@ AWWOTarget* FWWORegress::SpawnDummy(const FVector& At, float Health)
 AWWOEnemy* FWWORegress::SpawnEnemy(FName Kind, const FVector& At, bool bInert)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	UClass* Class = Kind == "tank" ? AWWOTank::StaticClass() : (Kind == "soldier" ? AWWOSoldier::StaticClass() : AWWOSwarm::StaticClass());
-	UWWOEnemyData* Data = Kind == "tank" ? (UWWOEnemyData*)L->TankData : (Kind == "soldier" ? (UWWOEnemyData*)L->SoldierData : (UWWOEnemyData*)L->SwarmData);
+	const FWWOEnemyKind& Entry = WWOEnemyKinds::FindOrSwarm(Kind);
+	UClass* Class = Entry.Class;
+	UWWOEnemyData* Data = L->EnemyDataFor(Entry.Id);
 	if (Data && bInert && Data->AiEnabled >= 0.5f) Tune(Data, "AiEnabled", 0.f);
 	const float Half = Class->GetDefaultObject<AWWOEnemy>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	AWWOEnemy* E = World()->SpawnActor<AWWOEnemy>(Class, At + FVector(0, 0, Half), FacingFrom(At, HomeFeet), WWO::AlwaysSpawn());
