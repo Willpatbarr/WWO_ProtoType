@@ -81,7 +81,11 @@ Tools/regress.sh render             # the small window, every scenario
   (what the scenario spawned and what that left: grenades, pools, fog, walls, effects), tuned values put
   back, the player reset again.
 - Enemies and allies are inert (their data asset's `AiEnabled` is 0 for the scenario) and bots are parked
-  with a fixed kit, except in the `enemy.<kind>.attacks` scenarios (AI on from tick 0).
+  with a fixed kit, except in the `enemy.<kind>.attacks`, `enemyhit.bite|leap.*` and `move.*` walk
+  scenarios (AI on, unparked).
+- **The navmesh** is built at run time and is still building when the run starts (and briefly after some
+  teardowns). The `move.*` walks wait until no build is in progress before switching the AI on (logged as
+  `Regress move.x: waited N ticks for the navmesh build`, never recorded); nothing builds during a walk.
 - **Values are written exactly** (`%.9g`, every float bit), with three stated exceptions, each found by
   running the suite in reverse order (`-WWORegressReverse`): positions (`RecordVec`) to 0.01 cm and view
   angles (`kick_pitch`, `kick_yaw`) to 0.0001 degrees, because the player's eye height carries a float
@@ -96,8 +100,12 @@ Tools/regress.sh render             # the small window, every scenario
 The suite runs without rendering (`-nullrhi`) and in a 640 x 360 window. Each scenario says whether its
 numbers hold in both modes (`EWWORegressModes::Same`, the default), legitimately differ (`PerMode`: golden
 keeps `<name>@norender` and `<name>@render`), or need rendering (`RenderOnly`: skipped, and logged as
-skipped, without it). Today 11 scenarios are `PerMode` and none `RenderOnly`; every other scenario gives
-identical numbers in both modes:
+skipped, without it), or repeat only without it (`NoRenderOnly`: skipped in the window). Today 11 scenarios
+are `PerMode`, none `RenderOnly`, and one `NoRenderOnly`: `move.bot.fight`, because a bot's choices (its
+reactions, strafes, jumps, bursts) draw on `FMath`'s generator, which a drawn game also draws on from other
+threads (two window runs differ). The bots' other walks agree between the modes because no choice they
+make there changes their path. Every other scenario gives identical numbers in both modes. Why the
+per-mode ones differ:
 
 - `view.reticle_and_marks.*`: without rendering the viewport has no size, so the low reticle's angle is 0
   and nothing is marked (marking works in HUD pixels on the screen).
@@ -114,7 +122,7 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 `EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
 `Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
 numbers; return true when done). Add it to the list in one of the family files
-(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`), generating from the catalogs
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
 friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
 checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the

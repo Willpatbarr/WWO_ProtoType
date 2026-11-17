@@ -126,6 +126,25 @@ A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
 6. What joiners see goes in `AnimateRemote`, from replicated state.
 7. Test: `-WWOWaveTest`.
 
+## Moving an AI
+
+An enemy, the teammate or a bot that walks somewhere (or a new way of walking):
+
+1. A path: an `FWWOPathFollower` member (`Systems/WWONav.h`; give it a starting `Goal` if "never pathed"
+   should read as far away) and the mover's own `FWWOPathRules` (repath age, goal moved, reach, `<` or `<=`).
+   Each tick call `Update(Querier, Feet, Goal, Here, dt, Rules)`, then decide from `Points` yourself: the
+   next point, or what to do with fewer than two (straight at the goal, stand when `bPartial` and blocked).
+2. Probes: `WWONav::WallAhead` (a capsule sweep or a line, from where and how far: the mover's numbers) and
+   `WWONav::LedgeAhead` (a line down from a step out), each with an `FWWOProbe` and the mover's own
+   `FCollisionQueryParams` (a `SCENE_QUERY_STAT`, itself ignored). One trace per question: no extra traces
+   in a per-tick path (swarms).
+3. Turning: `WWONav::TurnYaw(Current, Target, Rate, dt)`; pass the target in the precision the mover used.
+4. Host only (`HasAuthority()` / the bot's own controller). Random choices through `WWO::FRand` (the bot
+   still draws on `FMath`).
+5. Test: `move.<mover>.*` scenarios (`Player/WWORegressMove.cpp`): a walk on open floor, at a wall, at a
+   platform it can't climb, around the back wall's corners, its probes at their edges, its turn. Walks wait
+   for the run-time navmesh build before switching the AI on.
+
 ## A map
 
 1. The level: one `PlayerStart`, `ATargetPoint`s tagged `EnemySpawn` (add `PvEOnly` to keep one out of
@@ -220,7 +239,8 @@ A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
 1. Find the family it belongs to: guns (`Player/WWORegressGuns.cpp`), kit (`WWORegressKit.cpp`: grenades,
    abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies), or area
    (`WWORegressArea.cpp`: the edges of area effects and aim cones), or life (`WWORegressLife.cpp`: a
-   lingering effect followed tick by tick, its hits, looks, switches and the tick it goes).
+   lingering effect followed tick by tick, its hits, looks, switches and the tick it goes), or move
+   (`WWORegressMove.cpp`: AI walking, turning and probing).
    A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
    called from `BuildScenarios` in `WWORegress.cpp`).
 2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it
@@ -236,7 +256,7 @@ A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
    `Record` every number that would change if the logic changed, then return true.
 5. Run it alone (`Tools/regress.sh norender -WWORegressOnly=<name>`) a few times: the numbers must be the
    same every time. If they legitimately differ with rendering, set `Modes` to `PerMode` (or
-   `RenderOnly`) with a `ModeReason`.
+   `RenderOnly`, or `NoRenderOnly` when only the no-draw run repeats) with a `ModeReason`.
 6. Add its golden entry in its own commit: `Tools/regress.sh update-new <name or prefix>` (adds only
    missing entries and checks the two modes agree on the new ones; `git diff` must show only additions).
 7. Randomness in gameplay code goes through `WWO::FRand` / `FRandRange` / `RandRange` / `RandomInCone`

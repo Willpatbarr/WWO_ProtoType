@@ -86,8 +86,10 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
 - **Targets** come from `UWWOWorldSubsystem::LivingTargets` (PvE enemies, dummies, and in PvP the other
   team). Area effects ask `ForEachTargetInRadius` / `NearestTargetInRadius` with an `FWWOAreaQuery` (where to
   measure, who, line of sight); melee and aim assist pick a part with `BestAimPart`.
-- Enemy-to-player damage does not use `TakeHit`: enemies call `Health->DamageCameFrom` and
-  `Health->TakeDamage` directly, and `AWWOAlly::TakeAllyDamage` for teammates.
+- Enemy-to-friendly damage does not use `TakeHit`: every enemy attack (bite, leap, bolt, splash, slam)
+  calls `AWWOEnemy::HurtFriendly(Victim, Amount, CameFrom, bMelee)`: a player's `DamageCameFrom` then
+  `TakeDamage`, a teammate's `AWWOAlly::TakeAllyDamage`. No `FWWODamageBy` scope, no push; it returns the
+  player hurt (the slam slows them).
 
 ## A shot
 
@@ -194,6 +196,14 @@ in `NETWORKING_HANDOFF.md`.
 / `AnimateRemote` / `Absorb` / `OnHit` / `OnDeath` / `OnReset` / `AfterMove`. `WWOEnemyTypes` has the
 Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield, slam, lob).
 `AWWOAlly` is the AI teammate.
+
+**Moving** (`Systems/WWONav.*`), shared by the enemies, the ally and the bots: `WWONav::FindPath` (a
+navmesh path, start and end snapped onto it), `FWWOPathFollower` (the path being walked: `Update` ages it,
+paths again when its `FWWOPathRules` say so, drops reached points), `WWONav::WallAhead` / `LedgeAhead` (one
+trace each, shaped by an `FWWOProbe`: capsule or line, level geometry or a channel) and `WWONav::TurnYaw`
+(an eased yaw step). What each mover does with the answers stays in its own class (`AWWOEnemy::PathDirection`,
+`AWWOAlly::Follow`, `AWWOBotController::PathDirection` / `SideIsClear`); the bot's `TurnView` (yaw and pitch
+as one rate-limited angle) is its own. The navmesh is built at run time (`RuntimeGeneration=Dynamic`).
 
 ## Bodies
 

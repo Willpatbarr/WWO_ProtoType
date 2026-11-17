@@ -64,6 +64,11 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   Add new ones at the end (tests read the array by index).
 - The joiner's `MoveIn` is quantised (`Quantize`) so both machines simulate the same numbers.
 - Movement ticks before the character; `PreparedFrame` guards against preparing twice in a frame.
+- AI moves with the shared pieces in `Systems/WWONav.h`, never a hand copy: a path through an
+  `FWWOPathFollower` with the mover's own `FWWOPathRules`, wall and ledge checks through `WWONav::WallAhead` /
+  `LedgeAhead` with its own `FWWOProbe`, an eased turn through `WWONav::TurnYaw`. Each mover's numbers are
+  behaviour (the scenarios notice a reach of 60 instead of 90, or a float yaw instead of a double): pass
+  them, don't share them. An enemy's attack on a friendly goes through `AWWOEnemy::HurtFriendly`.
 
 ## Time
 
@@ -110,7 +115,8 @@ Look here before writing a new one.
 | An effect's age, grow-in, fade, tail and end (the host destroys) | `FWWOEffectLife` (`Flora/WWOEffectLife.h`) |
 | Show an effect on every machine (from the host) | the `AWWOGameState` statics; a new one ends with `HostRelay(World)` and its multicast |
 | Basic shapes, materials, lights, ground lookup for effects | `WWOFX::Sphere` / `Cube` / `AddShape` / `AddSoftSphere` / `AddGroundDisc` / `GroundBelow`, `WWOFX::AddPointLight` (any actor), `AWWOFXActor::AddLight` (`FX/WWOFX.*`) |
-| A navmesh path | `WWONav::FindPath` (`Enemies/WWOEnemy.*`) |
+| A navmesh path; following it; a wall or ledge probe; an eased yaw turn (AI) | `WWONav::FindPath`, `FWWOPathFollower` + `FWWOPathRules`, `WWONav::WallAhead` / `LedgeAhead` + `FWWOProbe`, `WWONav::TurnYaw` (`Systems/WWONav.h`) |
+| An enemy's attack hurting the player or an AI teammate | `AWWOEnemy::HurtFriendly` (`Enemies/WWOEnemy.h`) |
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
 | A regression scenario (exact numbers, compared with a golden file) | `FWWORegressScenario` and `FWWORegress`'s helpers (`Player/WWORegress.h`); `Tools/regress.sh` |
 | In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
