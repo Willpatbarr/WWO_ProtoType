@@ -56,6 +56,9 @@ namespace
 	constexpr float MeleeFrom = 25.5f;                // the joiner walks up to the nearest dummy and punches it
 	const float MeleePunches[] = { 28.f, 29.f, 30.f };
 	constexpr float MeleeForge = 28.5f, MeleeReport = 31.1f; // forged between the first punches, while the dummy still stands
+	// The joiner's clock starts when it sees the host, up to a second after the host's (the gap shrinks
+	// over the run, to 0.1 to 0.7 s by the shooting): the host counts what the joiner sent this much later.
+	constexpr float JoinerLag = 0.7f;
 	// Which round this process is in: 0 = the moves, 1 = after the host's restart. The controller
 	// (and its test state) is new after a map change; this isn't.
 	int32 GAutoNetRound = 0;
@@ -230,7 +233,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 				UWWOLoadoutSubsystem::Get(PC) ? UWWOLoadoutSubsystem::Get(PC)->ModPercent("damage") != 0.f : -1);
 		}
 	}
-	if (Crossed(ShootTo + 0.6f))
+	if (Crossed(ShootTo + 0.6f + (bHost ? JoinerLag : 0.f)))
 	{
 		const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetShootTarget.Get());
 		if (bHost)
@@ -362,7 +365,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 			}
 		}
 	}
-	if (Crossed(MeleeReport))
+	if (Crossed(MeleeReport + (bHost ? JoinerLag : 0.f)))
 	{
 		if (bHost)
 		{
