@@ -48,4 +48,5 @@ private:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Edge; // its outline on the floor
 	float Age = 0.f;
 	float TickLeft = 0.f;
+	friend class FWWORegress; // the life scenarios read its looks
 };

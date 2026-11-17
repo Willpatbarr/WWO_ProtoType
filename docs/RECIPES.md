@@ -200,7 +200,8 @@ Anything that acts on "everyone within R of a point" (a blast, a pool, an aura, 
 
 1. Find the family it belongs to: guns (`Player/WWORegressGuns.cpp`), kit (`WWORegressKit.cpp`: grenades,
    abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies), or area
-   (`WWORegressArea.cpp`: the edges of area effects and aim cones).
+   (`WWORegressArea.cpp`: the edges of area effects and aim cones), or life (`WWORegressLife.cpp`: a
+   lingering effect followed tick by tick, its hits, looks, switches and the tick it goes).
    A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
    called from `BuildScenarios` in `WWORegress.cpp`).
 2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it

@@ -898,6 +898,7 @@ void FWWORegress::BuildScenarios()
 		AddKitScenarios(List, *L);
 		AddCombatScenarios(List, *L);
 		AddAreaScenarios(List, *L);
+		AddLifeScenarios(List, *L);
 	}
 	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
 	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).

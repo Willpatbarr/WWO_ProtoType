@@ -47,6 +47,7 @@ private:
 	UPROPERTY(Replicated) FLinearColor Color;
 	UPROPERTY(Replicated) FName Flavor;
 	float Dps = 25.f, Age = 0.f, TickLeft = 0.f, NextArc = 0.f;
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -67,6 +68,7 @@ private:
 	UPROPERTY(Replicated) float Duration = 6.f;
 	float Age = 0.f;
 	bool bCounted = false;
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -113,6 +115,7 @@ private:
 	bool bSinking = false;
 	void Build();
 	void Dust(float Amount);
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -130,6 +133,7 @@ private:
 	float Duration = 10.f, Age = 0.f, RingAge = 0.f;
 	bool bEnding = false;
 	void BurstDirt();
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
