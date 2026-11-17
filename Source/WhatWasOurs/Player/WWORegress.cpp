@@ -907,6 +907,7 @@ void FWWORegress::BuildScenarios()
 		AddMoveScenarios(List, *L);
 		AddWaveScenarios(List, *L);
 		AddLoadoutScenarios(List, *L);
+		AddMatchScenarios(List, *L);
 	}
 	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
 	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).
