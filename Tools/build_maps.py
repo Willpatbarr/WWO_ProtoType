@@ -13,10 +13,12 @@ Run headless from the project folder after Tools/create_assets.py and Tools/impo
 - L_ArenaRing: the 4v4 PvP ring map, gray box, from the mockup's JSON (see build_ring_arena).
 - L_Arboretum: the Arboretum PvP map, from its mockup's JSON (see build_arboretum); needs
   Tools/create_kit_concrete.py and Tools/import_flora.py to have run.
+- L_FootRaceTest: the FootRace mode's gray-box test map (two lanes of rooms and a hub), from
+  Tools/footrace_layout.py; layout only (build_footrace).
 - L_Cascade: the 6v6 PvP map (ruins over waterfalls), from its mockup's JSON through Tools/cascade_layout.py;
   built by Tools/build_cascade.py with this file's helpers (concrete_instance, lamp_instance, fit_mesh,
   merge_kind with base/prefix), after Tools/create_kit_concrete.py and import_flora.py.
-WWO_MAPS=ring (or range, large, arena, arboretum, cascade, comma separated) builds only those.
+WWO_MAPS=ring (or range, large, arena, arboretum, cascade, footrace, comma separated) builds only those.
 The arenas are built from the same Quaternius Sci-Fi kit pieces as the Godot maps (imported by
 Tools/import_kit.py), placed as build_scifi_map.gd places them: positions and yaws are worked out in
 Godot space and converted. Each piece collides as its own mesh (Godot's trimesh shapes); stairs
@@ -796,6 +798,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ring_layout
 import arboretum_layout
+import footrace_layout
 
 RING_COLORS = {
     "ground": (0.18, 0.19, 0.21), "lane": (0.23, 0.22, 0.2), "slab": (0.26, 0.27, 0.3), "wall": (0.55, 0.57, 0.6),
@@ -874,6 +877,62 @@ def build_ring_arena():
     vol.set_actor_scale3d(unreal.Vector(5200.0 / ext, 5200.0 / ext, 1100.0 / ext))
     levels.save_current_level()
     log("L_ArenaRing: %d boxes, %d kinds merged" % (len(layout["boxes"]), merged))
+
+
+# --- FootRace test map (L_FootRaceTest) ------------------------------------------------------
+# Layout only, from Tools/footrace_layout.py (mockup meters, the ring's axes): two lanes of rooms
+# and a closed hub, as flat-colored boxes merged per kind, plus tagged TargetPoints the FootRace rules
+# spawn their actors on (doors, portals, levers, the bosses, cores). No cover, props or textures.
+FOOTRACE_COLORS = {
+    "floor": (0.3, 0.31, 0.33), "wall": (0.55, 0.57, 0.6), "hub_floor": (0.26, 0.3, 0.27),
+    "boss_floor": (0.34, 0.24, 0.24), "spawn0": (0.2, 0.32, 0.6), "spawn1": (0.7, 0.4, 0.16),
+}
+FOOTRACE_MERGED = "/Game/WWO/Maps/FootRace"
+
+
+def build_footrace():
+    new_level("/Game/WWO/Maps/L_FootRaceTest")
+    if eal.does_directory_exist(FOOTRACE_MERGED):
+        eal.delete_directory(FOOTRACE_MERGED)
+    layout = footrace_layout.build()
+    problems = footrace_layout.check(layout)
+    if problems:
+        raise RuntimeError("footrace layout: " + "; ".join(problems))
+    b = Builder(1, 1, 11)
+    lighting()
+    mats = {k: solid_material("FootRace_" + k, c) for k, c in FOOTRACE_COLORS.items()}
+    groups = {}
+    for box in layout["boxes"]:
+        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "FootRace_" + box.kind, yaw=90.0)
+        groups.setdefault(box.kind, []).append(a)
+    merged = 0
+    for kind, group in groups.items():
+        if len(group) < 2:
+            continue
+        try:
+            if merge_kind(kind, group, base=FOOTRACE_MERGED, prefix="FootRace"):
+                merged += 1
+        except Exception as e:  # keep the separate pieces if merging isn't available
+            log("footrace: couldn't merge %s (%s); keeping %d pieces" % (kind, e, len(group)))
+    if merged:
+        eal.save_directory(FOOTRACE_MERGED, only_if_is_dirty=False, recursive=True)
+    for i, m in enumerate(layout["markers"]):
+        at = mu(m.x, m.y, m.z)
+        rot = unreal.Rotator(0.0, 0.0, 90.0 - m.yaw)
+        if m.tags[0] == "PlayerStart":
+            actors.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(at.x, at.y, at.z + 95.0), rot).set_actor_label("PlayerStart")
+            continue
+        point = actors.spawn_actor_from_class(unreal.TargetPoint, at, rot)
+        point.set_editor_property("tags", m.tags)
+        point.set_actor_label("%s_%d" % ("_".join(m.tags), i))
+    x0, x1, y0, y1 = footrace_layout.bounds()
+    cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
+    b.box(mu(cx, cy, -0.6), (y1 - y0 + 10.0, x1 - x0 + 10.0, 0.2), None, "SafetyFloor", hidden=True)
+    vol = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume, mu(cx, cy, 4.0))
+    ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
+    vol.set_actor_scale3d(unreal.Vector((y1 - y0) * 50.0 / ext, (x1 - x0) * 50.0 / ext, 600.0 / ext))
+    levels.save_current_level()
+    log("L_FootRaceTest: %d boxes, %d kinds merged, %d markers" % (len(layout["boxes"]), merged, len(layout["markers"])))
 
 
 # --- Arboretum (L_Arboretum) -----------------------------------------------------------------
@@ -1078,8 +1137,8 @@ def build_arboretum():
         % (len(layout["boxes"]), merged, crates, len(layout["props"]), len(layout["plants"]), len(layout["lights"])))
 
 
-# WWO_MAPS picks which to build (comma separated: range, large, arena, ring, arboretum, cascade); all by default.
-_wanted = os.environ.get("WWO_MAPS", "range,large,arena,ring,arboretum,cascade").split(",")
+# WWO_MAPS picks which to build (comma separated: range, large, arena, ring, arboretum, cascade, footrace); all by default.
+_wanted = os.environ.get("WWO_MAPS", "range,large,arena,ring,arboretum,cascade,footrace").split(",")
 if "range" in _wanted:
     build_test_range()
 if "large" in _wanted:
@@ -1090,6 +1149,8 @@ if "ring" in _wanted:
     build_ring_arena()
 if "arboretum" in _wanted:
     build_arboretum()
+if "footrace" in _wanted:
+    build_footrace()
 if "cascade" in _wanted:
     import types
     import build_cascade
