@@ -25,6 +25,7 @@
 //   -WWOAutoTestNet             host and joiner, co-op
 //   -WWOAutoTestPvP             host and joiner, team deathmatch with forged-shot checks
 //   -WWOAutoTestTester          the firing tester (with -WWOTester)
+//   -WWOAutoTestFootRace        FootRace's breach portals (on L_FootRaceTest)
 //   -WWOTester                  open the firing tester (also the ?tester map option)
 //   -WWOTesterGun=<id>          (tester test) equip that gun
 //   -WWOTesterNoMods            (tester test) the bare frame

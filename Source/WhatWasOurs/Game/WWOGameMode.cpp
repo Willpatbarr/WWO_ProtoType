@@ -3,6 +3,7 @@
 
 #include "Game/WWOGameMode.h"
 #include "Game/WWOTesterRules.h"
+#include "Game/WWOFootRaceRules.h"
 #include "Game/WWOWaveRules.h"
 #include "Game/WWOTeamDeathmatch.h"
 #include "Game/WWOPlayerState.h"
@@ -50,7 +51,9 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
 	bTester = !bPvP && (UGameplayStatics::HasOption(Options, TEXT("tester")) || WWOSwitches::Has(TEXT("WWOTester")));
 	// The one rules object of this match.
+	bFootRace = !bPvP && !bTester && (UGameplayStatics::HasOption(Options, TEXT("footrace")) || MapName.Contains(TEXT("FootRace")));
 	if (bPvP) Rules = MakeUnique<FWWOTeamDeathmatch>(*this);
+	else if (bFootRace) Rules = MakeUnique<FWWOFootRaceRules>(*this);
 	else if (bTester) Rules = MakeUnique<FWWOTesterRules>(*this);
 	else Rules = MakeUnique<FWWOWaveRules>(*this);
 	FString Value;
@@ -63,7 +66,7 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
 	Roster.OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
 	// (The launch screen's count is exact, not a floor under the Bots setting: see FWWOBotRoster::Wanted.)
-	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
+	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : bFootRace ? TEXT("FootRace") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
 
@@ -122,6 +125,7 @@ void AWWOGameMode::SetTeam(AWWOPlayerState* PS, int32 Team)
 
 FTransform AWWOGameMode::PvPSpawnFor(const AWWOCharacter* Player) const
 {
+	if (const FWWOFootRaceRules* F = FootRace()) return F->SpawnSpot(Player);
 	return FWWOTeamDeathmatch::SpawnSpot(*this, Player);
 }
 

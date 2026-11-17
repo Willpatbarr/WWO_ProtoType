@@ -6,6 +6,7 @@
 //   FWWOWaveRules       PvE waves (the default; idle when the map has no enemy spawn points or Enabled is 0)
 //   FWWOTeamDeathmatch  PvP (?pvp): teams, kill credit and score, the kill and time limits
 //   FWWOTesterRules     the firing tester (?tester, -WWOTester): one dummy, nothing to fight
+//   FWWOFootRaceRules   FootRace (?footrace, or a map named FootRace): two lanes of PvE rooms and a PvP hub
 // plus the bot roster (FWWOBotRoster, PvP only). Replicated match state stays on AWWOGameState and
 // the player states; a rules object writes it, nothing else about replication changes.
 //
@@ -24,6 +25,7 @@ class APlayerController;
 class FWWOWaveRules;
 class FWWOTeamDeathmatch;
 class FWWOTesterRules;
+class FWWOFootRaceRules;
 
 // The match's phase. Waves: Idle, Countdown, Spawning, Won, Lost. Team deathmatch: Idle (before
 // Begin), Match, MatchOver. The tester: Idle.
@@ -59,6 +61,7 @@ public:
 	virtual FWWOWaveRules* AsWaves() { return nullptr; }
 	virtual FWWOTeamDeathmatch* AsDeathmatch() { return nullptr; }
 	virtual FWWOTesterRules* AsTester() { return nullptr; }
+	virtual FWWOFootRaceRules* AsFootRace() { return nullptr; }
 
 protected:
 	AWWOGameMode& Mode;

@@ -76,11 +76,14 @@ public:
 	// The firing tester (?tester, from the launch screen; -WWOTester): no waves, no enemies, one
 	// target dummy ahead of the start (FWWOTesterRules). UWWOFiringTester is the screen over it.
 	bool bTester = false;
+	// FootRace (?footrace, or any map whose name has FootRace in it: Game/WWOFootRaceRules.h).
+	bool bFootRace = false;
 	// The rules of this match (Game/WWOMatchRules.h), chosen in InitGame, and typed views of them.
 	TUniquePtr<FWWOMatchRules> Rules;
 	FWWOTesterRules* Tester() const { return Rules ? Rules->AsTester() : nullptr; }
 	FWWOWaveRules* Waves() const { return Rules ? Rules->AsWaves() : nullptr; }
 	FWWOTeamDeathmatch* Deathmatch() const { return Rules ? Rules->AsDeathmatch() : nullptr; }
+	FWWOFootRaceRules* FootRace() const { return Rules ? Rules->AsFootRace() : nullptr; }
 	EWWOWaveState MatchState() const { return Rules ? Rules->State : EWWOWaveState::Idle; }
 	// The PvP match's bot players (-WWOBots=N, ?bots=N, the Bots setting; Game/WWOBotRoster.h). -WWOStress logs the load.
 	FWWOBotRoster Roster;
@@ -129,4 +132,5 @@ private:
 	friend class FWWOTesterRules;
 	friend class FWWOWaveRules;
 	friend class FWWOTeamDeathmatch;
+	friend class FWWOFootRaceRules;
 };

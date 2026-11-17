@@ -194,6 +194,12 @@ walks the table in its order (the HUD line's).
     state says PvP).
   - `FWWOTesterRules` (`Game/WWOTesterRules.*`, `?tester` / `-WWOTester`): clears the level, puts one dummy
     ahead of where the player started (its `Home` and `Target` are what `UWWOFiringTester` reads).
+  - `FWWOFootRaceRules` (`Game/WWOFootRaceRules.*`, `?footrace`, or any map named FootRace such as
+    `L_FootRaceTest`): two teams race through their own lane of PvE rooms; a hub between the lanes is the PvP.
+    So far: teams, each team's spawn room (`SpawnSpot`, the game mode's `PvPSpawnFor`: the game state says
+    PvP), and the breach portals (`World/WWOBreachPortal.*`, spawned on the level's `PortalAnchor` and
+    `HubPortal` markers): a room's doorway takes its team to the team's hub doorway, the hub doorway back to
+    the room doorway they came through. The map's markers are listed in `Tools/footrace_layout.py`.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

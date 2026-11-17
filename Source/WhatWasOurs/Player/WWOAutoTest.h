@@ -35,6 +35,7 @@ struct FWWOAutoTestModes
 	bool bAutoTestTester = false;     // -WWOAutoTestTester
 	bool bAutoTestNet = false;        // -WWOAutoTestNet
 	bool bAutoTestPvP = false;        // -WWOAutoTestPvP
+	bool bAutoTestFootRace = false;   // -WWOAutoTestFootRace
 	bool bPerfTest = false;           // -WWOPerfTest
 	bool bJoinerStress = false;       // -WWOStress on a joiner: only logs its frame times
 	bool bRegress = false;            // -WWORegress: the regression scenarios (Player/WWORegress.h)
@@ -85,6 +86,10 @@ private:
 	// -WWOAutoTestTabs (WWOAutoTestTabs.cpp): the Weapon and Shell tabs fit on one screen.
 	void UpdateAutoTabsTest(float DeltaTime);
 	void UpdateAutoTesterTest(float DeltaTime); // -WWOAutoTestTester: the firing tester
+	// -WWOAutoTestFootRace (WWOAutoTestFootRace.cpp): FootRace's breach portals, alone on L_FootRaceTest.
+	float AutoFootRaceClock = 0.f;
+	FVector AutoFootRaceBefore = FVector::ZeroVector;
+	void UpdateAutoFootRaceTest(float DeltaTime);
 	// -WWOAutoTestNet (WWOAutoTestNet.cpp): online play, run on the host and the joiner.
 	float AutoNetWait = 0.f;   // seconds since start
 	float AutoNetClock = 0.f; // seconds since both players were in and settled (negative while settling)
