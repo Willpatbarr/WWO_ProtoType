@@ -41,7 +41,18 @@ namespace
 {
 	constexpr float NearSense = 4.f;     // m: anything this close is noticed whichever way the bot faces
 	constexpr float TurnGain = 14.f;     // 1/s: how hard the view closes on where it wants to look
-	constexpr float PathPointReach = 90.f; // cm: a path point this close counts as reached
+	// Paths again every 0.4 s or when the goal has moved 1.5 m (squared distances); a path point nearer
+	// than 90 cm (flat, FVector::Dist2D) is reached.
+	const FWWOPathRules BotPath = []
+	{
+		FWWOPathRules R;
+		R.RepathAfter = 0.4f;
+		R.RepathMoved = 150.f;
+		R.bMovedSquared = true;
+		R.Reach = 90.f;
+		R.bDist2D = true;
+		return R;
+	}();
 
 	// The host's bot settings (Settings -> Bots).
 	struct FBotTuning
@@ -88,7 +99,7 @@ AWWOBotController::AWWOBotController()
 	PrimaryActorTick.bCanEverTick = true;
 	// Bots don't all think on the same frame.
 	SenseLeft = FMath::FRandRange(0.f, 0.15f);
-	PathAge = FMath::FRandRange(99.f, 100.f);
+	Path.Age = FMath::FRandRange(99.f, 100.f);
 	StrafeDir = FMath::RandBool() ? 1.f : -1.f;
 }
 
@@ -523,19 +534,11 @@ FVector AWWOBotController::PathDirection(AWWOCharacter* Me, const FVector& To, f
 {
 	// Which way to run to reach To, around walls, on the level's navmesh (a straight line where
 	// there's none).
-	PathAge += DeltaSeconds;
-	if (PathAge > 0.4f || FVector::DistSquared(To, PathGoal) > FMath::Square(150.f))
-	{
-		Path = WWONav::FindPath(Me, Me->FeetLocation(), To, bPathPartial);
-		PathAge = 0.f;
-		PathGoal = To;
-		++(Path.Num() > 0 ? PathsFound : PathsFailed);
-	}
 	const FVector Here = Me->GetActorLocation();
-	while (Path.Num() > 1 && FVector::Dist2D(Path[0], Here) < PathPointReach) Path.RemoveAt(0);
+	if (Path.Update(Me, Me->FeetLocation(), To, Here, DeltaSeconds, BotPath)) ++(Path.Points.Num() > 0 ? PathsFound : PathsFailed);
 	const FVector Straight = Flat(To - Here);
-	if (Path.Num() == 0) return Straight.GetSafeNormal();
-	const FVector Step = Flat(Path[0] - Here);
+	if (Path.Points.Num() == 0) return Straight.GetSafeNormal();
+	const FVector Step = Flat(Path.Points[0] - Here);
 	return (Step.Size() > 1.f ? Step : Straight).GetSafeNormal();
 }
 
@@ -548,7 +551,7 @@ void AWWOBotController::PickGoal(const AWWOCharacter* Me)
 	TArray<FVector> Far = Spots.FilterByPredicate([Me](const FVector& S) { return FVector::Dist2D(S, Me->GetActorLocation()) > 12.f * WWO::M; });
 	const TArray<FVector>& From = Far.Num() > 0 ? Far : Spots;
 	Goal = From.Num() > 0 ? From[FMath::RandRange(0, From.Num() - 1)] : FVector::ZeroVector;
-	PathAge = 99.f;
+	Path.Age = 99.f;
 }
 
 bool AWWOBotController::SideIsClear(const AWWOCharacter* Me, const FVector& Direction) const
@@ -577,7 +580,7 @@ FString AWWOBotController::DebugState() const
 {
 	static const TCHAR* Names[] = { TEXT("roam"), TEXT("hunt"), TEXT("fight"), TEXT("retreat") };
 	return FString::Printf(TEXT("%s foe=%s%s path=%d%s"), Names[(int32)State], *GetNameSafe(Foe.Get()), bFoeVisible ? TEXT(" (seen)") : TEXT(""),
-		Path.Num(), bPathPartial ? TEXT(" partial") : TEXT(""));
+		Path.Points.Num(), Path.bPartial ? TEXT(" partial") : TEXT(""));
 }
 
 // --- Each frame ----------------------------------------------------------------------------------
@@ -602,8 +605,8 @@ void AWWOBotController::Tick(float DeltaSeconds)
 		// Dead: it comes back knowing nothing.
 		Foe = nullptr;
 		bFoeVisible = bAware = bWasFiring = bThrowing = bRetreating = false;
-		Path.Reset();
-		PathAge = 99.f;
+		Path.Points.Reset();
+		Path.Age = 99.f;
 		Goal = FVector::ZeroVector;
 		State = EState::Roam;
 		Stuck = 0.f;
@@ -675,7 +678,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 		{
 			bRetreating = true;
 			RetreatLeft = 10.f;
-			PathAge = 99.f;
+			Path.Age = 99.f;
 			++Retreats;
 		}
 		else

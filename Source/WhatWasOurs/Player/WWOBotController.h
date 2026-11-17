@@ -28,6 +28,7 @@
 #include "AIController.h"
 #include "WWOTypes.h"
 #include "Systems/WWOLoadoutSubsystem.h"
+#include "Systems/WWONav.h"
 #include "WWOBotController.generated.h"
 
 class AWWOCharacter;
@@ -104,10 +105,7 @@ private:
 	bool bWasFiring = false;
 
 	// --- Moving ---
-	TArray<FVector> Path;
-	FVector PathGoal = FVector::ZeroVector;
-	float PathAge = 99.f;
-	bool bPathPartial = false;
+	FWWOPathFollower Path;
 	FVector PathDirection(AWWOCharacter* Me, const FVector& To, float DeltaSeconds);
 	FVector Goal = FVector::ZeroVector; // where it's roaming to
 	void PickGoal(const AWWOCharacter* Me);
