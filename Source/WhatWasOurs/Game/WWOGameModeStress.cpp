@@ -178,7 +178,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 				UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
 				if (Loadout && !Host->Abilities->Equipped("spore_fog_damage"))
 				{
-					for (UWWOAbilityData* A : Loadout->Abilities) if (A && A->Id == "spore_fog_damage") Loadout->EquipAbility(0, A);
+					for (UWWOAbilityData* A : Loadout->Catalog.Abilities) if (A && A->Id == "spore_fog_damage") Loadout->EquipAbility(0, A);
 				}
 				for (TActorIterator<AWWOCharacter> It(World); It; ++It)
 				{
@@ -205,7 +205,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(Host);
 			if (Loadout && !Host->Abilities->Equipped("static_charge"))
 			{
-				for (UWWOAbilityData* A : Loadout->Abilities) if (A && A->Id == "static_charge") Loadout->EquipAbility(0, A);
+				for (UWWOAbilityData* A : Loadout->Catalog.Abilities) if (A && A->Id == "static_charge") Loadout->EquipAbility(0, A);
 			}
 			if (StressClock > 6.f) Host->Abilities->OnDamageTaken(99999.f);
 			if (StressClock >= NextShot && Shots < 3)

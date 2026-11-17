@@ -56,11 +56,11 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 	auto Crossed = [&](float T) { return WWOTest::Crossed(Before, AutoGraftClock, T); };
 	auto Equip = [&](const FGraftLoadout& L)
 	{
-		if (UWWOFloraData* F = ById(Loadout->Floras, L.Flora)) Loadout->EquipFlora(F);
-		if (UWWOGrenadeData* G = ById(Loadout->Grenades, L.Grenade)) Loadout->EquipGrenade(G);
-		if (UWWOAbilityData* A = ById(Loadout->Abilities, L.Ability0)) Loadout->EquipAbility(0, A);
-		if (UWWOAbilityData* A = ById(Loadout->Abilities, L.Ability1)) Loadout->EquipAbility(1, A);
-		for (const FName& Part : L.Frame) if (UWWOFramePartData* FP = ById(Loadout->FrameParts, Part)) Loadout->EquipFramePart(FP);
+		if (UWWOFloraData* F = ById(Loadout->Catalog.Floras, L.Flora)) Loadout->EquipFlora(F);
+		if (UWWOGrenadeData* G = ById(Loadout->Catalog.Grenades, L.Grenade)) Loadout->EquipGrenade(G);
+		if (UWWOAbilityData* A = ById(Loadout->Catalog.Abilities, L.Ability0)) Loadout->EquipAbility(0, A);
+		if (UWWOAbilityData* A = ById(Loadout->Catalog.Abilities, L.Ability1)) Loadout->EquipAbility(1, A);
+		for (const FName& Part : L.Frame) if (UWWOFramePartData* FP = ById(Loadout->Catalog.FrameParts, Part)) Loadout->EquipFramePart(FP);
 		const AWWOPreviewActor* Preview = PC->CharacterMenu->GetPreviewActor();
 		int32 Parts = 0;
 		if (Preview) for (UActorComponent* C : Preview->GetInstanceComponents()) Parts += C && C->IsRegistered() ? 1 : 0;

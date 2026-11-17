@@ -65,7 +65,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 	{
 		AddRowLabel(TEXT("Choose a flora (switches your grenade, abilities and ult)"));
 		UHorizontalBox* R = Row();
-		for (UWWOFloraData* Option : L->Floras)
+		for (UWWOFloraData* Option : L->Catalog.Floras)
 		{
 			if (!Option->bUnlocked) continue;
 			const bool bOn = Option == Flora;

@@ -46,7 +46,7 @@ void FWWOAutoTest::UpdateAutoTesterTest(float DeltaTime)
 		if (L && WWOSwitches::Value(TEXT("WWOTesterGun="), Gun))
 		{
 			TesterGunBefore = L->GetWeapon();
-			for (UWWOWeaponData* W : L->Weapons) if (W && W->Id == FName(*Gun)) L->EquipWeapon(W);
+			for (UWWOWeaponData* W : L->Catalog.Weapons) if (W && W->Id == FName(*Gun)) L->EquipWeapon(W);
 			// -WWOTesterNoMods: the bare frame, so what is measured is the gun's own numbers (the saved
 			// loadout comes back at the end with the rest).
 			if (WWOSwitches::Has(TEXT("WWOTesterNoMods")))

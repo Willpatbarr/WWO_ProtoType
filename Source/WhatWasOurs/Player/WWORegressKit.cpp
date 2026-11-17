@@ -196,7 +196,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// The grenade comes out of the thrower's own code (UWWOGrenadeComponent::ThrowFrom builds the spec
 	// from the loadout) 30 cm above the point, straight down and slow (the throw distance tuned to
 	// 5 cm for the scenario), so it settles on the point and goes off as it would anywhere.
-	for (const UWWOGrenadeData* G : L.Grenades)
+	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
 	{
 		if (!G) continue;
 		const FName Id = G->Id, Flora = G->Flora;
@@ -303,7 +303,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// Each one equipped alone (with its own flora), set off by its button where it has one; a second
 	// walked forward; then a grenade set off 4 m ahead (Seedburst, Spore Patches, Shield Share act on
 	// it); what it did by 8 s.
-	for (const UWWOAbilityData* A : L.Abilities)
+	for (const UWWOAbilityData* A : L.Catalog.Abilities)
 	{
 		if (!A) continue;
 		const FName Id = A->Id, Flora = A->Flora;
@@ -385,7 +385,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 
 	// --- (e) Each flora's ult: on inert enemies at 5 and 10 m and a dummy at 15 m; and in PvP on an
 	// other-team and a same-team player at 5 m ---
-	for (const UWWOFloraData* F : L.Floras)
+	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		const FName Flora = F->Id;
@@ -460,7 +460,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// --- (f) Flora effects, made by their own factories, owned by the player, 10 m ahead ---
 	struct FEffect { FString Name; TFunction<void(FWWORegress&, const FVector&)> Make; float Seconds; };
 	TArray<FEffect> Effects;
-	for (const UWWOFloraData* F : L.Floras)
+	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		const FName Flavor = F->Id;
@@ -601,7 +601,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		};
 		Out.Add(S);
 	}
-	for (const UWWOAbilityData* A : L.Abilities)
+	for (const UWWOAbilityData* A : L.Catalog.Abilities)
 	{
 		if (!A) continue;
 		const FName Id = A->Id, Flora = A->Flora;
@@ -663,7 +663,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		};
 		Out.Add(S);
 	}
-	for (const UWWOFloraData* F : L.Floras)
+	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		const FName Flora = F->Id;
@@ -885,8 +885,8 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		Out.Add(S);
 	}
 	const UWWOTraitData* Impact = nullptr;
-	for (const UWWOTraitData* T : L.Traits) if (T && T->Effect == "impact_fuse") { Impact = T; break; }
-	for (const UWWOGrenadeData* G : L.Grenades)
+	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && T->Effect == "impact_fuse") { Impact = T; break; }
+	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
 	{
 		if (!G) continue;
 		const FName Id = G->Id, Flora = G->Flora;
@@ -906,7 +906,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				R.EquipGrenade(Id);
 				if (bImpact)
 				{
-					if (Trait.IsValid()) R.Loadout()->EquippedTraitList.Add(const_cast<UWWOTraitData*>(Trait.Get()));
+					if (Trait.IsValid()) R.Loadout()->Equipped.Traits.Add(const_cast<UWWOTraitData*>(Trait.Get()));
 					else R.Record(TEXT("missing_trait"), TEXT("impact_fuse"));
 				}
 				R.Tune(R.Player()->Grenades, "ThrowDistance", 0.05f);

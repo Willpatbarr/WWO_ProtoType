@@ -500,8 +500,8 @@ bool FWWOAutoTest::UpdateAutoGrenadeTest(AWWOCharacter* P, float DeltaTime)
 		}
 		AutoGrenadeBefore = Loadout->GetGrenade();
 		AutoGrenades.Reset();
-		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind != EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
-		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind == EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		for (UWWOGrenadeData* G : Loadout->Catalog.Grenades) if (G && G->Kind != EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		for (UWWOGrenadeData* G : Loadout->Catalog.Grenades) if (G && G->Kind == EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
 		UE_LOG(LogWWO, Display, TEXT("AutoTest grenade: %d grenades at %s; throw distance %.1f m, fuse %.2f s, release %.2f s, recharge %.1f s"),
 			AutoGrenades.Num(), AutoTarget.IsValid() ? *AutoTarget->GetName() : TEXT("no target"), P->Grenades->EffectiveThrowDistance(),
 			P->Grenades->DetonationTime, P->Weapon->ThrowRelease, P->Grenades->EffectiveRechargeTime());

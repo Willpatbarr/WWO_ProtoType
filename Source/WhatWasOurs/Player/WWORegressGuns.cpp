@@ -228,7 +228,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	};
 
 	// --- (a) Every weapon, no mods: body and head, on a dummy and on an inert Soldier, at 10 m ---
-	for (const UWWOWeaponData* W : L.Weapons)
+	for (const UWWOWeaponData* W : L.Catalog.Weapons)
 	{
 		if (!W) continue;
 		for (const FName Target : { FName("dummy"), FName("soldier") })
@@ -274,7 +274,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	}
 
 	// --- (b) Every perk on every mod that carries it: the condition met, and not ---
-	for (const UWWOModData* Mod : L.WeaponMods)
+	for (const UWWOModData* Mod : L.Catalog.WeaponMods)
 	{
 		if (!Mod || Mod->Perk.IsNone()) continue;
 		const FName Perk = Mod->Perk;
@@ -331,11 +331,11 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	}
 
 	// --- (c) Every weapon's stats bare and with each of its mods, as the gun reports them ---
-	for (const UWWOWeaponData* W : L.Weapons)
+	for (const UWWOWeaponData* W : L.Catalog.Weapons)
 	{
 		if (!W) continue;
 		TArray<const UWWOModData*> Mods = { nullptr };
-		for (const UWWOModData* Mod : L.WeaponMods) if (Mod && Mod->Frame == W->Id) Mods.Add(Mod);
+		for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod && Mod->Frame == W->Id) Mods.Add(Mod);
 		for (const UWWOModData* Mod : Mods)
 		{
 			FWWORegressScenario S;
@@ -374,7 +374,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// Every weapon bare, with each of its mods, with one perk mod in every slot, and two setups that
 	// can't exist: the limits GunLimits works out, and the most damage CheckGunHit lets through for a
 	// hit near and far, close, on a hurt target, after a pause and on the head.
-	for (const UWWOWeaponData* W : L.Weapons)
+	for (const UWWOWeaponData* W : L.Catalog.Weapons)
 	{
 		if (!W) continue;
 		struct FSetup { FString Name; TArray<FName> Mods; };
@@ -383,7 +383,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		TSet<FName> PerkSlots;
 		TMap<FName, FName> FirstInSlot;
 		FSetup TwoInSlot = { TEXT("two_in_slot"), {} };
-		for (const UWWOModData* Mod : L.WeaponMods)
+		for (const UWWOModData* Mod : L.Catalog.WeaponMods)
 		{
 			if (!Mod || Mod->Frame != W->Id) continue;
 			Setups.Add({ Mod->Id.ToString(), { Mod->Id } });
@@ -393,7 +393,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 		}
 		if (AllPerks.Mods.Num() > 1) Setups.Add(AllPerks);
 		if (TwoInSlot.Mods.Num() > 0) Setups.Add(TwoInSlot);
-		for (const UWWOModData* Mod : L.WeaponMods)
+		for (const UWWOModData* Mod : L.Catalog.WeaponMods)
 		{
 			if (Mod && Mod->Frame != W->Id) { Setups.Add({ TEXT("other_frame"), { Mod->Id } }); break; }
 		}
@@ -487,7 +487,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	{
 		auto ModWith = [&L](FName Frame, FName Perk) -> FName
 		{
-			for (const UWWOModData* Mod : L.WeaponMods) if (Mod && Mod->Frame == Frame && Mod->Perk == Perk) return Mod->Id;
+			for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod && Mod->Frame == Frame && Mod->Perk == Perk) return Mod->Id;
 			return NAME_None;
 		};
 		struct FHostShot { FString Name; FName Weapon; FName Mod; bool bMet = false; bool bKill = false; };

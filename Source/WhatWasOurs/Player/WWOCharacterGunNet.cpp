@@ -59,7 +59,7 @@ bool AWWOCharacter::GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponDat
 	for (const FName& Id : ModIds)
 	{
 		const UWWOModData* Mod = nullptr;
-		for (const UWWOModData* M : L->WeaponMods) if (M && M->Id == Id) { Mod = M; break; }
+		for (const UWWOModData* M : L->Catalog.WeaponMods) if (M && M->Id == Id) { Mod = M; break; }
 		if (!Mod || Mod->Frame != Gun->Id) { Why = FString::Printf(TEXT("mod %s doesn't fit %s"), *Id.ToString(), *Gun->Id.ToString()); return false; }
 		bool bTaken = false;
 		Slots.Add(Mod->Slot, &bTaken);
@@ -101,7 +101,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	const UWWOWeaponData* Gun = nullptr;
 	if (L)
 	{
-		for (const UWWOWeaponData* W : L->Weapons) if (W && W->Id == Shot.WeaponId) { Gun = W; break; }
+		for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W && W->Id == Shot.WeaponId) { Gun = W; break; }
 	}
 	FWWOGunLimits Limits;
 	FString Why = Gun ? TEXT("dead") : FString::Printf(TEXT("unknown gun %s"), *Shot.WeaponId.ToString());

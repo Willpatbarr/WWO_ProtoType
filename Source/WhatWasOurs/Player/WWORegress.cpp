@@ -413,17 +413,17 @@ void FWWORegress::SnapshotLoadout()
 	if (!L) return;
 	SavedLoadout = MakeShared<FLoadoutSnapshot>();
 	FLoadoutSnapshot& S = *SavedLoadout;
-	S.Weapon = L->Weapon;
-	S.Grenade = L->Grenade;
-	S.Flora = L->Flora;
-	S.Abilities = L->EquippedAbilities;
-	S.Traits = L->EquippedTraitList;
-	S.Frame = L->EquippedFrame;
-	S.Mods = L->EquippedMods;
-	S.Configs = L->Configs;
-	S.ActiveConfig = L->ActiveConfig;
-	S.SlotConfigs = L->SlotConfigs;
-	S.ActiveSlot = L->ActiveSlot;
+	S.Weapon = L->Equipped.Weapon;
+	S.Grenade = L->Equipped.Grenade;
+	S.Flora = L->Equipped.Flora;
+	S.Abilities = L->Equipped.Abilities;
+	S.Traits = L->Equipped.Traits;
+	S.Frame = L->Equipped.Frame;
+	S.Mods = L->Equipped.Mods;
+	S.Configs = L->ModConfigs.Configs;
+	S.ActiveConfig = L->ModConfigs.Active;
+	S.SlotConfigs = L->ModConfigs.SlotConfigs;
+	S.ActiveSlot = L->ModConfigs.ActiveSlot;
 	S.bSaveDue = L->bSaveDue;
 }
 
@@ -432,17 +432,17 @@ void FWWORegress::RestoreLoadout()
 	UWWOLoadoutSubsystem* L = Loadout();
 	if (!L || !SavedLoadout.IsValid()) return;
 	const FLoadoutSnapshot& S = *SavedLoadout;
-	L->Weapon = S.Weapon;
-	L->Grenade = S.Grenade;
-	L->Flora = S.Flora;
-	L->EquippedAbilities = S.Abilities;
-	L->EquippedTraitList = S.Traits;
-	L->EquippedFrame = S.Frame;
-	L->EquippedMods = S.Mods;
-	L->Configs = S.Configs;
-	L->ActiveConfig = S.ActiveConfig;
-	L->SlotConfigs = S.SlotConfigs;
-	L->ActiveSlot = S.ActiveSlot;
+	L->Equipped.Weapon = S.Weapon;
+	L->Equipped.Grenade = S.Grenade;
+	L->Equipped.Flora = S.Flora;
+	L->Equipped.Abilities = S.Abilities;
+	L->Equipped.Traits = S.Traits;
+	L->Equipped.Frame = S.Frame;
+	L->Equipped.Mods = S.Mods;
+	L->ModConfigs.Configs = S.Configs;
+	L->ModConfigs.Active = S.ActiveConfig;
+	L->ModConfigs.SlotConfigs = S.SlotConfigs;
+	L->ModConfigs.ActiveSlot = S.ActiveSlot;
 	L->OnChanged.Broadcast();
 	L->bSaveDue = S.bSaveDue; // nothing new to write: the run never saves
 }
@@ -453,36 +453,36 @@ void FWWORegress::BaselineLoadout()
 	// weapon with no mods, no grenade, no abilities, no traits, the Standard frame parts.
 	UWWOLoadoutSubsystem* L = Loadout();
 	if (!L) return;
-	L->Flora = L->Floras.Num() > 0 ? L->Floras[0] : nullptr;
-	L->Weapon = L->Weapons.Num() > 0 ? L->Weapons[0] : nullptr;
-	L->Grenade = nullptr;
-	L->EquippedAbilities.Init(nullptr, UWWOLoadoutSubsystem::AbilitySlots);
-	L->EquippedTraitList.Reset();
-	L->EquippedMods.Reset();
-	L->EquippedFrame.Reset();
+	L->Equipped.Flora = L->Catalog.Floras.Num() > 0 ? L->Catalog.Floras[0] : nullptr;
+	L->Equipped.Weapon = L->Catalog.Weapons.Num() > 0 ? L->Catalog.Weapons[0] : nullptr;
+	L->Equipped.Grenade = nullptr;
+	L->Equipped.Abilities.Init(nullptr, UWWOLoadoutSubsystem::AbilitySlots);
+	L->Equipped.Traits.Reset();
+	L->Equipped.Mods.Reset();
+	L->Equipped.Frame.Reset();
 	for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())
 	{
 		const TArray<UWWOFramePartData*> Options = L->FramePartsFor(Slot);
-		if (Options.Num() > 0) L->EquippedFrame.Add(Slot, Options[0]);
+		if (Options.Num() > 0) L->Equipped.Frame.Add(Slot, Options[0]);
 	}
-	L->ActiveConfig = INDEX_NONE;
+	L->ModConfigs.Active = INDEX_NONE;
 	L->bSaveDue = false;
 }
 
 void FWWORegress::EquipWeapon(FName Id)
 {
-	if (UWWOWeaponData* W = WeaponAsset(Id)) Loadout()->Weapon = W;
+	if (UWWOWeaponData* W = WeaponAsset(Id)) Loadout()->Equipped.Weapon = W;
 	else Record(TEXT("missing_weapon"), Id.ToString());
 }
 
 void FWWORegress::EquipMod(FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	for (UWWOModData* M : L->WeaponMods)
+	for (UWWOModData* M : L->Catalog.WeaponMods)
 	{
-		if (M && M->Id == Id && L->Weapon && M->Frame == L->Weapon->Id)
+		if (M && M->Id == Id && L->Equipped.Weapon && M->Frame == L->Equipped.Weapon->Id)
 		{
-			L->EquippedMods.FindOrAdd(L->Weapon->Id).Add(M->Slot, M);
+			L->Equipped.Mods.FindOrAdd(L->Equipped.Weapon->Id).Add(M->Slot, M);
 			return;
 		}
 	}
@@ -492,26 +492,26 @@ void FWWORegress::EquipMod(FName Id)
 void FWWORegress::EquipFlora(FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	for (UWWOFloraData* F : L->Floras) if (F && F->Id == Id) { L->Flora = F; return; }
+	for (UWWOFloraData* F : L->Catalog.Floras) if (F && F->Id == Id) { L->Equipped.Flora = F; return; }
 	Record(TEXT("missing_flora"), Id.ToString());
 }
 
 void FWWORegress::EquipGrenade(FName Id)
 {
-	if (UWWOGrenadeData* G = GrenadeAsset(Id)) Loadout()->Grenade = G;
+	if (UWWOGrenadeData* G = GrenadeAsset(Id)) Loadout()->Equipped.Grenade = G;
 	else Record(TEXT("missing_grenade"), Id.ToString());
 }
 
 void FWWORegress::EquipAbility(int32 Slot, FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	if (UWWOAbilityData* A = AbilityAsset(Id); A && L->EquippedAbilities.IsValidIndex(Slot)) L->EquippedAbilities[Slot] = A;
+	if (UWWOAbilityData* A = AbilityAsset(Id); A && L->Equipped.Abilities.IsValidIndex(Slot)) L->Equipped.Abilities[Slot] = A;
 	else Record(TEXT("missing_ability"), Id.ToString());
 }
 
-UWWOWeaponData* FWWORegress::WeaponAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Weapons, Id); }
-UWWOGrenadeData* FWWORegress::GrenadeAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Grenades, Id); }
-UWWOAbilityData* FWWORegress::AbilityAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Abilities, Id); }
+UWWOWeaponData* FWWORegress::WeaponAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Weapons, Id); }
+UWWOGrenadeData* FWWORegress::GrenadeAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Grenades, Id); }
+UWWOAbilityData* FWWORegress::AbilityAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Abilities, Id); }
 
 void FWWORegress::Tune(UObject* Object, FName Property, float Value)
 {
@@ -564,7 +564,7 @@ AWWOEnemy* FWWORegress::SpawnEnemy(FName Kind, const FVector& At, bool bInert)
 AWWOAlly* FWWORegress::SpawnAlly(const FVector& At)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	if (L->AllyData && L->AllyData->AiEnabled >= 0.5f) Tune(L->AllyData, "AiEnabled", 0.f);
+	if (L->Catalog.AllyData && L->Catalog.AllyData->AiEnabled >= 0.5f) Tune(L->Catalog.AllyData, "AiEnabled", 0.f);
 	const float Half = AWWOAlly::StaticClass()->GetDefaultObject<AWWOAlly>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	AWWOAlly* A = World()->SpawnActor<AWWOAlly>(AWWOAlly::StaticClass(), At + FVector(0, 0, Half), FacingFrom(At, HomeFeet), WWO::AlwaysSpawn());
 	if (!A) { Record(TEXT("spawn_failed"), TEXT("ally")); return nullptr; }
@@ -592,8 +592,8 @@ AWWOCharacter* FWWORegress::SpawnBot(int32 Team, const FVector& At, float FaceYa
 	{
 		const UWWOLoadoutSubsystem* L = Loadout();
 		FWWONetLoadout Kit;
-		Kit.Flora = L->Floras.Num() > 0 ? L->Floras[0]->Id : NAME_None;
-		Kit.Weapon = L->Weapons.Num() > 0 ? L->Weapons[0]->Id : NAME_None;
+		Kit.Flora = L->Catalog.Floras.Num() > 0 ? L->Catalog.Floras[0]->Id : NAME_None;
+		Kit.Weapon = L->Catalog.Weapons.Num() > 0 ? L->Catalog.Weapons[0]->Id : NAME_None;
 		for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())
 		{
 			const TArray<UWWOFramePartData*> Options = L->FramePartsFor(Slot);

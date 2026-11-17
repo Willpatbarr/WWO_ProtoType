@@ -277,14 +277,14 @@ void UWWOSettingsMenu::BuildPages(UWWOLoadoutSubsystem* L)
 	AddItems(TEXT("Grenade Types"), [WL]
 	{
 		TArray<FWWOBrowserItem> Items;
-		if (WL.IsValid()) for (UWWOGrenadeData* G : WL->Grenades) Items.Add({ TEXT("grenade/") + G->Id.ToString(), G->DisplayName, G == WL->GetGrenade() ? TEXT("Equipped") : TEXT("") });
+		if (WL.IsValid()) for (UWWOGrenadeData* G : WL->Catalog.Grenades) Items.Add({ TEXT("grenade/") + G->Id.ToString(), G->DisplayName, G == WL->GetGrenade() ? TEXT("Equipped") : TEXT("") });
 		return Items;
 	});
 	AddItems(TEXT("Abilities"), [WL]
 	{
 		TArray<FWWOBrowserItem> Items;
 		if (!WL.IsValid()) return Items;
-		for (UWWOAbilityData* A : WL->Abilities)
+		for (UWWOAbilityData* A : WL->Catalog.Abilities)
 		{
 			const int32 Slot = WL->AbilitySlotOf(A);
 			Items.Add({ TEXT("ability/") + A->Id.ToString(), A->DisplayName, KindName(A->Kind) + (Slot != INDEX_NONE ? FString::Printf(TEXT(" · equipped in slot %d"), Slot + 1) : FString()) });
@@ -295,7 +295,7 @@ void UWWOSettingsMenu::BuildPages(UWWOLoadoutSubsystem* L)
 	{
 		TArray<FWWOBrowserItem> Items;
 		if (!WL.IsValid()) return Items;
-		for (UWWOTraitData* T : WL->Traits)
+		for (UWWOTraitData* T : WL->Catalog.Traits)
 		{
 			Items.Add({ TEXT("trait/") + T->Id.ToString(), T->DisplayName, Capitalize(T->Flora.ToString()) + (WL->IsTraitEquipped(T) ? TEXT(" · equipped") : TEXT("")) });
 		}
@@ -304,14 +304,14 @@ void UWWOSettingsMenu::BuildPages(UWWOLoadoutSubsystem* L)
 	AddItems(TEXT("Weapons"), [WL]
 	{
 		TArray<FWWOBrowserItem> Items;
-		if (WL.IsValid()) for (UWWOWeaponData* W : WL->Weapons) Items.Add({ TEXT("weapon/") + W->Id.ToString(), W->DisplayName, W->Archetype + (W == WL->GetWeapon() ? TEXT(" · equipped") : TEXT("")) });
+		if (WL.IsValid()) for (UWWOWeaponData* W : WL->Catalog.Weapons) Items.Add({ TEXT("weapon/") + W->Id.ToString(), W->DisplayName, W->Archetype + (W == WL->GetWeapon() ? TEXT(" · equipped") : TEXT("")) });
 		return Items;
 	});
 	AddItems(TEXT("Shell"), [WL]
 	{
 		TArray<FWWOBrowserItem> Items;
 		if (!WL.IsValid()) return Items;
-		for (UWWOFramePartData* Part : WL->FrameParts)
+		for (UWWOFramePartData* Part : WL->Catalog.FrameParts)
 		{
 			Items.Add({ TEXT("frame/") + Part->Id.ToString(), Part->DisplayName, Capitalize(Part->Slot.ToString()) + (Part == WL->GetFramePart(Part->Slot) ? TEXT(" · equipped") : TEXT("")) });
 		}

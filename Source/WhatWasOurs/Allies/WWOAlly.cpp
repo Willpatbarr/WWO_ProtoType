@@ -40,7 +40,7 @@ AWWOAlly::AWWOAlly(const FObjectInitializer& ObjectInitializer)
 UWWOAllyData* AWWOAlly::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->AllyData.Get() : nullptr;
+	return L ? L->Catalog.AllyData.Get() : nullptr;
 }
 
 void AWWOAlly::BeginPlay()

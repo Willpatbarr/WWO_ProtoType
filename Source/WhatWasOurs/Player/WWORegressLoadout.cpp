@@ -120,8 +120,8 @@ namespace
 		for (const TCHAR* Extra : { TEXT("shield_regen"), TEXT("melee_damage"), TEXT("grenade_recharge"), TEXT("range"), TEXT("recoil_side"),
 			TEXT("recoil_up"), TEXT("magazine_size"), TEXT("ads_move_speed"), TEXT("sway"), TEXT("zoom"), TEXT("damage"), TEXT("fire_rate"),
 			TEXT("crit_multiplier"), TEXT("pellet_spread"), TEXT("hip_spread"), TEXT("not_a_stat") }) Stats.AddUnique(FName(Extra));
-		for (const UWWOTraitData* T : L.Traits) if (T) for (const FWWOStatModifier& M : T->Mods) Stats.AddUnique(M.Stat);
-		for (const UWWOModData* Mod : L.WeaponMods) if (Mod) for (const FWWOStatModifier& M : Mod->Mods) Stats.AddUnique(M.Stat);
+		for (const UWWOTraitData* T : L.Catalog.Traits) if (T) for (const FWWOStatModifier& M : T->Mods) Stats.AddUnique(M.Stat);
+		for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod) for (const FWWOStatModifier& M : Mod->Mods) Stats.AddUnique(M.Stat);
 		return Stats;
 	}
 }
@@ -130,8 +130,8 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 {
 	const TArray<FName> Stats = AllStats(L);
 	TArray<FName> Effects, Perks;
-	for (const UWWOTraitData* T : L.Traits) if (T && !T->Effect.IsNone()) Effects.AddUnique(T->Effect);
-	for (const UWWOModData* Mod : L.WeaponMods) if (Mod && !Mod->Perk.IsNone()) Perks.AddUnique(Mod->Perk);
+	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && !T->Effect.IsNone()) Effects.AddUnique(T->Effect);
+	for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod && !Mod->Perk.IsNone()) Perks.AddUnique(Mod->Perk);
 	Effects.AddUnique("not_an_effect");
 	Perks.AddUnique("not_a_perk");
 
@@ -140,19 +140,19 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 	struct FConfigStash { TArray<FWWOModConfig> Configs; TArray<int32> Slots; int32 Active = INDEX_NONE, ActiveSlot = 0; };
 	auto Stash = [](UWWOLoadoutSubsystem* Lo)
 	{
-		FConfigStash S{ Lo->Configs, Lo->SlotConfigs, Lo->ActiveConfig, Lo->ActiveSlot };
-		Lo->Configs.Reset();
-		Lo->SlotConfigs = { INDEX_NONE, INDEX_NONE };
-		Lo->ActiveConfig = INDEX_NONE;
-		Lo->ActiveSlot = 0;
+		FConfigStash S{ Lo->ModConfigs.Configs, Lo->ModConfigs.SlotConfigs, Lo->ModConfigs.Active, Lo->ModConfigs.ActiveSlot };
+		Lo->ModConfigs.Configs.Reset();
+		Lo->ModConfigs.SlotConfigs = { INDEX_NONE, INDEX_NONE };
+		Lo->ModConfigs.Active = INDEX_NONE;
+		Lo->ModConfigs.ActiveSlot = 0;
 		return S;
 	};
 	auto Unstash = [](UWWOLoadoutSubsystem* Lo, const FConfigStash& S)
 	{
-		Lo->Configs = S.Configs;
-		Lo->SlotConfigs = S.Slots;
-		Lo->ActiveConfig = S.Active;
-		Lo->ActiveSlot = S.ActiveSlot;
+		Lo->ModConfigs.Configs = S.Configs;
+		Lo->ModConfigs.SlotConfigs = S.Slots;
+		Lo->ModConfigs.Active = S.Active;
+		Lo->ModConfigs.ActiveSlot = S.ActiveSlot;
 	};
 
 	// What is equipped, as ids.
@@ -230,7 +230,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 	// A flora with its kit, the way the menu gives it (EquipFlora from another flora: its first grenade and abilities).
 	auto PutFlora = [](UWWOLoadoutSubsystem* Lo, UWWOFloraData* F)
 	{
-		Lo->Flora = nullptr;
+		Lo->Equipped.Flora = nullptr;
 		Lo->EquipFlora(F);
 	};
 	auto PutTraits = [](UWWOLoadoutSubsystem* Lo)
@@ -256,7 +256,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 	};
 
 	Add(TEXT("bare"), [](FWWORegress&, UWWOLoadoutSubsystem*) {});
-	for (UWWOFloraData* F : L.Floras)
+	for (UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		Add(TEXT("flora.") + F->Id.ToString(), [PutFlora, F](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutFlora(Lo, F); });
@@ -265,7 +265,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 	Add(TEXT("frame.second"), [PutFrame](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutFrame(Lo, false); });
 	Add(TEXT("frame.last"), [PutFrame](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutFrame(Lo, true); });
 	UWWOWeaponData* FirstModded = nullptr;
-	for (UWWOWeaponData* W : L.Weapons)
+	for (UWWOWeaponData* W : L.Catalog.Weapons)
 	{
 		if (!W || !L.HasMods(W)) continue;
 		if (!FirstModded) FirstModded = W;
@@ -273,7 +273,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 		Add(TEXT("mods.") + W->Id.ToString() + TEXT(".last"), [PutMods, W](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutMods(Lo, W, true); });
 	}
 	// Everything at once: the last flora's kit and traits, the last frame parts, mods in every slot.
-	UWWOFloraData* LastFlora = L.Floras.Num() > 0 ? L.Floras.Last().Get() : nullptr;
+	UWWOFloraData* LastFlora = L.Catalog.Floras.Num() > 0 ? L.Catalog.Floras.Last().Get() : nullptr;
 	Add(TEXT("everything"), [PutFlora, PutTraits, PutFrame, PutMods, LastFlora, FirstModded](FWWORegress&, UWWOLoadoutSubsystem* Lo)
 	{
 		if (LastFlora) PutFlora(Lo, LastFlora);
@@ -289,22 +289,22 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 		S.Step = [](FWWORegress& R, int32 Tick)
 		{
 			UWWOLoadoutSubsystem* Lo = R.Loadout();
-			R.Record(TEXT("weapons"), Ids(Lo->Weapons));
-			R.Record(TEXT("grenades"), Ids(Lo->Grenades));
-			R.Record(TEXT("abilities"), Ids(Lo->Abilities));
-			R.Record(TEXT("frame_parts"), Ids(Lo->FrameParts));
-			R.Record(TEXT("floras"), Ids(Lo->Floras));
-			R.Record(TEXT("traits"), Ids(Lo->Traits));
-			R.Record(TEXT("mods"), Ids(Lo->WeaponMods));
-			R.Record(TEXT("counts"), FString::Printf(TEXT("%d,%d,%d,%d,%d,%d,%d"), Lo->Weapons.Num(), Lo->Grenades.Num(), Lo->Abilities.Num(),
-				Lo->FrameParts.Num(), Lo->Floras.Num(), Lo->Traits.Num(), Lo->WeaponMods.Num()));
-			R.Record(TEXT("ally_data"), Lo->AllyData ? Lo->AllyData->GetName() : FString(TEXT("none")));
+			R.Record(TEXT("weapons"), Ids(Lo->Catalog.Weapons));
+			R.Record(TEXT("grenades"), Ids(Lo->Catalog.Grenades));
+			R.Record(TEXT("abilities"), Ids(Lo->Catalog.Abilities));
+			R.Record(TEXT("frame_parts"), Ids(Lo->Catalog.FrameParts));
+			R.Record(TEXT("floras"), Ids(Lo->Catalog.Floras));
+			R.Record(TEXT("traits"), Ids(Lo->Catalog.Traits));
+			R.Record(TEXT("mods"), Ids(Lo->Catalog.WeaponMods));
+			R.Record(TEXT("counts"), FString::Printf(TEXT("%d,%d,%d,%d,%d,%d,%d"), Lo->Catalog.Weapons.Num(), Lo->Catalog.Grenades.Num(), Lo->Catalog.Abilities.Num(),
+				Lo->Catalog.FrameParts.Num(), Lo->Catalog.Floras.Num(), Lo->Catalog.Traits.Num(), Lo->Catalog.WeaponMods.Num()));
+			R.Record(TEXT("ally_data"), Lo->Catalog.AllyData ? Lo->Catalog.AllyData->GetName() : FString(TEXT("none")));
 			R.Record(TEXT("point_value"), Lo->PointValue);
 			TArray<FString> Unlocked;
-			for (const UWWOWeaponData* W : Lo->Weapons) if (W && W->bUnlocked) Unlocked.Add(W->Id.ToString());
+			for (const UWWOWeaponData* W : Lo->Catalog.Weapons) if (W && W->bUnlocked) Unlocked.Add(W->Id.ToString());
 			R.Record(TEXT("weapons_unlocked"), FString::Join(Unlocked, TEXT(",")));
 			// The mod data read from Config/WeaponMods.json, one value each.
-			for (const UWWOModData* Mod : Lo->WeaponMods)
+			for (const UWWOModData* Mod : Lo->Catalog.WeaponMods)
 			{
 				TArray<FString> M;
 				for (const FWWOStatModifier& X : Mod->Mods) M.Add(FString::Printf(TEXT("%s%d%.9g"), *X.Stat.ToString(), (int32)X.Op, X.Value));
@@ -312,28 +312,28 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 					Mod->Rarity, Mod->Order, *Mod->Perk.ToString(), Mod->VisualParts.Num(), *FString::Join(M, TEXT("+"))));
 			}
 			// Picker lists: per flora (and none), per frame slot, per weapon and mod slot.
-			UWWOFloraData* FloraBefore = Lo->Flora;
-			Lo->Flora = nullptr;
+			UWWOFloraData* FloraBefore = Lo->Equipped.Flora;
+			Lo->Equipped.Flora = nullptr;
 			R.Record(TEXT("for.none"), Ids(Lo->GrenadesForFlora()) + TEXT("|") + Ids(Lo->AbilitiesForFlora()) + TEXT("|") + Ids(Lo->TraitsForFlora()));
-			for (UWWOFloraData* F : Lo->Floras)
+			for (UWWOFloraData* F : Lo->Catalog.Floras)
 			{
-				Lo->Flora = F;
+				Lo->Equipped.Flora = F;
 				R.Record(TEXT("for.") + F->Id.ToString(), Ids(Lo->GrenadesForFlora()) + TEXT("|") + Ids(Lo->AbilitiesForFlora()) + TEXT("|") + Ids(Lo->TraitsForFlora()));
 			}
-			Lo->Flora = FloraBefore;
+			Lo->Equipped.Flora = FloraBefore;
 			for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots()) R.Record(TEXT("frame.") + Slot.ToString(), Ids(Lo->FramePartsFor(Slot)));
-			UWWOWeaponData* WeaponBefore = Lo->Weapon;
-			for (UWWOWeaponData* W : Lo->Weapons)
+			UWWOWeaponData* WeaponBefore = Lo->Equipped.Weapon;
+			for (UWWOWeaponData* W : Lo->Catalog.Weapons)
 			{
-				Lo->Weapon = W;
+				Lo->Equipped.Weapon = W;
 				TArray<FString> PerSlot;
 				for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) PerSlot.Add(Ids(Lo->ModsFor(Slot)));
 				R.Record(TEXT("modsfor.") + W->Id.ToString(), FString::Printf(TEXT("%d|"), Lo->HasMods(W) ? 1 : 0) + FString::Join(PerSlot, TEXT("|")));
 			}
-			Lo->Weapon = nullptr;
+			Lo->Equipped.Weapon = nullptr;
 			R.Record(TEXT("modsfor.none"), Ids(Lo->ModsFor("barrel")));
 			R.RecordBool(TEXT("hasmods.null"), Lo->HasMods(nullptr));
-			Lo->Weapon = WeaponBefore;
+			Lo->Equipped.Weapon = WeaponBefore;
 			// The fixed tables.
 			R.Record(TEXT("groups"), Names(UWWOLoadoutSubsystem::GroupOrder()));
 			for (const FName& Group : UWWOLoadoutSubsystem::GroupOrder())
@@ -362,9 +362,9 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 		{
 			UWWOLoadoutSubsystem* Lo = R.Loadout();
 			FMuted Muted(Lo);
-			UWWOFloraData* F = Lo->Floras.Num() > 0 ? Lo->Floras[0].Get() : nullptr;
-			UWWOFloraData* Other = Lo->Floras.Num() > 1 ? Lo->Floras[1].Get() : nullptr;
-			Lo->Flora = nullptr;
+			UWWOFloraData* F = Lo->Catalog.Floras.Num() > 0 ? Lo->Catalog.Floras[0].Get() : nullptr;
+			UWWOFloraData* Other = Lo->Catalog.Floras.Num() > 1 ? Lo->Catalog.Floras[1].Get() : nullptr;
+			Lo->Equipped.Flora = nullptr;
 			Lo->EquipFlora(F);
 			RecordEquipped(R, Lo, TEXT("a."));
 			// Ability swap: slot 0's ability put in slot 1 swaps them.
@@ -372,7 +372,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			RecordEquipped(R, Lo, TEXT("b."));
 			// Traits: up to the slots, then refused; another flora's refused; one taken off.
 			TArray<FString> Toggles;
-			for (UWWOTraitData* T : Lo->Traits) Toggles.Add(FString::FromInt(Lo->ToggleTrait(T) ? 1 : 0));
+			for (UWWOTraitData* T : Lo->Catalog.Traits) Toggles.Add(FString::FromInt(Lo->ToggleTrait(T) ? 1 : 0));
 			R.Record(TEXT("c.toggles"), FString::Join(Toggles, TEXT("")));
 			RecordEquipped(R, Lo, TEXT("c."));
 			if (Lo->EquippedTraits().Num() > 0) R.RecordBool(TEXT("d.untoggle"), Lo->ToggleTrait(Lo->EquippedTraits()[0]));
@@ -384,15 +384,15 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			Lo->EquipFlora(Other);
 			RecordEquipped(R, Lo, TEXT("f."));
 			// FitFlora drops what isn't this flora's; FillFloraSlots fills the empty slots.
-			if (Lo->Grenades.Num() > 0) Lo->Grenade = Lo->Grenades[0];
-			if (Lo->Abilities.Num() > 0) Lo->EquippedAbilities[0] = Lo->Abilities[0];
-			Lo->FitFlora();
+			if (Lo->Catalog.Grenades.Num() > 0) Lo->Equipped.Grenade = Lo->Catalog.Grenades[0];
+			if (Lo->Catalog.Abilities.Num() > 0) Lo->Equipped.Abilities[0] = Lo->Catalog.Abilities[0];
+			Lo->Equipped.FitFlora();
 			RecordEquipped(R, Lo, TEXT("g."));
-			Lo->FillFloraSlots();
+			Lo->Equipped.FillFloraSlots(Lo->Catalog);
 			RecordEquipped(R, Lo, TEXT("h."));
 			// A mod for the wrong slot or frame is refused; null empties the slot.
 			UWWOWeaponData* Gun = nullptr;
-			for (UWWOWeaponData* W : Lo->Weapons) if (W && Lo->HasMods(W)) { Gun = W; break; }
+			for (UWWOWeaponData* W : Lo->Catalog.Weapons) if (W && Lo->HasMods(W)) { Gun = W; break; }
 			Lo->EquipWeapon(Gun);
 			const TArray<UWWOModData*> Barrels = Lo->ModsFor("barrel");
 			if (Barrels.Num() > 0)
@@ -407,7 +407,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			}
 			// Each frame keeps its own mods: away and back.
 			TArray<FString> Cycle;
-			for (int32 i = 0; i < Lo->Weapons.Num() + 1; ++i)
+			for (int32 i = 0; i < Lo->Catalog.Weapons.Num() + 1; ++i)
 			{
 				Lo->CycleWeapon(1);
 				Cycle.Add(Lo->GetWeapon() ? Lo->GetWeapon()->Id.ToString() : TEXT("none"));
@@ -436,7 +436,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			FMuted Muted(Lo);
 			const FConfigStash Before = Stash(Lo);
 			TArray<UWWOWeaponData*> Modded;
-			for (UWWOWeaponData* W : Lo->Weapons) if (W && Lo->HasMods(W)) Modded.Add(W);
+			for (UWWOWeaponData* W : Lo->Catalog.Weapons) if (W && Lo->HasMods(W)) Modded.Add(W);
 			auto Configs = [Lo]()
 			{
 				TArray<FString> Lines;
@@ -503,7 +503,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 		S.Step = [File, RecordEquipped](FWWORegress& R, int32 Tick)
 		{
 			UWWOLoadoutSubsystem* Copy = UWWOLoadoutSubsystem::NewCopy(R.Loadout());
-			Copy->EquippedAbilities.SetNum(UWWOLoadoutSubsystem::AbilitySlots);
+			Copy->Equipped.Abilities.SetNum(UWWOLoadoutSubsystem::AbilitySlots);
 			if (File.bJson)
 			{
 				Copy->LoadDefaultLoadout();
@@ -533,14 +533,14 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			R.Record(TEXT("read.net.md5"), NetMd5(Copy->ToNet()));
 			R.Record(TEXT("read.net.text"), NetText(Copy->ToNet()));
 			// What Initialize does after reading: fit the flora, fill the frame and the flora's slots.
-			if (!Copy->Flora && Copy->Floras.Num() > 0) Copy->Flora = Copy->Floras[0];
-			Copy->FitFlora();
+			if (!Copy->Equipped.Flora && Copy->Catalog.Floras.Num() > 0) Copy->Equipped.Flora = Copy->Catalog.Floras[0];
+			Copy->Equipped.FitFlora();
 			for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())
 			{
-				if (!Copy->GetFramePart(Slot) && Copy->FramePartsFor(Slot).Num() > 0) Copy->EquippedFrame.Add(Slot, Copy->FramePartsFor(Slot)[0]);
+				if (!Copy->GetFramePart(Slot) && Copy->FramePartsFor(Slot).Num() > 0) Copy->Equipped.Frame.Add(Slot, Copy->FramePartsFor(Slot)[0]);
 			}
-			if (!Copy->Weapon && Copy->Weapons.Num() > 0) Copy->Weapon = Copy->Weapons[0];
-			Copy->FillFloraSlots();
+			if (!Copy->Equipped.Weapon && Copy->Catalog.Weapons.Num() > 0) Copy->Equipped.Weapon = Copy->Catalog.Weapons[0];
+			Copy->Equipped.FillFloraSlots(Copy->Catalog);
 			RecordEquipped(R, Copy, TEXT("fit."));
 			R.Record(TEXT("fit.save.md5"), SaveBytesMd5(Copy->MakeSave()));
 			R.Record(TEXT("fit.net.md5"), NetMd5(Copy->ToNet()));

@@ -132,12 +132,12 @@ void AWWOBotController::GiveKit(AWWOCharacter* Me)
 			return Ids;
 		};
 		TArray<FName> Floras, Nades, Powers, Weapons;
-		for (const UWWOFloraData* F : Base->Floras) if (F && F->bUnlocked) Floras.Add(F->Id);
+		for (const UWWOFloraData* F : Base->Catalog.Floras) if (F && F->bUnlocked) Floras.Add(F->Id);
 		if (Floras.Num() == 0) return;
 		Kit.Flora = Floras[FMath::RandRange(0, Floras.Num() - 1)];
-		for (const UWWOGrenadeData* G : Base->Grenades) if (G && G->bUnlocked && G->Flora == Kit.Flora) Nades.Add(G->Id);
-		for (const UWWOAbilityData* A : Base->Abilities) if (A && A->bUnlocked && A->Flora == Kit.Flora) Powers.Add(A->Id);
-		for (const UWWOWeaponData* W : Base->Weapons) if (W && W->bUnlocked) Weapons.Add(W->Id);
+		for (const UWWOGrenadeData* G : Base->Catalog.Grenades) if (G && G->bUnlocked && G->Flora == Kit.Flora) Nades.Add(G->Id);
+		for (const UWWOAbilityData* A : Base->Catalog.Abilities) if (A && A->bUnlocked && A->Flora == Kit.Flora) Powers.Add(A->Id);
+		for (const UWWOWeaponData* W : Base->Catalog.Weapons) if (W && W->bUnlocked) Weapons.Add(W->Id);
 		Kit.Grenade = Nades.Num() > 0 ? Nades[FMath::RandRange(0, Nades.Num() - 1)] : NAME_None;
 		Powers = Shuffled(Powers);
 		Powers.SetNum(FMath::Min(Powers.Num(), UWWOLoadoutSubsystem::AbilitySlots));
@@ -166,7 +166,7 @@ void AWWOBotController::PickGun(AWWOCharacter* Me, float Dist)
 		return Dist <= W->FireRange * 0.9f ? 1.f : 0.f;
 	};
 	UWWOWeaponData* Other = nullptr;
-	for (UWWOWeaponData* W : Loadout->Weapons) if (W && Guns.Contains(W->Id) && W != Loadout->GetWeapon()) Other = W;
+	for (UWWOWeaponData* W : Loadout->Catalog.Weapons) if (W && Guns.Contains(W->Id) && W != Loadout->GetWeapon()) Other = W;
 	if (!Other || Fit(Other) < Fit(Loadout->GetWeapon()) + 0.7f) return;
 	NextSwap = Clock + 5.f;
 	Loadout->EquipWeapon(Other);

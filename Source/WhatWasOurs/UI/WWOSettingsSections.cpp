@@ -422,7 +422,7 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 			} },
 		{ TEXT("Skip wave (kill all)"), [WeakMode] { if (WeakMode.IsValid()) WeakMode->SkipWave(); } },
 	});
-	UWWOAllyData* AL = L->AllyData;
+	UWWOAllyData* AL = L->Catalog.AllyData;
 	AddGlobal(TEXT("Allies"), {
 		Header(TEXT("AI teammates (for testing team abilities like Shield Share)")),
 		Row(AL, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -459,7 +459,7 @@ void UWWOSettingsMenu::RegisterAimAssistSection(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterWeaponSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOWeaponData* W : L->Weapons)
+	for (UWWOWeaponData* W : L->Catalog.Weapons)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("weapon/") + W->Id.ToString();
@@ -546,7 +546,7 @@ void UWWOSettingsMenu::RegisterWeaponSections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterShellSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOFramePartData* Part : L->FrameParts)
+	for (UWWOFramePartData* Part : L->Catalog.FrameParts)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("frame/") + Part->Id.ToString();
@@ -567,7 +567,7 @@ void UWWOSettingsMenu::RegisterShellSections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterAbilitySections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOAbilityData* A : L->Abilities)
+	for (UWWOAbilityData* A : L->Catalog.Abilities)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("ability/") + A->Id.ToString();
@@ -609,7 +609,7 @@ void UWWOSettingsMenu::RegisterAbilitySections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterTraitSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOTraitData* T : L->Traits)
+	for (UWWOTraitData* T : L->Catalog.Traits)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("trait/") + T->Id.ToString();
@@ -638,7 +638,7 @@ void UWWOSettingsMenu::RegisterGrenadeSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 	UWWOGrenadeComponent* Th = P->Grenades;
-	for (UWWOGrenadeData* Gr : L->Grenades)
+	for (UWWOGrenadeData* Gr : L->Catalog.Grenades)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("grenade/") + Gr->Id.ToString();

@@ -305,7 +305,7 @@ void UWWOCharacterMenu::BuildOverview()
 		{
 			const FWWOModConfig& Config = L->GetConfigs()[ConfigIndex];
 			const UWWOWeaponData* Gun = nullptr;
-			for (const UWWOWeaponData* W : L->Weapons) if (W->Id == Config.Weapon) Gun = W;
+			for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == Config.Weapon) Gun = W;
 			Name = (Gun ? Gun->DisplayName : Config.Weapon.ToString()) + TEXT("  ·  ") + Config.Name;
 		}
 		else if (bInHand && L->GetWeapon()) Name = L->GetWeapon()->DisplayName + TEXT("  ·  not saved");
@@ -530,7 +530,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	auto Rim = [](const FLinearColor& C, bool bOn) { return bOn ? WWO::Lightened(C, 0.3f) : C; };
 	if (Name == TEXT("flora"))
 	{
-		for (UWWOFloraData* F : L->Floras)
+		for (UWWOFloraData* F : L->Catalog.Floras)
 		{
 			if (F->bUnlocked) Option(Initials(F->DisplayName), FString(), F->DisplayName, F == L->GetFlora(), In(F->Color), Rim(F->Color, F == L->GetFlora()), [WL, F] { if (WL.IsValid()) WL->EquipFlora(F); });
 		}
@@ -577,7 +577,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		for (int32 i = 0; i < Configs.Num(); ++i)
 		{
 			const UWWOWeaponData* Gun = nullptr;
-			for (const UWWOWeaponData* W : L->Weapons) if (W->Id == Configs[i].Weapon) Gun = W;
+			for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == Configs[i].Weapon) Gun = W;
 			const FString GunName = Gun ? Gun->DisplayName : Configs[i].Weapon.ToString();
 			Option(GunName, Configs[i].Name, GunName + TEXT(" · ") + Configs[i].Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
 				L->GetSlotConfig(WeaponSlot) == i, WWOUI::CardColor, L->GetSlotConfig(WeaponSlot) == i ? FLinearColor::White : WWOUI::CardEdgeStrong, [WL, WeaponSlot, i] { if (WL.IsValid()) WL->SetSlotConfig(WeaponSlot, i); });

@@ -153,7 +153,7 @@ namespace
 
 	const UWWOGrenadeData* GrenadeOfKind(const UWWOLoadoutSubsystem& L, EWWOGrenadeKind Kind)
 	{
-		for (const UWWOGrenadeData* G : L.Grenades) if (G && G->Kind == Kind) return G;
+		for (const UWWOGrenadeData* G : L.Catalog.Grenades) if (G && G->Kind == Kind) return G;
 		return nullptr;
 	}
 	FWWOGrenadeSpec SpecOf(const UWWOGrenadeData* G)

@@ -274,7 +274,7 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 
 	// --- (b) The AI teammate walking (it follows the player) ---
 	{
-		auto AiOn = [](FWWORegress& R, FMoveState& St) { R.Tune(R.Loadout()->AllyData, "AiEnabled", 1.f); };
+		auto AiOn = [](FWWORegress& R, FMoveState& St) { R.Tune(R.Loadout()->Catalog.AllyData, "AiEnabled", 1.f); };
 		// Open floor from 15 m, an inert Soldier off to the side it shoots at (its random fire cooldown and spread).
 		{
 			FWalk W;
@@ -448,7 +448,7 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		};
 		W.Start = [Kind, BotStart](FWWORegress& R, FMoveState& St)
 		{
-			if (Kind == "ally") R.Tune(R.Loadout()->AllyData, "AiEnabled", 1.f);
+			if (Kind == "ally") R.Tune(R.Loadout()->Catalog.AllyData, "AiEnabled", 1.f);
 			else if (Kind == "bot") BotStart(R, St);
 			else
 			{

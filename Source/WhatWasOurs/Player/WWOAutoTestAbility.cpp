@@ -78,8 +78,8 @@ bool FWWOAutoTest::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTime)
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot) AutoAbilitiesBefore.Add(Loadout->GetAbility(Slot));
 		AutoTraitsBefore.Reset();
 		for (UWWOTraitData* T : Loadout->EquippedTraits()) AutoTraitsBefore.Add(T);
-		AutoAbilities = Loadout->Abilities;
-		AutoFloras = Loadout->Floras;
+		AutoAbilities = Loadout->Catalog.Abilities;
+		AutoFloras = Loadout->Catalog.Floras;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest ability: %d abilities, %d flora ults"), AutoAbilities.Num(), AutoFloras.Num());
 		AutoAbilityIndex = 0;
 		AutoAbilityPhase = -1.f;

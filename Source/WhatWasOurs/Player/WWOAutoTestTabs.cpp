@@ -126,8 +126,8 @@ void FWWOAutoTest::UpdateAutoTabsTest(float DeltaTime)
 	case 0:
 		if (TabsClock < 8.f) break;
 		// The fullest Weapon tab: six perks' worth of text and a long list of configs.
-		for (UWWOWeaponData* W : L->Weapons) if (W->Id == "rifle") L->EquipWeapon(W);
-		for (UWWOModData* Mod : L->WeaponMods) if (Mod->Frame == "rifle" && !Mod->Perk.IsNone()) L->EquipMod(Mod->Slot, Mod);
+		for (UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == "rifle") L->EquipWeapon(W);
+		for (UWWOModData* Mod : L->Catalog.WeaponMods) if (Mod->Frame == "rifle" && !Mod->Perk.IsNone()) L->EquipMod(Mod->Slot, Mod);
 		for (int32 i = 0; i < 4; ++i) L->SaveConfig(INDEX_NONE);
 		PC->ToggleCharacterMenu();
 		PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
