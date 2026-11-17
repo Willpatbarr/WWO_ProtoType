@@ -27,6 +27,12 @@ public:
 	// takes to enter the hub (the host's setting, here so every HUD can mark it).
 	UPROPERTY(Replicated) TArray<float> BreachEnergy;
 	UPROPERTY(Replicated) float BreachThreshold = 0.f;
+	// While a team's breachers are still in the hub on the pool they opened a door with: that pool is
+	// frozen (BreachFrozen), and what the team earns goes to BreachNext, its next breach. DoorsOpen: each
+	// team's doors opened so far (0-3).
+	UPROPERTY(Replicated) TArray<float> BreachNext;
+	UPROPERTY(Replicated) TArray<bool> BreachFrozen;
+	UPROPERTY(Replicated) TArray<int32> DoorsOpen;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

@@ -32,7 +32,19 @@
 // - Drained: BreachDrain per second for each of the team's breachers.
 // - Out of energy: every breacher of that team goes back through the hub doorway to their room.
 // - A breacher's death costs the team BreachDeathLoss of its pool.
-// - (Later: it resets when the team opens a door; the hijack costs and bonuses.)
+// - (Later: the hijack costs and bonuses.)
+//
+// Doors and levers (World/WWOBreachDoor.h, WWOBreachLever.h; DoorSlot and LeverSlot markers): Door1-3
+// close the doorways out of Room1-3. A door's lever in the hub is live only when its door is the
+// team's next one and the team's current breach went in by the room that door leads out of (one breach
+// opens at most one door). A breacher holds the Revive key at it for LeverHoldTime and it opens.
+// Leaving the hub lands a player in the furthest room their team has opened.
+//
+// Two pools (the design doc's 2.1): a door opened while the team's breachers are in the hub freezes
+// the pool they are on. They keep draining it; what the team earns goes to the next pool
+// (AWWOGameState::BreachNext) instead, but a kill made in the hub is split evenly between the two. Nobody
+// on the team can breach until that breach ends; once no one is in the hub the rest of the frozen pool
+// is thrown away and the next pool becomes the pool.
 //
 // The level's markers (Tools/footrace_layout.py) are TargetPoints tagged with what they are and where:
 // TeamSpawn Lane<n>; PortalAnchor Lane<n> Room<k>|Boss; HubPortal Lane<n>. Lane n is team n's.
@@ -42,6 +54,8 @@
 
 class AWWOCharacter;
 class AWWOBreachPortal;
+class AWWOBreachDoor;
+class AWWOBreachLever;
 class AWWOEnemy;
 class UWWOHealthComponent;
 
@@ -86,16 +100,36 @@ public:
 	// What a room spawns next: its kind by the room and how many it has spawned.
 	static FName RoomKind(int32 Index, int32 Spawned);
 
+	// Doors and levers (Door 1-3).
+	int32 DoorsOpen(int32 Team) const;
+	int32 OpenedRoom(int32 Team) const { return DoorsOpen(Team) + 1; } // the furthest room it can reach: 1 Room1 .. 4 Boss
+	AWWOBreachDoor* DoorOf(int32 Team, int32 Door) const;
+	AWWOBreachLever* LeverOf(int32 Team, int32 Door) const;
+	bool IsLeverLive(int32 Team, int32 Door) const;
+	void OpenDoor(int32 Team, int32 Door);
+	// The two pools.
+	float NextEnergy(int32 Team) const;
+	bool IsFrozen(int32 Team) const;
+	// Energy earned by Killer's team: to the pool, or (while frozen) to the next pool, or split in the hub.
+	void CreditKill(int32 Team, float Amount, const AWWOCharacter* Killer, const TCHAR* Why);
+
 private:
 	void SpawnPortals();
 	// Steps Body through Portal: to its team's hub doorway, or back to the room doorway it came from.
 	void GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPortal* Portal);
-	// The hub doorway's way out: back in front of the room doorway Body came in by.
+	// The hub doorway's way out: in front of the doorway of the furthest room the team has opened.
 	void LeaveHub(AWWOCharacter* Body, int32 Team);
 	void BindDeaths();                       // each new player's and enemy's death, once
 	void OnPlayerDied(AWWOCharacter* Victim);
 	void OnEnemyDied(AWWOEnemy* Enemy);
 	void Drain(float DeltaSeconds);
+	void SpawnDoorsAndLevers();
+	void UpdateLevers(float DeltaSeconds);
+	void EndBreachesDone(); // a team with nobody left in the hub: its breach is over (and a frozen pool swaps)
+	void SetNext(int32 Team, float Value);
+	TArray<TWeakObjectPtr<AWWOBreachDoor>> Doors;
+	TArray<TWeakObjectPtr<AWWOBreachLever>> Levers;
+	TSet<int32> EnteredFrom[2]; // the rooms (1-4) the team's current breach went in by
 	struct FRoom
 	{
 		int32 Team = 0;
@@ -117,7 +151,6 @@ private:
 
 	TArray<TWeakObjectPtr<AWWOBreachPortal>> Portals;
 	TSet<TWeakObjectPtr<AWWOCharacter>> Placed;                                    // bodies put in their spawn room
-	TMap<TWeakObjectPtr<AWWOCharacter>, TWeakObjectPtr<AWWOBreachPortal>> CameFrom; // the room doorway each one entered the hub by
 	TMap<TWeakObjectPtr<AWWOCharacter>, double> LastThrough;                        // when each last went through a doorway
 	TSet<TWeakObjectPtr<AWWOCharacter>> InHub;                                      // breachers
 	TSet<TWeakObjectPtr<AWWOCharacter>> PlayersBound;

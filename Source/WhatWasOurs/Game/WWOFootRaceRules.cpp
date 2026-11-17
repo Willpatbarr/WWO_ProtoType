@@ -12,6 +12,8 @@
 #include "WWOIds.h"
 #include "Allies/WWOAlly.h"
 #include "World/WWOBreachPortal.h"
+#include "World/WWOBreachDoor.h"
+#include "World/WWOBreachLever.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
@@ -64,9 +66,13 @@ void FWWOFootRaceRules::Begin()
 		GS->bMatchOver = false;
 		GS->MatchWinner = -1;
 		GS->BreachEnergy = { 0.f, 0.f };
+		GS->BreachNext = { 0.f, 0.f };
+		GS->BreachFrozen = { false, false };
+		GS->DoorsOpen = { 0, 0 };
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	SpawnPortals();
+	SpawnDoorsAndLevers();
 	FindRooms();
 	State = EWWOWaveState::Match;
 }
@@ -142,6 +148,8 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
 	BindDeaths();
 	Drain(DeltaSeconds);
+	EndBreachesDone();
+	UpdateLevers(DeltaSeconds);
 	UpdateRooms(DeltaSeconds);
 	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 	{
@@ -166,6 +174,11 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 			if (P.IsValid() && P->Team == PS->Team && P->Contains(Feet))
 			{
 				LastThrough.Add(Body, Now); // a refused step waits the cooldown too (one log line, not one a tick)
+				if (!P->bHub && IsFrozen(PS->Team))
+				{
+					UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) can't breach yet: the team's last breach is still in the hub"), *Body->GetName(), PS->Team);
+					break;
+				}
 				if (!P->bHub && Energy(PS->Team) < Mode.BreachThreshold)
 				{
 					UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) can't breach yet: %.0f of %.0f energy"), *Body->GetName(), PS->Team,
@@ -188,8 +201,8 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 	}
 	AWWOBreachPortal* To = HubPortal(Team);
 	if (!To) return;
-	CameFrom.Add(Body, Portal);
 	InHub.Add(Body);
+	for (int32 I = 1; I <= 4; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway into the hub (%.0f energy)"), *Body->GetName(), Team,
 		*Portal->Room.ToString(), Energy(Team));
@@ -198,8 +211,7 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
 {
 	InHub.Remove(Body);
-	const TWeakObjectPtr<AWWOBreachPortal>* From = CameFrom.Find(Body);
-	AWWOBreachPortal* To = From && From->IsValid() ? From->Get() : RoomPortal(Team, "Room1");
+	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
 	if (!To) return;
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
 	LastThrough.Add(Body, Mode.GetWorld()->GetTimeSeconds());
@@ -403,14 +415,15 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 	const bool bRecent = Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= KillCreditWindow;
 	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
 	const int32 KillerTeam = Killer ? UWWOWorldSubsystem::TeamOf(Killer) : -1;
-	if (KillerTeam >= 0 && KillerTeam != VictimTeam) AddEnergy(KillerTeam, Mode.EnergyPerPlayerKill, TEXT("a player kill"));
+	if (KillerTeam >= 0 && KillerTeam != VictimTeam) CreditKill(KillerTeam, Mode.EnergyPerPlayerKill, Killer, TEXT("a player kill"));
 }
 
 void FWWOFootRaceRules::OnEnemyDied(AWWOEnemy* Enemy)
 {
 	const AWWOCharacter* Killer = Enemy ? Enemy->LastHitBy.Get() : nullptr;
+	if (Killer && !Killer->Health) Killer = nullptr;
 	const int32 Team = Killer ? UWWOWorldSubsystem::TeamOf(Killer) : -1;
-	if (Team >= 0) AddEnergy(Team, Mode.EnergyPerEnemy, TEXT("an enemy kill"));
+	if (Team >= 0) CreditKill(Team, Mode.EnergyPerEnemy, Killer, TEXT("an enemy kill"));
 }
 
 void FWWOFootRaceRules::Teleport(AWWOCharacter* Body, const FTransform& Spot)
@@ -428,4 +441,178 @@ FString FWWOFootRaceRules::StatusText(FLinearColor& OutColor) const
 {
 	OutColor = FLinearColor::White;
 	return TEXT("FOOTRACE");
+}
+
+// --- Doors, levers and the two pools ---------------------------------------------------------------
+
+void FWWOFootRaceRules::SpawnDoorsAndLevers()
+{
+	UWorld* World = Mode.GetWorld();
+	auto DoorNumber = [](const AActor* Marker)
+	{
+		for (int32 D = 1; D <= 3; ++D) if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("Door%d"), D)))) return D;
+		return 0;
+	};
+	for (TActorIterator<ATargetPoint> It(World); It; ++It)
+	{
+		const bool bDoor = It->ActorHasTag("DoorSlot");
+		const bool bLever = It->ActorHasTag("LeverSlot");
+		if (!bDoor && !bLever) continue;
+		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
+		const int32 Door = DoorNumber(*It);
+		if (Team < 0 || Door == 0) continue;
+		const FRotator Facing(0.f, It->GetActorRotation().Yaw, 0.f);
+		if (bDoor)
+		{
+			// The slab stands in the doorway, its middle at half the doorway's height (the marker is on the floor).
+			const FTransform Where(Facing, It->GetActorLocation() + FVector(0, 0, AWWOBreachDoor::Height * 0.5f * WWO::M),
+				FVector(AWWOBreachDoor::Thickness, AWWOBreachDoor::Width, AWWOBreachDoor::Height));
+			AWWOBreachDoor* D = World->SpawnActorDeferred<AWWOBreachDoor>(AWWOBreachDoor::StaticClass(), Where, nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (!D) continue;
+			D->Team = (int8)Team;
+			D->Door = Door;
+			D->FinishSpawning(Where);
+			Doors.Add(D);
+		}
+		else
+		{
+			FVector At = It->GetActorLocation();
+			FVector Ground;
+			if (WWOFX::GroundBelow(World, At + FVector(0, 0, 100.f), 400.f, Ground)) At = Ground;
+			AWWOBreachLever* L = World->SpawnActorDeferred<AWWOBreachLever>(AWWOBreachLever::StaticClass(), FTransform(Facing, At), nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (!L) continue;
+			L->Team = (int8)Team;
+			L->Door = (int8)Door;
+			L->FinishSpawning(FTransform(Facing, At));
+			Levers.Add(L);
+		}
+	}
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %d doors, %d levers"), Doors.Num(), Levers.Num());
+}
+
+int32 FWWOFootRaceRules::DoorsOpen(int32 Team) const
+{
+	const AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	return GS && GS->DoorsOpen.IsValidIndex(Team) ? GS->DoorsOpen[Team] : 0;
+}
+
+AWWOBreachDoor* FWWOFootRaceRules::DoorOf(int32 Team, int32 Door) const
+{
+	for (const TWeakObjectPtr<AWWOBreachDoor>& D : Doors) if (D.IsValid() && D->Team == Team && D->Door == Door) return D.Get();
+	return nullptr;
+}
+
+AWWOBreachLever* FWWOFootRaceRules::LeverOf(int32 Team, int32 Door) const
+{
+	for (const TWeakObjectPtr<AWWOBreachLever>& L : Levers) if (L.IsValid() && L->Team == Team && L->Door == Door) return L.Get();
+	return nullptr;
+}
+
+bool FWWOFootRaceRules::IsLeverLive(int32 Team, int32 Door) const
+{
+	if (Team < 0 || Team > 1) return false;
+	return Door == DoorsOpen(Team) + 1 && Door <= 3 && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
+}
+
+void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (!GS || Team < 0 || Team > 1 || Door != DoorsOpen(Team) + 1) return;
+	if (GS->DoorsOpen.Num() < 2) GS->DoorsOpen.SetNum(2);
+	GS->DoorsOpen[Team] = Door;
+	if (AWWOBreachDoor* D = DoorOf(Team, Door)) D->Open();
+	if (AWWOBreachLever* L = LeverOf(Team, Door))
+	{
+		L->bPulled = true;
+		L->bLive = false;
+		L->Progress = 0.f;
+	}
+	// The breach that opened it goes on draining the pool it is on; what the team earns now is for the next one.
+	const bool bFreeze = Breachers(Team) > 0;
+	if (bFreeze)
+	{
+		if (GS->BreachFrozen.Num() < 2) GS->BreachFrozen.SetNum(2);
+		GS->BreachFrozen[Team] = true;
+	}
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d opened Door %d%s"), Team, Door, bFreeze ? TEXT(" (its breach's pool is frozen)") : TEXT(""));
+}
+
+void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
+{
+	for (const TWeakObjectPtr<AWWOBreachLever>& Weak : Levers)
+	{
+		AWWOBreachLever* L = Weak.Get();
+		if (!L || L->bPulled) continue;
+		L->bLive = IsLeverLive(L->Team, L->Door);
+		bool bHeld = false;
+		if (L->bLive)
+		{
+			for (const TWeakObjectPtr<AWWOCharacter>& B : InHub)
+			{
+				if (B.IsValid() && !B->Health->bDead && B->bHoldingUse && UWWOWorldSubsystem::TeamOf(B.Get()) == L->Team && L->InReach(B->GetActorLocation()))
+				{
+					bHeld = true;
+					break;
+				}
+			}
+		}
+		// Let go (or out of reach) and the handle springs back.
+		L->Progress = bHeld ? L->Progress + DeltaSeconds / FMath::Max(Mode.LeverHoldTime, 0.01f) : 0.f;
+		if (L->Progress >= 1.f) OpenDoor(L->Team, L->Door);
+	}
+}
+
+void FWWOFootRaceRules::EndBreachesDone()
+{
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		if (Breachers(Team) > 0) continue;
+		EnteredFrom[Team].Reset();
+		if (!IsFrozen(Team)) continue;
+		// The breach that opened the door is over: the rest of its pool goes, the next pool takes its place.
+		AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+		const float Left = Energy(Team);
+		SetEnergy(Team, NextEnergy(Team));
+		SetNext(Team, 0.f);
+		GS->BreachFrozen[Team] = false;
+		UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's breach is over: %.0f left over thrown away, the next pool (%.0f) is the pool"), Team, Left, Energy(Team));
+	}
+}
+
+float FWWOFootRaceRules::NextEnergy(int32 Team) const
+{
+	const AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	return GS && GS->BreachNext.IsValidIndex(Team) ? GS->BreachNext[Team] : 0.f;
+}
+
+void FWWOFootRaceRules::SetNext(int32 Team, float Value)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (!GS || Team < 0 || Team > 1) return;
+	if (GS->BreachNext.Num() < 2) GS->BreachNext.SetNum(2);
+	GS->BreachNext[Team] = FMath::Max(0.f, Value);
+}
+
+bool FWWOFootRaceRules::IsFrozen(int32 Team) const
+{
+	const AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	return GS && GS->BreachFrozen.IsValidIndex(Team) && GS->BreachFrozen[Team];
+}
+
+void FWWOFootRaceRules::CreditKill(int32 Team, float Amount, const AWWOCharacter* Killer, const TCHAR* Why)
+{
+	if (Team < 0 || Team > 1) return;
+	if (!IsFrozen(Team))
+	{
+		AddEnergy(Team, Amount, Why);
+		return;
+	}
+	// Frozen: a kill made in the hub stretches the breach a little and helps the next one; any other goes to the next.
+	const float ToPool = Killer && IsBreaching(Killer) ? Amount * 0.5f : 0.f;
+	if (ToPool > 0.f) SetEnergy(Team, Energy(Team) + ToPool);
+	SetNext(Team, NextEnergy(Team) + Amount - ToPool);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d %+.0f energy (%s; frozen: %.0f to the pool, %.0f to the next), now %.0f + %.0f next"),
+		Team, Amount, Why, ToPool, Amount - ToPool, Energy(Team), NextEnergy(Team));
 }

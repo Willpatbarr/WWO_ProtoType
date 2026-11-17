@@ -208,6 +208,12 @@ walks the table in its order (the HUD line's).
     of its players has stood in; Room1 from the start) fills to `RoomEnemies` and refills after deaths;
     rooms behind keep their enemies without refilling. Each enemy guards its lane (`AWWOEnemy::Lane`) and
     only targets that team's players.
+    Doors and levers (`World/WWOBreachDoor.*`, `WWOBreachLever.*` on `DoorSlot` / `LeverSlot`): a lever is
+    live when its door is the team's next and the team's current breach went in by the room that door
+    leads out of; a breacher holds the Revive key at it (`AWWOCharacter::bHoldingUse`) for `LeverHoldTime`.
+    A door opened mid-breach freezes that pool (`BreachFrozen`); earnings go to `BreachNext` (hub kills
+    split) until nobody is in the hub, then the next pool takes over. Leaving the hub lands in the furthest
+    room opened.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

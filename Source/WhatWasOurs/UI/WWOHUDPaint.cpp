@@ -16,6 +16,8 @@
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
 #include "Game/WWOGameMode.h"
+#include "World/WWOBreachLever.h"
+#include "EngineUtils.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -875,9 +877,41 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const float TickX = Pos.X + BarSize.X * 0.5f;
 		P.Box(FVector2D(TickX - 1.f, Pos.Y - 3.f), FVector2D(2.f, BarSize.Y + 6.f), FLinearColor(1, 1, 1, 0.9f));
 		P.Outline(Pos, BarSize, FLinearColor(1, 1, 1, 0.35f), 1.f);
+		// The next breach's pool, grey and thin under it, while a door opened mid-breach has frozen the pool.
+		const bool bFrozen = GS->BreachFrozen.IsValidIndex(Team) && GS->BreachFrozen[Team];
+		const float Next = GS->BreachNext.IsValidIndex(Team) ? GS->BreachNext[Team] : 0.f;
+		if (bFrozen || Next > 0.f)
+		{
+			const FVector2D NextPos(Pos.X, Pos.Y + BarSize.Y + 2.f);
+			P.Box(NextPos, FVector2D(BarSize.X, 5.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.6f));
+			P.Box(NextPos, FVector2D(BarSize.X * FMath::Clamp(Next / (Threshold * 2.f), 0.f, 1.f), 5.f), FLinearColor(0.62f, 0.64f, 0.68f, 0.9f));
+		}
 		const FString Label = FString::Printf(TEXT("%s%s  %.0f"), Slot == 0 ? TEXT("YOUR BREACH") : TEXT("THEIRS"),
 			Energy >= Threshold ? TEXT(" READY") : TEXT(""), Energy);
-		P.Text(Label, FVector2D(Pos.X + (Slot == 0 ? BarSize.X : 0.f), Pos.Y + BarSize.Y + 4.f), 16.f, Color, Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+		P.Text(Label, FVector2D(Pos.X + (Slot == 0 ? BarSize.X : 0.f), Pos.Y + BarSize.Y + 9.f), 16.f, Color, Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+	}
+	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
+	const AWWOBreachLever* Near = nullptr;
+	for (TActorIterator<AWWOBreachLever> It(F.Pl->GetWorld()); It; ++It)
+	{
+		if (It->Team == Mine && It->InReach(F.Pl->GetActorLocation())) Near = *It;
+	}
+	if (!Near) return;
+	const int32 Opened = GS->DoorsOpen.IsValidIndex(Mine) ? GS->DoorsOpen[Mine] : 0;
+	const AWWOPlayerController* Keys = Cast<AWWOPlayerController>(F.PC);
+	const FString Key = Keys ? Keys->BindHint("revive") : TEXT("Revive");
+	FString Line;
+	if (Near->bPulled) Line = FString::Printf(TEXT("Door %d is open"), (int32)Near->Door);
+	else if (Near->bLive) Line = FString::Printf(TEXT("Hold %s to open Door %d"), *Key, (int32)Near->Door);
+	else if (Near->Door > Opened + 1) Line = FString::Printf(TEXT("Door %d: open Door %d first"), (int32)Near->Door, Opened + 1);
+	else if (GS->BreachFrozen.IsValidIndex(Mine) && GS->BreachFrozen[Mine]) Line = TEXT("One door per breach: breach again for the next");
+	else Line = FString::Printf(TEXT("Door %d: breach from Room %d to unlock this lever"), (int32)Near->Door, (int32)Near->Door);
+	P.Text(Line, F.Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
+	if (Near->Progress > 0.f)
+	{
+		const FVector2D BarPos(F.Center.X - 110.f, F.Center.Y + 125.f);
+		P.Box(BarPos, FVector2D(220.f, 10.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+		P.Box(BarPos, FVector2D(220.f * FMath::Clamp(Near->Progress, 0.f, 1.f), 10.f), FLinearColor::White);
 	}
 }
 

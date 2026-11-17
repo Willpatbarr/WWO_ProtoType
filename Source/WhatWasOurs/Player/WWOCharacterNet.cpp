@@ -59,6 +59,23 @@ void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
 	Health->bWantsRevive = bHolding;
 }
 
+void AWWOCharacter::ServerSetUse_Implementation(bool bHolding)
+{
+	bHoldingUse = bHolding;
+}
+
+void AWWOCharacter::UpdateUseInput()
+{
+	// The Revive key, held, whatever is near: what it does is up to whoever reads bHoldingUse (host).
+	const bool bHolding = !Health->bDead && Pressed(EWWOAction::Revive);
+	if (HasAuthority()) bHoldingUse = bHolding;
+	else if (bHolding != bSentUse)
+	{
+		bSentUse = bHolding;
+		ServerSetUse(bHolding);
+	}
+}
+
 void AWWOCharacter::UpdateReviveInput()
 {
 	if (GetNetMode() == NM_Standalone) return;

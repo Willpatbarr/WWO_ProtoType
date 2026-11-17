@@ -436,9 +436,15 @@ public:
 	UFUNCTION(Client, Reliable) void ClientKitRefused(uint8 What, int32 Slot);
 	FVector NetAim = FVector::ForwardVector; // host: where a joiner was looking when it last used an ability
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();
+	// Holding the Revive key anywhere, alive: the host's view of it, for things you hold a key at
+	// (FootRace's levers). Set on the host from its own input or a joiner's ServerSetUse.
+	bool bHoldingUse = false;
+	UFUNCTION(Server, Reliable) void ServerSetUse(bool bHolding);
 private:
 	bool bSentRevive = false;
+	bool bSentUse = false;
 	void UpdateReviveInput();
+	void UpdateUseInput();
 
 	// --- Gun net: a joiner's shots and punches, checked and applied by the host (WWOCharacterGunNet.cpp) ---
 public:

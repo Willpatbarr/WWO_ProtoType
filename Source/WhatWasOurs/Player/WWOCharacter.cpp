@@ -222,6 +222,7 @@ void AWWOCharacter::Tick(float DeltaSeconds)
 	SendPose(DeltaSeconds);
 	if (PreparedFrame != GFrameCounter) PrepareMovement(DeltaSeconds); // movement didn't tick this frame
 	UpdateReviveInput();
+	UpdateUseInput();
 	if (Health->bDead != bWeaponSawDead)
 	{
 		// Dying stops the gun mid-burst, mid-reload or mid-punch; coming back starts every gun full.

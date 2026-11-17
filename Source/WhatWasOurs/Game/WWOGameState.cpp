@@ -21,6 +21,9 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, MatchWinner);
 	DOREPLIFETIME(AWWOGameState, BreachEnergy);
 	DOREPLIFETIME(AWWOGameState, BreachThreshold);
+	DOREPLIFETIME(AWWOGameState, BreachNext);
+	DOREPLIFETIME(AWWOGameState, BreachFrozen);
+	DOREPLIFETIME(AWWOGameState, DoorsOpen);
 }
 
 AWWOGameState* AWWOGameState::HostRelay(UWorld* World)

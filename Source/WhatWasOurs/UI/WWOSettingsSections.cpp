@@ -395,6 +395,7 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "EnergyPerPlayerKill", TEXT("Energy per enemy player killed"), 0.f, 200.f, 1.f),
 		Row(Mode, "BreachDrain", TEXT("Drain per player in the hub (per second)"), 0.f, 50.f, 0.5f),
 		Row(Mode, "BreachDeathLoss", TEXT("Share of the pool lost when a breacher dies"), 0.f, 1.f, 0.05f),
+		Row(Mode, "LeverHoldTime", TEXT("Time to pull a door lever (s)"), 0.f, 5.f, 0.1f),
 		Header(TEXT("Lane rooms")),
 		Row(Mode, "RoomEnemies", TEXT("Enemies in a team's live room"), 0.f, 30.f, 1.f),
 		Row(Mode, "RoomSpawnStagger", TEXT("Time between spawns while a room fills (s)"), 0.f, 3.f, 0.05f),
