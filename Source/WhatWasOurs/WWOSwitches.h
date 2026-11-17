@@ -31,8 +31,10 @@
 //   -WWOTesterFrames=<n>        (tester test) save n frames in a row around one shot
 //   -WWOTesterHip / -WWOTesterStrafe / -WWOTesterNoShot   (tester frames) from the hip; strafing; no shot
 //   -WWORegress                 the regression scenarios (Player/WWORegress*.cpp), compared with Tools/regress/golden.json
-//   -WWORegressOnly=<text>      (regress) only the scenarios whose name contains that text
+//   -WWORegressOnly=<a,b>       (regress) only the scenarios whose name contains one of those texts
+//   -WWORegressPerModeOnly      (regress) only the scenarios with one golden entry per mode (the drawn-only check)
 //   -WWORegressUpdate           (regress) rewrite the golden file from this run (this mode's entries)
+//   -WWORegressUpdateNew        (regress) add the golden entries this run made that it lacks; compare the rest
 //   -WWORegressReverse          (regress) run the scenarios in reverse order (a check that they are independent)
 //   -WWOWaveTest                all 8 waves with god mode, logging AI state
 //   -WWOTestScoreboard          pictures of the match-end scoreboard, then NEXT MATCH

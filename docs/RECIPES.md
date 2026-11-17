@@ -214,10 +214,11 @@ Anything that acts on "everyone within R of a point" (a blast, a pool, an aura, 
 4. `Step(R, Tick)`: drive it by tick number (`FWWORegress::Ticks(Seconds)`), with `R.Press` / `Hold` /
    `Move` / `AimAt` / `Face` for input, or by calling the game's own functions. Never use real time.
    `Record` every number that would change if the logic changed, then return true.
-5. Run it alone (`Tools/regress.sh both -WWORegressOnly=<name>`) a few times: the numbers must be the
-   same every time and in both modes. If they legitimately differ with rendering, set `Modes` to
-   `PerMode` (or `RenderOnly`) with a `ModeReason`.
-6. Add its golden entry in its own commit: `Tools/regress.sh both -WWORegressOnly=<name> -WWORegressUpdate`.
+5. Run it alone (`Tools/regress.sh norender -WWORegressOnly=<name>`) a few times: the numbers must be the
+   same every time. If they legitimately differ with rendering, set `Modes` to `PerMode` (or
+   `RenderOnly`) with a `ModeReason`.
+6. Add its golden entry in its own commit: `Tools/regress.sh update-new <name or prefix>` (adds only
+   missing entries and checks the two modes agree on the new ones; `git diff` must show only additions).
 7. Randomness in gameplay code goes through `WWO::FRand` / `FRandRange` / `RandRange` / `RandomInCone`
    (`WWOTypes.h`), so the scenarios can seed it; looks-only randomness stays on `FMath`.
 

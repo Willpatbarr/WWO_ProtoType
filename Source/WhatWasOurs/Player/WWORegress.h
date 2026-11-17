@@ -122,6 +122,7 @@ public:
 private:
 	TArray<FWWORegressScenario> Scenarios;
 	void BuildScenarios();
+	static bool IsFilteredRun(); // -WWORegressOnly= or -WWORegressPerModeOnly
 	// The scenario families, one file each (members, so their scenarios may read the private state
 	// the gameplay classes open to this class).
 	static void AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);    // WWORegressGuns.cpp: weapons, perks, mod stats
@@ -134,6 +135,7 @@ private:
 	int32 Index = -1;
 	int32 StepTick = 0;
 	bool bUpdate = false;
+	bool bUpdateNew = false; // -WWORegressUpdateNew: add missing golden entries, touch no others
 	bool bRender = true;
 	FString Mode() const { return bRender ? TEXT("render") : TEXT("norender"); }
 	double StartedAt = 0.0;

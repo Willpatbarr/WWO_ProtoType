@@ -91,6 +91,6 @@ build scripts: `Tools/`.
 - Verify with a build and the narrowest autotest that covers the change; say what you ran.
 - Before a refactor that touches gameplay logic, run `Tools/regress.sh`; it must pass unchanged before and
   after (`docs/TESTING.md`, "Regression scenarios"). Update its golden file only for an intended change.
-  The default check is `Tools/regress.sh norender` (about 20 s); the drawn mode (`render` / `both`, about
-  14 min) only for a change to something that exists only when the game draws (the view, reticle and
-  target marks, the real grenade throw, HUD and menus) or a golden update (which needs both modes).
+  The default check is `Tools/regress.sh norender` (about 20 s); add `drawn-only` for a change to the view,
+  reticle and target marks, the real grenade throw, HUD or menus; `update-new <prefix>` for new scenarios;
+  the full `both` (about 14 min) only when the owner asks.

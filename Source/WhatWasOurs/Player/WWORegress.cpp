@@ -91,10 +91,11 @@ FWWORegress::FWWORegress(AWWOPlayerController& Controller)
 	FApp::SetUseFixedTimeStep(true);
 	FApp::SetFixedDeltaTime(Dt);
 	bUpdate = WWOSwitches::Has(TEXT("WWORegressUpdate"));
+	bUpdateNew = WWOSwitches::Has(TEXT("WWORegressUpdateNew"));
 	bRender = !GUsingNullRHI;
 	IFileManager::Get().MakeDirectory(*ResultsDir(), true);
 	GLoadoutExisted = FFileHelper::LoadFileToArray(GLoadoutAtStart, *LoadoutFile(), FILEREAD_Silent);
-	UE_LOG(LogWWO, Display, TEXT("Regress: starting (%s mode, fixed step %.4f s%s)"), *Mode(), Dt, bUpdate ? TEXT(", updating golden") : TEXT(""));
+	UE_LOG(LogWWO, Display, TEXT("Regress: starting (%s mode, fixed step %.4f s%s)"), *Mode(), Dt, bUpdate ? TEXT(", updating golden") : bUpdateNew ? TEXT(", adding new golden entries") : TEXT(""));
 }
 
 void FWWORegress::AddReferencedObjects(FReferenceCollector& Collector)
@@ -761,8 +762,7 @@ bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TP
 void FWWORegress::Finish()
 {
 	const double Seconds = FPlatformTime::Seconds() - StartedAt;
-	FString Only;
-	const bool bFiltered = WWOSwitches::Value(TEXT("WWORegressOnly="), Only);
+	const bool bFiltered = IsFilteredRun();
 	SaveResults(ResultsDir() / TEXT("results.json"), All);
 	SaveResults(ResultsDir() / FString::Printf(TEXT("results-%s.json"), *Mode()), All);
 
@@ -808,9 +808,31 @@ void FWWORegress::Finish()
 	}
 	else
 	{
+		// -WWORegressUpdateNew: entries the golden doesn't have yet are added; every other entry is
+		// left as it is and compared as usual (Tools/regress.sh update-new).
+		TSet<FString> Added;
+		if (bUpdateNew && bHaveGolden)
+		{
+			TMap<FString, TArray<TPair<FString, FString>>> Merged;
+			for (const auto& Pair : Golden)
+			{
+				TArray<TPair<FString, FString>>& Values = Merged.Add(Pair.Key);
+				for (const auto& KV : Pair.Value) Values.Add({ KV.Key, KV.Value });
+			}
+			for (const FString& Key : Order)
+			{
+				if (Golden.Contains(Key)) continue;
+				Merged.Add(Key, All[Key]);
+				Added.Add(Key);
+				UE_LOG(LogWWO, Display, TEXT("Regress: golden gains %s"), *Key);
+			}
+			if (Added.Num() > 0) SaveResults(GoldenPath(), Merged);
+			UE_LOG(LogWWO, Display, TEXT("Regress: golden gains %d new entries, existing ones unchanged"), Added.Num());
+		}
 		if (!bHaveGolden) { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF golden: no golden file at %s"), *GoldenPath()); ++Diffs; }
 		for (const FString& Key : Order)
 		{
+			if (Added.Contains(Key)) continue;
 			const TArray<TPair<FString, FString>>& Now = All[Key];
 			const TMap<FString, FString>* Was = Golden.Find(Key);
 			if (!Was)
@@ -877,14 +899,26 @@ void FWWORegress::BuildScenarios()
 		AddCombatScenarios(List, *L);
 		AddAreaScenarios(List, *L);
 	}
+	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
+	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).
 	FString Only;
-	const bool bFiltered = WWOSwitches::Value(TEXT("WWORegressOnly="), Only);
+	TArray<FString> Parts;
+	if (WWOSwitches::Value(TEXT("WWORegressOnly="), Only, false)) Only.ParseIntoArray(Parts, TEXT(","), true);
+	const bool bPerModeOnly = WWOSwitches::Has(TEXT("WWORegressPerModeOnly"));
 	TSet<FString> Names;
 	for (FWWORegressScenario& S : List)
 	{
 		if (Names.Contains(S.Name)) { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF %s: two scenarios have this name"), *S.Name); ++Problems; continue; }
 		Names.Add(S.Name);
-		if (bFiltered && !S.Name.Contains(Only)) continue;
+		bool bWanted = Parts.Num() == 0;
+		for (const FString& Part : Parts) bWanted |= S.Name.Contains(Part);
+		if (!bWanted || (bPerModeOnly && S.Modes != EWWORegressModes::PerMode)) continue;
 		Scenarios.Add(MoveTemp(S));
 	}
+}
+
+bool FWWORegress::IsFilteredRun()
+{
+	FString Only;
+	return WWOSwitches::Value(TEXT("WWORegressOnly="), Only) || WWOSwitches::Has(TEXT("WWORegressPerModeOnly"));
 }

@@ -30,15 +30,20 @@ keeps behaviour passes with no differences at all; any difference is a change in
 **Before a refactor that touches gameplay logic, run `Tools/regress.sh`: it must pass before and after.**
 
 **Which mode.** The default before / after check is the no-draw run, `Tools/regress.sh norender` (about
-20 s). Run the drawn mode (`render`, or `both`, about 14 min) only when the change touches something that
-exists only when the game draws: the view, the low reticle and target marks, the real grenade throw, the
-HUD or menus; and when updating the golden file, which needs both modes (`both -WWORegressUpdate`).
+20 s, every scenario). When the change touches something that exists only when the game draws (the view,
+the low reticle and target marks, the real grenade throw, the HUD or menus), also run `drawn-only`: the
+drawn window, but only the scenarios whose numbers differ between the modes (the ones with `@render`
+golden entries; 11 today, about 20 s). Every other scenario gives the same numbers in both modes, so the
+slow full drawn run adds nothing for them. New scenarios get their golden entries with `update-new`. The
+full `both` (about 14 min) only when the owner asks for it.
 
 ```
-Tools/regress.sh                    # both modes (no rendering, then a small window); about 14 min
-Tools/regress.sh norender           # no rendering only: about 20 s in all (the scenarios take about 12 s)
-Tools/regress.sh render             # the small window only
-Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name contains "perk."
+Tools/regress.sh norender           # the default: no rendering, every scenario (about 20 s)
+Tools/regress.sh drawn-only         # the small window, only the per-mode scenarios (about 20 s)
+Tools/regress.sh update-new area.,hp.   # golden entries for new scenarios (see "Updating the golden file")
+Tools/regress.sh norender -WWORegressOnly=perk.,melee.   # the scenarios whose name contains "perk." or "melee."
+Tools/regress.sh both               # both modes, every scenario (about 14 min; when the owner asks)
+Tools/regress.sh render             # the small window, every scenario
 ```
 
 - Output: one `Regress <name>: key=value ...` line per scenario in the log (`Saved/Regress/run-<mode>.log`),
@@ -117,7 +122,16 @@ checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Imple
 
 ### Updating the golden file
 
-`Tools/regress.sh both -WWORegressUpdate` rewrites the golden entries this run produced (a filtered run only
+**New scenarios**: `Tools/regress.sh update-new <names>` (names or name prefixes, comma-separated). It runs
+every scenario without drawing and the named ones in the window, both with `-WWORegressUpdateNew`: an entry
+the golden lacks is added (`Regress: golden gains <key>`), every existing entry is left as it is and
+compared as usual, then the two modes are compared on the named scenarios. A new scenario marked `Same` that
+disagrees between the modes fails (`Regress MODES DIFF`, and a `DIFF` in the window run against the entry
+the no-draw run just added): find what drawing changes, or mark it `PerMode` and delete its shared entry by
+hand before running `update-new` again. Check with `git diff Tools/regress/golden.json` that the commit only
+adds entries.
+
+**Changed behaviour**: `Tools/regress.sh both -WWORegressUpdate` rewrites the golden entries this run produced (a filtered run only
 its own). **Only for an intended behaviour change** (a new scenario, a retune, a fix), in its own commit
 that says what changed and why, never to make a refactor pass: a refactor that needs a new golden changed
 behaviour. Run the suite again afterwards; it must pass.
@@ -142,7 +156,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestNet`, `-WWOAutoTestPvP` | Host and joiner: co-op, and team deathmatch with forged-shot checks | two copies |
 | `-WWOTester -WWOAutoTestTester` | The firing tester (`-WWOTesterGun=<id>`, `-WWOTesterFrames=N`, `-WWOTesterHip`, `-WWOTesterStrafe`, `-WWOTesterNoShot`, `-WWOTesterNoMods`) | `L_TestRange` |
 | `-WWOWaveTest` | All 8 waves with god mode; logs AI state and flags anyone stuck (about 4.5 min) | `L_Arena` |
-| `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<text>`, `-WWORegressUpdate`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |
+| `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<a,b>`, `-WWORegressPerModeOnly`, `-WWORegressUpdate`, `-WWORegressUpdateNew`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |
 | `-WWOTestScoreboard` | Match-end scoreboard (`-WWOKillTarget=N`) | PvP |
 
 ### Bot matches and stress
