@@ -127,7 +127,7 @@ void AWWOGrenade::Setup(AActor* InThrower)
 		AWWOCharacter* P = Cast<AWWOCharacter>(InThrower);
 		if (P && P->IsLocallyControlled() && !P->GetBot())
 		{
-			P->Abilities->LiveSeeds++; // keeps the Seedburst HUD lit (a person's own; a bot has no HUD)
+			P->Abilities->LiveCount(WWOIds::Ability::Seedburst)++; // keeps the Seedburst HUD lit (a person's own; a bot has no HUD)
 			bCounted = true;
 			CountedFor = P;
 		}
@@ -174,7 +174,11 @@ void AWWOGrenade::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (bCounted)
 	{
-		if (AWWOCharacter* P = CountedFor.Get()) P->Abilities->LiveSeeds = FMath::Max(P->Abilities->LiveSeeds - 1, 0); // off whoever it was counted on
+		if (AWWOCharacter* P = CountedFor.Get()) // off whoever it was counted on
+		{
+			int32& Live = P->Abilities->LiveCount(WWOIds::Ability::Seedburst);
+			Live = FMath::Max(Live - 1, 0);
+		}
 	}
 	if (Trail.IsValid()) Trail->StopAndFade();
 	Super::EndPlay(Reason);

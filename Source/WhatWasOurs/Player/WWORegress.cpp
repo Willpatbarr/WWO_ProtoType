@@ -366,11 +366,7 @@ void FWWORegress::ResetPlayer()
 	G->bMeleeConnected = false;
 	// Kit.
 	UWWOAbilityComponent* K = P->Abilities;
-	K->ChargeById.Reset();
-	K->ActiveLeft.Reset();
-	K->Armed.Reset();
-	K->GuardLeft = 0.f;
-	K->LiveSeeds = K->LivePatches = 0;
+	K->States.Reset();
 	P->Grenades->ReleaseLeft = -1.f;
 	P->Grenades->Charge = P->Grenades->MaxCharges();
 	P->Ult->Charge = 1.f;

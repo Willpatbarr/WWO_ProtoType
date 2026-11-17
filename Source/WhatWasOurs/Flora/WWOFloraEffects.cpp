@@ -191,7 +191,7 @@ void AWWOSporePatch::BeginPlay()
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	if (P && P->IsLocallyControlled())
 	{
-		P->Abilities->LivePatches++; // keeps the Spore Patches HUD box lit
+		P->Abilities->LiveCount(WWOIds::Ability::SporePatches)++; // keeps the Spore Patches HUD box lit
 		bCounted = true;
 	}
 }
@@ -200,7 +200,11 @@ void AWWOSporePatch::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (bCounted)
 	{
-		if (AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner())) P->Abilities->LivePatches = FMath::Max(P->Abilities->LivePatches - 1, 0);
+		if (AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner()))
+		{
+			int32& Live = P->Abilities->LiveCount(WWOIds::Ability::SporePatches);
+			Live = FMath::Max(Live - 1, 0);
+		}
 	}
 	Super::EndPlay(Reason);
 }

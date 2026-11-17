@@ -115,7 +115,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 					if (Tick == 3)
 					{
 						R.Record(TEXT("melee_mult"), K->MeleeMultiplier());
-						if (UWWOAbilityData* A = K->Equipped("static_charge")) R.RecordBool(TEXT("armed"), K->Armed.FindRef(A->Id));
+						if (UWWOAbilityData* A = K->Equipped("static_charge")) R.RecordBool(TEXT("armed"), K->FindState(A->Id) && K->FindState(A->Id)->bArmed);
 						St->Before = FWWORegress::HealthOf(T);
 						St->OthersBefore = OthersHealth(*St);
 						St->From = P->GetActorLocation();
@@ -135,7 +135,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 						if (St->Others.Num() > 0) R.Record(TEXT("others_dealt"), St->OthersBefore - OthersHealth(*St));
 						R.Record(TEXT("guard_left"), K->GuardTimeLeft());
 						R.Record(TEXT("incoming_melee_mult"), K->IncomingMeleeMultiplier());
-						if (UWWOAbilityData* A = K->Equipped("static_charge")) R.RecordBool(TEXT("armed_after"), K->Armed.FindRef(A->Id));
+						if (UWWOAbilityData* A = K->Equipped("static_charge")) R.RecordBool(TEXT("armed_after"), K->FindState(A->Id) && K->FindState(A->Id)->bArmed);
 						return true;
 					}
 					return false;

@@ -17,7 +17,7 @@ namespace WWOIds
 		inline const FName IronBark(TEXT("ironbark"));
 	}
 
-	// Abilities (UWWOAbilityData::Id). Their behaviour: UWWOAbilityComponent.
+	// Abilities (UWWOAbilityData::Id). Their behaviour: WWOAbility::Table() (Player/WWOAbilities.cpp).
 	namespace Ability
 	{
 		inline const FName Overgrowth(TEXT("overgrowth"));

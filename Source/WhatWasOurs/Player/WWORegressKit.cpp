@@ -346,7 +346,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			{
 				R.Record(TEXT("charge_used"), Ab ? K->Charge(Ab) : -1.f);
 				R.RecordBool(TEXT("effect_on"), Ab && K->IsEffectActive(Ab));
-				R.Record(TEXT("effect_left"), K->ActiveLeft.FindRef(Id));
+				R.Record(TEXT("effect_left"), K->FindState(Id) ? K->FindState(Id)->ActiveLeft : 0.f);
 				R.Record(TEXT("melee_mult"), K->MeleeMultiplier());
 			}
 			if (Tick == 60)
@@ -359,7 +359,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			}
 			FollowVictims(*St);
 			if (Tick > 60) TrackGrenades(R, *St, Tick);
-			if (Tick == 62) R.Record(TEXT("live_seeds"), K->LiveSeeds);
+			if (Tick == 62) R.Record(TEXT("live_seeds"), K->LiveCount("seedburst"));
 			if (St->BoomTick >= 0 && Tick == St->BoomTick + 2)
 			{
 				// Right after the (last) blast: patches sprouted, an ally's shield refilled.
@@ -640,7 +640,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			if (Tick == 2)
 			{
 				R.RecordBool(TEXT("effect_on"), K->IsEffectActive(Ab));
-				R.Record(TEXT("effect_left"), K->ActiveLeft.FindRef(Id));
+				R.Record(TEXT("effect_left"), K->FindState(Id) ? K->FindState(Id)->ActiveLeft : 0.f);
 				R.Record(TEXT("fists"), P->NetFists.ToString());
 				R.Record(TEXT("melee_mult"), K->MeleeMultiplier());
 			}
@@ -828,13 +828,13 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				if (St->First < 0) St->First = Tick;
 				St->Last = Tick;
 			}
-			St->Most = FMath::Max(St->Most, Id == "seedburst" ? K->LiveSeeds : K->LivePatches);
+			St->Most = FMath::Max(St->Most, K->LiveCount(Id));
 			if (Tick == Ticks(9.f))
 			{
 				R.Record(TEXT("lit_first"), St->First);
 				R.Record(TEXT("lit_last"), St->Last);
 				R.Record(TEXT("most_live"), St->Most);
-				R.Record(TEXT("live_end"), Id == "seedburst" ? K->LiveSeeds : K->LivePatches);
+				R.Record(TEXT("live_end"), K->LiveCount(Id));
 				return true;
 			}
 			return false;

@@ -495,7 +495,7 @@ bool FWWOAutoTest::UpdateAutoAbilityTest(AWWOCharacter* P, float DeltaTime)
 				Loadout->GetGrenade() ? *Loadout->GetGrenade()->Id.ToString() : TEXT("none"), bThrown, A->SubCount, A->SubScale, A->SubSpread, A->SubFuse,
 				A->PatchMax, A->PatchRadius, A->PatchTime);
 		}
-		const int32 Live = bSeeds ? Abilities->LiveSeeds : Abilities->LivePatches;
+		const int32 Live = Abilities->LiveCount(Id); // Seedburst's seeds, Spore Patches' patches
 		AutoAbilityValue = FMath::Max(AutoAbilityValue, float(Live));
 		if (!bAutoAbilityFlag && AutoAbilityPhase > 0.1f && (bSeeds ? Live >= 2 : Live >= 1))
 		{

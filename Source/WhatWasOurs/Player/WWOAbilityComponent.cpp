@@ -5,15 +5,13 @@
 #include "Player/WWOBotController.h"
 #include "Player/WWOHealthComponent.h"
 #include "Player/WWOPlayerController.h"
-#include "Weapons/WWOGrenade.h"
-#include "Flora/WWOSporeFog.h"
-#include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
 #include "WhatWasOurs.h"
 #include "WWOIds.h"
+#include "Player/WWOAbilities.h"
 
 UWWOAbilityComponent::UWWOAbilityComponent()
 {
@@ -40,7 +38,7 @@ UWWOAbilityData* UWWOAbilityComponent::Equipped(FName Id) const
 
 void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 {
-	GuardLeft = FMath::Max(GuardLeft - DeltaSeconds, 0.f);
+	for (const FWWOAbility& E : WWOAbility::Table()) if (E.Tick) E.Tick(State(E.Id), DeltaSeconds);
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	// While Thornfist is up (or Static Charge is armed) the fists glow in its color, so whoever is
@@ -49,8 +47,12 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	// to the rest (AWWOCharacter::NetFists).
 	if (P && (P->HasAuthority() || P->IsLocalHuman()))
 	{
-		const UWWOAbilityData* Lit = ThornfistActive();
-		if (!Lit) { if (const UWWOAbilityData* Charge = Equipped(WWOIds::Ability::StaticCharge)) if (Armed.FindRef(Charge->Id)) Lit = Charge; }
+		const UWWOAbilityData* Lit = nullptr;
+		for (const FWWOAbility& E : WWOAbility::Table())
+		{
+			const UWWOAbilityData* A = E.bFistsGlow ? Equipped(E.Id) : nullptr;
+			if (A && IsEffectActive(A)) { Lit = A; break; }
+		}
 		if (Lit != FistsLit.Get())
 		{
 			FistsLit = Lit;
@@ -70,16 +72,18 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 		{
 			// No button: once it's full it arms itself, and the next melee hit discharges it. (Each
 			// machine that follows this player's charge, theirs and the host's, arms its own copy.)
-			if (Charge(A) >= 1.f && !Armed.FindRef(A->Id))
+			if (Charge(A) >= 1.f && !State(A->Id).bArmed)
 			{
-				Armed.Add(A->Id, true);
+				State(A->Id).bArmed = true;
 				if (P->IsLocallyControlled() || Bot) UWWOSound::PlayFor(P, "ability"); // the sound of it coming ready
 			}
 			continue;
 		}
 		if (!A || A->Kind != EWWOAbilityKind::Active) continue;
-		ChargeById.Add(A->Id, FMath::Min(Charge(A) + DeltaSeconds / FMath::Max(A->Cooldown, 0.1f), 1.f));
-		ActiveLeft.Add(A->Id, FMath::Max(ActiveLeft.FindRef(A->Id) - DeltaSeconds, 0.f));
+		const float Recharged = FMath::Min(Charge(A) + DeltaSeconds / FMath::Max(A->Cooldown, 0.1f), 1.f);
+		FWWOAbilityState& S = State(A->Id);
+		S.Charge = Recharged;
+		S.ActiveLeft = FMath::Max(S.ActiveLeft - DeltaSeconds, 0.f);
 		if (bPressed && !PlayerBusy() && ActivateAbility(A) && GetNetMode() == NM_Client)
 		{
 			if (AWWOCharacter* Me = Cast<AWWOCharacter>(GetOwner())) Me->ServerUseAbility(Slot, Me->AimForward()); // the host runs it too
@@ -101,9 +105,10 @@ void UWWOAbilityComponent::UndoUse(int32 Slot)
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const UWWOAbilityData* A = Loadout ? Loadout->GetAbility(Slot) : nullptr;
 	if (!A) return;
-	Armed.Remove(A->Id);
-	ActiveLeft.Add(A->Id, 0.f);
-	if (A->Kind == EWWOAbilityKind::Active) ChargeById.Add(A->Id, 1.f);
+	FWWOAbilityState& S = State(A->Id);
+	S.bArmed = false;
+	S.ActiveLeft = 0.f;
+	if (A->Kind == EWWOAbilityKind::Active) S.Charge = 1.f;
 }
 
 EWWOKitRefusal UWWOAbilityComponent::HostUseAbility(int32 Slot)
@@ -121,7 +126,7 @@ EWWOKitRefusal UWWOAbilityComponent::HostUseAbility(int32 Slot)
 	bool bDone = false;
 	if (A->Kind == EWWOAbilityKind::Charged && Charge(A) >= Ready)
 	{
-		Armed.Add(A->Id, true);
+		State(A->Id).bArmed = true;
 		bDone = true;
 	}
 	else if (A->Kind == EWWOAbilityKind::Active) bDone = ActivateAbility(A, Ready);
@@ -133,81 +138,110 @@ EWWOKitRefusal UWWOAbilityComponent::HostUseAbility(int32 Slot)
 bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
 {
 	if (A->Kind != EWWOAbilityKind::Active || Charge(A) < Ready) return false;
-	ChargeById.Add(A->Id, 0.f);
-	ActiveLeft.Add(A->Id, A->Duration);
+	FWWOAbilityState& S = State(A->Id);
+	S.Charge = 0.f;
+	S.ActiveLeft = A->Duration;
 	UWWOSound::PlayFor(GetOwner(), "ability");
-	if (A->Id == WWOIds::Ability::SporeDash) SporeDash(A);
-	if (A->Id == WWOIds::Ability::RootBombs) RootBombs(A);
+	if (const FWWOAbility* E = WWOAbility::Find(A->Id); E && E->OnActivate) E->OnActivate(*this, *A);
 	return true;
 }
 
 float UWWOAbilityComponent::Charge(const UWWOAbilityData* A) const
 {
 	// Charged abilities start empty; everything else starts ready.
-	const float* Found = ChargeById.Find(A->Id);
-	return Found ? *Found : (A->Kind == EWWOAbilityKind::Charged ? 0.f : 1.f);
+	return WWOAbility::ChargeOf(*A, FindState(A->Id));
 }
 
 bool UWWOAbilityComponent::IsEffectActive(const UWWOAbilityData* A) const
 {
+	const FWWOAbilityState* S = FindState(A->Id);
 	switch (A->Kind)
 	{
-	case EWWOAbilityKind::Active: return ActiveLeft.FindRef(A->Id) > 0.f;
-	case EWWOAbilityKind::Charged: return Armed.FindRef(A->Id);
+	case EWWOAbilityKind::Active: return S && S->ActiveLeft > 0.f;
+	case EWWOAbilityKind::Charged: return S && S->bArmed;
 	case EWWOAbilityKind::Triggered:
-		if (A->Id == WWOIds::Ability::MeleeGuard) return GuardLeft > 0.f;
-		if (A->Id == WWOIds::Ability::SporePatches) return LivePatches > 0;
-		return LiveSeeds > 0;
+	{
+		const FWWOAbility* E = WWOAbility::Find(A->Id);
+		return E && E->Lit && E->Lit(S ? *S : FWWOAbilityState());
+	}
 	default: return true; // passives are always on
 	}
 }
 
+float UWWOAbilityComponent::GuardTimeLeft() const
+{
+	const FWWOAbilityState* S = FindState(WWOIds::Ability::MeleeGuard);
+	return S ? S->LitLeft : 0.f;
+}
+
 float UWWOAbilityComponent::SpeedMultiplier() const
 {
-	const UWWOAbilityData* A = Equipped(WWOIds::Ability::Overgrowth);
-	return A ? A->SpeedMult : 1.f;
+	float Mult = 1.f;
+	for (const FWWOAbility& E : WWOAbility::Table())
+	{
+		if (const UWWOAbilityData* A = E.MoveSpeed ? Equipped(E.Id) : nullptr) Mult *= E.MoveSpeed(*A);
+	}
+	return Mult;
 }
 
 int32 UWWOAbilityComponent::ExtraJumps() const
 {
-	const UWWOAbilityData* A = Equipped(WWOIds::Ability::Overgrowth);
-	return A ? FMath::RoundToInt(A->ExtraJumps) : 0;
+	int32 Jumps = 0;
+	for (const FWWOAbility& E : WWOAbility::Table())
+	{
+		if (const UWWOAbilityData* A = E.ExtraJumps ? Equipped(E.Id) : nullptr) Jumps += E.ExtraJumps(*A);
+	}
+	return Jumps;
 }
 
 void UWWOAbilityComponent::OnMeleeLanded()
 {
-	if (const UWWOAbilityData* Guard = Equipped(WWOIds::Ability::MeleeGuard)) GuardLeft = Guard->Duration;
+	for (const FWWOAbility& E : WWOAbility::Table())
+	{
+		if (const UWWOAbilityData* A = E.OnMeleeLanded ? Equipped(E.Id) : nullptr) E.OnMeleeLanded(*A, State(E.Id));
+	}
 }
 
 void UWWOAbilityComponent::OnDamageTaken(float Amount)
 {
-	// Static Charge fills up from the damage you take (not while it's armed and waiting).
-	const UWWOAbilityData* A = Equipped(WWOIds::Ability::StaticCharge);
-	if (A && !Armed.FindRef(A->Id))
+	for (const FWWOAbility& E : WWOAbility::Table())
 	{
-		ChargeById.Add(A->Id, FMath::Min(Charge(A) + Amount / FMath::Max(A->ChargeDamage, 1.f), 1.f));
+		if (const UWWOAbilityData* A = E.OnDamageTaken ? Equipped(E.Id) : nullptr) E.OnDamageTaken(*A, State(E.Id), Amount);
 	}
 }
 
 UWWOAbilityData* UWWOAbilityComponent::ConsumeStaticCharge()
 {
 	UWWOAbilityData* A = Equipped(WWOIds::Ability::StaticCharge);
-	if (!A || !Armed.FindRef(A->Id)) return nullptr;
-	Armed.Add(A->Id, false);
-	ChargeById.Add(A->Id, 0.f);
+	if (!A || !FindState(A->Id) || !FindState(A->Id)->bArmed) return nullptr;
+	FWWOAbilityState& S = State(A->Id);
+	S.bArmed = false;
+	S.Charge = 0.f;
 	return A;
 }
 
 float UWWOAbilityComponent::IncomingMeleeMultiplier() const
 {
-	const UWWOAbilityData* Guard = Equipped(WWOIds::Ability::MeleeGuard);
-	return Guard && GuardLeft > 0.f ? 1.f - Guard->GuardReduction : 1.f;
+	float Mult = 1.f;
+	for (const FWWOAbility& E : WWOAbility::Table())
+	{
+		if (const UWWOAbilityData* A = E.MeleeTaken ? Equipped(E.Id) : nullptr)
+		{
+			const FWWOAbilityState* S = FindState(E.Id);
+			Mult *= E.MeleeTaken(*A, S ? *S : FWWOAbilityState());
+		}
+	}
+	return Mult;
 }
 
 float UWWOAbilityComponent::ExtraCharges() const
 {
-	const UWWOAbilityData* A = Equipped(WWOIds::Ability::ExtraGrenade);
-	return A ? A->ExtraCharges : 0.f;
+	float Extra = 0.f;
+	for (const FWWOAbility& E : WWOAbility::Table())
+	{
+		if (const UWWOAbilityData* A = E.GrenadeCharges ? Equipped(E.Id) : nullptr) Extra += E.GrenadeCharges(*A);
+	}
+	return Extra;
 }
 
 UWWOAbilityData* UWWOAbilityComponent::ThornfistActive() const
@@ -218,55 +252,14 @@ UWWOAbilityData* UWWOAbilityComponent::ThornfistActive() const
 
 float UWWOAbilityComponent::MeleeMultiplier() const
 {
-	const UWWOAbilityData* A = ThornfistActive();
-	return A ? A->MeleeDamageMult : 1.f;
-}
-
-void UWWOAbilityComponent::SporeDash(UWWOAbilityData* A)
-{
-	// Launch backwards (and a little up, to keep the speed through the air) and leave a
-	// thick fog where you were standing.
-	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	const FVector At = P->GetActorLocation();
-	if (P->HasAuthority()) AWWOSporeFog::SpawnFog(GetWorld(), At, A->DashFogRadius, A->DashFogTime, true, GetOwner()); // online it replicates
-	AWWOParticles::Burst(GetWorld(), At, WWO::WithAlpha(WWO::Lightened(AWWOSporeFog::Color(), 0.15f), 0.5f), 18, 1.f, 1.5f, 4.f, 0.9f,
-		FVector(0, 0, 0.3f), EWWOParticleStyle::Smoke);
-	AWWOParticles::Burst(GetWorld(), At, WWO::Lightened(AWWOSporeFog::Color(), 0.4f), 24, 0.7f, 2.f, 5.f, 0.06f, FVector(0, 0, -2.f));
-	if (!P->IsLocallyControlled()) return; // the launch is the dashing player's own move
-	FVector Back = -P->GetActorForwardVector();
-	Back.Z = 0.f;
-	P->Launch((Back.GetSafeNormal() * A->DashSpeed + FVector(0, 0, A->DashUp)) * WWO::M);
-}
-
-void UWWOAbilityComponent::RootBombs(UWWOAbilityData* A)
-{
-	// Two big bombs, thrown a little left and right of where you're looking, that blow up the
-	// moment they hit something.
-	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	if (!P->HasAuthority()) return; // the host throws a joiner's bombs (they replicate)
-	const float Bigger = 1.f + UWWOLoadoutSubsystem::Bonus(this, "blast_bigger");
-	// Where the thrower is looking: its own aim here, or for a joiner (whose copy here has no camera
-	// pitch) the direction it sent with the ability.
-	const FVector Aim = P->IsLocallyControlled() ? P->AimForward() : P->NetAim;
-	const FVector Right = FVector::CrossProduct(FVector::UpVector, Aim).GetSafeNormal(UE_SMALL_NUMBER, P->GetActorRightVector());
-	TArray<AWWOGrenade*> Thrown;
-	for (const float Side : { -1.f, 1.f })
+	float Mult = 1.f;
+	for (const FWWOAbility& E : WWOAbility::Table())
 	{
-		FWWOGrenadeSpec Spec;
-		Spec.Color = A->Color;
-		Spec.Damage = A->BombDamage;
-		Spec.BlastRadius = A->BombRadius * Bigger;
-		Spec.Fuse = 6.f; // backup, in case it never hits anything
-		Spec.SizeScale = 2.f;
-		Spec.bExplodeOnImpact = true;
-		Spec.Flavor = A->Flora;
-		Spec.ThrownFrom = P->GetActorLocation();
-		const FVector At = P->EyeLocation() + Aim * 60.f + Right * 35.f * Side - FVector(0, 0, 20.f);
-		FVector Dir = Aim.RotateAngleAxis(1.5f * Side, FVector::UpVector);
-		Dir = Dir.RotateAngleAxis(-2.f, Right); // a little upward
-		AWWOGrenade* Bomb = AWWOGrenade::Throw(GetWorld(), Spec, At, Dir.GetSafeNormal() * A->BombSpeed * WWO::M, P);
-		if (!Bomb) continue;
-		for (AWWOGrenade* Other : Thrown) Bomb->IgnoreActor(Other); // the pair never hit each other
-		Thrown.Add(Bomb);
+		if (const UWWOAbilityData* A = E.MeleeDealt ? Equipped(E.Id) : nullptr)
+		{
+			const FWWOAbilityState* S = FindState(E.Id);
+			Mult *= E.MeleeDealt(*A, S ? *S : FWWOAbilityState());
+		}
 	}
+	return Mult;
 }
