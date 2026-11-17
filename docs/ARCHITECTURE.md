@@ -204,6 +204,10 @@ walks the table in its order (the HUD line's).
     earned by kills (an enemy's `LastHitBy`, a player's `LastAttacker`), needed to enter the hub
     (`BreachThreshold`), drained per breacher per second; out of energy sends the team's breachers back,
     a breacher's death costs a share. The HUD draws both pools under the match line (`PaintBreachEnergy`).
+    Lane rooms (`RoomArea` markers, their scale the size in m): a team's furthest room (the furthest any
+    of its players has stood in; Room1 from the start) fills to `RoomEnemies` and refills after deaths;
+    rooms behind keep their enemies without refilling. Each enemy guards its lane (`AWWOEnemy::Lane`) and
+    only targets that team's players.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.
@@ -241,7 +245,8 @@ Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield,
 
 **The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
 class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
-`FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). The waves (`Waves()`) and spawn point tags name
+`FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). `SpawnDeferred` places one at a spawn
+marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. The waves (`Waves()`) and spawn point tags name
 kinds by id; `FWWOWaveRules::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
 catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
 

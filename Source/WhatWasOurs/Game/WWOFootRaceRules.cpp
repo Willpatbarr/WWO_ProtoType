@@ -8,6 +8,8 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
+#include "Enemies/WWOEnemyKinds.h"
+#include "WWOIds.h"
 #include "Allies/WWOAlly.h"
 #include "World/WWOBreachPortal.h"
 #include "FX/WWOFX.h"
@@ -65,13 +67,14 @@ void FWWOFootRaceRules::Begin()
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	SpawnPortals();
+	FindRooms();
 	State = EWWOWaveState::Match;
 }
 
 void FWWOFootRaceRules::SpawnPortals()
 {
 	UWorld* World = Mode.GetWorld();
-	int32 Rooms = 0, Hubs = 0;
+	int32 RoomCount = 0, Hubs = 0;
 	for (TActorIterator<ATargetPoint> It(World); It; ++It)
 	{
 		const bool bRoom = It->ActorHasTag("PortalAnchor");
@@ -91,9 +94,9 @@ void FWWOFootRaceRules::SpawnPortals()
 		Portal->Room = bHub ? NAME_None : RoomOf(*It);
 		Portal->FinishSpawning(FTransform(Facing, At));
 		Portals.Add(Portal);
-		(bHub ? Hubs : Rooms)++;
+		(bHub ? Hubs : RoomCount)++;
 	}
-	UE_LOG(LogWWO, Display, TEXT("FootRace: %d room portals, %d hub portals"), Rooms, Hubs);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %d room portals, %d hub portals"), RoomCount, Hubs);
 }
 
 void FWWOFootRaceRules::OnPlayerJoined(APlayerController* NewPlayer)
@@ -139,6 +142,7 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
 	BindDeaths();
 	Drain(DeltaSeconds);
+	UpdateRooms(DeltaSeconds);
 	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 	{
 		if (!Body || !Body->Health) continue;
@@ -262,12 +266,129 @@ void FWWOFootRaceRules::BindDeaths()
 		TWeakObjectPtr<AWWOCharacter> Weak = P;
 		PlayerBindings.Add({ P->Health, P->Health->OnDied.AddWeakLambda(&Mode, [this, Weak] { if (Weak.IsValid()) OnPlayerDied(Weak.Get()); }) });
 	}
-	for (TActorIterator<AWWOEnemy> It(World); It; ++It)
+	for (TActorIterator<AWWOEnemy> It(World); It; ++It) BindEnemy(*It); // any spawned by something else (tests)
+}
+
+void FWWOFootRaceRules::BindEnemy(AWWOEnemy* Enemy)
+{
+	if (!Enemy || EnemiesBound.Contains(Enemy)) return;
+	EnemiesBound.Add(Enemy);
+	EnemyBindings.Add({ Enemy, Enemy->OnDied.AddWeakLambda(&Mode, [this](AWWOEnemy* E) { OnEnemyDied(E); }) });
+}
+
+FName FWWOFootRaceRules::RoomName(int32 Index)
+{
+	static const FName Names[] = { "Spawn", "Room1", "Room2", "Room3", "Boss" };
+	return Index >= 0 && Index < UE_ARRAY_COUNT(Names) ? Names[Index] : NAME_None;
+}
+
+FName FWWOFootRaceRules::RoomKind(int32 Index, int32 Spawned)
+{
+	using namespace WWOIds::Enemy;
+	if (Index == 3 && Spawned == 0) return Tank; // Room3 opens with its Tank
+	static const FName Room1[] = { Swarm, Swarm, Soldier };
+	static const FName Room2[] = { Soldier, Swarm, Soldier };
+	static const FName Room3[] = { Soldier, Soldier, Swarm };
+	const FName* Pattern = Index == 1 ? Room1 : Index == 2 ? Room2 : Room3;
+	return Pattern[Spawned % 3];
+}
+
+void FWWOFootRaceRules::FindRooms()
+{
+	TMap<TPair<int32, int32>, int32> Found; // (team, index) -> Rooms slot
+	for (TActorIterator<ATargetPoint> It(Mode.GetWorld()); It; ++It)
 	{
-		if (EnemiesBound.Contains(*It)) continue;
-		EnemiesBound.Add(*It);
-		EnemyBindings.Add({ *It, It->OnDied.AddWeakLambda(&Mode, [this](AWWOEnemy* E) { OnEnemyDied(E); }) });
+		if (!It->ActorHasTag("RoomArea")) continue;
+		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
+		int32 Index = -1;
+		for (int32 I = 0; I < 5; ++I) if (It->ActorHasTag(RoomName(I))) Index = I;
+		if (Team < 0 || Index < 0) continue;
+		FRoom Room;
+		Room.Team = Team;
+		Room.Index = Index;
+		// The marker's scale is the room's size in m (Tools/footrace_layout.py).
+		const FVector Half = It->GetActorScale3D() * 0.5f * WWO::M;
+		Room.Area = FBox(It->GetActorLocation() - Half, It->GetActorLocation() + Half);
+		Found.Add({ Team, Index }, Rooms.Add(Room));
 	}
+	for (TActorIterator<ATargetPoint> It(Mode.GetWorld()); It; ++It)
+	{
+		if (!It->ActorHasTag("EnemySpawn")) continue;
+		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
+		for (int32 I = 1; I <= 3; ++I)
+		{
+			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I))) Rooms[*Slot].Spawns.Add(It->GetActorLocation());
+		}
+	}
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %d lane rooms"), Rooms.Num());
+}
+
+int32 FWWOFootRaceRules::RoomAt(int32 Team, const FVector& Where) const
+{
+	for (const FRoom& Room : Rooms)
+	{
+		if (Room.Team == Team && Room.Area.IsInsideOrOn(Where)) return Room.Index;
+	}
+	return -1;
+}
+
+TArray<AWWOEnemy*> FWWOFootRaceRules::EnemiesIn(int32 Team, FName Name) const
+{
+	TArray<AWWOEnemy*> Out;
+	for (const FRoom& Room : Rooms)
+	{
+		if (Room.Team != Team || RoomName(Room.Index) != Name) continue;
+		for (const TWeakObjectPtr<AWWOEnemy>& E : Room.Alive) if (E.IsValid() && !E->IsDead()) Out.Add(E.Get());
+	}
+	return Out;
+}
+
+void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
+{
+	// A team's furthest room: the furthest any of its living players stands in.
+	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(&Mode)->GetPlayers())
+	{
+		const int32 Team = UWWOWorldSubsystem::TeamOf(Body);
+		if (Team < 0 || Team > 1 || Body->Health->bDead) continue;
+		const int32 Index = RoomAt(Team, Body->GetActorLocation());
+		if (Index > Furthest[Team])
+		{
+			Furthest[Team] = Index;
+			UE_LOG(LogWWO, Display, TEXT("FootRace: team %d reached %s"), Team, *RoomName(Index).ToString());
+		}
+	}
+	const int32 Want = FMath::RoundToInt(Mode.RoomEnemies);
+	for (FRoom& Room : Rooms)
+	{
+		Room.Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
+		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty()) continue; // only the live room spawns (not the boss room)
+		if (Room.Alive.Num() >= Want)
+		{
+			Room.bFilled = true;
+			Room.SpawnLeft = Mode.RoomRefillTime; // a death is refilled RoomRefillTime after it, not at once
+			continue;
+		}
+		Room.SpawnLeft -= DeltaSeconds;
+		if (Room.SpawnLeft > 0.f) continue;
+		SpawnInRoom(Room);
+		Room.SpawnLeft = Room.bFilled ? Mode.RoomRefillTime : Mode.RoomSpawnStagger;
+	}
+}
+
+void FWWOFootRaceRules::SpawnInRoom(FRoom& Room)
+{
+	const FVector& Marker = Room.Spawns[FMath::Min(Room.Spawns.Num() - 1, (int32)(WWO::FRand() * Room.Spawns.Num()))];
+	FTransform Where;
+	AWWOEnemy* Enemy = WWOEnemyKinds::SpawnDeferred(Mode.GetWorld(), RoomKind(Room.Index, Room.Spawned), Marker, Where);
+	if (!Enemy) return;
+	Enemy->bRespawns = false;
+	Enemy->Lane = (int8)Room.Team;
+	Enemy->FinishSpawning(Where);
+	Enemy->bAlerted = true; // the room's enemies come at the team
+	Enemy->OnDied.AddLambda([](AWWOEnemy* Dead) { Dead->SetLifeSpan(4.f); }); // the corpse goes, as the waves' do
+	BindEnemy(Enemy); // now, so a kill this same tick still counts
+	Room.Alive.Add(Enemy);
+	++Room.Spawned;
 }
 
 void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)

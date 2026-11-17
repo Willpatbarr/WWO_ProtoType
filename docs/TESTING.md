@@ -190,7 +190,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestTitle` | Launch screen, a local PvP match, quit to title, host (no map on the command line) | none |
 | `-WWOAutoTestTitleJoin`, `-WWOAutoTestTitleJoinFail` | A second copy joins the first; a join that fails | none |
 | `-WWOAutoTestNet`, `-WWOAutoTestPvP` | Host and joiner: co-op, and team deathmatch with forged-shot checks | two copies |
-| `-WWOAutoTestFootRace` | FootRace's breach portals and energy: placing in the team's spawn room, the hub refused without energy, an enemy kill's energy, room doorway to the hub and back, the drain, another team's doorway does nothing, running out sends you back, a death in the hub costs a share (about 25 s) | `L_FootRaceTest` |
+| `-WWOAutoTestFootRace` | FootRace's breach portals and energy: placing in the team's spawn room, the hub refused without energy, an enemy kill's energy, room doorway to the hub and back, the drain, another team's doorway does nothing, running out sends you back, a death in the hub costs a share, the lane rooms' enemies (fill, furthest room, Room3's Tank, lane targeting, refill) (about 32 s) | `L_FootRaceTest` |
 | `-WWOTester -WWOAutoTestTester` | The firing tester (`-WWOTesterGun=<id>`, `-WWOTesterFrames=N`, `-WWOTesterHip`, `-WWOTesterStrafe`, `-WWOTesterNoShot`, `-WWOTesterNoMods`) | `L_TestRange` |
 | `-WWOWaveTest` | All 8 waves with god mode; logs AI state and flags anyone stuck (about 4.5 min) | `L_Arena` |
 | `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<a,b>`, `-WWORegressPerModeOnly`, `-WWORegressUpdate`, `-WWORegressUpdateNew`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |

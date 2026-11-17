@@ -10,6 +10,7 @@
 
 class AWWOEnemy;
 class UWWOEnemyData;
+class UWorld;
 
 struct FWWOEnemyKind
 {
@@ -30,4 +31,9 @@ namespace WWOEnemyKinds
 	const FWWOEnemyKind& FindOrSwarm(FName Id);
 	// The entry whose class this enemy is, or null.
 	const FWWOEnemyKind* Of(const AWWOEnemy* Enemy);
+	// Spawns one of this kind at a spawn marker, deferred (set its fields, then FinishSpawning(OutWhere)):
+	// within the kind's SpawnScatter of the marker, its feet on the marker's height, on the navmesh and
+	// clear of anything solid (8 tries, then the nearest navmesh spot). Null if it couldn't be spawned.
+	// The waves' placement (FWWOWaveRules::SpawnEnemy), shared with FootRace's rooms.
+	AWWOEnemy* SpawnDeferred(UWorld* World, FName Kind, const FVector& Marker, FTransform& OutWhere);
 }

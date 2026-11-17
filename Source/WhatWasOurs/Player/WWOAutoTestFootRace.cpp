@@ -6,7 +6,10 @@
 // - the hub drains the pool while the player is in it, and not once they are out;
 // - the other team's hub doorway does nothing;
 // - running out of energy in the hub sends the player back to their room;
-// - dying in the hub costs BreachDeathLoss of the pool.
+// - dying in the hub costs BreachDeathLoss of the pool;
+// - lane rooms: Room1 of both lanes fills at the start, the team's furthest room is the one that
+//   fills (Room2, never stood in, has none), Room3 has its Tank, a lane's enemies leave the other
+//   team's players alone, and a kill is refilled after RoomRefillTime.
 // Screenshots 88_footrace_*. Logs `AutoTest footrace: ... ok|FAIL`.
 
 #include "Player/WWOAutoTest.h"
@@ -62,7 +65,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 
 	if (Crossed(1.f) && !Check(F != nullptr, TEXT("the map runs FootRace's rules"))) { WWOTest::Exit(); return; }
 	if (!F) return;
-	if (AutoFootRaceClock < 22.f) P->Health->GodMode = 1.f; // until the death step
+	if (AutoFootRaceClock < 22.f || AutoFootRaceClock >= 24.f) P->Health->GodMode = 1.f; // but for the death step
 	const AWWOPlayerState* PS = PC->GetPlayerState<AWWOPlayerState>();
 	const int32 Team = PS ? PS->Team : -1;
 	AWWOBreachPortal* Room1 = F->RoomPortal(Team, "Room1");
@@ -185,5 +188,49 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 			FString::Printf(TEXT("a breacher's death costs %.0f%% of the pool (%.1f -> %.1f, want %.1f)"), GM->BreachDeathLoss * 100.f, EnergyMark, F->Energy(Team), Want));
 		Check(!F->IsBreaching(P), TEXT("and the dead player is no longer breaching"));
 	}
-	if (Crossed(23.f)) WWOTest::Exit();
+	// The lane rooms (the player has respawned in the spawn room by now).
+	const int32 Want = FMath::RoundToInt(GM->RoomEnemies);
+	if (Crossed(26.f))
+	{
+		Check(F->AliveIn(1 - Team, "Room1") == Want, FString::Printf(TEXT("the other lane's Room1 filled to %d at the start (%d)"), Want, F->AliveIn(1 - Team, "Room1")));
+		Check(F->FurthestRoom(Team) == 3, FString::Printf(TEXT("the team's furthest room is Room3, where the player stood (%d)"), F->FurthestRoom(Team)));
+		Check(F->AliveIn(Team, "Room3") == Want, FString::Printf(TEXT("its furthest room, Room3, filled to %d (%d)"), Want, F->AliveIn(Team, "Room3")));
+		Check(F->AliveIn(Team, "Room2") == 0, FString::Printf(TEXT("Room2, never stood in, has no enemies (%d)"), F->AliveIn(Team, "Room2")));
+		bool bTank = false;
+		for (const AWWOEnemy* E : F->EnemiesIn(Team, "Room3"))
+		{
+			const FWWOEnemyKind* Kind = WWOEnemyKinds::Of(E);
+			if (Kind && Kind->Id == WWOIds::Enemy::Tank) bTank = true;
+		}
+		Check(bTank, TEXT("Room3 has its Tank"));
+		int32 Lanes = 0, Unset = 0, AfterMe = 0;
+		for (TActorIterator<AWWOEnemy> It(PC->GetWorld()); It; ++It)
+		{
+			if (It->IsDead()) continue;
+			++Lanes;
+			if (It->Lane < 0) ++Unset;
+			if (It->Lane != Team && It->GetTargetActor() == P) ++AfterMe;
+		}
+		Check(Unset == 0, FString::Printf(TEXT("every enemy guards a lane (%d of %d don't)"), Unset, Lanes));
+		Check(AfterMe == 0, FString::Printf(TEXT("the other lane's enemies leave this team's player alone (%d after them)"), AfterMe));
+		TArray<AWWOEnemy*> InRoom3 = F->EnemiesIn(Team, "Room3");
+		if (InRoom3.Num() > 0)
+		{
+			FWWODamageBy By(P);
+			AWWOEnemy* Victim = InRoom3.Last(); // not the Tank (the first spawned), whose shield takes hits
+			Victim->ApplyHit(100000.f, false, Victim->GetActorLocation(), FLinearColor::White);
+		}
+	}
+	if (Crossed(26.5f)) Check(F->AliveIn(Team, "Room3") == Want - 1, FString::Printf(TEXT("a kill in Room3 leaves %d (%d)"), Want - 1, F->AliveIn(Team, "Room3")));
+	if (Crossed(26.5f + GM->RoomRefillTime + 0.5f))
+	{
+		Check(F->AliveIn(Team, "Room3") == Want, FString::Printf(TEXT("and Room3 refills to %d within %.0f s (%d)"), Want, GM->RoomRefillTime, F->AliveIn(Team, "Room3")));
+		// A look at the room's enemies: in front of Room3's doorway, facing into the room.
+		const FTransform Spot = Room3->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+		P->TeleportTo(Spot.GetLocation(), Spot.Rotator());
+		PC->SetControlRotation(Spot.Rotator());
+		P->SetViewRotation(0.f, Spot.Rotator().Yaw);
+	}
+	if (Crossed(27.5f + GM->RoomRefillTime)) Shot(TEXT("88_footrace_room_enemies"));
+	if (Crossed(28.f + GM->RoomRefillTime)) WWOTest::Exit();
 }

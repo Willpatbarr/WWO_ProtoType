@@ -24,6 +24,9 @@ the hub's center. A box: center (x, y, z), size (length along x, thickness along
     LeverSlot Lane<n> Door<d>            a team's lever for each door, in the hub
     BossSpawn Lane<n>                    the boss
     CoreSpawn                            where boss cores appear, mid-hub
+    RoomArea Lane<n> Spawn|Room<k>|Boss  a room's floor area: the TargetPoint's scale is its size in m
+                                         (Unreal X = across the lane, Y = along it, Z = wall height)
+    HubArea                              the hub's floor area, the same way
   One PlayerStart, in lane 0's spawn room (the game mode's ring of spots goes around it).
   A marker's yaw is the way it faces, in degrees counter-clockwise from east (Unreal yaw 90 - yaw).
 """
@@ -64,10 +67,11 @@ class Box:
 
 
 class Marker:
-    __slots__ = ("x", "y", "z", "yaw", "tags")
+    __slots__ = ("x", "y", "z", "yaw", "tags", "size")
 
-    def __init__(self, x, y, z, yaw, tags):
+    def __init__(self, x, y, z, yaw, tags, size=None):
         self.x, self.y, self.z, self.yaw, self.tags = x, y, z, yaw, list(tags)
+        self.size = size  # an area: (length along x, width along y, height), m
 
     def to_dict(self):
         return {k: getattr(self, k) for k in self.__slots__}
@@ -148,6 +152,7 @@ def build():
         for name, x0, x1, width in rooms:
             y0, y1 = cy - width * 0.5, cy + width * 0.5
             mid = (x0 + x1) * 0.5
+            markers.append(Marker(mid, cy, WALL_H * 0.5, 0.0, ["RoomArea", lane_tag, name], size=(x1 - x0, width, WALL_H)))
             if name == "Spawn":
                 for i, (px, py) in enumerate(grid(x0, x1, y0, y1, TEAM_SPAWNS, 2.5)):
                     markers.append(Marker(px, py, 0.1, 0.0, ["TeamSpawn", lane_tag]))
@@ -177,6 +182,7 @@ def build():
         for d, x in enumerate((-8.0 * SCALE, 0.0, 8.0 * SCALE)):
             markers.append(Marker(x, side * (hw * 0.5 - 6.0), 0.1, -90.0 * side, ["LeverSlot", "Lane%d" % lane, "Door%d" % (d + 1)]))
     markers.append(Marker(0.0, 0.0, 0.1, 0.0, ["CoreSpawn"]))
+    markers.append(Marker(0.0, 0.0, WALL_H * 0.5, 0.0, ["HubArea"], size=(hl, hw, WALL_H)))
     return {"boxes": boxes, "markers": markers}
 
 
@@ -202,6 +208,9 @@ def check(layout):
                 n = sum(1 for t in tags if t[0] == kind and lt in t and "Door%d" % d in t)
                 if n != 1:
                     problems.append("%s %s Door%d: %d markers" % (kind, lt, d, n))
+        for room in ("Spawn", "Room1", "Room2", "Room3", "Boss"):
+            if sum(1 for t in tags if t[0] == "RoomArea" and lt in t and room in t) != 1:
+                problems.append("RoomArea %s %s missing or doubled" % (lt, room))
         for room in ("Room1", "Room2", "Room3", "Boss"):
             if sum(1 for t in tags if t[0] == "PortalAnchor" and lt in t and room in t) != 1:
                 problems.append("PortalAnchor %s %s missing or doubled" % (lt, room))
@@ -215,6 +224,8 @@ def check(layout):
                 problems.append("%s %s: %d, want %d" % (kind, lt, n, want))
     if sum(1 for t in tags if t[0] == "PlayerStart") != 1:
         problems.append("want exactly one PlayerStart")
+    if sum(1 for t in tags if t[0] == "HubArea") != 1:
+        problems.append("want exactly one HubArea")
     if sum(1 for t in tags if t[0] == "CoreSpawn") != 1:
         problems.append("want exactly one CoreSpawn")
 

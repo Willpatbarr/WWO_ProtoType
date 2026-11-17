@@ -922,8 +922,12 @@ def build_footrace():
         if m.tags[0] == "PlayerStart":
             actors.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(at.x, at.y, at.z + 95.0), rot).set_actor_label("PlayerStart")
             continue
+        if m.size:  # an area: unturned, its scale the size in m (Unreal X = mockup y)
+            rot = unreal.Rotator(0.0, 0.0, 0.0)
         point = actors.spawn_actor_from_class(unreal.TargetPoint, at, rot)
         point.set_editor_property("tags", m.tags)
+        if m.size:
+            point.set_actor_scale3d(unreal.Vector(m.size[1], m.size[0], m.size[2]))
         point.set_actor_label("%s_%d" % ("_".join(m.tags), i))
     x0, x1, y0, y1 = footrace_layout.bounds()
     cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5

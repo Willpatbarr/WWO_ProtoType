@@ -370,7 +370,8 @@ FVector AWWOEnemy::Unstick(const FVector& Wish, float DeltaSeconds)
 
 void AWWOEnemy::Retarget(float DeltaSeconds)
 {
-	// Enemies go after whoever's closest: a player (any of them, online) or an AI teammate.
+	// Enemies go after whoever's closest: a player (any of them, online) or an AI teammate. A FootRace
+	// lane's enemies (Lane set) only go after that lane's team: a hijacker from the other team is left alone.
 	RetargetLeft -= DeltaSeconds;
 	const AWWOAlly* CurrentAlly = Cast<AWWOAlly>(TargetActor.Get());
 	const AWWOCharacter* CurrentPlayer = Cast<AWWOCharacter>(TargetActor.Get());
@@ -383,6 +384,7 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 	for (AWWOCharacter* Player : WS->GetPlayers())
 	{
 		if (Player->IsInvisible() || Player->Health->bDead) continue; // veiled: teammates are fair game, you aren't
+		if (Lane >= 0 && UWWOWorldSubsystem::TeamOf(Player) != Lane) continue;
 		const float D = FVector::Dist(GetActorLocation(), Player->GetActorLocation());
 		if (D < BestDistance)
 		{
@@ -390,7 +392,7 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 			BestDistance = D;
 		}
 	}
-	if (!Best) Best = WS->GetPlayer(); // everyone down or veiled: keep facing someone
+	if (!Best && Lane < 0) Best = WS->GetPlayer(); // everyone down or veiled: keep facing someone
 	for (AWWOAlly* Mate : WS->LivingTeammates())
 	{
 		const float D = FVector::Dist(GetActorLocation(), Mate->GetActorLocation());

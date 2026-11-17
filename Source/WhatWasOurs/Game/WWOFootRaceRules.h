@@ -5,8 +5,16 @@
 // lanes is where they fight each other. The design: LaminarFlow, Game Modes, "PvE Race Mode - v1
 // Design"; the build order: the FootRace plan (map, enemies, portals, energy, levers, boss, cores, bots).
 //
-// So far: teams (each player joins the smaller one), each team's spawn room, the breach portals and
-// breach energy.
+// So far: teams (each player joins the smaller one), each team's spawn room, the lane rooms' enemies,
+// the breach portals and breach energy.
+//
+// Lane rooms (RoomArea markers: Spawn, Room1-3, Boss, in that order along the lane): a team's furthest
+// room, the furthest any of its players has stood in, is its live room; Room1 is live from the start.
+// The live room fills to RoomEnemies at the room's EnemySpawn markers (one every RoomSpawnStagger s) and
+// refills one every RoomRefillTime s after a death; rooms the team has moved past keep what is left but
+// don't refill, the boss room has none (the boss comes later). Each enemy guards its lane (AWWOEnemy::Lane):
+// it only goes after that team's players. The kinds per room are RoomKind's (Room1 mostly Swarm, Room2
+// mostly Soldiers, Room3 Soldiers with a Tank first).
 // The game state says PvP, so the teams can hurt each other and the health component respawns players
 // at PvPSpawnFor (SpawnSpot here: their team's spawn room).
 //
@@ -69,6 +77,15 @@ public:
 	bool IsBreaching(const AWWOCharacter* Body) const { return InHub.Contains(Body); }
 	int32 Breachers(int32 Team) const; // the team's living players in the hub
 
+	// The lane rooms: index 0 Spawn, 1-3 Room1-3, 4 Boss.
+	static FName RoomName(int32 Index);
+	int32 FurthestRoom(int32 Team) const { return Team >= 0 && Team <= 1 ? Furthest[Team] : 0; }
+	int32 AliveIn(int32 Team, FName Room) const { return EnemiesIn(Team, Room).Num(); }
+	TArray<AWWOEnemy*> EnemiesIn(int32 Team, FName Room) const; // the room's living enemies
+	int32 RoomAt(int32 Team, const FVector& Where) const; // which of the team's rooms a spot is in (-1: none)
+	// What a room spawns next: its kind by the room and how many it has spawned.
+	static FName RoomKind(int32 Index, int32 Spawned);
+
 private:
 	void SpawnPortals();
 	// Steps Body through Portal: to its team's hub doorway, or back to the room doorway it came from.
@@ -79,6 +96,23 @@ private:
 	void OnPlayerDied(AWWOCharacter* Victim);
 	void OnEnemyDied(AWWOEnemy* Enemy);
 	void Drain(float DeltaSeconds);
+	struct FRoom
+	{
+		int32 Team = 0;
+		int32 Index = 0;
+		FBox Area = FBox(ForceInit);
+		TArray<FVector> Spawns;               // its EnemySpawn markers
+		TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
+		int32 Spawned = 0;
+		bool bFilled = false;                 // reached RoomEnemies once: from now on it refills slowly
+		float SpawnLeft = 0.f;                // s to the next spawn
+	};
+	void FindRooms();
+	void UpdateRooms(float DeltaSeconds);
+	void SpawnInRoom(FRoom& Room);
+	void BindEnemy(AWWOEnemy* Enemy);
+	TArray<FRoom> Rooms;
+	int32 Furthest[2] = { 1, 1 };
 	static void Teleport(AWWOCharacter* Body, const FTransform& Spot);
 
 	TArray<TWeakObjectPtr<AWWOBreachPortal>> Portals;

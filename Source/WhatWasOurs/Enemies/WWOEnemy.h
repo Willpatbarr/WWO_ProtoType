@@ -68,6 +68,7 @@ public:
 
 	FWWOOnEnemyDied OnDied;
 	TWeakObjectPtr<class AWWOCharacter> LastHitBy; // host: the player whose hit landed last (FootRace's kill credit)
+	int8 Lane = -1; // FootRace: the team whose lane it guards; it only goes after that team's players (-1: anyone)
 	bool bAlerted = false;
 	bool bRespawns = true; // wave enemies don't
 	float SlowLeft = 0.f, SlowAmount = 0.f, BlindLeft = 0.f;
