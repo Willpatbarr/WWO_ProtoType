@@ -153,6 +153,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 // --- Spore patch ------------------------------------------------------------------------------
 
 AWWOSporePatch::AWWOSporePatch()
+	: Life(0.25f, 0.3f, false) // grows in over 0.25 s, holds its duration, shrinks over 0.3 s after it
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -216,11 +217,11 @@ void AWWOSporePatch::Tick(float DeltaSeconds)
 {
 	WWO_PROF("SporePatch");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
-	const float In = WWO::BackOut(Age / 0.25f);
-	const float Out = FMath::Clamp(1.f - (Age - Duration) / 0.3f, 0.01f, 1.f);
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
+	const float In = Life.GrowIn();
+	const float Out = FMath::Clamp(Life.TailLeft(Duration), 0.01f, 1.f);
 	SetActorScale3D(FVector(FMath::Max(In * Out, 0.01f)));
-	if (Age >= Duration + 0.3f && HasAuthority()) Destroy();
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this); // a joiner's copy stays, shrunk, until the host's goes
 }
 
 // --- Poison -----------------------------------------------------------------------------------

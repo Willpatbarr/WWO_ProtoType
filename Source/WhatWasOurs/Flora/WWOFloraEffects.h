@@ -68,7 +68,7 @@ public:
 private:
 	UPROPERTY(Replicated) float Radius = 2.f;
 	UPROPERTY(Replicated) float Duration = 6.f;
-	float Age = 0.f;
+	FWWOEffectLife Life; // its numbers are in the constructor
 	bool bCounted = false;
 	friend class FWWORegress; // the life scenarios read its looks
 };
