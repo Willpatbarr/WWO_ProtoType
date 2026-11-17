@@ -220,24 +220,21 @@ void AWWOGrenade::Tick(float DeltaSeconds)
 
 void AWWOGrenade::Seek(float DeltaSeconds)
 {
-	// The Poison Spike curves toward the nearest target in range, harder the closer it gets.
-	AActor* Best = nullptr;
-	float BestDistance = Spec.Data->SeekRadius * WWO::M;
-	float BestRadius = 0.f;
-	FVector BestPos;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
-	{
-		const FWWOAimPart Body = Cast<IWWOTargetable>(Actor)->GetAimParts().Last();
-		const float Distance = FVector::Dist(GetActorLocation(), Body.Position);
-		if (Distance < BestDistance)
-		{
-			Best = Actor;
-			BestDistance = Distance;
-			BestRadius = Body.Radius;
-			BestPos = Body.Position;
-		}
-	}
-	if (!Best) return;
+	// The Poison Spike curves toward the nearest target in range (its body, closer than the seek radius),
+	// harder the closer it gets.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = Spec.Data->SeekRadius * WWO::M;
+	Q.bInclusive = false;
+	Q.bFloatDistance = true;
+	Q.Measure = EWWOAreaMeasure::LastPart;
+	Q.For = this; // targets, and in PvP the thrower's foes
+	FWWOAreaHit Near;
+	if (!UWWOWorldSubsystem::Get(this)->NearestTargetInRadius(Q, [](const AActor*) { return true; }, Near)) return;
+	AActor* Best = Near.Actor;
+	const float BestDistance = Near.Distance;
+	const float BestRadius = Near.PartRadius;
+	const FVector BestPos = Near.Point;
 	if (BestDistance <= BestRadius + Proximity * WWO::M)
 	{
 		SpikeHit(Best); // close enough: counts as touching it
@@ -383,14 +380,15 @@ void AWWOGrenade::UpdateMine(float DeltaSeconds)
 	const float Blink = 0.5f + 0.5f * FMath::Sin(GetWorld()->GetTimeSeconds() * 15.f);
 	if (Light) Light->SetIntensity(2.f * Blink * 1500.f); // armed: blinks
 	if (Halo) WWOFX::MID(Halo)->SetScalarParameterValue("Alpha", 0.25f + 0.6f * Blink);
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
-	{
-		if (FVector::Dist(Cast<IWWOTargetable>(Actor)->FeetLocation(), GetActorLocation()) <= (Spec.Data->TriggerRadius + 0.5f) * WWO::M)
-		{
-			Explode();
-			return;
-		}
-	}
+	// Any target's feet within the trigger reach (the first one found) sets it off.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = (Spec.Data->TriggerRadius + 0.5f) * WWO::M;
+	Q.Measure = EWWOAreaMeasure::Feet;
+	Q.For = this;
+	bool bTriggered = false;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [&bTriggered](const FWWOAreaHit&) { bTriggered = true; return false; });
+	if (bTriggered) Explode();
 }
 
 void AWWOGrenade::SpikeHit(AActor* TargetActor)
@@ -427,7 +425,6 @@ void AWWOGrenade::Explode()
 {
 	if (bSpent) return;
 	bSpent = true;
-	UWorld* World = GetWorld();
 	const FVector Center = GetActorLocation();
 	Blast(Center);
 	int32 HitCount = 0;
@@ -435,33 +432,23 @@ void AWWOGrenade::Explode()
 	FWWODamageBy By(this);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOBlast), false, this);
 	if (Thrower.IsValid()) Params.AddIgnoredActor(Thrower.Get());
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// Every target (and in PvP the thrower's foes) whose closest part is in the blast, unless a wall is
+	// in the way of that part.
+	FWWOAreaQuery Q;
+	Q.Center = Center;
+	Q.Radius = Spec.BlastRadius * WWO::M;
+	Q.Measure = EWWOAreaMeasure::NearestPart;
+	Q.For = this;
+	Q.SightParams = &Params;
+	Q.SightFrom = Center + FVector(0, 0, 5.f);
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [&](const FWWOAreaHit& Hit)
 	{
-		IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		// Closest part of the target to the blast.
-		FWWOAimPart BestPart;
-		float BestDistance = TNumericLimits<float>::Max();
-		for (const FWWOAimPart& Part : Target->GetAimParts())
-		{
-			const float D = FMath::Max(FVector::Dist(Part.Position, Center) - Part.Radius, 0.f);
-			if (D < BestDistance)
-			{
-				BestDistance = D;
-				BestPart = Part;
-			}
-		}
-		if (BestDistance > Spec.BlastRadius * WWO::M) continue;
-		// Walls block the blast.
-		FHitResult Check;
-		if (World->LineTraceSingleByChannel(Check, Center + FVector(0, 0, 5.f), BestPart.Position, ECC_Visibility, Params) && Check.GetActor() != Actor)
-		{
-			continue;
-		}
-		const float Dealt = Spec.Damage * FMath::Lerp(1.f, EdgeDamage, BestDistance / (Spec.BlastRadius * WWO::M));
-		Target->TakeHit(Dealt, false, BestPart.Position); // marks the thrower's reticle (ConfirmHit)
+		const float Dealt = Spec.Damage * FMath::Lerp(1.f, EdgeDamage, Hit.Distance / (Spec.BlastRadius * WWO::M));
+		Hit.Target->TakeHit(Dealt, false, Hit.Point); // marks the thrower's reticle (ConfirmHit)
 		HitCount++;
 		DealtTotal += Dealt;
-	}
+		return true;
+	});
 	UE_LOG(LogWWO, Log, TEXT("Grenade %s: exploded at %s after %.2f s (radius %.1f m), hit %d for %.0f in all"),
 		Spec.Data ? *Spec.Data->Id.ToString() : (Spec.bIsSeed ? TEXT("seed") : TEXT("blast")), *Center.ToCompactString(), Age, Spec.BlastRadius, HitCount, DealtTotal);
 	if (Spec.Seedburst) Burst(Center);
@@ -543,22 +530,31 @@ void AWWOGrenade::BlindOrSlow(const FVector& Center, bool bBlind)
 	const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
 	int32 Affected = 0;
 	const float SlowTime = D->SlowTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "slow_longer")); // Longer Snare
-	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+	// Enemies (not dummies) by their feet; in PvP the other team's players too, by their centre: slowed as
+	// an enemy is; blinded = a white-out of their screen that clears over the blind time (a bot loses its
+	// target and its aim).
+	FWWOAreaQuery Q;
+	Q.Center = Center;
+	Q.Radius = Reach;
+	Q.Targets = EWWOAreaTargets::Enemies;
+	Q.Measure = EWWOAreaMeasure::Feet;
+	Q.PlayersMeasure = EWWOAreaMeasure::Centre;
+	Q.For = Thrower.Get();
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [&](const FWWOAreaHit& Hit)
 	{
-		if (FVector::Dist(Enemy->FeetLocation(), Center) > Reach) continue;
-		if (bBlind) Enemy->ApplyBlind(D->BlindTime);
-		else Enemy->ApplySlow(D->SlowAmount, SlowTime);
+		if (AWWOEnemy* Enemy = Cast<AWWOEnemy>(Hit.Actor))
+		{
+			if (bBlind) Enemy->ApplyBlind(D->BlindTime);
+			else Enemy->ApplySlow(D->SlowAmount, SlowTime);
+		}
+		else if (AWWOCharacter* Foe = Cast<AWWOCharacter>(Hit.Actor))
+		{
+			if (bBlind) Foe->ApplyBlind(D->BlindTime);
+			else Foe->ApplySlow(D->SlowAmount, SlowTime);
+		}
 		Affected++;
-	}
-	// PvP: the other team's players caught in it. Slowed as an enemy is; blinded = a white-out
-	// of their screen that clears over the blind time (a bot loses its target and its aim).
-	for (AWWOCharacter* Foe : UWWOWorldSubsystem::Get(this)->GetPlayers())
-	{
-		if (Foe->Health->bDead || !UWWOWorldSubsystem::CanHurt(Thrower.Get(), Foe) || FVector::Dist(Foe->GetActorLocation(), Center) > Reach) continue;
-		if (bBlind) Foe->ApplyBlind(D->BlindTime);
-		else Foe->ApplySlow(D->SlowAmount, SlowTime);
-		Affected++;
-	}
+		return true;
+	});
 	UE_LOG(LogWWO, Log, TEXT("Grenade %s: %s %d enemies"), *D->Id.ToString(), bBlind ? TEXT("blinded") : TEXT("slowed"), Affected);
 }
 
@@ -596,18 +592,23 @@ void AWWOGrenade::ShareShields(const FVector& Center)
 	AWWOCharacter* P = Cast<AWWOCharacter>(Thrower.Get());
 	const UWWOAbilityData* Share = P ? P->Abilities->Equipped(WWOIds::Ability::ShieldShare) : nullptr;
 	if (!Share) return;
-	const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
-	for (AWWOAlly* Mate : UWWOWorldSubsystem::Get(this)->LivingTeammates())
+	// AI teammates first, then (online) the other players on your side (PvP: your own team only; their
+	// shields are the host's, they replicate), by their centre.
+	FWWOAreaQuery Q;
+	Q.Center = Center;
+	Q.Radius = (Spec.BlastRadius + 0.5f) * WWO::M;
+	Q.Measure = EWWOAreaMeasure::Centre;
+	Q.Targets = EWWOAreaTargets::None;
+	Q.Players = EWWOAreaPlayers::FriendsOf;
+	Q.bTeammates = true;
+	Q.bTeammatesFirst = true;
+	Q.For = P;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [Share](const FWWOAreaHit& Hit)
 	{
-		if (FVector::Dist(Mate->GetActorLocation(), Center) <= Reach) Mate->RestoreShield(Share->ShieldAmount);
-	}
-	// Online, the other players caught in it too (their shields are the host's; they replicate).
-	for (AWWOCharacter* Mate : UWWOWorldSubsystem::Get(this)->GetPlayers())
-	{
-		if (Mate == P || Mate->Health->bDead || FVector::Dist(Mate->GetActorLocation(), Center) > Reach) continue;
-		if (UWWOWorldSubsystem::CanHurt(P, Mate)) continue; // PvP: your own team only
-		Mate->Health->Shield = FMath::Min(Mate->Health->Shield + Share->ShieldAmount, Mate->Health->MaxShield());
-	}
+		if (AWWOAlly* Ally = Cast<AWWOAlly>(Hit.Actor)) Ally->RestoreShield(Share->ShieldAmount);
+		else if (AWWOCharacter* Mate = Cast<AWWOCharacter>(Hit.Actor)) Mate->Health->Shield = FMath::Min(Mate->Health->Shield + Share->ShieldAmount, Mate->Health->MaxShield());
+		return true;
+	});
 }
 
 void AWWOGrenade::SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore)
