@@ -37,6 +37,7 @@ enum class EWWORegressModes : uint8
 	Same,       // one set of numbers for both modes (the default; a disagreement between modes fails)
 	PerMode,    // the numbers legitimately differ with rendering: golden keeps one set per mode
 	RenderOnly, // needs the game to draw: skipped (and reported skipped) without rendering
+	NoRenderOnly, // repeatable only without drawing (its numbers come from FMath's generator, which drawing also draws on): skipped in the window
 };
 
 struct FWWORegressScenario
@@ -130,6 +131,7 @@ private:
 	static void AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L); // WWORegressCombat.cpp: melee, damage pipeline, enemies
 	static void AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressArea.cpp: the edges of area effects and aim cones
 	static void AddLifeScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressLife.cpp: lingering effects' lives, tick by tick
+	static void AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressMove.cpp: AI walking, turning and probing
 	enum class EPhase : uint8 { Boot, Setup, Settle, Run, Teardown, Gap, Done };
 	EPhase Phase = EPhase::Boot;
 	int32 PhaseTicks = 0;
@@ -139,6 +141,7 @@ private:
 	bool bUpdateNew = false; // -WWORegressUpdateNew: add missing golden entries, touch no others
 	bool bRender = true;
 	FString Mode() const { return bRender ? TEXT("render") : TEXT("norender"); }
+	bool SkippedHere(const FWWORegressScenario& S) const { return (S.Modes == EWWORegressModes::RenderOnly && !bRender) || (S.Modes == EWWORegressModes::NoRenderOnly && bRender); }
 	double StartedAt = 0.0;
 	int32 Skipped = 0;
 	int32 Problems = 0; // scenario list errors (two with one name)

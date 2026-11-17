@@ -190,9 +190,9 @@ void FWWORegress::Tick()
 	case EPhase::Gap:
 		if (PhaseTicks < GapTicks) return;
 		++Index;
-		while (Scenarios.IsValidIndex(Index) && !bRender && Scenarios[Index].Modes == EWWORegressModes::RenderOnly)
+		while (Scenarios.IsValidIndex(Index) && SkippedHere(Scenarios[Index]))
 		{
-			UE_LOG(LogWWO, Display, TEXT("Regress %s: skipped (render-only: %s)"), *Scenarios[Index].Name, *Scenarios[Index].ModeReason);
+			UE_LOG(LogWWO, Display, TEXT("Regress %s: skipped (%s: %s)"), *Scenarios[Index].Name, bRender ? TEXT("no-render only") : TEXT("render-only"), *Scenarios[Index].ModeReason);
 			++Skipped;
 			++Index;
 		}
@@ -793,9 +793,9 @@ void FWWORegress::Finish()
 		{
 			if (!bFiltered && IsMine(Pair.Key) && !All.Contains(Pair.Key))
 			{
-				// A render-only scenario a no-render run skipped keeps its golden entry.
+				// A scenario this mode skips (render-only, no-render only) keeps its golden entry.
 				bool bSkippedHere = false;
-				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Pair.Key && S.Modes == EWWORegressModes::RenderOnly && !bRender;
+				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Pair.Key && SkippedHere(S);
 				if (!bSkippedHere) continue;
 			}
 			TArray<TPair<FString, FString>>& Values = Merged.Add(Pair.Key);
@@ -868,7 +868,7 @@ void FWWORegress::Finish()
 			{
 				if (!IsMine(Key) || All.Contains(Key)) continue;
 				bool bSkippedHere = false;
-				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Key && S.Modes == EWWORegressModes::RenderOnly && !bRender;
+				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Key && SkippedHere(S);
 				if (bSkippedHere) continue;
 				UE_LOG(LogWWO, Warning, TEXT("Regress DIFF %s: in golden, not run"), *Key);
 				++Diffs;
@@ -899,6 +899,7 @@ void FWWORegress::BuildScenarios()
 		AddCombatScenarios(List, *L);
 		AddAreaScenarios(List, *L);
 		AddLifeScenarios(List, *L);
+		AddMoveScenarios(List, *L);
 	}
 	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
 	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).
