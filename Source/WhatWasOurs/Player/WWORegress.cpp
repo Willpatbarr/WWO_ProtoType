@@ -676,13 +676,29 @@ void FWWORegress::NotePlayerShot()
 
 FString FWWORegress::Quote(const FString& S)
 {
-	return TEXT("\"") + S.ReplaceCharWithEscapedChar() + TEXT("\"");
+	// JSON's own escapes only (FString::ReplaceCharWithEscapedChar also writes \', which JSON has not).
+	FString Out = TEXT("\"");
+	for (const TCHAR C : S)
+	{
+		switch (C)
+		{
+		case TEXT('"'): Out += TEXT("\\\""); break;
+		case TEXT('\\'): Out += TEXT("\\\\"); break;
+		case TEXT('\n'): Out += TEXT("\\n"); break;
+		case TEXT('\r'): Out += TEXT("\\r"); break;
+		case TEXT('\t'): Out += TEXT("\\t"); break;
+		case TEXT('\b'): Out += TEXT("\\b"); break;
+		case TEXT('\f'): Out += TEXT("\\f"); break;
+		default:
+			if (C < 0x20) Out += FString::Printf(TEXT("\\u%04x"), (uint32)C);
+			else Out += C;
+		}
+	}
+	return Out + TEXT("\"");
 }
 
-bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out)
+bool FWWORegress::ParseResults(const FString& Text, TMap<FString, TMap<FString, FString>>& Out)
 {
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *Path)) return false;
 	TSharedPtr<FJsonObject> Root;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return false;
 	for (const auto& Pair : Root->Values)
@@ -695,7 +711,30 @@ bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, F
 	return true;
 }
 
-bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results)
+bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out)
+{
+	FString Text;
+	return FFileHelper::LoadFileToString(Text, *Path) && ParseResults(Text, Out);
+}
+
+bool FWWORegress::CheckResultsRoundTrip()
+{
+	// The results text must read back as it was written, whatever a value holds (a recorded reason
+	// with an apostrophe or a quote once made the golden unreadable).
+	const FString Value = TEXT("it's a \"quoted\" \\ value\twith\nlines");
+	TMap<FString, TArray<TPair<FString, FString>>> Results;
+	Results.Add(TEXT("check's \"name\""), { { TEXT("why"), Value } });
+	TMap<FString, TMap<FString, FString>> Back;
+	const bool bParsed = ParseResults(ResultsText(Results), Back);
+	const TMap<FString, FString>* Entry = Back.Find(TEXT("check's \"name\""));
+	const FString* Got = Entry ? Entry->Find(TEXT("why")) : nullptr;
+	const bool bOk = bParsed && Got && *Got == Value;
+	if (bOk) { UE_LOG(LogWWO, Display, TEXT("Regress: results text round-trip ok (apostrophe, quote, backslash, tab, newline)")); }
+	else { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF harness: results text round-trip FAIL (parsed %d, got %s)"), bParsed, Got ? **Got : TEXT("(none)")); }
+	return bOk;
+}
+
+FString FWWORegress::ResultsText(const TMap<FString, TArray<TPair<FString, FString>>>& Results)
 {
 	// Sorted scenarios, sorted keys, one per line: the same bytes for the same numbers.
 	TArray<FString> Names;
@@ -715,7 +754,12 @@ bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TP
 		Out += i + 1 < Names.Num() ? TEXT(",\n") : TEXT("\n");
 	}
 	Out += TEXT("}\n");
-	return FFileHelper::SaveStringToFile(Out, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	return Out;
+}
+
+bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results)
+{
+	return FFileHelper::SaveStringToFile(ResultsText(Results), *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 }
 
 void FWWORegress::Finish()
@@ -734,9 +778,17 @@ void FWWORegress::Finish()
 		return Key.Mid(At + 1) == Mode();
 	};
 	TMap<FString, TMap<FString, FString>> Golden;
+	const bool bGoldenExists = FPaths::FileExists(GoldenPath());
 	const bool bHaveGolden = LoadResults(GoldenPath(), Golden);
 	int32 Diffs = Problems;
-	if (bUpdate)
+	if (!CheckResultsRoundTrip()) ++Diffs;
+	if (bGoldenExists && !bHaveGolden)
+	{
+		// Never rewritten from here: an update would keep only this run's entries and drop the rest.
+		UE_LOG(LogWWO, Warning, TEXT("Regress DIFF golden: %s is not valid JSON, FAIL (left as it is%s)"), *GoldenPath(), bUpdate ? TEXT(", not updated") : TEXT(""));
+		++Diffs;
+	}
+	else if (bUpdate)
 	{
 		// This run's entries replace the golden ones; a full run also drops entries it no longer has
 		// (of its own mode). The other mode's entries stay.

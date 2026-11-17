@@ -167,6 +167,9 @@ private:
 	FString GoldenKey(const FWWORegressScenario& S) const;
 	static uint32 SeedFor(const FString& Name);
 	static FString Quote(const FString& S);
+	static bool ParseResults(const FString& Text, TMap<FString, TMap<FString, FString>>& Out);
 	static bool LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out);
+	static FString ResultsText(const TMap<FString, TArray<TPair<FString, FString>>>& Results);
+	static bool CheckResultsRoundTrip();
 	static bool SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results);
 };

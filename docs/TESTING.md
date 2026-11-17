@@ -46,6 +46,9 @@ Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name con
   `FAIL (n)`; exit code 1 on failure. With both modes the script also fails if the two modes disagree on a
   scenario that should give the same numbers in both (`Regress MODES DIFF ...`). Results:
   `Saved/Regress/results.json` (and `results-<mode>.json`), sorted, one value per line.
+- A golden file that is not valid JSON is a FAIL (`Regress DIFF golden: ... is not valid JSON`) and is never
+  rewritten, not even by an update. Every run first checks that the results text reads back exactly
+  (values may hold quotes, apostrophes, backslashes, newlines: `Regress: results text round-trip ok`).
 - Windows: `UnrealEditor.exe <proj> /Game/WWO/Maps/L_TestRange -game -nullrhi -nosound -WWORegress
   -abslog=<log>` (no rendering), or with `-windowed -ResX=640 -ResY=360` instead of `-nullrhi`; the exit code
   is the result. (The golden was recorded on the Mac; a Windows run is expected to match, but that has not
