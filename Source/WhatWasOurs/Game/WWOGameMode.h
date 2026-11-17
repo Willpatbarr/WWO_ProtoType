@@ -15,12 +15,10 @@
 #include "GameFramework/GameModeBase.h"
 #include "Game/WWOGameModeStress.h"
 #include "Game/WWOBotRoster.h"
+#include "Game/WWOMatchRules.h"
 #include "WWOGameMode.generated.h"
 
 class AWWOEnemy;
-
-UENUM()
-enum class EWWOWaveState : uint8 { Idle, Countdown, Spawning, Won, Lost, Match, MatchOver };
 
 UCLASS()
 class WHATWASOURS_API AWWOGameMode : public AGameModeBase
@@ -81,13 +79,11 @@ public:
 	static int32 PvPKills;
 	static int32 PvPMatchesEnded;
 	// The firing tester (?tester, from the launch screen; -WWOTester): no waves, no enemies, one
-	// target dummy ahead of the start. UWWOFiringTester is the screen over it.
+	// target dummy ahead of the start (FWWOTesterRules). UWWOFiringTester is the screen over it.
 	bool bTester = false;
-	FTransform TesterHome;            // where the player started (the strafe run is centred on it)
-	bool bTesterHomeSet = false;
-	TWeakObjectPtr<class AWWOTarget> TesterTarget;
-	float TesterTargetDistance = 20.f; // m
-	void UpdateTester();
+	// The rules of this match (Game/WWOMatchRules.h), chosen in InitGame; null for the rules still here.
+	TUniquePtr<FWWOMatchRules> Rules;
+	FWWOTesterRules* Tester() const { return Rules ? Rules->AsTester() : nullptr; }
 	// The PvP match's bot players (-WWOBots=N, ?bots=N, the Bots setting; Game/WWOBotRoster.h). -WWOStress logs the load.
 	FWWOBotRoster Roster;
 	float CmdKillTarget = -1.f; // -WWOKillTarget= (tests): wins over the saved setting
@@ -151,4 +147,5 @@ private:
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the wave spawn directly; no gameplay code uses this.
 	friend class FWWORegress;
 	friend struct FWWOBotRoster;
+	friend class FWWOTesterRules;
 };

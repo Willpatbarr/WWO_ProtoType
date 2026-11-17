@@ -11,6 +11,7 @@
 #include "Player/WWORegress.h"
 #include "WhatWasOurs.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOTesterRules.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOCharacter.h"
@@ -88,7 +89,8 @@ namespace
 		bool bKilled = false;
 		TArray<TWeakObjectPtr<AActor>> Others;
 		// The game mode as it was (put back by M::Leave).
-		bool bPvP = false, bTester = false, bTesterHomeSet = false;
+		bool bPvP = false, bTester = false;
+		TUniquePtr<FWWOMatchRules> SavedRules; // the level's own rules, while the scenario's run
 		EWWOWaveState State = EWWOWaveState::Idle;
 		int32 Wave = 0, Winner = -1;
 		FWWOBotRoster Roster;
@@ -97,8 +99,6 @@ namespace
 		TArray<TWeakObjectPtr<AWWOEnemy>> AliveList;
 		TSet<TWeakObjectPtr<AWWOCharacter>> PvPBound;
 		TSet<TWeakObjectPtr<AWWOPlayerState>> TeamGiven;
-		FTransform TesterHome;
-		TWeakObjectPtr<AWWOTarget> TesterTarget;
 		bool bGSPvP = false, bMatchOver = false;
 		TArray<int32> TeamScores;
 		int8 MatchWinner = -1;
@@ -183,9 +183,6 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		{
 			S.bPvP = G->bPvP;
 			S.bTester = G->bTester;
-			S.bTesterHomeSet = G->bTesterHomeSet;
-			S.TesterHome = G->TesterHome;
-			S.TesterTarget = G->TesterTarget;
 			S.State = G->State;
 			S.Wave = G->Wave;
 			S.Timer = G->Timer;
@@ -210,12 +207,27 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			}
 		}
 
+		// A scenario's run state, fresh (rules a timed-out run left switched on are put back first).
+		static void Fresh(FWWORegress& R, FMatchRun& S)
+		{
+			Leave(R, S);
+			S = FMatchRun();
+		}
+
+		static TUniquePtr<FWWOMatchRules> MakeRules(AWWOGameMode* G, ERules Rules)
+		{
+			if (Rules == ERules::Tester) return MakeUnique<FWWOTesterRules>(*G);
+			return nullptr;
+		}
+
 		// Switches the rules on (the game mode's Begin under them), the player already placed on a team.
 		static void Enter(FWWORegress& R, FMatchRun& S, ERules Rules)
 		{
 			AWWOGameMode* G = GM(R);
 			Snap(G, S);
 			S.bEntered = true;
+			S.SavedRules = MoveTemp(G->Rules);
+			G->Rules = MakeRules(G, Rules);
 			G->bPvP = Rules == ERules::Deathmatch;
 			G->bTester = Rules == ERules::Tester;
 			if (Rules == ERules::Deathmatch)
@@ -236,9 +248,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			AWWOGameMode* G = GM(R);
 			G->bPvP = S.bPvP;
 			G->bTester = S.bTester;
-			G->bTesterHomeSet = S.bTesterHomeSet;
-			G->TesterHome = S.TesterHome;
-			G->TesterTarget = S.TesterTarget;
+			G->Rules = MoveTemp(S.SavedRules);
 			G->State = S.State;
 			G->Wave = S.Wave;
 			G->Timer = S.Timer;
@@ -314,10 +324,10 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		static void UpdateBots(AWWOGameMode* G) { G->Roster.Update(*G); } // as the game mode's PvP tick runs it (no stress harness here)
 		static void RetireBotFor(AWWOGameMode* G, AController* Joiner) { G->Roster.RetireFor(*G, Joiner); }
 		// --- The tester ---
-		static void UpdateTester(AWWOGameMode* G) { G->UpdateTester(); }
-		static AWWOTarget* TesterTarget(AWWOGameMode* G) { return G->TesterTarget.Get(); }
-		static FTransform TesterHome(AWWOGameMode* G) { return G->TesterHome; }
-		static bool TesterHomeSet(AWWOGameMode* G) { return G->bTesterHomeSet; }
+		static void UpdateTester(AWWOGameMode* G) { G->Tester()->Update(FWWORegress::Dt); }
+		static AWWOTarget* TesterTarget(AWWOGameMode* G) { return G->Tester()->Target.Get(); }
+		static FTransform TesterHome(AWWOGameMode* G) { return G->Tester()->Home; }
+		static bool TesterHomeSet(AWWOGameMode* G) { return G->Tester()->bHomeSet; }
 	};
 
 	// One line per change of the waves' state, wave, queue or living count.
@@ -366,7 +376,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run, Inert](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Inert(R);
 			Run->Others.Add(R.SpawnEnemy("swarm", R.Ahead(12.f)));
 			Run->Others.Add(R.SpawnAlly(R.Ahead(8.f, 4.f)));
@@ -408,7 +418,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run, Inert, WavesToWin](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Inert(R);
 			AWWOGameMode* G = M::GM(R);
 			R.Tune(G, "Enabled", 1.f);
@@ -468,7 +478,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run, Inert, bCompany](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Inert(R);
 			R.Tune(M::GM(R), "Enabled", 1.f);
 			AddPoint(R, R.Ahead(20.f));
@@ -510,7 +520,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		FWWORegressScenario S;
 		S.Name = TEXT("match.wave.jump");
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
-		S.Setup = [Run](FWWORegress& R) { *Run = FMatchRun(); R.Tune(M::GM(R), "Enabled", 1.f); AddPoint(R, R.Ahead(20.f)); };
+		S.Setup = [Run](FWWORegress& R) { M::Fresh(R, *Run); R.Tune(M::GM(R), "Enabled", 1.f); AddPoint(R, R.Ahead(20.f)); };
 		S.Step = [Run](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* G = M::GM(R);
@@ -543,7 +553,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		FWWORegressScenario S;
 		S.Name = TEXT("match.status");
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
-		S.Setup = [Run](FWWORegress& R) { *Run = FMatchRun(); };
+		S.Setup = [Run](FWWORegress& R) { M::Fresh(R, *Run); };
 		S.Step = [Run](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* G = M::GM(R);
@@ -597,7 +607,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run, Inert](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Inert(R);
 			Run->Others.Add(R.SpawnEnemy("swarm", R.Ahead(12.f)));
 			Run->Others.Add(R.SpawnAlly(R.Ahead(8.f, 4.f)));
@@ -609,15 +619,16 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			if (Tick == 0)
 			{
 				R.Tune(G, "TimeLimit", 4.f);
-				M::Snap(G, *Run); // as it was, before the stale fields below
-				Run->Mark = 1;
-				if (AWWOGameState* GS = G->GetGameState<AWWOGameState>()) { GS->TeamScores = { 9, 9, 9 }; GS->bMatchOver = true; GS->MatchWinner = 1; }
-				const FMatchRun Before = *Run;
+				AWWOGameState* GS = G->GetGameState<AWWOGameState>();
+				// As it was, before the stale fields below (put back by Leave).
+				const TArray<int32> Scores = GS ? GS->TeamScores : TArray<int32>();
+				const bool bOver = GS && GS->bMatchOver;
+				const int8 Won = GS ? GS->MatchWinner : -1;
+				if (GS) { GS->TeamScores = { 9, 9, 9 }; GS->bMatchOver = true; GS->MatchWinner = 1; }
 				M::Enter(R, *Run, ERules::Deathmatch);
-				Run->bGSPvP = Before.bGSPvP;
-				Run->TeamScores = Before.TeamScores;
-				Run->bMatchOver = Before.bMatchOver;
-				Run->MatchWinner = Before.MatchWinner;
+				Run->TeamScores = Scores;
+				Run->bMatchOver = bOver;
+				Run->MatchWinner = Won;
 				R.Record(TEXT("state"), M::State(G));
 				R.Record(TEXT("match_left"), M::MatchLeft(G));
 				R.Record(TEXT("winner"), M::Winner(G));
@@ -646,7 +657,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			AddPvPPoints(R);
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(10.f)));
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(14.f, -9.f))); // a foe standing near one spot
@@ -698,7 +709,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Run->Others.Add(R.SpawnBot(0, R.Ahead(8.f, -6.f)));
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(8.f, -2.f)));
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(8.f, 2.f)));
@@ -740,7 +751,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			R.Tune(M::GM(R), "KillTarget", 4.f); // 1 + 2 (the precision kill) + 1
 			R.Tune(M::GM(R), "BotHealth", 120.f);
 			for (int32 i = 0; i < 3; ++i) Run->Others.Add(R.SpawnBot(1, R.Ahead(10.f, (i - 1) * 4.f)));
@@ -795,7 +806,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			R.Tune(M::GM(R), "TimeLimit", 0.05f);
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(10.f)));
 		};
@@ -837,7 +848,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			AddPvPPoints(R);
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(15.f, -10.f) + FVector(0, 0, 0.f))); // on a spot: taken
 			Run->Others.Add(R.SpawnBot(1, R.Ahead(28.f, -4.f)));
@@ -875,7 +886,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			AddPvPPoints(R);
 			Run->Others.Add(R.SpawnBot(0, R.Ahead(20.f, -3.f)));
 			Run->Others.Add(R.SpawnBot(0, R.Ahead(20.f, 3.f)));
@@ -925,7 +936,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
 		S.Setup = [Run, Inert](FWWORegress& R)
 		{
-			*Run = FMatchRun();
+			M::Fresh(R, *Run);
 			Inert(R);
 			Run->Others.Add(R.SpawnEnemy("swarm", R.Ahead(12.f)));
 			Run->Others.Add(R.SpawnAlly(R.Ahead(8.f, 4.f)));
@@ -953,7 +964,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		FWWORegressScenario S;
 		S.Name = TEXT("match.tester.target");
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
-		S.Setup = [Run](FWWORegress& R) { *Run = FMatchRun(); };
+		S.Setup = [Run](FWWORegress& R) { M::Fresh(R, *Run); };
 		S.Step = [Run](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* G = M::GM(R);
@@ -1027,7 +1038,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		S.Modes = EWWORegressModes::NoRenderOnly;
 		S.ModeReason = TEXT("a bot's kit and timers draw on FMath's generator, which drawing also draws on");
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
-		S.Setup = [Run](FWWORegress& R) { *Run = FMatchRun(); AddPvPPoints(R); };
+		S.Setup = [Run](FWWORegress& R) { M::Fresh(R, *Run); AddPvPPoints(R); };
 		S.Step = [Run, Players, NewBots, RecordBot](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* G = M::GM(R);
@@ -1058,7 +1069,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		S.Modes = EWWORegressModes::NoRenderOnly;
 		S.ModeReason = TEXT("a bot's kit and timers draw on FMath's generator, which drawing also draws on");
 		TSharedRef<FMatchRun> Run = MakeShared<FMatchRun>();
-		S.Setup = [Run](FWWORegress& R) { *Run = FMatchRun(); AddPvPPoints(R); };
+		S.Setup = [Run](FWWORegress& R) { M::Fresh(R, *Run); AddPvPPoints(R); };
 		S.Step = [Run, NewBots, RecordBot](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* G = M::GM(R);

@@ -11,6 +11,7 @@
 #include "Player/WWOWeaponComponent.h"
 #include "UI/WWOFiringTester.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOTesterRules.h"
 #include "World/WWOTarget.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -89,7 +90,7 @@ void FWWOAutoTest::UpdateAutoTesterTest(float DeltaTime)
 		int32 Dummies = 0;
 		for (TActorIterator<AWWOTarget> It(PC->GetWorld()); It; ++It) ++Dummies;
 		const ULocalPlayer* LP = PC->GetLocalPlayer();
-		Check(Dummies == 1 && GM->TesterTarget.IsValid(), FString::Printf(TEXT("%d target dummy, no waves"), Dummies));
+		Check(Dummies == 1 && GM->Tester() && GM->Tester()->Target.IsValid(), FString::Printf(TEXT("%d target dummy, no waves"), Dummies));
 		Check(LP && FMath::IsNearlyEqual((float)LP->Size.X, UWWOFiringTester::WinW, 0.01f), FString::Printf(TEXT("the view is drawn in the window (%.2f of the width)"), LP ? (float)LP->Size.X : -1.f));
 		Check(PC->FiringTester->WantsCursor() && !PC->IsPaused(), TEXT("the pane has the cursor and the game runs under it"));
 		{
@@ -99,7 +100,7 @@ void FWWOAutoTest::UpdateAutoTesterTest(float DeltaTime)
 				&& UWWOHUDWidget::RadarBands(3.f, 30.f, 4.f, 4) == 4, TEXT("radar: bands by distance (out of range 0, rim 1, ..., melee all)"));
 			TArray<float> Lit;
 			const int32 Steps = UWWOHUDWidget::Radar(P, Lit);
-			const int32 Want = UWWOHUDWidget::RadarBands(GM->TesterTargetDistance, P->RadarRange, P->RadarFullRange, Steps);
+			const int32 Want = UWWOHUDWidget::RadarBands(GM->Tester() ? GM->Tester()->TargetDistance : 20.f, P->RadarRange, P->RadarFullRange, Steps);
 			int32 Ahead = 0, Elsewhere = 0;
 			for (int32 i = 0; i < Lit.Num(); ++i) (i < Steps ? Ahead : Elsewhere) += Lit[i] > 0.f ? 1 : 0;
 			Check(Ahead == Want && Elsewhere == 0 && (Want == 0 || Lit[0] > 0.95f),
