@@ -49,19 +49,36 @@ host's check of a joiner's shot both read it, so nothing else needs to know the 
 
 ## An ability or a grenade
 
-1. A `UWWOAbilityData` or `UWWOGrenadeData` asset with its `Flora` set.
-2. Grenade: pick an `EWWOGrenadeKind` (`WWOTypes.h`). A new kind needs branches in
-   `Weapons/WWOGrenade.cpp`: `Setup`, `Tick`, `OnBounce`, `Explode`.
-3. Ability: behaviour is wired by id. `Equipped("<id>")` in `Player/WWOAbilityComponent.cpp` (dispatch,
-   `IsEffectActive`), and wherever else it acts (grep an existing id such as `static_charge` to see the
-   places).
-4. The look on the body: a branch in `Characters/WWOBodyGrafts.cpp` (`F.Has("<id>")`).
-5. Text: a line in `UWWOCharacterMenu::BuildOverview` (`UI/WWOCharacterMenuOverview.cpp`, the Loadout
+1. A `UWWOAbilityData` or `UWWOGrenadeData` asset with its `Flora` set. Its id goes in `WWOIds.h`
+   (`WWOIds::Ability::...` / `WWOIds::Grenade::...`) if any game code tests for it; game code compares
+   against the constant, not a literal (tests keep strings).
+2. Grenade: behaviour goes by kind (`EWWOGrenadeKind`, `WWOTypes.h`), not id. An existing kind needs nothing
+   more. A new kind is one more entry at the end of `AWWOGrenade::KindRules` (`Weapons/WWOGrenade.cpp`, in the
+   enum's order): whether the Impact Grenades trait applies (`bImpactFuse`), a brighter blast
+   (`bBrightFlash`), its life when it has no fuse (`Life`, then it fizzles), and its handlers: `OnTick` (every
+   host tick), `OnTouch` (return true when the touch is handled, so nothing else happens on it), `OnBurst`
+   (after the blast's damage, Seedburst and Shield Share). Handlers run on the host; a field left empty is
+   something the kind doesn't do.
+3. Ability: one entry in `WWOAbility::Table()` (`Player/WWOAbilities.cpp`), with its `Id`. The recharge,
+   arming and button go by kind (`EWWOAbilityKind`) in `UWWOAbilityComponent`; what the ability itself
+   does is its entry's fields: `OnActivate` (Active, just used: also runs on the host for a joiner),
+   `Tick` (every update, equipped or not), `Lit` (Triggered: the HUD box), `bFistsGlow`, the effects on
+   its owner (`MoveSpeed`, `ExtraJumps`, `GrenadeCharges`, `MeleeDealt`, `MeleeTaken`) and the events
+   (`OnMeleeLanded`, `OnDamageTaken`). What it remembers goes in `FWWOAbilityState` (`Player/WWOAbilities.h`),
+   read through `UWWOAbilityComponent::State` / `FindState`; the regression runner empties it with the
+   rest of the kit. Something an ability does elsewhere (a grenade's seeds, the fog's damage) asks
+   `Equipped(WWOIds::Ability::...)` there; the entry's comment says where.
+4. A joiner's use: the host's checks return an `EWWOKitRefusal` (`Player/WWOKitRefusal.h`);
+   `WWOKit::RefusalText` is where a reason becomes words. A new reason is a value there and a line there.
+5. The look on the body: a branch in `Characters/WWOBodyGrafts.cpp` (`F.Has(WWOIds::Ability::...)`).
+6. Text: a line in `UWWOCharacterMenu::BuildOverview` (`UI/WWOCharacterMenuOverview.cpp`, the Loadout
    tab's Build notes), and per-ability rows in `UWWOSettingsMenu::RegisterAbilitySections`
-   (`UI/WWOSettingsSections.cpp`).
-6. Bots: a hint in `AWWOBotController::UseKit` if they should use it.
-7. An `ability` / `grenade_throw` sound plays by default.
-8. Test: `-WWOAutoTest` sets off every ability and throws every grenade.
+   (`UI/WWOSettingsSections.cpp`; the row names are the asset's property names, saved-file keys).
+7. Bots: a hint in `AWWOBotController::UseKit` if they should use it (a branch on the id there, not in the table).
+8. An `ability` / `grenade_throw` sound plays by default.
+9. Test: the regression scenarios pick up every ability and grenade asset by themselves (`ability.<id>`,
+   `kit.host.ability.<id>`, `grenade.<id>.*`, `kit.impact.<id>`); add a `kit.*` scenario for what the new
+   entry does that those don't record. `-WWOAutoTest` sets off every ability and throws every grenade.
 
 ## An enemy type
 

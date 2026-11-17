@@ -116,9 +116,22 @@ walks the table in its order (the HUD line's).
 
 ## Kit: grenades, abilities, ults, flora effects
 
+- **Ids** the code tests for are named once in `WWOIds.h` (`WWOIds::Flora`, `Ability`, `Perk`, `Grenade`:
+  `FName` constants). The data, the wire and the tests name them as strings.
 - The grenade, ability and ult components fill an `FWWOGrenadeSpec` and call `AWWOGrenade::Throw` or
   `ExplodeAt`. The grenade runs on the host. `Explode` loops the living targets (nearest aim part, line
-  of sight, falloff), then the kind's own effect (wall, blind / slow, pool).
+  of sight, falloff), then the kind's own burst. What each `EWWOGrenadeKind` does is one
+  `FWWOGrenadeKindRules` entry in `AWWOGrenade::KindRules` (impact fuse allowed, brighter flash, life
+  without a fuse, handlers per tick, on a touch, on the burst); a grenade with no asset (seeds, the ult,
+  Root Bombs) has no kind.
+- **Abilities** are a table (`Player/WWOAbilities.h` / `.cpp`): one `FWWOAbility` per ability id (what it
+  does when used, its own timer, when it is lit, the fists' glow, its effects on its owner, what it does
+  on a melee hit landed or damage taken). `UWWOAbilityComponent` runs the recharge and arming by kind and
+  keeps each ability's `FWWOAbilityState` (charge, effect time, armed, guard time, live seeds or patches)
+  in one map by id. The ult goes by the flora's `EWWOUltKind` (`UWWOUltComponent::Kind`).
+- **A joiner's kit**: the host's checks (`HostThrow`, `HostUseAbility`) return an `EWWOKitRefusal`
+  (`ServerActivateUlt` logs one); `ClientKitRefused(What)` names the kit with an `EWWOKit` (a `uint8` on the wire);
+  `WWOKit::RefusalText` (`Player/WWOKitRefusal.h`) is the one place a reason becomes words (the host's log).
 - Flora effects (`Flora/`) are actors with static `Spawn` / `Raise` factories. They age in `Tick`; the
   host deals damage every 0.5 s inside an `FWWODamageBy` scope.
 - Effects everyone must see go through the `AWWOGameState` statics (`Blast`, `Bolt`, `Text`, `Sound`,
