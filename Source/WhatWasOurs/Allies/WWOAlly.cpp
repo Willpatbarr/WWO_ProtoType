@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemy.h"
+#include "Systems/WWONav.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "FX/WWOFX.h"
@@ -258,9 +259,7 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 void AWWOAlly::Face(const FVector& Direction, float DeltaSeconds)
 {
 	if (Direction.Size2D() < 1.f) return;
-	const float Current = GetActorRotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Direction.Rotation().Yaw) * WWO::Damp(10.f, DeltaSeconds);
-	SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	SetActorRotation(FRotator(0.f, WWONav::TurnYaw(GetActorRotation().Yaw, Direction.Rotation().Yaw, 10.f, DeltaSeconds), 0.f)); // its own rate; a double target
 }
 
 AWWOEnemy* AWWOAlly::NearestVisibleEnemy() const

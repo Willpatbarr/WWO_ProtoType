@@ -10,6 +10,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Systems/WWOTargetable.h"
+#include "Systems/WWONav.h"
 #include "WWOEnemy.generated.h"
 
 class UBoxComponent;
@@ -19,15 +20,6 @@ class UWWOBodyComponent;
 class UWWOEnemyData;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FWWOOnEnemyDied, class AWWOEnemy*);
-
-namespace WWONav
-{
-	// A navmesh path like Godot's map_get_path: a start or end that's off the navmesh (pressed
-	// against a crate, a teammate standing in a corner) snaps to the closest navmesh point first,
-	// and an unreachable end gives the path to the closest reachable spot (bOutPartial).
-	// Empty when there's no navmesh here.
-	WHATWASOURS_API TArray<FVector> FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial);
-}
 
 // Enemy movement: the velocity eases toward what the AI wants at a set acceleration (and
 // knockback / leaps are left alone while bSteering is off).

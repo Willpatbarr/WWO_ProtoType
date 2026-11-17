@@ -18,31 +18,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "NavigationSystem.h"
-#include "NavigationPath.h"
 #include "Engine/World.h"
 
 namespace
 {
 	constexpr float CorpseTime = 3.f; // seconds the body stays before disappearing
 	constexpr float EnemyGravity = 20.f; // m/s^2, as in Godot
-}
-
-TArray<FVector> WWONav::FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial)
-{
-	bOutPartial = false;
-	UWorld* World = Querier ? Querier->GetWorld() : nullptr;
-	const UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
-	if (!Nav) return {};
-	auto Snap = [Nav](const FVector& Point)
-	{
-		FNavLocation Out;
-		if (Nav->ProjectPointToNavigation(Point, Out)) return Point;
-		return Nav->ProjectPointToNavigation(Point, Out, FVector(400.f, 400.f, 250.f)) ? Out.Location : Point;
-	};
-	const UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, Snap(Start), Snap(End), Querier);
-	if (!NavPath || !NavPath->IsValid()) return {};
-	bOutPartial = NavPath->IsPartial();
-	return NavPath->PathPoints;
 }
 
 UWWOEnemyMovement::UWWOEnemyMovement()
@@ -460,10 +441,8 @@ void AWWOEnemy::TurnToward(const FVector& Direction, float DeltaSeconds, float S
 {
 	if (Direction.Size2D() < 1.f) return;
 	const float Rate = Speed < 0.f ? (Data() ? Data()->TurnSpeed : 8.f) : Speed;
-	const float Current = GetActorRotation().Yaw;
-	const float Target = Direction.Rotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Target) * WWO::Damp(Rate, DeltaSeconds);
-	SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	const float Target = Direction.Rotation().Yaw; // a float target: float maths
+	SetActorRotation(FRotator(0.f, WWONav::TurnYaw(GetActorRotation().Yaw, Target, Rate, DeltaSeconds), 0.f));
 }
 
 FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
