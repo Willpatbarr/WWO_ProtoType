@@ -13,6 +13,7 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOGrenadeComponent.h"
 #include "Player/WWOUltComponent.h"
+#include "Player/WWOTestTally.h"
 
 using namespace WWOCharacter; // the constants these files share (WWOCharacterPrivate.h)
 
@@ -24,12 +25,10 @@ void AWWOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOCharacter, NetFists);
 }
 
-int32 AWWOCharacter::NetAbilitiesUsed = 0;
-int32 AWWOCharacter::NetUltsCast = 0;
 
 void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot, FVector_NetQuantizeNormal Aim)
 {
-	++NetAbilitiesUsed;
+	FWWOTestTally::Count(&FWWOTestTally::AbilitiesUsed);
 	NetAim = FVector(Aim).GetSafeNormal(UE_SMALL_NUMBER, GetActorForwardVector()); // this copy's camera has no pitch
 	if (Abilities->HostUseAbility(Slot) != EWWOKitRefusal::None) ClientKitRefused((uint8)EWWOKit::Ability, Slot);
 }
@@ -51,7 +50,7 @@ void AWWOCharacter::ServerActivateUlt_Implementation()
 	if (Ult->Charge >= 0.95f) Ult->Fill(); // a little slack: the two charges run a frame or two apart
 	const bool bCast = Ult->ActivateUlt();
 	if (!bCast) ClientKitRefused((uint8)EWWOKit::Ult, 0);
-	NetUltsCast += bCast ? 1 : 0;
+	FWWOTestTally::Count(&FWWOTestTally::UltsCast, bCast ? 1 : 0);
 	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), *WWOKit::RefusalText(EWWOKit::Ult, bCast ? EWWOKitRefusal::None : EWWOKitRefusal::NotReady));
 }
 

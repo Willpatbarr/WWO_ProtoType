@@ -13,9 +13,8 @@
 #include "Camera/CameraComponent.h"
 #include "WhatWasOurs.h"
 #include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
-int32 UWWOGrenadeComponent::NetThrows = 0;
-int32 UWWOGrenadeComponent::NetThrowsRejected = 0;
 
 UWWOGrenadeComponent::UWWOGrenadeComponent()
 {
@@ -111,11 +110,11 @@ EWWOKitRefusal UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVecto
 	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = EWWOKitRefusal::ThrownElsewhere;
 	if (Why != EWWOKitRefusal::None)
 	{
-		++NetThrowsRejected;
+		FWWOTestTally::Count(&FWWOTestTally::ThrowsRejected);
 		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *WWOKit::RefusalText(EWWOKit::Grenade, Why, Charge));
 		return Why;
 	}
-	++NetThrows;
+	FWWOTestTally::Count(&FWWOTestTally::Throws);
 	Charge = FMath::Max(Charge - 1.f, 0.f);
 	ThrowFrom(Hand, Dir.GetSafeNormal());
 	return EWWOKitRefusal::None;

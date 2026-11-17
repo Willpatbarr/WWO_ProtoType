@@ -13,6 +13,7 @@
 #include "Enemies/WWOEnemy.h"
 #include "Data/WWOData.h"
 #include "Camera/CameraComponent.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -526,7 +527,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 					P->Weapon->HostStaticHits = H.Name.Contains(TEXT("static")) && H.bMet ? 9 : 0; // the 10th hit arcs
 					St->TargetBefore = FWWORegress::HealthOf(T);
 					for (const TWeakObjectPtr<AActor>& E : St->Extras) St->ExtrasBefore += FWWORegress::HealthOf(E.Get());
-					const int32 Taken = AWWOCharacter::NetShotsTaken, Applied = AWWOCharacter::NetHitsApplied, Rejected = AWWOCharacter::NetHitsRejected, Credited = AWWOCharacter::NetKillsCredited;
+					const int32 Taken = FWWOTestTally::Get().ShotsTaken, Applied = FWWOTestTally::Get().HitsApplied, Rejected = FWWOTestTally::Get().HitsRejected, Credited = FWWOTestTally::Get().KillsCredited;
 					FWWOGunShot Shot;
 					Shot.WeaponId = H.Weapon;
 					Shot.Mods = { H.Mod };
@@ -539,10 +540,10 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 					Shot.Hits.Add(Hit);
 					Shot.Ends.Add(Hit.Point);
 					P->ServerGunShot_Implementation(Shot);
-					R.Record(TEXT("taken"), AWWOCharacter::NetShotsTaken - Taken);
-					R.Record(TEXT("applied"), AWWOCharacter::NetHitsApplied - Applied);
-					R.Record(TEXT("rejected"), AWWOCharacter::NetHitsRejected - Rejected);
-					R.Record(TEXT("credited"), AWWOCharacter::NetKillsCredited - Credited);
+					R.Record(TEXT("taken"), FWWOTestTally::Get().ShotsTaken - Taken);
+					R.Record(TEXT("applied"), FWWOTestTally::Get().HitsApplied - Applied);
+					R.Record(TEXT("rejected"), FWWOTestTally::Get().HitsRejected - Rejected);
+					R.Record(TEXT("credited"), FWWOTestTally::Get().KillsCredited - Credited);
 					R.Record(TEXT("static_hits"), P->Weapon->HostStaticHits);
 					return false;
 				}

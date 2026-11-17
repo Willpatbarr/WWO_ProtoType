@@ -46,6 +46,7 @@
 #include "RHI.h"
 #include "UObject/UnrealType.h"
 #include "Algo/Reverse.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -672,7 +673,7 @@ float FWWORegress::HealthOf(const AActor* A)
 
 void FWWORegress::NotePlayerShot()
 {
-	ShotsMarkedSince = UWWOWorldSubsystem::HitsMarked;
+	ShotsMarkedSince = FWWOTestTally::Get().HitsMarked;
 	TextsAtStart = UWWOWorldSubsystem::Get(World())->FloatingTexts().Num();
 }
 

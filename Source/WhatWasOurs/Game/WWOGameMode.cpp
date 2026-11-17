@@ -43,8 +43,6 @@ AWWOGameMode::AWWOGameMode()
 	PlayerStateClass = AWWOPlayerState::StaticClass(); // team and score
 }
 
-int32 AWWOGameMode::PvPKills = 0;
-int32 AWWOGameMode::PvPMatchesEnded = 0;
 
 void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {

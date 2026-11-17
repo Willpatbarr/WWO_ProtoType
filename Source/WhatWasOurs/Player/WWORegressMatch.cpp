@@ -31,6 +31,7 @@
 #include "NavigationSystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -182,8 +183,8 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			S.bTester = G->bTester;
 			S.RestartLeft = G->RestartLeft;
 			S.Roster = G->Roster;
-			S.PvPKills = AWWOGameMode::PvPKills;
-			S.PvPMatchesEnded = AWWOGameMode::PvPMatchesEnded;
+			S.PvPKills = FWWOTestTally::Get().PvPKills;
+			S.PvPMatchesEnded = FWWOTestTally::Get().PvPMatchesEnded;
 			if (const AWWOGameState* GS = G->GetGameState<AWWOGameState>())
 			{
 				S.bGSPvP = GS->bPvP;
@@ -239,8 +240,8 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			G->Rules = MoveTemp(S.SavedRules);
 			G->RestartLeft = S.RestartLeft;
 			G->Roster = S.Roster;
-			AWWOGameMode::PvPKills = S.PvPKills;
-			AWWOGameMode::PvPMatchesEnded = S.PvPMatchesEnded;
+			FWWOTestTally::Get().PvPKills = S.PvPKills;
+			FWWOTestTally::Get().PvPMatchesEnded = S.PvPMatchesEnded;
 			if (AWWOGameState* GS = G->GetGameState<AWWOGameState>())
 			{
 				GS->bPvP = S.bGSPvP;
@@ -662,14 +663,14 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 				RecordPS(R, TEXT("killer"), R.Player());
 				RecordPS(R, TEXT("victim"), Victim);
 				RecordFeed(R, TEXT("feed"), Run->Feed);
-				R.Record(TEXT("pvp_kills"), AWWOGameMode::PvPKills - Run->PvPKills);
+				R.Record(TEXT("pvp_kills"), FWWOTestTally::Get().PvPKills - Run->PvPKills);
 				R.Record(TEXT("state"), M::State(G));
 				R.Record(TEXT("respawn_left"), Victim->Health->RespawnLeft);
 				RecordGS(R, TEXT("kill."));
 				// A second death call for the same body (already dead): counted again, as before.
 				M::PvPDeath(G, Victim);
 				RecordPS(R, TEXT("again.victim"), Victim);
-				R.Record(TEXT("again.pvp_kills"), AWWOGameMode::PvPKills - Run->PvPKills);
+				R.Record(TEXT("again.pvp_kills"), FWWOTestTally::Get().PvPKills - Run->PvPKills);
 				M::Leave(R, *Run);
 				return false;
 			}
@@ -773,7 +774,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 				RecordPS(R, TEXT("player"), R.Player());
 				RecordFeed(R, TEXT("feed"), Run->Feed);
 				R.Record(TEXT("restart"), M::RestartLeft(G));
-				R.Record(TEXT("matches_ended"), AWWOGameMode::PvPMatchesEnded - Run->PvPMatchesEnded);
+				R.Record(TEXT("matches_ended"), FWWOTestTally::Get().PvPMatchesEnded - Run->PvPMatchesEnded);
 				RecordGS(R, TEXT("end."));
 				M::Done(R, *Run);
 				return true;

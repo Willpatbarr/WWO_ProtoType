@@ -225,8 +225,6 @@ public:
 	// onto it: the top shows as a level edge under the sight, not a ramp running up to it
 	// (1 = fully level, 0 = the gun points straight at the reticle as at the hip). Not from Godot.
 	UPROPERTY(EditAnywhere, Category = "Camera") float AdsLevel = 1.f;
-	FVector DebugGunOffset = FVector::ZeroVector; // autotest: moves the gun (Godot space, m) to bring the hands into view
-	FVector DebugGunRotation = FVector::ZeroVector; // and turns it (radians: pitch, yaw, roll)
 
 	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowRelease = 0.22f;
 	UPROPERTY(EditAnywhere, Category = "Throw") float ThrowFollow = 0.2f;

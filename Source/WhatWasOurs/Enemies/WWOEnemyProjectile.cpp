@@ -13,9 +13,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/WWOTestTally.h"
 
-int32 AWWOEnemyProjectile::PlayerHits = 0;
-int32 AWWOEnemyProjectile::SeenRemote = 0;
 
 AWWOEnemyProjectile::AWWOEnemyProjectile()
 {
@@ -43,7 +42,7 @@ void AWWOEnemyProjectile::BeginPlay()
 	Super::BeginPlay();
 	if (HasAuthority()) return;
 	// A joiner's copy: the replicated values are in by now (they arrive with the spawn).
-	++SeenRemote;
+	FWWOTestTally::Count(&FWWOTestTally::EnemyShotsSeen);
 	Life += 1.f; // the host's copy decides when it ends; this one only outlives it a little
 	Build();
 }
@@ -156,7 +155,7 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		if (const AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()); P && !P->Health->bDead) ++PlayerHits;
+		if (const AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()); P && !P->Health->bDead) FWWOTestTally::Count(&FWWOTestTally::EnemyHitsOnPlayer);
 		AWWOEnemy::HurtFriendly(Hit.GetActor(), Damage, Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // the mark: back along its flight
 	}
 	AWWOFXActor::Pop(GetWorld(), Hit.ImpactPoint, Color, Size * 2.5f, 0.2f);

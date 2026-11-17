@@ -260,6 +260,10 @@ if a person would type it, in the tables above.
 - The game mode's stress and screenshot runs are `FWWOStressHarness` (`Game/WWOGameModeStress.*`), made
   only when the command line has a `WWOStress` switch; the wave test is `Game/WWOGameModeWaveTest.cpp`.
   Neither goes through `WWOTest::Exit`: they print no result line and exit 0.
+- What gameplay counts for a test (the host's tally of a joiner's shots, corrections, what a machine drew
+  for the host, hits marked) is `FWWOTestTally` (`Player/WWOTestTally.h`): a new test counter is a field
+  there, bumped with one `FWWOTestTally::Count(...)` line where it happens and read with
+  `FWWOTestTally::Get()`; gameplay never reads it. The writes are empty in a shipping build.
 - Tests run on real time (`FApp::GetDeltaTime`), because menus pause the game.
 - Test state that must survive a map load has to be file-scope static, not a driver member: the
   controller, and its driver with it, is recreated with the map.

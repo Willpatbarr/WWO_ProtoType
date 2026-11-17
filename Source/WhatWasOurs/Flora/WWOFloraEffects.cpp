@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -43,12 +44,10 @@ void AWWOSporePool::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME_CONDITION(AWWOSporePool, Flavor, COND_InitialOnly);
 }
 
-int32 AWWOSporePool::SeenRemote = 0;
-
 void AWWOSporePool::BeginPlay()
 {
 	Super::BeginPlay();
-	if (!HasAuthority()) ++SeenRemote;
+	if (!HasAuthority()) FWWOTestTally::Count(&FWWOTestTally::PoolsSeen);
 	const FVector At = GetActorLocation();
 	Disc = WWOFX::AddGroundDisc(this, GetRootComponent(), Color, 0.1f, 0.55f, 0.8f);
 	Disc->SetRelativeLocation(FVector(0, 0, 4.f));

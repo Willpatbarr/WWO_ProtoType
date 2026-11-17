@@ -188,7 +188,6 @@ public:
 	// MeleeStrike on the shooter's own machine, which mark once per shot with the predicted kill).
 	static void ConfirmHit(AActor* Victim, bool bCritical, bool bKilled);
 	static bool bAttackerSawHit;
-	static int32 HitsMarked; // how many reached this machine's own reticle (tests read it)
 
 	// Bring every target back at full health; enemies reset to their spawn. Teammates too.
 	void ResetTargets();

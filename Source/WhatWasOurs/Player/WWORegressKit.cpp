@@ -21,6 +21,7 @@
 #include "World/WWOTarget.h"
 #include "Data/WWOData.h"
 #include "EngineUtils.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -251,7 +252,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				RecordSums(R, *St);
 				R.Record(TEXT("grenades_seen"), St->SeenGrenades);
 				R.Record(TEXT("player_hp"), FWWORegress::HealthOf(P));
-				R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+				R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 				return true;
 			};
 			Out.Add(S);
@@ -448,7 +449,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 					RecordSums(R, *St);
 					R.RecordBool(TEXT("active_6s"), P->Ult->bActive);
 					R.Record(TEXT("charge_6s"), P->Ult->Charge);
-					R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+					R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 					return true;
 				}
 				return false;
@@ -537,7 +538,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				{
 					RecordVictims(R, *St, true);
 					RecordSums(R, *St);
-					R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+					R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 					if (bWall)
 					{
 						R.Record(TEXT("walls"), WallLine(R));
@@ -575,7 +576,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			AWWOCharacter* P = R.Player();
 			UWWOGrenadeComponent* G = P->Grenades;
 			if (Tick != 0) return Tick >= 1;
-			const int32 Throws = UWWOGrenadeComponent::NetThrows, Rejected = UWWOGrenadeComponent::NetThrowsRejected;
+			const int32 Throws = FWWOTestTally::Get().Throws, Rejected = FWWOTestTally::Get().ThrowsRejected;
 			const FVector Dir = P->AimForward();
 			const FVector Hand = P->EyeLocation() + Dir * 50.f;
 			R.Record(TEXT("charge_start"), G->Charge);
@@ -589,8 +590,8 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			R.RecordBool(TEXT("throw_dead"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None);
 			P->Health->bDead = false;
 			R.Record(TEXT("charge_end"), G->Charge);
-			R.Record(TEXT("net_throws"), UWWOGrenadeComponent::NetThrows - Throws);
-			R.Record(TEXT("net_rejected"), UWWOGrenadeComponent::NetThrowsRejected - Rejected);
+			R.Record(TEXT("net_throws"), FWWOTestTally::Get().Throws - Throws);
+			R.Record(TEXT("net_rejected"), FWWOTestTally::Get().ThrowsRejected - Rejected);
 			G->Charge = 0.25f;
 			P->ClientKitRefused_Implementation((uint8)EWWOKit::Grenade, 0); // the charge comes back
 			R.Record(TEXT("charge_refused"), G->Charge);

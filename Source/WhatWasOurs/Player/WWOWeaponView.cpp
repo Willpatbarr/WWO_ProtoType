@@ -14,6 +14,7 @@
 #include "Components/PoseableMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Player/WWOTestTally.h"
 
 using namespace WWOWeapon; // the helpers these files share (WWOWeaponPrivate.h)
 
@@ -221,8 +222,7 @@ void UWWOWeaponComponent::UpdatePose(float DeltaSeconds)
 	Pos += MeleeGunDropOffset * DropHeld;
 	Rot += MeleeGunDropRotation * DropHeld;
 
-	Pos += DebugGunOffset;
-	Rot += DebugGunRotation;
+	FWWOTestTally::AddGunLift(this, Pos, Rot); // the body autotest's pictures of the hands
 	SetRelativeLocationAndRotation(G2U(Pos), GRot(Rot));
 	ModelRoot->SetRelativeScale3D(FVector(FMath::Lerp(1.f, FMath::Max(AdsGunScale, 0.05f), AdsAmount))); // the model's origin is its sight point
 

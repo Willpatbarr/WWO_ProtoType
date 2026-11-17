@@ -23,6 +23,7 @@
 #include "World/WWOTarget.h"
 #include "Data/WWOData.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -209,7 +210,7 @@ void FWWORegress::AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			}
 			if (Tick < 5) return false;
 			RecordEdge(R, St, St.Point);
-			R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+			R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 			return true;
 		});
 	}

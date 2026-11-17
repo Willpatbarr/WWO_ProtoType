@@ -24,6 +24,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
 AWWOGrenade::AWWOGrenade()
 {
@@ -59,13 +60,11 @@ void AWWOGrenade::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AWWOGrenade, bStuck);
 }
 
-int32 AWWOGrenade::SeenRemote = 0;
-
 void AWWOGrenade::BeginPlay()
 {
 	Super::BeginPlay();
 	if (HasAuthority()) return; // the host's is set up by Throw
-	++SeenRemote;
+	FWWOTestTally::Count(&FWWOTestTally::GrenadesSeen);
 	// Someone else's machine runs it: just the looks, moved by the host.
 	Movement->StopMovementImmediately();
 	Movement->Deactivate();

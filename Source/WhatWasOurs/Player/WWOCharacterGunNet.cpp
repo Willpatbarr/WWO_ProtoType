@@ -25,15 +25,8 @@
 #include "WhatWasOurs.h"
 #include "Engine/World.h"
 #include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
-int32 AWWOCharacter::NetShotsTaken = 0;
-int32 AWWOCharacter::NetHitsApplied = 0;
-int32 AWWOCharacter::NetHitsRejected = 0;
-int32 AWWOCharacter::NetShotsSeen = 0;
-int32 AWWOCharacter::NetMeleeSwings = 0;
-int32 AWWOCharacter::NetMeleeApplied = 0;
-int32 AWWOCharacter::NetMeleeRejected = 0;
-int32 AWWOCharacter::NetKillsCredited = 0;
 
 namespace
 {
@@ -107,14 +100,14 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	FString Why = Gun ? TEXT("dead") : FString::Printf(TEXT("unknown gun %s"), *Shot.WeaponId.ToString());
 	if (!Gun || Health->bDead || !GunLimits(L, Gun, Shot.Mods, Limits, Why))
 	{
-		NetHitsRejected += Shot.Hits.Num();
+		FWWOTestTally::Count(&FWWOTestTally::HitsRejected, Shot.Hits.Num());
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %s"), *GetName(), *Why);
 		return;
 	}
 
 	if (!Gun->bUnlocked)
 	{
-		NetHitsRejected += Shot.Hits.Num();
+		FWWOTestTally::Count(&FWWOTestTally::HitsRejected, Shot.Hits.Num());
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %s is locked"), *GetName(), *Gun->Id.ToString());
 		return;
 	}
@@ -123,7 +116,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	for (const FWWOGunHit& Hit : Shot.Hits) Struck.Add(Hit.Target);
 	if (Shot.Hits.Num() > Limits.Pellets || Struck.Num() != Shot.Hits.Num() || Shot.Ends.Num() > Limits.Pellets)
 	{
-		NetHitsRejected += Shot.Hits.Num();
+		FWWOTestTally::Count(&FWWOTestTally::HitsRejected, Shot.Hits.Num());
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %d hits and %d impacts from one shot of %d pellet(s)"), *GetName(), Shot.Hits.Num(), Shot.Ends.Num(), Limits.Pellets);
 		return;
 	}
@@ -134,14 +127,14 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	Budget.Time = Now;
 	if (Budget.Shots < 1.f)
 	{
-		NetHitsRejected += Shot.Hits.Num();
+		FWWOTestTally::Count(&FWWOTestTally::HitsRejected, Shot.Hits.Num());
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: faster than %s fires"), *GetName(), *Gun->Id.ToString());
 		return;
 	}
 	Budget.Shots -= 1.f;
 	Limits.SinceShot = float(Now - Budget.LastShot);
 	Budget.LastShot = Now;
-	++NetShotsTaken;
+	FWWOTestTally::Count(&FWWOTestTally::ShotsTaken);
 	int32 Kills = 0;
 	FWWODamageBy By(this); // PvP kill credit
 	TGuardValue<bool> Seen(UWWOWorldSubsystem::bAttackerSawHit, true); // the joiner marked its own shot
@@ -153,11 +146,11 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		FString HitWhy;
 		if (!CheckGunHit(Shot, Hit, Limits, HitWhy))
 		{
-			++NetHitsRejected;
+			FWWOTestTally::Count(&FWWOTestTally::HitsRejected);
 			UE_LOG(LogWWO, Display, TEXT("NetShot hit rejected from %s on %s: %s"), *GetName(), *GetNameSafe(Hit.Target), *HitWhy);
 			continue;
 		}
-		++NetHitsApplied;
+		FWWOTestTally::Count(&FWWOTestTally::HitsApplied);
 		Kills += Cast<IWWOTargetable>(Hit.Target)->TakeHit(Hit.Damage, Hit.bCritical, Hit.Point) ? 1 : 0;
 		if (!FirstHit) FirstHit = Hit.Target;
 		if (Hit.bCritical && !FirstCrit) FirstCrit = Hit.Target;
@@ -173,7 +166,7 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 	for (const FWWOPerk* Perk : Limits.Perks) if (Perk->HostShot) Perk->HostShot(Arcs);
 	if (Kills > 0)
 	{
-		NetKillsCredited += Kills;
+		FWWOTestTally::Count(&FWWOTestTally::KillsCredited, Kills);
 		ClientKillCredit(Kills, false);
 	}
 	MulticastGunShot(Shot.Origin, Shot.Ends); // everyone else sees it
@@ -229,7 +222,7 @@ void AWWOCharacter::MulticastGunShot_Implementation(FVector_NetQuantize From, co
 {
 	// The shooter already showed it; everyone else draws its tracers and impacts.
 	if (IsLocallyControlled() || GetNetMode() == NM_DedicatedServer) return;
-	++NetShotsSeen;
+	FWWOTestTally::Count(&FWWOTestTally::ShotsSeen);
 	ShowShotFromBody(From, Ends, true);
 }
 
@@ -275,7 +268,7 @@ void AWWOCharacter::ServerMeleeSwing_Implementation()
 {
 	if (Health->bDead) return;
 	LastSwingTime = GetWorld()->GetTimeSeconds();
-	++NetMeleeSwings;
+	FWWOTestTally::Count(&FWWOTestTally::MeleeSwings);
 	PlaySwingOnBody(); // replicates to everyone but the joiner (it plays its own)
 }
 
@@ -284,11 +277,11 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 	FString Why;
 	if (!CheckMeleeHit(Target, Damage, Origin, Point, Why))
 	{
-		++NetMeleeRejected;
+		FWWOTestTally::Count(&FWWOTestTally::MeleeRejected);
 		UE_LOG(LogWWO, Display, TEXT("NetMelee hit rejected from %s on %s: %s"), *GetName(), *GetNameSafe(Target), *Why);
 		return;
 	}
-	++NetMeleeApplied;
+	FWWOTestTally::Count(&FWWOTestTally::MeleeApplied);
 	LastMeleeHitTime = GetWorld()->GetTimeSeconds();
 	FWWODamageBy By(this);
 	bool bKilled;
@@ -300,7 +293,7 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 	Weapon->MeleeKitEffects(Target, Point); // Melee Guard, Thornfist's discharge, Static Charge's chain
 	if (bKilled)
 	{
-		++NetKillsCredited;
+		FWWOTestTally::Count(&FWWOTestTally::KillsCredited);
 		ClientKillCredit(1, true);
 	}
 }
@@ -308,7 +301,7 @@ void AWWOCharacter::ServerMeleeHit_Implementation(AActor* Target, float Damage, 
 void AWWOCharacter::ClientHitMarker_Implementation(bool bKilled)
 {
 	Weapon->OnHitConfirmed.Broadcast(false, bKilled);
-	if (bKilled) ++NetKillsCredited;
+	if (bKilled) FWWOTestTally::Count(&FWWOTestTally::KillsCredited);
 }
 
 void AWWOCharacter::ServerThrowGrenade_Implementation(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir)
@@ -318,7 +311,7 @@ void AWWOCharacter::ServerThrowGrenade_Implementation(FVector_NetQuantize Hand, 
 
 void AWWOCharacter::ClientKillCredit_Implementation(int32 Kills, bool bMelee)
 {
-	NetKillsCredited += Kills;
+	FWWOTestTally::Count(&FWWOTestTally::KillsCredited, Kills);
 	Weapon->OnKillsConfirmed(Kills, bMelee);
 }
 

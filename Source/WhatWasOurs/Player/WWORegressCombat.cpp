@@ -19,6 +19,7 @@
 #include "Data/WWOData.h"
 #include "EngineUtils.h"
 #include "Camera/CameraComponent.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -132,7 +133,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 						R.Record(TEXT("knockback_peak"), St->PeakSpeed);
 						if (T) R.RecordVec(TEXT("target_at"), T->GetActorLocation());
 						R.Record(TEXT("confirms"), R.Confirms);
-						R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+						R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 						if (St->Others.Num() > 0) R.Record(TEXT("others_dealt"), St->OthersBefore - OthersHealth(*St));
 						R.Record(TEXT("guard_left"), K->GuardTimeLeft());
 						R.Record(TEXT("incoming_melee_mult"), K->IncomingMeleeMultiplier());
@@ -165,7 +166,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 				FWWODamageBy By(R.Player());
 				R.RecordBool(TEXT("killed_now"), Foe->TakeHit(Amount, false, BodyOf(Foe)));
 				R.Record(TEXT("texts_shown"), UWWOWorldSubsystem::Get(R.World())->FloatingTexts().Num() - R.TextsAtStart);
-				R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+				R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 			}
 			if (Tick == 2)
 			{
@@ -207,7 +208,7 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 			}
 			R.Record(TEXT("dealt"), Before - FWWORegress::HealthOf(T));
 			R.Record(TEXT("texts_shown"), UWWOWorldSubsystem::Get(R.World())->FloatingTexts().Num() - R.TextsAtStart);
-			R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+			R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 			R.Record(TEXT("confirms"), R.Confirms);
 			return true;
 		};

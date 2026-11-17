@@ -22,8 +22,6 @@ using namespace WWOCharacter; // the constants these files share (WWOCharacterPr
 
 namespace
 {
-	constexpr float HeadHitUp = 10.f;         // skull center above the head bone, as on the enemies
-	constexpr float HeadHitForward = 2.f;
 	constexpr float HeadShotThrough = 60.f;   // a shot that lands this close in front of the head still counts
 }
 
@@ -129,43 +127,6 @@ void AWWOCharacter::PinHeadHitbox()
 	const FVector Local = Ref.InverseTransformPosition(Ref.GetLocation() + FVector(0, HeadHitForward, HeadHitUp));
 	HeadHitbox->AttachToComponent(BodyMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HeadBone);
 	HeadHitbox->SetRelativeLocation(Local);
-}
-
-void AWWOCharacter::ProbeHeadShots(int32& Shots, int32& Crits, int32& OldCrits, float& HeadOffEyes) const
-{
-	if (!bHitboxesOn) return;
-	const FVector Head = GetMesh()->GetSocketLocation("head") + FVector(0, 0, HeadHitUp) + GetActorForwardVector() * HeadHitForward;
-	const FVector Eyes = Camera->GetComponentLocation();
-	HeadOffEyes = FMath::Max(HeadOffEyes, FVector::Dist(Head, Eyes));
-	const FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOHeadProbe), false);
-	for (int32 Side = 0; Side < 8; ++Side)
-	{
-		for (const float Up : { 0.f, 20.f })
-		{
-			const FVector Away = FRotator(Up, GetActorRotation().Yaw + Side * 45.f, 0.f).Vector();
-			const FVector From = Head + Away * 1500.f;
-			const FVector Right = FVector::CrossProduct(FVector::UpVector, Away).GetSafeNormal();
-			for (const FVector2D& Off : { FVector2D(0, 0), FVector2D(6, 0), FVector2D(-6, 0), FVector2D(0, 6), FVector2D(0, -6) })
-			{
-				const FVector At = Head + Right * Off.X + FVector::UpVector * Off.Y;
-				const FVector To = From + (At - From).GetSafeNormal() * 2000.f;
-				FHitResult BodyHit, HeadHit;
-				const bool bBody = BodyHitbox->LineTraceComponent(BodyHit, From, To, Params);
-				const bool bHead = HeadHitbox->LineTraceComponent(HeadHit, From, To, Params);
-				++Shots;
-				if (bBody || bHead)
-				{
-					const FHitResult& First = bHead && (!bBody || HeadHit.Distance <= BodyHit.Distance) ? HeadHit : BodyHit;
-					Crits += IsCriticalHit(First, From) ? 1 : 0;
-				}
-				// Before: a 16 cm sphere at the eyes, and only if the shot met it before the body.
-				const FVector Dir = (To - From).GetSafeNormal();
-				const float Along = FVector::DotProduct(Eyes - From, Dir);
-				const float OffSq = FVector::DistSquared(From + Dir * Along, Eyes);
-				if (OffSq <= 256.f && (!bBody || Along - FMath::Sqrt(256.f - OffSq) <= BodyHit.Distance)) ++OldCrits;
-			}
-		}
-	}
 }
 
 bool AWWOCharacter::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLinearColor Color)

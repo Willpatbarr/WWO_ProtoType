@@ -47,7 +47,6 @@ public:
 	// machine already showed it (its predicted punch), so it isn't drawn twice there.
 	static void Bolt(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Lifetime,
 		AActor* FromActor = nullptr, AActor* ToActor = nullptr);
-	static int32 BlastsSeen; // blasts this machine drew for the host (-WWOAutoTestNet)
 	static void Blast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore = nullptr);
 	static void Text(UWorld* World, const FString& Words, const FVector& At, const FLinearColor& Color); // "BLINDED", "SLOWED"
 	static void Sound(UWorld* World, FName Event, const FVector& At, float Volume = 1.f); // a Sounds.json event, heard on every machine

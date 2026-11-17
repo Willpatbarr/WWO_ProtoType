@@ -25,6 +25,7 @@
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Components/PrimitiveComponent.h"
+#include "Player/WWOTestTally.h"
 
 void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 {
@@ -113,7 +114,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (W->State == EWWOWaveState::Won)
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest done: cleared %d waves; %d stuck, %d blocked by others, %d holding range, %d not facing, %d overlaps; %d enemy shots hit the player"),
-			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, AWWOEnemyProjectile::PlayerHits);
+			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, FWWOTestTally::Get().EnemyHitsOnPlayer);
 		WWOTest::Shot(TEXT("wave_won"));
 		bWaveTest = false;
 		FTimerHandle Quit;
@@ -266,7 +267,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (WaveTestLog > 0.f) return;
 	WaveTestLog = 3.f;
 	UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d at %.0f s, %d alive, %d queued; player %s health %.0f; enemy shots hit the player %d times"), Wave, WaveTestFight,
-		W->Alive.Num(), W->Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, AWWOEnemyProjectile::PlayerHits);
+		W->Alive.Num(), W->Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, FWWOTestTally::Get().EnemyHitsOnPlayer);
 	for (AWWOAlly* A : WS->AllTeammates())
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest   %s %s at %s speed %.1f"), *A->GetName(), *A->StatusText(), *A->GetActorLocation().ToCompactString(),

@@ -16,6 +16,7 @@
 #include "WhatWasOurs.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -175,7 +176,7 @@ void FWWOTeamDeathmatch::OnDeath(AWWOCharacter* Victim)
 void FWWOTeamDeathmatch::OnKill(AWWOCharacter* Victim, AWWOPlayerState* VictimPS, AWWOPlayerState* KillerPS)
 {
 	++KillerPS->Kills;
-	++AWWOGameMode::PvPKills;
+	FWWOTestTally::Count(&FWWOTestTally::PvPKills);
 	// A precision kill (the hit that killed was a head hit) scores more.
 	const bool bPrecision = Victim->Health->bLastAttackCritical && Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 0.05;
 	const int32 Points = bPrecision ? AWWOGameState::PrecisionKillPoints : AWWOGameState::KillPoints;
@@ -198,7 +199,7 @@ void FWWOTeamDeathmatch::EndMatch(int32 WinningTeam)
 {
 	State = EWWOWaveState::MatchOver;
 	Winner = WinningTeam;
-	++AWWOGameMode::PvPMatchesEnded;
+	FWWOTestTally::Count(&FWWOTestTally::PvPMatchesEnded);
 	// The scoreboard comes up on every machine and stays until the host picks what's next
 	// (UWWOScoreboard: next match, change map, quit). A test run restarts by itself as before.
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())

@@ -8,6 +8,7 @@
 #include "Systems/WWOWorldSubsystem.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/WWOTestTally.h"
 
 void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -40,12 +41,10 @@ void AWWOGameState::Blast(UWorld* World, const FWWOGrenadeLook& Look, const FVec
 	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastBlast(Look, Center, RadiusM);
 }
 
-int32 AWWOGameState::BlastsSeen = 0;
-
 void AWWOGameState::MulticastBlast_Implementation(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM)
 {
 	if (HasAuthority()) return; // the host drew it already
-	++BlastsSeen;
+	FWWOTestTally::Count(&FWWOTestTally::BlastsSeen);
 	AWWOGrenade::SpawnBlast(GetWorld(), Look, Center, RadiusM);
 }
 

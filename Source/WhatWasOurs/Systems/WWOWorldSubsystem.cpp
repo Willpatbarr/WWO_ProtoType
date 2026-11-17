@@ -13,6 +13,7 @@
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOTestTally.h"
 
 UWWOWorldSubsystem* UWWOWorldSubsystem::Get(const UObject* WorldContext)
 {
@@ -280,7 +281,6 @@ FWWOAimPick UWWOWorldSubsystem::BestAimPart(const UObject* For, TFunctionRef<boo
 TWeakObjectPtr<AActor> UWWOWorldSubsystem::CurrentAttacker;
 
 bool UWWOWorldSubsystem::bAttackerSawHit = false;
-int32 UWWOWorldSubsystem::HitsMarked = 0;
 
 void UWWOWorldSubsystem::ConfirmHit(AActor* Victim, bool bCritical, bool bKilled)
 {
@@ -288,7 +288,7 @@ void UWWOWorldSubsystem::ConfirmHit(AActor* Victim, bool bCritical, bool bKilled
 	if (!By || By == Victim || !By->IsPlayerControlled()) return; // bots and allies have no reticle
 	if (By->IsLocallyControlled())
 	{
-		++HitsMarked;
+		FWWOTestTally::Count(&FWWOTestTally::HitsMarked);
 		if (!bAttackerSawHit) By->Weapon->OnHitConfirmed.Broadcast(bCritical, bKilled); // else the gun or fist marks it
 	}
 	else if (By->HasAuthority() && !bAttackerSawHit) By->ClientHitMarker(bKilled);

@@ -122,6 +122,7 @@ Look here before writing a new one.
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
 | A regression scenario (exact numbers, compared with a golden file) | `FWWORegressScenario` and `FWWORegress`'s helpers (`Player/WWORegress.h`); `Tools/regress.sh` |
 | In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
+| A counter gameplay bumps for a test to read ("how many shots did the host refuse"), a test probe or hook on a gameplay object | a field in `FWWOTestTally`, written with one `FWWOTestTally::Count(&FWWOTestTally::X)` line, read with `FWWOTestTally::Get().X` (`Player/WWOTestTally.h`; empty in a shipping build). Never a new static on the gameplay class |
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
 | In a menu: a label, spaced capitals, a thin line, a size box, a fill share, the accent colour, the palette | `WWOUI::Text`, `Spaced`, `Rule` / `RuleDown`, `Sized` / `Wide`, `Fill`, `Accent(this)`; `WWOUI::PageColor`, `CardColor`, `CardEdge`, `Dim`, ... (`UI/WWOUI.h`). Each takes the menu's own `WidgetTree` |
 | Immediate-mode drawing in the HUD's 1600 x 900 layout (box, outline, line, triangle, vignette, circle, dot, text, measure, material); the layout's scale | `FWWOPainter` (`UI/WWOPainter.h`), `WWOHUD::Scale` (`UI/WWOHUDLayout.h`) |

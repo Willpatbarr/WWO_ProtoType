@@ -112,7 +112,6 @@ public:
 	static constexpr float ContactFriction = 0.8f; // the Godot grenade's physics material friction
 
 	FWWOGrenadeSpec Spec;
-	static int32 SeenRemote; // grenades this machine drew for the host (-WWOAutoTestNet)
 	UPROPERTY(Replicated) FWWOGrenadeLook Look;
 
 private:

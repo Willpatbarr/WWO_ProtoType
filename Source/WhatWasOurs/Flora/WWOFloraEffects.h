@@ -33,7 +33,6 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	static int32 SeenRemote; // pools this machine drew for the host (-WWOAutoTestNet)
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Haze; // the glow over the surface
 	UPROPERTY() TObjectPtr<class UPointLightComponent> Glow;
 	static AWWOSporePool* Spawn(UWorld* World, const FVector& At, float RadiusM, float Dps, float Duration, const FLinearColor& Color, FName Flavor, AActor* Thrower);

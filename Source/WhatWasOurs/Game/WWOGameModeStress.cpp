@@ -37,6 +37,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "UnrealClient.h"
 #include "RHI.h"
+#include "Player/WWOTestTally.h"
 
 void FWWOStressHarness::LogBots(AWWOGameMode& GM)
 {
@@ -52,7 +53,7 @@ void FWWOStressHarness::LogBots(AWWOGameMode& GM)
 	}
 	UE_LOG(LogWWO, Display, TEXT("Bots team: %d following a leader, callouts acted on %d"), Following, AWWOBotController::Callouts);
 	UE_LOG(LogWWO, Display, TEXT("Bots: t=%.0f roam %d hunt %d fight %d retreat %d; sightings %d, shots %d, kills %d, paths %d (%d failed), stuck hops %d, gave up %d"),
-		BotLogClock, Count[0], Count[1], Count[2], Count[3], AWWOBotController::Sightings, AWWOBotController::ShotsFired, AWWOGameMode::PvPKills,
+		BotLogClock, Count[0], Count[1], Count[2], Count[3], AWWOBotController::Sightings, AWWOBotController::ShotsFired, FWWOTestTally::Get().PvPKills,
 		AWWOBotController::PathsFound, AWWOBotController::PathsFailed, AWWOBotController::StuckJumps, AWWOBotController::Regoals);
 	// -WWOStressShots: the host's player turns to the nearest other player in sight, a teammate and
 	// a foe in turn, and the view is saved a moment later (Saved/AutoTest/41_pvp_view_<t>.png).
@@ -90,7 +91,7 @@ void FWWOStressHarness::LogBots(AWWOGameMode& GM)
 	UE_LOG(LogWWO, Display, TEXT("Bots sounds: %s"), *UWWOSound::Summary());
 	int32 HeadShots = 0, HeadCrits = 0, HeadOldCrits = 0;
 	float HeadOffEyes = 0.f;
-	for (TActorIterator<AWWOCharacter> It(World); It; ++It) It->ProbeHeadShots(HeadShots, HeadCrits, HeadOldCrits, HeadOffEyes);
+	for (TActorIterator<AWWOCharacter> It(World); It; ++It) FWWOTestTally::ProbeHeadShots(**It, HeadShots, HeadCrits, HeadOldCrits, HeadOffEyes);
 	UE_LOG(LogWWO, Display, TEXT("Bots heads: %d test shots at the drawn heads, %d count as headshots (%d under the old hitboxes); head up to %.0f cm from the eye point"),
 		HeadShots, HeadCrits, HeadOldCrits, HeadOffEyes);
 	UE_LOG(LogWWO, Display, TEXT("Bots kit: melees %d, grenades %d, abilities %d, ults %d, retreats %d (%d found no cover), gun swaps %d; stuck hops roaming %d hunting %d fighting %d retreating %d"),
@@ -192,7 +193,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 			if (Fogged.IsValid() && StressClock >= NextLog)
 			{
 				NextLog = StressClock + 1.f;
-				UE_LOG(LogWWO, Display, TEXT("FogTest: t %.0f %s shield %.0f health %.0f dead %d, hit markers %d"), StressClock, *Fogged->GetName(), Fogged->Health->Shield, Fogged->Health->Health, Fogged->Health->bDead ? 1 : 0, UWWOWorldSubsystem::HitsMarked);
+				UE_LOG(LogWWO, Display, TEXT("FogTest: t %.0f %s shield %.0f health %.0f dead %d, hit markers %d"), StressClock, *Fogged->GetName(), Fogged->Health->Shield, Fogged->Health->Health, Fogged->Health->bDead ? 1 : 0, FWWOTestTally::Get().HitsMarked);
 			}
 		}
 		// -WWOTestCharge: the host gets Static Charge, filled (so it arms itself); pictures of the
@@ -305,7 +306,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 	}
 	UE_LOG(LogWWO, Display, TEXT("Stress host: t=%.0f %d players (%d bots), frame avg %.1f ms worst %.1f ms, out %.1f KB/s in %.1f KB/s to %d joiners, lost %d, kills %d, %s"),
 		StressClock, UWWOWorldSubsystem::Get(&GM)->GetPlayers().Num(), GM.Roster.BotsSpawned, 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
-		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, AWWOGameMode::PvPKills, *GM.GetGameState<AWWOGameState>()->StatusLine);
+		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, FWWOTestTally::Get().PvPKills, *GM.GetGameState<AWWOGameState>()->StatusLine);
 	UE_LOG(LogWWO, Display, TEXT("Stress threads: t=%.0f game %.1f ms, render %.1f ms, GPU %.1f ms (averages)"), StressClock,
 		StressGame / FMath::Max(StressFrames, 1.f), StressRender / FMath::Max(StressFrames, 1.f), StressGpu / FMath::Max(StressFrames, 1.f));
 	// What's alive right now (effects, grenades, fogs...), to line slow stretches up with.

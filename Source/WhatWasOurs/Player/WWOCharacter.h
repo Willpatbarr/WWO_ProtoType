@@ -363,9 +363,6 @@ public:
 	void UpdateHitboxes(); // on only in PvP (co-op traces pass through players as before)
 	bool bHitboxesOn = false;
 	void PinHeadHitbox(); // onto the body's head bone, so it follows the animations
-	// Test runs: shots at the drawn head from all around; how many count as headshots now, and how
-	// many did when the head hitbox sat at the eyes and only the first part hit counted.
-	void ProbeHeadShots(int32& Shots, int32& Crits, int32& OldCrits, float& HeadOffEyes) const;
 	// Status effects.
 	float SlowLeft = 0.f;
 	float SlowAmount = 0.f;
@@ -439,9 +436,6 @@ public:
 	UFUNCTION(Client, Reliable) void ClientKitRefused(uint8 What, int32 Slot);
 	FVector NetAim = FVector::ForwardVector; // host: where a joiner was looking when it last used an ability
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();
-	// host: joiners' abilities and ults it ran
-	static int32 NetAbilitiesUsed;
-	static int32 NetUltsCast;
 private:
 	bool bSentRevive = false;
 	void UpdateReviveInput();
@@ -454,21 +448,12 @@ public:
 	// its gun hand, a trail to each end, and (bMarks) a mark where each one landed.
 	void ShowShotFromBody(const FVector& From, TConstArrayView<FVector_NetQuantize> Ends, bool bMarks);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastGunShot(FVector_NetQuantize From, const TArray<FVector_NetQuantize>& Ends);
-	// The host's tally of joiners' shots, for -WWOAutoTestNet.
-	static int32 NetShotsTaken;
-	static int32 NetHitsApplied;
-	static int32 NetHitsRejected;
-	static int32 NetShotsSeen; // shots from someone else shown on this machine
 
 	// Online melee: a joiner's swing (so the host's copy of its body punches, which everyone else
 	// sees) and, if it landed, what it hit. The host checks the hit, applies it and the knockback.
 	UFUNCTION(Server, Reliable) void ServerMeleeSwing();
 	UFUNCTION(Server, Reliable) void ServerMeleeHit(AActor* Target, float Damage, FVector_NetQuantize Origin, FVector_NetQuantize Point);
 	void PlaySwingOnBody(); // the punch on the full body (others see it online)
-	// the host's tally of joiners' melee
-	static int32 NetMeleeSwings;
-	static int32 NetMeleeApplied;
-	static int32 NetMeleeRejected;
 
 	// The host's word on what a joiner's shot or punch killed (kill perks, the kill marker).
 	UFUNCTION(Client, Reliable) void ClientKillCredit(int32 Kills, bool bMelee);
@@ -476,7 +461,6 @@ public:
 	UFUNCTION(Client, Unreliable) void ClientHitMarker(bool bKilled);
 	// Online: a joiner's grenade leaves its hand (the host builds and throws it).
 	UFUNCTION(Server, Reliable) void ServerThrowGrenade(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir);
-	static int32 NetKillsCredited; // joiner: kills the host confirmed; host: kills it credited to joiners
 	double LastSwingTime = -100.0;  // host: this player's last melee swing (a hit, or a lunge, needs one)
 	double LastLaunchTime = -100.0; // host: the last launch (Spore Dash) it let this player's moves make
 	float LungeOnCredit = 0.f;      // host: seconds of lunging moves taken before their swing arrived

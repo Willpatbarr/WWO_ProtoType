@@ -36,9 +36,6 @@ public:
 	bool ThrowGrenade();
 	void UpdateCharge(float DeltaSeconds); // the recharge (the host runs a joiner's too, to check its throws)
 	EWWOKitRefusal HostThrow(const FVector& Hand, const FVector& Dir); // host: a joiner's throw (see AWWOCharacter::ServerThrowGrenade); None: thrown
-	// the host's tally of joiners' throws
-	static int32 NetThrows;
-	static int32 NetThrowsRejected;
 
 private:
 	float ReleaseLeft = -1.f; // seconds until the grenade leaves the hand
