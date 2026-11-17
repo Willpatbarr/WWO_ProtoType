@@ -875,6 +875,7 @@ void FWWORegress::BuildScenarios()
 		AddGunScenarios(List, *L);
 		AddKitScenarios(List, *L);
 		AddCombatScenarios(List, *L);
+		AddAreaScenarios(List, *L);
 	}
 	FString Only;
 	const bool bFiltered = WWOSwitches::Value(TEXT("WWORegressOnly="), Only);

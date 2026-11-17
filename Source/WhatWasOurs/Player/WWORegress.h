@@ -127,6 +127,7 @@ private:
 	static void AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);    // WWORegressGuns.cpp: weapons, perks, mod stats
 	static void AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);    // WWORegressKit.cpp: grenades, abilities, ults, flora effects
 	static void AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L); // WWORegressCombat.cpp: melee, damage pipeline, enemies
+	static void AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressArea.cpp: the edges of area effects and aim cones
 	enum class EPhase : uint8 { Boot, Setup, Settle, Run, Teardown, Gap, Done };
 	EPhase Phase = EPhase::Boot;
 	int32 PhaseTicks = 0;

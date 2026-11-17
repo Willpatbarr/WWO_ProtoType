@@ -159,4 +159,7 @@ private:
 	void BlindOrSlow(const FVector& Center, bool bBlind); // blind (Blind), else slow (Tripmine)
 	void LeavePool(const FVector& Center);
 
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
+
 };

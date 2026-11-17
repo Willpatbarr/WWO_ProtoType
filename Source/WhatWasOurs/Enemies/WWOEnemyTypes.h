@@ -139,4 +139,7 @@ private:
 	void ShieldBreak();
 	void Slam();
 	void Lob();
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
+
 };
