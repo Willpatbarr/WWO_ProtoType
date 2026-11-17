@@ -40,7 +40,7 @@ to `WhatWasOurs.uproject`.
 | `Game/` | Game mode (waves, PvP, bots), game state (replicated match state, effect relay), player state |
 | `Systems/` | Loadout subsystem (catalog, equipped kit, stat maths), world subsystem (targets, teams, damage credit), sound |
 | `Weapons/`, `Flora/`, `FX/` | Grenades and perk numbers; flora effect actors; hand-built effects (no Niagara) |
-| `Enemies/`, `Allies/` | PvE AI (Soldier, Swarm, Tank), AI teammates |
+| `Enemies/`, `Allies/` | PvE AI (Soldier, Swarm, Tank) and the enemy registry (`WWOEnemyKinds`), AI teammates |
 | `Characters/` | Body component, native anim instances, procedural flora grafts |
 | `UI/` | HUD (immediate-mode paint), settings, character, launch, scoreboard, firing tester |
 | `Net/` | Sessions, travel, the map table |
@@ -83,7 +83,7 @@ build scripts: `Tools/`.
 ## Working agreements
 
 - Look for an existing helper before writing one: `WWOTypes.h` (`WWO::` maths and colour),
-  `UWWOWorldSubsystem` (targets, teams, `CanHurt`, `PlayerOf`), `UWWOLoadoutSubsystem` (`FindById`, `M()`),
+  `UWWOWorldSubsystem` (targets, teams, `CanHurt`, `PlayerOf`), `UWWOLoadoutSubsystem` (its `Catalog`, `FWWOLoadoutCatalog::FindById`, `M()`),
   `WWOFX` (shapes, lights, materials), `WWOConfig` (JSON config files), `WWOSwitches` (command-line
   switches), `WWOUI` (menu palette, text, buttons, rules: every menu builds with it, in its own tree). `docs/CONVENTIONS.md` lists them.
 - A feature that changes how a system works updates that system's section in `docs/`, in place. Dated

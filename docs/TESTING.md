@@ -93,7 +93,16 @@ Tools/regress.sh render             # the small window, every scenario
   some earlier scenarios; not pinned down further); and status timers (`slow_left`, `blind_left`) to
   0.1 s, because which of two actors ticks first in a frame is the engine's choice (the order of its tick
   set) and can change with what ran before, which moves a status by one tick. Within one order every
-  value is bit-identical run to run.
+  value is bit-identical run to run. One known exception to "any order": `move.bot.wall` and
+  `move.bot.roam` differ by a few millimetres in a reversed run, because there the `wave.*` scenarios
+  (which spawn Soldiers through the game mode) run before them; in the normal order they pass. Every
+  other scenario, `wave.*` and `loadout.*` included, gives the same numbers reversed.
+- **The loadout scenarios** mute the loadout's `OnChanged` listeners while they equip (the body's grafts
+  and the gun would rebuild), work on an empty set of saved configs (the owner's are put back in the same
+  tick), hash a save from the class name on (the header before it lists the engine's custom versions loaded
+  in the process), and read `Tools/regress/fixtures/Loadout.sav`, a copy of a real saved loadout, so the
+  saved format is checked against a real file. A change to the save or net format shows as a different
+  `save.md5` / `net.md5`.
 
 ### Modes
 
@@ -122,7 +131,7 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 `EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
 `Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
 numbers; return true when done). Add it to the list in one of the family files
-(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`), generating from the catalogs
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`, `WWORegressWaves.cpp`, `WWORegressLoadout.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
 friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
 checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the

@@ -109,7 +109,8 @@ Look here before writing a new one.
 | Living targets for an attacker | `UWWOWorldSubsystem::LivingTargets` |
 | Everyone within a radius (measure point, `<` / `<=`, who, line of sight); the nearest such; the best aim part in a cone | `ForEachTargetInRadius`, `NearestTargetInRadius` with an `FWWOAreaQuery`; `BestAimPart` (`Systems/WWOWorldSubsystem.h`) |
 | Team rules, the player behind an actor | `UWWOWorldSubsystem::CanHurt`, `TeamOf`, `IsPvP`, `PlayerOf` |
-| A data asset by id | `UWWOLoadoutSubsystem::FindById` |
+| A data asset by id | `FWWOLoadoutCatalog::FindById(L->Catalog.Weapons, Id)` (`Systems/WWOLoadoutCatalog.h`) |
+| An enemy kind's class, data or spawn rules | `WWOEnemyKinds::Find(Id)` / `Of(Enemy)` (`Enemies/WWOEnemyKinds.h`); its data asset `L->EnemyDataAs<T>(Id)` |
 | A modified stat | `Character->M("stat_name", Base)` |
 | Another character's loadout | `UWWOLoadoutSubsystem::Get(Context)` |
 | An effect's age, grow-in, fade, tail and end (the host destroys) | `FWWOEffectLife` (`Flora/WWOEffectLife.h`) |

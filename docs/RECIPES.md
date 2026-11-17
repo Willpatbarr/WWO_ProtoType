@@ -118,13 +118,39 @@ A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
 ## An enemy type
 
 1. An `AWWOEnemy` subclass in `Enemies/WWOEnemyTypes.*` overriding the hooks it needs (`Setup`, `Think`,
-   `Animate`, `AnimateRemote`, `OnHit`, `OnDeath`...), and a `UWWOEnemyData` subclass with its asset.
-2. A data pointer and cast in `UWWOLoadoutSubsystem::LoadAllData` and `NewCopy`.
-3. The name-to-class branch in `AWWOGameMode::SpawnEnemy`, and rows in `Waves()`.
-4. A `Config/CharacterModels.json` key if it has its own model; set `Body->ModelKey` before `BeginPlay`.
-5. Spawn points: `ATargetPoint`s tagged `EnemySpawn` plus the kind's name.
-6. What joiners see goes in `AnimateRemote`, from replicated state.
-7. Test: `-WWOWaveTest`.
+   `Animate`, `AnimateRemote`, `OnHit`, `OnDeath`...), and a `UWWOEnemyData` subclass with its asset
+   (`Content/WWO/Data`, primary asset type `WWOEnemy`). Its `D()` is
+   `L->EnemyDataAs<UWWOMyData>(WWOIds::Enemy::MyKind)`, its `Data()` returns `D()`.
+2. An id in `WWOIds::Enemy` (`WWOIds.h`) and one entry in `WWOEnemyKinds::All()` (`Enemies/WWOEnemyKinds.cpp`):
+   id, class, data class, and its spawn rules (`SpawnScatter`: how far a wave spawn lands from its marker,
+   0 for right on it; `WaveTestFacing`: the wave test's facing slack). That is the whole registration: the
+   loadout's catalog finds its asset by the data class (or makes a code default), the wave spawn takes the
+   class and rules from the entry, the tests look it up by id. Rows in `Waves()` (`Game/WWOGameMode.cpp`)
+   to put it in the waves.
+3. A `Config/CharacterModels.json` key if it has its own model; set `Body->ModelKey` before `BeginPlay`.
+4. Spawn points: `ATargetPoint`s tagged `EnemySpawn` plus the kind's id (a point with only `EnemySpawn` takes any kind).
+5. What joiners see goes in `AnimateRemote`, from replicated state.
+6. A Settings page for its data asset in `RegisterEnemySections` (`UI/WWOSettingsSections.cpp`) if it should be tunable.
+7. Test: the `wave.spawn.*` regression scenarios (`Player/WWORegressWaves.cpp`) take a list of kinds: add
+   it there (`update-new wave.spawn.<id>`), then `-WWOWaveTest`.
+
+## The loadout
+
+`UWWOLoadoutSubsystem` owns four parts (`Systems/`); put a change in the part it belongs to:
+
+- **Something new to pick** (a data asset type, a list the pickers show): `FWWOLoadoutCatalog`
+  (`WWOLoadoutCatalog.*`: `Load`, `GrenadesFor` and the other lists). Callers read `L->Catalog.Weapons`.
+- **Something new to wear** (a slot, an equip rule): `FWWOEquipped` (`WWOLoadoutEquipped.*`) for the state
+  and the rule, a forward on the subsystem that calls it and then `Changed()` (every change is announced
+  once, and saved later). Anything saved goes in `ToSave` / `FromSave`, anything the host needs in `ToNet`.
+- **A new stat or modifier**: `WWOLoadoutStats` (`WWOLoadoutStats.*`): a stat in `StatsInGroup` / `StatName`.
+  Keep the order of the sums and products in `Apply`: the `loadout.stats.*` scenarios compare every bit.
+- **Weapon configs and slots**: `FWWOModConfigs` (`WWOModConfigs.*`).
+- **The saved file and the wire** (`UWWOLoadoutSave`, `FWWOModConfig`, `FWWONetLoadout` in
+  `WWOLoadoutTypes.h`) are players' files and the joiner's RPC: never rename, retype or remove a property.
+  A new one is added at the end and must read sensibly as empty from an old file. `loadout.file.owner`
+  reads a real `Loadout.sav` (`Tools/regress/fixtures`) and checks it saves back to the same body.
+- `PointValue` stays on the subsystem: a Settings row binds it by name.
 
 ## Moving an AI
 
@@ -240,12 +266,14 @@ An enemy, the teammate or a bot that walks somewhere (or a new way of walking):
    abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies), or area
    (`WWORegressArea.cpp`: the edges of area effects and aim cones), or life (`WWORegressLife.cpp`: a
    lingering effect followed tick by tick, its hits, looks, switches and the tick it goes), or move
-   (`WWORegressMove.cpp`: AI walking, turning and probing).
+   (`WWORegressMove.cpp`: AI walking, turning and probing), or waves (`WWORegressWaves.cpp`: the game mode's
+   wave spawn and queue), or loadout (`WWORegressLoadout.cpp`: catalog, equipping, stat maths, configs,
+   the save and net payloads).
    A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
    called from `BuildScenarios` in `WWORegress.cpp`).
 2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it
-   needs team rules, and `MaxTicks` if it runs longer than 20 s. Generate from the catalogs (`L.Weapons`,
-   `L.WeaponMods`, `L.Grenades`, `L.Abilities`, `L.Floras`) where the scenario applies to each item.
+   needs team rules, and `MaxTicks` if it runs longer than 20 s. Generate from the catalogs (`L.Catalog.Weapons`,
+   `L.Catalog.WeaponMods`, `L.Catalog.Grenades`, `L.Catalog.Abilities`, `L.Catalog.Floras`) where the scenario applies to each item.
 3. `Setup`: spawn with `R.SpawnDummy` / `SpawnEnemy` (inert) / `SpawnAlly` (inert) / `SpawnBot(Team, At)`
    (parked, fixed kit), at `R.Ahead(Metres, SideMetres)`; equip with `R.EquipWeapon` / `EquipMod` /
    `EquipFlora` / `EquipGrenade` / `EquipAbility`; change a float tunable for this scenario with

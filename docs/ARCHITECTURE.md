@@ -151,16 +151,27 @@ walks the table in its order (the HUD line's).
 
 ## Loadout and data
 
-- **`UWWOLoadoutSubsystem`** (GameInstance subsystem) owns the catalogs, what is equipped, the stat
-  maths, weapon-mod configs and the save (slot `Loadout`, written when the menu closes).
-- **Stats**: `M(Stat, Base)` on the character, `Apply(Stat, Base)` in the subsystem:
+- **`UWWOLoadoutSubsystem`** (GameInstance subsystem, `Systems/WWOLoadoutSubsystem.*`) is a thin owner of
+  four parts and does the saving (slot `Loadout`, written when the menu closes, a map changes or the game
+  exits: `FlushSave`), the sending (`ToNet` / `ApplyNet`), joiners' copies (`NewCopy`) and the change
+  notice (`OnChanged`, once per change). Its equip, stat and config functions are one-line forwards:
+  - `FWWOLoadoutCatalog Catalog` (`WWOLoadoutCatalog.*`): every option, loaded once (`Load`: the data
+    assets and `Config/WeaponMods.json`), the picker lists, `FindById`, the enemies' data by kind
+    (`EnemyData`) and the allies'.
+  - `FWWOEquipped Equipped` (`WWOLoadoutEquipped.*`): flora, weapon, grenade, abilities, traits, frame
+    parts and each frame's mods; the equip rules; to and from the save and the wire.
+  - `WWOLoadoutStats` (`WWOLoadoutStats.*`): the stat maths and its tables, pure functions of an `FWWOEquipped`.
+  - `FWWOModConfigs ModConfigs` (`WWOModConfigs.*`): saved weapon configs and the two weapon slots.
+  - The saved and sent shapes, `UWWOLoadoutSave`, `FWWOModConfig`, `FWWONetLoadout`, are in
+    `WWOLoadoutTypes.h` (file and wire format).
+- **Stats**: `M(Stat, Base)` on the character, `Apply(Stat, Base)` in the subsystem (`WWOLoadoutStats::Apply`):
   `(base + flat) x (1 + percent) x multiplier`, from frame parts, traits and weapon mods.
 - **Other players' kit**: `UWWOLoadoutSubsystem::Get(Context)` returns your own loadout for you, and a
   per-character copy (`NetLoadout`, built from the ids in `FWWONetLoadout`) for anyone else. That is why
   spawned kit must carry its Owner.
 - **Data assets** (`Data/WWOData.h`): `UPrimaryDataAsset` subclasses for weapons, grenades, abilities,
   frame parts, floras, traits, enemies and allies, loaded by type through the Asset Manager, sorted by
-  `Order`, found by `FName Id` (`FindById`). Weapon mods are not assets: they come from
+  `Order`, found by `FName Id` (`FWWOLoadoutCatalog::FindById`). Weapon mods are not assets: they come from
   `Config/WeaponMods.json`.
 
 ## Game rules
@@ -196,6 +207,12 @@ in `NETWORKING_HANDOFF.md`.
 / `AnimateRemote` / `Absorb` / `OnHit` / `OnDeath` / `OnReset` / `AfterMove`. `WWOEnemyTypes` has the
 Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield, slam, lob).
 `AWWOAlly` is the AI teammate.
+
+**The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
+class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
+`FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). The waves (`Waves()`) and spawn point tags name
+kinds by id; `AWWOGameMode::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
+catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
 
 **Moving** (`Systems/WWONav.*`), shared by the enemies, the ally and the bots: `WWONav::FindPath` (a
 navmesh path, start and end snapped onto it), `FWWOPathFollower` (the path being walked: `Update` ages it,
