@@ -133,6 +133,7 @@ private:
 	static void AddLifeScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressLife.cpp: lingering effects' lives, tick by tick
 	static void AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressMove.cpp: AI walking, turning and probing
 	static void AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressWaves.cpp: wave spawns and queues
+	static void AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L); // WWORegressLoadout.cpp: catalog, equipping, stat maths, configs, saved and sent payloads
 	enum class EPhase : uint8 { Boot, Setup, Settle, Run, Teardown, Gap, Done };
 	EPhase Phase = EPhase::Boot;
 	int32 PhaseTicks = 0;

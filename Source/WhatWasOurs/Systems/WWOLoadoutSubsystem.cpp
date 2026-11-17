@@ -345,6 +345,11 @@ void UWWOLoadoutSubsystem::Save() const
 		UE_LOG(LogWWO, Warning, TEXT("Loadout not saved: the mods or weapons didn't load, and saving would drop what's equipped"));
 		return;
 	}
+	UGameplayStatics::SaveGameToSlot(MakeSave(), SaveSlot, 0);
+}
+
+UWWOLoadoutSave* UWWOLoadoutSubsystem::MakeSave() const
+{
 	UWWOLoadoutSave* Data = Cast<UWWOLoadoutSave>(UGameplayStatics::CreateSaveGameObject(UWWOLoadoutSave::StaticClass()));
 	Data->Flora = Flora ? Flora->Id : NAME_None;
 	Data->Weapon = Weapon ? Weapon->Id : NAME_None;
@@ -361,7 +366,7 @@ void UWWOLoadoutSubsystem::Save() const
 	}
 	Data->ModConfigs = Configs;
 	Data->WeaponSlots = SlotConfigs;
-	UGameplayStatics::SaveGameToSlot(Data, SaveSlot, 0);
+	return Data;
 }
 
 bool UWWOLoadoutSubsystem::LoadSave()

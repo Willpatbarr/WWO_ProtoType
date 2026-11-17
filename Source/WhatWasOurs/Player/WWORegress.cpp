@@ -79,6 +79,7 @@ struct FWWORegress::FLoadoutSnapshot
 	TArray<TObjectPtr<UWWOTraitData>> Traits;
 	TMap<FName, TObjectPtr<UWWOFramePartData>> Frame;
 	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> Mods;
+	TArray<FWWOModConfig> Configs;
 	int32 ActiveConfig = INDEX_NONE;
 	TArray<int32> SlotConfigs;
 	int32 ActiveSlot = 0;
@@ -419,6 +420,7 @@ void FWWORegress::SnapshotLoadout()
 	S.Traits = L->EquippedTraitList;
 	S.Frame = L->EquippedFrame;
 	S.Mods = L->EquippedMods;
+	S.Configs = L->Configs;
 	S.ActiveConfig = L->ActiveConfig;
 	S.SlotConfigs = L->SlotConfigs;
 	S.ActiveSlot = L->ActiveSlot;
@@ -437,6 +439,7 @@ void FWWORegress::RestoreLoadout()
 	L->EquippedTraitList = S.Traits;
 	L->EquippedFrame = S.Frame;
 	L->EquippedMods = S.Mods;
+	L->Configs = S.Configs;
 	L->ActiveConfig = S.ActiveConfig;
 	L->SlotConfigs = S.SlotConfigs;
 	L->ActiveSlot = S.ActiveSlot;
@@ -903,6 +906,7 @@ void FWWORegress::BuildScenarios()
 		AddLifeScenarios(List, *L);
 		AddMoveScenarios(List, *L);
 		AddWaveScenarios(List, *L);
+		AddLoadoutScenarios(List, *L);
 	}
 	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
 	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).

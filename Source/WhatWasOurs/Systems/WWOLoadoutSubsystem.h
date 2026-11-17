@@ -198,6 +198,7 @@ private:
 	void FitFlora();
 	void FillFloraSlots();
 	void Save() const;
+	UWWOLoadoutSave* MakeSave() const; // what Save writes (the regression scenarios hash it)
 	bool LoadSave();
 	void LoadDefaultLoadout();
 	void ApplySave(const UWWOLoadoutSave* Data);
