@@ -135,16 +135,20 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	if (TickLeft > 0.f) return;
 	TickLeft += 0.5f; // not reset: a late frame doesn't cost damage
 	FWWODamageBy By(this);
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// Targets (and in PvP the thrower's foes) standing in it: feet within the radius on the ground, and
+	// less than 1.5 m above or below it.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = Radius * WWO::M;
+	Q.bFlat = true;
+	Q.MaxHeight = 150.f;
+	Q.Measure = EWWOAreaMeasure::Feet;
+	Q.For = this;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this](const FWWOAreaHit& Hit)
 	{
-		IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		const FVector Feet = Target->FeetLocation();
-		const FVector2D Flat(Feet.X - GetActorLocation().X, Feet.Y - GetActorLocation().Y);
-		if (Flat.Size() <= Radius * WWO::M && FMath::Abs(Feet.Z - GetActorLocation().Z) < 150.f)
-		{
-			Target->TakeHit(Dps * 0.5f, false, Feet + FVector(0, 0, 30.f), Color);
-		}
-	}
+		Hit.Target->TakeHit(Dps * 0.5f, false, Hit.Point + FVector(0, 0, 30.f), Color);
+		return true;
+	});
 }
 
 // --- Spore patch ------------------------------------------------------------------------------
@@ -526,25 +530,24 @@ AWWOChainLightning* AWWOChainLightning::SpawnFrom(UWorld* World, AActor* First, 
 
 AActor* AWWOChainLightning::NextTarget() const
 {
-	// The nearest living target in range with a clear line from the last one.
+	// The nearest living target (and in PvP the player's foes) not hit yet, its body centre closer than the
+	// range, with a clear line from the last one.
 	const FVector Origin = Current.IsValid() ? AWWOLightningBolt::CenterOf(Current.Get()) : GetActorLocation();
-	AActor* Best = nullptr;
-	float BestDistance = Range * WWO::M;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(Player.Get()))
-	{
-		if (Hit.Contains(Actor)) continue;
-		const FVector Point = AWWOLightningBolt::CenterOf(Actor);
-		const float Distance = FVector::Dist(Origin, Point);
-		if (Distance >= BestDistance) continue;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOChain), false);
-		if (Current.IsValid()) Params.AddIgnoredActor(Current.Get());
-		if (Player.IsValid()) Params.AddIgnoredActor(Player.Get());
-		FHitResult Block;
-		if (GetWorld()->LineTraceSingleByChannel(Block, Origin, Point, ECC_Visibility, Params) && Block.GetActor() != Actor) continue;
-		Best = Actor;
-		BestDistance = Distance;
-	}
-	return Best;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOChain), false);
+	if (Current.IsValid()) Params.AddIgnoredActor(Current.Get());
+	if (Player.IsValid()) Params.AddIgnoredActor(Player.Get());
+	FWWOAreaQuery Q;
+	Q.Center = Origin;
+	Q.Radius = Range * WWO::M;
+	Q.bInclusive = false;
+	Q.bFloatDistance = true;
+	Q.Measure = EWWOAreaMeasure::BodyCenter;
+	Q.For = Player.Get();
+	Q.SightParams = &Params;
+	Q.SightFrom = Origin;
+	FWWOAreaHit Next;
+	const bool bFound = UWWOWorldSubsystem::Get(this)->NearestTargetInRadius(Q, [this](const AActor* Actor) { return !Hit.Contains(Actor); }, Next);
+	return bFound ? Next.Actor : nullptr;
 }
 
 void AWWOChainLightning::Burst(AActor* Target, int32 Arcs, float Reach, float Time)

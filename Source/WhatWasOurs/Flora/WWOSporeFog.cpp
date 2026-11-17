@@ -167,17 +167,18 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	const float Hit = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(Player, "poison_damage")) * FogTick; // Stronger Poison
 	const FLinearColor Tint = WWO::Lightened(Color(), 0.3f);
 	FWWODamageBy By(Player); // theirs: the kill credit, and the numbers on their screen only
-	for (AWWOEnemy* Enemy : WS->LivingEnemies())
+	// Enemies of the rank and file (not dummies, not the Tank) and, in PvP, the other team's players and
+	// bots (it used to hurt the waves' enemies only): their chest within the radius.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = Radius * WWO::M;
+	Q.Targets = EWWOAreaTargets::Enemies;
+	Q.Measure = EWWOAreaMeasure::Chest;
+	Q.For = Player;
+	WS->ForEachTargetInRadius(Q, [Hit, Tint](const FWWOAreaHit& In)
 	{
-		if (!Enemy->IsRankAndFile()) continue;
-		const FVector Chest = Enemy->FeetLocation() + FVector(0, 0, 80.f);
-		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Enemy->TakeHit(Hit, false, Chest, Tint);
-	}
-	// PvP: the other team's players and bots in it too (it used to hurt the waves' enemies only).
-	for (AWWOCharacter* Other : WS->GetPlayers())
-	{
-		if (!Other || Other->Health->bDead || !UWWOWorldSubsystem::CanHurt(Player, Other)) continue;
-		const FVector Chest = Other->FeetLocation() + FVector(0, 0, 80.f);
-		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Other->TakeHit(Hit, false, Chest, Tint);
-	}
+		const AWWOEnemy* Enemy = Cast<AWWOEnemy>(In.Actor);
+		if (!Enemy || Enemy->IsRankAndFile()) In.Target->TakeHit(Hit, false, In.Point, Tint);
+		return true;
+	});
 }
