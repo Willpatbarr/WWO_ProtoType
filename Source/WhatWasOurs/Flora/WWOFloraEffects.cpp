@@ -294,6 +294,7 @@ void UWWODamageOverTime::OnComponentDestroyed(bool bDestroyingHierarchy)
 // --- Bark wall --------------------------------------------------------------------------------
 
 AWWOBarkWall::AWWOBarkWall()
+	: Life(0.25f, 0.4f, true) // rises over 0.25 s, stands its duration, sinks over 0.4 s on its own clock
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Box = CreateDefaultSubobject<UBoxComponent>(TEXT("Collision"));
@@ -383,7 +384,7 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 {
 	WWO_PROF("BarkWall");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
 	// The slab is centered on the collision box: grow it up from the ground.
 	auto SetRise = [this](float R)
 	{
@@ -391,26 +392,26 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 		Visual->SetRelativeScale3D(FVector(1.f, 1.f, R));
 		Visual->SetRelativeLocation(FVector(0, 0, -(1.f - R) * Height * 0.5f * WWO::M));
 	};
-	if (!bSinking)
+	if (Step == EWWOLifeStep::Holding || Step == EWWOLifeStep::Leaving)
 	{
-		SetRise(WWO::BackOut(Age / 0.25f));
-		if (Age >= Duration)
+		SetRise(Life.GrowIn());
+		if (Step == EWWOLifeStep::Leaving)
 		{
-			bSinking = true;
-			Age = 0.f;
+			// No longer solid or cover from the tick it starts to sink.
 			Tags.Remove("Cover");
 			Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Dust(0.6f);
 		}
 		return;
 	}
-	SetRise(1.f - Age / 0.4f);
-	if (Age >= 0.4f && HasAuthority()) Destroy();
+	SetRise(Life.TailLeft(Duration));
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this); // a joiner's copy stays, sunk, until the host's goes
 }
 
 // --- Entrench roots ---------------------------------------------------------------------------
 
 AWWOEntrenchRoots::AWWOEntrenchRoots()
+	: Life(0.2f, 0.3f, true) // rise over 0.2 s, stand their duration, sink over 0.3 s on their own clock
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -462,22 +463,17 @@ void AWWOEntrenchRoots::Tick(float DeltaSeconds)
 {
 	WWO_PROF("EntrenchRoots");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
 	RingAge += DeltaSeconds;
 	if (RingMat) RingMat->SetScalarParameterValue("Alpha", 0.7f - 0.2f * FMath::Cos(RingAge * UE_PI / 0.8f)); // a slow pulse: 0.5 -> 0.9 -> 0.5 every 1.6 s
-	if (!bEnding)
+	if (Step == EWWOLifeStep::Holding || Step == EWWOLifeStep::Leaving)
 	{
-		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(WWO::BackOut(Age / 0.2f), 0.01f)));
-		if (Age >= Duration)
-		{
-			bEnding = true;
-			Age = 0.f;
-			BurstDirt();
-		}
+		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(Life.GrowIn(), 0.01f)));
+		if (Step == EWWOLifeStep::Leaving) BurstDirt();
 		return;
 	}
-	SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(1.f - Age / 0.3f, 0.01f)));
-	if (Age >= 0.3f) Destroy();
+	SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(Life.TailLeft(Duration), 0.01f)));
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this, true); // looks only, on each machine: not replicated
 }
 
 // --- Chain lightning ------------------------------------------------------------------------

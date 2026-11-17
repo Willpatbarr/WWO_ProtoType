@@ -113,8 +113,7 @@ public:
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Box;
 	UPROPERTY() TObjectPtr<USceneComponent> Visual;
-	float Age = 0.f;
-	bool bSinking = false;
+	FWWOEffectLife Life; // its numbers are in the constructor
 	void Build();
 	void Dust(float Amount);
 	friend class FWWORegress; // the life scenarios read its looks
@@ -132,8 +131,8 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> RingMat;
-	float Duration = 10.f, Age = 0.f, RingAge = 0.f;
-	bool bEnding = false;
+	FWWOEffectLife Life; // its numbers are in the constructor
+	float Duration = 10.f, RingAge = 0.f;
 	void BurstDirt();
 	friend class FWWORegress; // the life scenarios read its looks
 };
