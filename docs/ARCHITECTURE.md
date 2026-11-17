@@ -176,9 +176,30 @@ walks the table in its order (the HUD line's).
 
 ## Game rules
 
-- **`AWWOGameMode`** (`Game/WWOGameMode.cpp`) runs PvE waves (the `Waves()` table), PvP team deathmatch
-  (chosen by `?pvp` on the map URL), the bot population (`UpdateBots`) and the firing tester (`?tester`).
-  It also carries the stress and screenshot test hooks (`LogStress`).
+- **`AWWOGameMode`** (`Game/WWOGameMode.*`) is a shell: logins (gamer tag, the full-game check), spawning
+  (the ring of spots around the one Player Start), map changes (`LoadMap`, `Restart`), the status line every
+  tick, the restart timer, and the tunables of every mode (Settings binds its sliders to these properties
+  by name). It owns **one rules object** (`TUniquePtr<FWWOMatchRules> Rules`), chosen in `InitGame` from the
+  map URL, and the **bot roster**. The rules run on the host only and write the replicated match state on
+  the game state and player states; nothing about replication is theirs.
+  - `FWWOMatchRules` (`Game/WWOMatchRules.h`): the interface (`Begin`; `Update`, each tick where the mode's
+    bookkeeping always ran; `Advance`, last in the tick; `OnPlayerJoined`, `OnPlayerLeaving` / `OnPlayerLeft`;
+    `IsOver`; `StatusText`), the match's phase `State` (`EWWOWaveState`, read as `MatchState()`), and typed
+    views (`AsWaves`, `AsDeathmatch`, `AsTester`; the game mode's `Waves()`, `Deathmatch()`, `Tester()`).
+  - `FWWOWaveRules` (`Game/WWOWaveRules.*`): PvE waves, the default (the `Waves()` table, the countdown,
+    spawning one by one, a cleared wave, won, everyone down lost, `SkipWave` / `JumpToWave`).
+  - `FWWOTeamDeathmatch` (`Game/WWOTeamDeathmatch.*`, `?pvp`): teams (`BalanceTeam`, `SwitchTeam`), the
+    death and the kill (`OnDeath` then `OnKill`: credit, score, the kill feed, the kill limit), the time
+    limit, and `SpawnSpot` (the game mode's `PvPSpawnFor`, which the health component asks whenever the game
+    state says PvP).
+  - `FWWOTesterRules` (`Game/WWOTesterRules.*`, `?tester` / `-WWOTester`): clears the level, puts one dummy
+    ahead of where the player started (its `Home` and `Target` are what `UWWOFiringTester` reads).
+  - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
+    wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
+    following the Bots settings.
+  The rules and roster are plain C++ objects holding actors by weak pointer; a rules object removes its own
+  death bindings when it is destroyed. The stress and screenshot harness (`FWWOStressHarness`,
+  `Game/WWOGameModeStress.*`) and the wave test (`Game/WWOGameModeWaveTest.cpp`) are test code beside them.
 - **`AWWOGameState`** replicates the status line, `bPvP`, `TeamScores`, `bMatchOver`, `MatchWinner`, and
   keeps the kill feed. **`AWWOPlayerState`** replicates `Team`, `Kills`, `PrecisionKills`, `Deaths`.
 - **`UWWONetSubsystem`** (`Net/`): hosting, joining, the LAN game list, travel, the gamer tag, and
@@ -211,7 +232,7 @@ Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield,
 **The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
 class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
 `FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). The waves (`Waves()`) and spawn point tags name
-kinds by id; `AWWOGameMode::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
+kinds by id; `FWWOWaveRules::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
 catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
 
 **Moving** (`Systems/WWONav.*`), shared by the enemies, the ally and the bots: `WWONav::FindPath` (a

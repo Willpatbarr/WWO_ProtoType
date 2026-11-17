@@ -238,7 +238,7 @@ phase 3 simulates the lunge on the host.
 ## Phase 4: PvP (in progress)
 Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (no downed state, no reviving),
 **no friendly fire**, and a **kill target and a time limit**, either of which can be off (whichever comes first).
-- **Done** (`Game/WWOPlayerState`, `AWWOGameMode` PvP parts, `AWWOGameState::bPvP / TeamScores`):
+- **Done** (`Game/WWOPlayerState`, `FWWOTeamDeathmatch` (the game mode's PvP rules), `AWWOGameState::bPvP / TeamScores`):
   hosting with `?pvp` (Settings, Multiplayer: "Host a PvP game"; command line `-WWOHostPvP`; restarts and map
   changes keep it; the LAN session takes 12). No waves or enemies. Players join the smaller team (`PostLogin`,
   `BalanceTeam`); "Switch team (PvP)" in the menu (`ServerSwitchTeam`). Score line: "BLUE 3 – 1 ORANGE · first to
@@ -251,8 +251,8 @@ Agreed with Will: **team deathmatch** (up to 6 v 6), **respawn after a delay** (
   lightning); `LivingTargets(For)` adds the other team's players for aim assist, melee, grenades, pools, mines,
   spikes and the HUD's health bars. Kill credit: `FWWODamageBy` marks who is dealing damage while a hit is applied
   (gunfire, melee, grenades, pools, chain lightning); a player's `TakeHit` stores it (`LastAttacker`) and the game
-  mode scores the death (`OnPvPDeath`). PvP respawns go to the spawn spot (enemy spawn points and player starts)
-  farthest from the other team (`PvPSpawnFor`).
+  mode's rules score the death (`FWWOTeamDeathmatch::OnDeath` / `OnKill`). PvP respawns go to the spawn spot (enemy
+  spawn points and player starts) farthest from the other team (`PvPSpawnFor`, `FWWOTeamDeathmatch::SpawnSpot`).
   Tested (`-WWOAutoTestPvP`, host also `-WWOKillTarget=3`): different teams; the joiner shoots the host dead (kill
   to ORANGE, host respawns); on the same team its shots don't hurt (270 -> 270); the host's kills end the match at 3
   ("BLUE WINS 3 – 1" on both), the restart stays PvP. Co-op network test and single-player test still pass.

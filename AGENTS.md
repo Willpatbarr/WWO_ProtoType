@@ -37,7 +37,7 @@ to `WhatWasOurs.uproject`.
 | Folder | Holds |
 |---|---|
 | `Player/` | Character, movement, weapon/health/ability/ult/grenade/aim-assist components, player and bot controllers, the autotest driver (`WWOAutoTest*.cpp`, `WWOTestRun`) |
-| `Game/` | Game mode (waves, PvP, bots), game state (replicated match state, effect relay), player state |
+| `Game/` | Game mode (a shell owning one rules object: waves, team deathmatch or tester; and the bot roster), game state (replicated match state, effect relay), player state |
 | `Systems/` | Loadout subsystem (catalog, equipped kit, stat maths), world subsystem (targets, teams, damage credit), sound |
 | `Weapons/`, `Flora/`, `FX/` | Grenades and perk numbers; flora effect actors; hand-built effects (no Niagara) |
 | `Enemies/`, `Allies/` | PvE AI (Soldier, Swarm, Tank) and the enemy registry (`WWOEnemyKinds`), AI teammates |

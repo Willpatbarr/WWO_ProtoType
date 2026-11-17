@@ -110,6 +110,7 @@ Look here before writing a new one.
 | Everyone within a radius (measure point, `<` / `<=`, who, line of sight); the nearest such; the best aim part in a cone | `ForEachTargetInRadius`, `NearestTargetInRadius` with an `FWWOAreaQuery`; `BestAimPart` (`Systems/WWOWorldSubsystem.h`) |
 | Team rules, the player behind an actor | `UWWOWorldSubsystem::CanHurt`, `TeamOf`, `IsPvP`, `PlayerOf` |
 | A data asset by id | `FWWOLoadoutCatalog::FindById(L->Catalog.Weapons, Id)` (`Systems/WWOLoadoutCatalog.h`) |
+| The match's rules from game code (host only): its phase, the waves, team deathmatch, the tester | `AWWOGameMode::MatchState()`, `Waves()`, `Deathmatch()`, `Tester()` (`Game/WWOGameMode.h`; the rules in `Game/WWOMatchRules.h`) |
 | An enemy kind's class, data or spawn rules | `WWOEnemyKinds::Find(Id)` / `Of(Enemy)` (`Enemies/WWOEnemyKinds.h`); its data asset `L->EnemyDataAs<T>(Id)` |
 | A modified stat | `Character->M("stat_name", Base)` |
 | Another character's loadout | `UWWOLoadoutSubsystem::Get(Context)` |

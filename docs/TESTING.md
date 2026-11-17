@@ -80,6 +80,14 @@ Tools/regress.sh render             # the small window, every scenario
 - **Teardown**: everything of this game's classes that wasn't there when the run started is destroyed
   (what the scenario spawned and what that left: grenades, pools, fog, walls, effects), tuned values put
   back, the player reset again.
+- **Match flow** (`match.*`, `WWORegressMatch.cpp`): the range runs the waves, idle. A scenario switches a
+  fresh rules object on (`M::Enter`: waves, team deathmatch or the tester, and the game mode's `Begin` under
+  it), drives events directly (a hit, a kill, `OnDeath`, `SwitchTeam`, the roster's `Update`) and lets the
+  game mode's own `Tick` run what crosses ticks (a wave round, the limits, a respawn); `M::Done` puts the
+  level's rules, the roster, the restart timer and the game state's match fields back. In team deathmatch
+  the player is never bound or rebalanced by the match (its death binding would outlive the scenario) and
+  the roster adds no bots unless asked. A lost round's restart timer is cleared in the tick it is set (it
+  would reload the level). The roster scenarios are `NoRenderOnly` (a bot's kit draws on `FMath`).
 - Enemies and allies are inert (their data asset's `AiEnabled` is 0 for the scenario) and bots are parked
   with a fixed kit, except in the `enemy.<kind>.attacks`, `enemyhit.bite|leap.*` and `move.*` walk
   scenarios (AI on, unparked).
@@ -96,7 +104,7 @@ Tools/regress.sh render             # the small window, every scenario
   value is bit-identical run to run. One known exception to "any order": `move.bot.wall` and
   `move.bot.roam` differ by a few millimetres in a reversed run, because there the `wave.*` scenarios
   (which spawn Soldiers through the game mode) run before them; in the normal order they pass. Every
-  other scenario, `wave.*` and `loadout.*` included, gives the same numbers reversed. Narrowed down
+  other scenario, `wave.*`, `loadout.*` and `match.*` included, gives the same numbers reversed. Narrowed down
   (not fixed): `-WWORegressReverse -WWORegressOnly=wave.spawn.soldier,move.bot.wall` alone reproduces it
   (24 differences from the first 30 ticks: a few mm, 0.02 degrees); `wave.spawn.swarm` or `wave.queue.1`
   before it don't, nor does `move.soldier.open` before it in the normal order (a Soldier the harness
@@ -142,7 +150,7 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 `EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
 `Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
 numbers; return true when done). Add it to the list in one of the family files
-(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`, `WWORegressWaves.cpp`, `WWORegressLoadout.cpp`), generating from the catalogs
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`, `WWORegressWaves.cpp`, `WWORegressLoadout.cpp`, `WWORegressMatch.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
 friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
 checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the

@@ -125,7 +125,7 @@ A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
    id, class, data class, and its spawn rules (`SpawnScatter`: how far a wave spawn lands from its marker,
    0 for right on it; `WaveTestFacing`: the wave test's facing slack). That is the whole registration: the
    loadout's catalog finds its asset by the data class (or makes a code default), the wave spawn takes the
-   class and rules from the entry, the tests look it up by id. Rows in `Waves()` (`Game/WWOGameMode.cpp`)
+   class and rules from the entry, the tests look it up by id. Rows in `Waves()` (`Game/WWOWaveRules.cpp`)
    to put it in the waves.
 3. A `Config/CharacterModels.json` key if it has its own model; set `Body->ModelKey` before `BeginPlay`.
 4. Spawn points: `ATargetPoint`s tagged `EnemySpawn` plus the kind's id (a point with only `EnemySpawn` takes any kind).
@@ -170,6 +170,28 @@ An enemy, the teammate or a bot that walks somewhere (or a new way of walking):
 5. Test: `move.<mover>.*` scenarios (`Player/WWORegressMove.cpp`): a walk on open floor, at a wall, at a
    platform it can't climb, around the back wall's corners, its probes at their edges, its turn. Walks wait
    for the run-time navmesh build before switching the AI on.
+
+## A game mode (a new kind of match)
+
+1. A class deriving from `FWWOMatchRules` (`Game/WWOMatchRules.h`) in `Game/WWO<Name>Rules.*`, like
+   `FWWOTesterRules` (the smallest) or `FWWOTeamDeathmatch`. It reaches the game mode through `Mode`
+   (the shell names the rules classes as friends: add yours).
+2. `Begin`: clear what the mode doesn't use from the level (enemies, allies, dummies) and set `State`.
+   `Update` (every tick, the mode's bookkeeping: bind each new player's death once, run clocks), `Advance`
+   (every tick, last: a state machine that should see this tick's restart first), `OnPlayerJoined`,
+   `OnPlayerLeaving` / `OnPlayerLeft`, `IsOver`, `StatusText` (the HUD's line: phases of your own, or new
+   `EWWOWaveState` values at the end of the enum). Override only what it needs.
+3. A death binding: `P->Health->OnDied.AddRaw` or `AddWeakLambda(&Mode, ...)`, keeping the handle, and remove
+   every handle in the destructor (see `FWWOWaveRules`): the scenarios switch rules objects mid-run.
+4. Choose it in `AWWOGameMode::InitGame` from a map URL option (and keep it across restarts in `LoadMap` /
+   `UWWONetSubsystem::MatchOptions`, as `bPvP` is). Add an `As<Name>()` view to the interface if other code
+   needs its state.
+5. Its tunables are `UPROPERTY(EditAnywhere) float`s on `AWWOGameMode` (Settings rows bind them there by
+   name, in `RegisterMatchSections`), read through `Mode`.
+6. Replicated match state goes on `AWWOGameState` / `AWWOPlayerState`; the rules run on the host only.
+7. Tests: scenarios in `Player/WWORegressMatch.cpp` switch a fresh rules object on with `M::Enter` (add yours
+   to `M::MakeRules`) and put the level's back with `M::Done`; drive events directly (a hit, a kill, a call)
+   and let the game mode's own `Tick` run what crosses ticks.
 
 ## A map
 
@@ -268,7 +290,8 @@ An enemy, the teammate or a bot that walks somewhere (or a new way of walking):
    lingering effect followed tick by tick, its hits, looks, switches and the tick it goes), or move
    (`WWORegressMove.cpp`: AI walking, turning and probing), or waves (`WWORegressWaves.cpp`: the game mode's
    wave spawn and queue), or loadout (`WWORegressLoadout.cpp`: catalog, equipping, stat maths, configs,
-   the save and net payloads).
+   the save and net payloads), or match (`WWORegressMatch.cpp`: the rules the game mode runs and the bot
+   roster, through its `M` helpers).
    A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
    called from `BuildScenarios` in `WWORegress.cpp`).
 2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it
