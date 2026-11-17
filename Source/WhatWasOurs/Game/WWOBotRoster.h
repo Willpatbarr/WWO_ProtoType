@@ -10,6 +10,7 @@
 
 class AWWOGameMode;
 class AController;
+class FWWOTeamDeathmatch;
 
 struct FWWOBotRoster
 {
@@ -21,7 +22,7 @@ struct FWWOBotRoster
 	// How many bots the match should have now.
 	int32 Wanted(const AWWOGameMode& GM) const;
 	// One bot a call, once the host's own player is in, while the match is on and short of Wanted.
-	void Update(AWWOGameMode& GM);
+	void Update(AWWOGameMode& GM, FWWOTeamDeathmatch& Match);
 	// A person joined mid-match: one bot leaves, from the bigger team, so the match stays its size.
 	void RetireFor(AWWOGameMode& GM, AController* Joiner);
 	// A person left mid-match: a bot takes the place (Update adds it).

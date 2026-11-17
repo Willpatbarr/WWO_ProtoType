@@ -458,7 +458,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 			Other->Health->Kill();
 			P->Health->Kill();
 			const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host downed both players (%d players): round lost %d"), Players.Num(), GM && GM->State == EWWOWaveState::Lost);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host downed both players (%d players): round lost %d"), Players.Num(), GM && GM->MatchState() == EWWOWaveState::Lost);
 			return;
 		}
 		if (Crossed(RestartAt + 8.f))

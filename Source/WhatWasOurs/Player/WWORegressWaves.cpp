@@ -121,7 +121,7 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			AWWOGameMode* GM = R.World()->GetAuthGameMode<AWWOGameMode>();
 			FWWOWaveRules* W = GM ? GM->Waves() : nullptr;
 			if (!W) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
-			const EWWOWaveState StateBefore = GM->State;
+			const EWWOWaveState StateBefore = W->State;
 			const int32 WaveBefore = W->Wave;
 			const float TimerBefore = W->Timer;
 			const TArray<FName> QueueBefore = W->Queue;
@@ -130,12 +130,12 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			W->Wave = Number - 1;
 			W->StartWave();
 			R.Record(TEXT("wave"), W->Wave);
-			R.Record(TEXT("state"), (int32)GM->State);
+			R.Record(TEXT("state"), (int32)W->State);
 			R.Record(TEXT("timer"), W->Timer);
 			R.Record(TEXT("count"), W->Queue.Num());
 			R.Record(TEXT("queue"), Joined(W->Queue));
 			R.Record(TEXT("rand_next"), WWO::FRand());
-			GM->State = StateBefore;
+			W->State = StateBefore;
 			W->Wave = WaveBefore;
 			W->Timer = TimerBefore;
 			W->Queue = QueueBefore;
@@ -162,7 +162,7 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			AWWOGameMode* GM = R.World()->GetAuthGameMode<AWWOGameMode>();
 			FWWOWaveRules* W = GM ? GM->Waves() : nullptr;
 			if (!W) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
-			const EWWOWaveState StateBefore = GM->State;
+			const EWWOWaveState StateBefore = W->State;
 			const int32 WaveBefore = W->Wave;
 			const float TimerBefore = W->Timer;
 			const TArray<FName> QueueBefore = W->Queue;
@@ -179,7 +179,7 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			R.Record(TEXT("spawned"), W->Alive.Num() - From);
 			R.Record(TEXT("rand_next"), WWO::FRand());
 			W->Alive.SetNum(From);
-			GM->State = StateBefore;
+			W->State = StateBefore;
 			W->Wave = WaveBefore;
 			W->Timer = TimerBefore;
 			W->Queue = QueueBefore;

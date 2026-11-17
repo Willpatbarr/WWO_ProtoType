@@ -13,6 +13,7 @@
 #include "Game/WWOGameMode.h"
 #include "Game/WWOTesterRules.h"
 #include "Game/WWOWaveRules.h"
+#include "Game/WWOTeamDeathmatch.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOCharacter.h"
@@ -92,13 +93,9 @@ namespace
 		// The game mode as it was (put back by M::Leave).
 		bool bPvP = false, bTester = false;
 		TUniquePtr<FWWOMatchRules> SavedRules; // the level's own rules, while the scenario's run
-		EWWOWaveState State = EWWOWaveState::Idle;
-		int32 Winner = -1;
 		FWWOBotRoster Roster;
-		float RestartLeft = -1.f, MatchLeft = 0.f, MatchElapsed = 0.f;
+		float RestartLeft = -1.f;
 		TArray<FName> Queue;
-		TSet<TWeakObjectPtr<AWWOCharacter>> PvPBound;
-		TSet<TWeakObjectPtr<AWWOPlayerState>> TeamGiven;
 		bool bGSPvP = false, bMatchOver = false;
 		TArray<int32> TeamScores;
 		int8 MatchWinner = -1;
@@ -183,13 +180,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		{
 			S.bPvP = G->bPvP;
 			S.bTester = G->bTester;
-			S.State = G->State;
 			S.RestartLeft = G->RestartLeft;
-			S.MatchLeft = G->MatchLeft;
-			S.MatchElapsed = G->MatchElapsed;
-			S.Winner = G->Winner;
-			S.PvPBound = G->PvPBound;
-			S.TeamGiven = G->TeamGiven;
 			S.Roster = G->Roster;
 			S.PvPKills = AWWOGameMode::PvPKills;
 			S.PvPMatchesEnded = AWWOGameMode::PvPMatchesEnded;
@@ -214,7 +205,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		{
 			if (Rules == ERules::Tester) return MakeUnique<FWWOTesterRules>(*G);
 			if (Rules == ERules::Waves) return MakeUnique<FWWOWaveRules>(*G);
-			return nullptr;
+			return MakeUnique<FWWOTeamDeathmatch>(*G);
 		}
 
 		// Switches the rules on (the game mode's Begin under them), the player already placed on a team.
@@ -231,8 +222,8 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			{
 				// The player is never bound or rebalanced by the match (its death binding would outlive the scenario).
 				AWWOCharacter* P = R.Player();
-				G->PvPBound.Add(P);
-				G->TeamGiven.Add(P->GetPlayerState<AWWOPlayerState>());
+				G->Deathmatch()->PvPBound.Add(P);
+				G->Deathmatch()->TeamGiven.Add(P->GetPlayerState<AWWOPlayerState>());
 				G->Roster.OptionBots = 0; // the roster adds no bots of its own unless a scenario asks
 			}
 			G->Begin();
@@ -246,13 +237,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			G->bPvP = S.bPvP;
 			G->bTester = S.bTester;
 			G->Rules = MoveTemp(S.SavedRules);
-			G->State = S.State;
 			G->RestartLeft = S.RestartLeft;
-			G->MatchLeft = S.MatchLeft;
-			G->MatchElapsed = S.MatchElapsed;
-			G->Winner = S.Winner;
-			G->PvPBound = S.PvPBound;
-			G->TeamGiven = S.TeamGiven;
 			G->Roster = S.Roster;
 			AWWOGameMode::PvPKills = S.PvPKills;
 			AWWOGameMode::PvPMatchesEnded = S.PvPMatchesEnded;
@@ -274,7 +259,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		}
 
 		// --- Reading the rules ---
-		static int32 State(AWWOGameMode* G) { return (int32)G->State; }
+		static int32 State(AWWOGameMode* G) { return (int32)G->MatchState(); }
 		static int32 Wave(AWWOGameMode* G) { return G->Waves() ? G->Waves()->Wave : -1; }
 		static float Timer(AWWOGameMode* G) { return G->Waves() ? G->Waves()->Timer : -1.f; }
 		static float RestartLeft(AWWOGameMode* G) { return G->RestartLeft; }
@@ -286,9 +271,9 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			if (const FWWOWaveRules* W = G->Waves()) for (const TWeakObjectPtr<AWWOEnemy>& E : W->Alive) Out.Add(E.Get());
 			return Out;
 		}
-		static float MatchLeft(AWWOGameMode* G) { return G->MatchLeft; }
-		static int32 Winner(AWWOGameMode* G) { return G->Winner; }
-		static void PvPDeath(AWWOGameMode* G, AWWOCharacter* Victim) { G->OnPvPDeath(Victim); }
+		static float MatchLeft(AWWOGameMode* G) { return G->Deathmatch() ? G->Deathmatch()->MatchLeft : -1.f; }
+		static int32 Winner(AWWOGameMode* G) { return G->Deathmatch() ? G->Deathmatch()->Winner : -9; }
+		static void PvPDeath(AWWOGameMode* G, AWWOCharacter* Victim) { if (G->Deathmatch()) G->Deathmatch()->OnDeath(Victim); }
 		static FString Status(AWWOGameMode* G, FLinearColor& Color) { return G->StatusText(Color); }
 		// The status line for a state, with the fields a line reads set for it (put back by Leave).
 		static FString StatusFor(AWWOGameMode* G, EWWOWaveState St, int32 Wave, float Timer, int32 Left, float MatchLeft, int32 Winner, bool bTestRun, FLinearColor& Color)
@@ -297,15 +282,18 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			const bool bMatchLine = St == EWWOWaveState::Match || St == EWWOWaveState::MatchOver;
 			TUniquePtr<FWWOMatchRules> Was = MoveTemp(G->Rules);
 			G->Rules = MakeRules(G, bMatchLine ? ERules::Deathmatch : ERules::Waves);
-			G->State = St;
+			G->Rules->State = St;
 			if (FWWOWaveRules* W = G->Waves())
 			{
 				W->Wave = Wave;
 				W->Timer = Timer;
 				for (int32 i = 0; i < Left; ++i) W->Queue.Add("swarm");
 			}
-			G->MatchLeft = MatchLeft;
-			G->Winner = Winner;
+			if (FWWOTeamDeathmatch* T = G->Deathmatch())
+			{
+				T->MatchLeft = MatchLeft;
+				T->Winner = Winner;
+			}
 			const bool bWasTest = G->bTestRun;
 			G->bTestRun = bTestRun;
 			const FString Line = G->StatusText(Color);
@@ -320,7 +308,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		static int32 BotsSpawned(AWWOGameMode* G) { return G->Roster.BotsSpawned; }
 		static int32 BotsExtra(AWWOGameMode* G) { return G->Roster.BotsExtra; }
 		static void PersonLeft(AWWOGameMode* G) { G->Roster.PersonLeft(); } // what Logout does for a person leaving mid-match
-		static void UpdateBots(AWWOGameMode* G) { G->Roster.Update(*G); } // as the game mode's PvP tick runs it (no stress harness here)
+		static void UpdateBots(AWWOGameMode* G) { G->Roster.Update(*G, *G->Deathmatch()); } // as the game mode's PvP tick runs it (no stress harness here)
 		static void RetireBotFor(AWWOGameMode* G, AController* Joiner) { G->Roster.RetireFor(*G, Joiner); }
 		// --- The tester ---
 		static void UpdateTester(AWWOGameMode* G) { G->Tester()->Update(FWWORegress::Dt); }

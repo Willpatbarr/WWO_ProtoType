@@ -38,6 +38,8 @@ public:
 	FWWOMatchRules(const FWWOMatchRules&) = delete;
 	FWWOMatchRules& operator=(const FWWOMatchRules&) = delete;
 
+	EWWOWaveState State = EWWOWaveState::Idle; // the match's phase (AWWOGameMode::MatchState)
+
 	// StartPlay: clears what this mode doesn't use from the level and sets the first state.
 	virtual void Begin() = 0;
 	// Every tick, after the advertised game is refreshed: the mode's bookkeeping (binding deaths, clocks).

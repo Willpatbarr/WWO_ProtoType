@@ -3,6 +3,7 @@
 
 #include "Game/WWOBotRoster.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOTeamDeathmatch.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOBotController.h"
 #include "Player/WWOCharacter.h"
@@ -21,12 +22,12 @@ int32 FWWOBotRoster::Wanted(const AWWOGameMode& GM) const
 	return FMath::Clamp(Asked + BotsExtra, 0, 11);
 }
 
-void FWWOBotRoster::Update(AWWOGameMode& GM)
+void FWWOBotRoster::Update(AWWOGameMode& GM, FWWOTeamDeathmatch& Match)
 {
 	// One a frame, once the host's own player is in.
 	const int32 Want = Wanted(GM);
 	UWorld* World = GM.GetWorld();
-	if (BotsSpawned >= Want || GM.State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(World)->GetPlayer()) return;
+	if (BotsSpawned >= Want || Match.State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(World)->GetPlayer()) return;
 	AWWOBotController* Bot = World->SpawnActor<AWWOBotController>();
 	if (!Bot) return;
 	++BotsSpawned;
@@ -35,7 +36,7 @@ void FWWOBotRoster::Update(AWWOGameMode& GM)
 	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
 	// steady scene of moving characters for performance tests).
 	if (WWOSwitches::Has(TEXT("WWOBotsPeace"))) GM.SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
-	GM.TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
+	Match.TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
 	GM.RestartPlayer(Bot);
 	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
 	{

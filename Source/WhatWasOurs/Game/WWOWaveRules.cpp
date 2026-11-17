@@ -47,7 +47,7 @@ void FWWOWaveRules::Begin()
 {
 	if (Mode.Enabled < 0.5f || Mode.SpawnPoints().Num() == 0)
 	{
-		Mode.State = EWWOWaveState::Idle;
+		State = EWWOWaveState::Idle;
 		return;
 	}
 	for (TActorIterator<AWWOEnemy> It(Mode.GetWorld()); It; ++It) It->Destroy(); // waves replace the hand-placed enemies
@@ -68,7 +68,7 @@ void FWWOWaveRules::Update(float DeltaSeconds)
 
 void FWWOWaveRules::Advance(float DeltaSeconds)
 {
-	switch (Mode.State)
+	switch (State)
 	{
 	case EWWOWaveState::Countdown:
 		Timer -= DeltaSeconds;
@@ -106,7 +106,7 @@ void FWWOWaveRules::OnPlayerLeft(AController* Exiting)
 
 bool FWWOWaveRules::IsOver() const
 {
-	return Mode.State == EWWOWaveState::Won || Mode.State == EWWOWaveState::Lost;
+	return State == EWWOWaveState::Won || State == EWWOWaveState::Lost;
 }
 
 void FWWOWaveRules::SkipWave()
@@ -120,7 +120,7 @@ void FWWOWaveRules::SkipWave()
 
 void FWWOWaveRules::JumpToWave(int32 Number)
 {
-	if (Mode.State == EWWOWaveState::Idle || Number < 1) return;
+	if (State == EWWOWaveState::Idle || Number < 1) return;
 	Queue.Reset();
 	for (const TWeakObjectPtr<AWWOEnemy>& Enemy : Alive)
 	{
@@ -133,7 +133,7 @@ void FWWOWaveRules::JumpToWave(int32 Number)
 
 void FWWOWaveRules::Countdown(float Seconds)
 {
-	Mode.State = EWWOWaveState::Countdown;
+	State = EWWOWaveState::Countdown;
 	Timer = Seconds;
 }
 
@@ -150,14 +150,14 @@ void FWWOWaveRules::StartWave()
 	}
 	for (int32 i = Queue.Num() - 1; i > 0; --i) Queue.Swap(i, WWO::RandRange(0, i)); // shuffle
 	Timer = 0.f;
-	Mode.State = EWWOWaveState::Spawning;
+	State = EWWOWaveState::Spawning;
 }
 
 void FWWOWaveRules::WaveCleared()
 {
 	if (Wave >= FMath::RoundToInt(Mode.WavesToWin))
 	{
-		Mode.State = EWWOWaveState::Won;
+		State = EWWOWaveState::Won;
 		return;
 	}
 	Countdown(Mode.BreakTime);
@@ -165,14 +165,14 @@ void FWWOWaveRules::WaveCleared()
 
 void FWWOWaveRules::OnAnyoneDown()
 {
-	if (Mode.State == EWWOWaveState::Idle || Mode.State == EWWOWaveState::Won || Mode.State == EWWOWaveState::Lost) return;
+	if (State == EWWOWaveState::Idle || State == EWWOWaveState::Won || State == EWWOWaveState::Lost) return;
 	// Alone, a living ally keeps the run going (you respawn). Online, downed players stay down
 	// until revived, and only players can revive: everyone down loses.
 	bool bAnyoneUp = Mode.GetNetMode() == NM_Standalone && UWWOWorldSubsystem::Get(&Mode)->LivingTeammates().Num() > 0;
 	for (const AWWOCharacter* P : UWWOWorldSubsystem::Get(&Mode)->GetPlayers()) bAnyoneUp |= !P->Health->bDead;
 	if (!bAnyoneUp)
 	{
-		Mode.State = EWWOWaveState::Lost; // nobody left standing
+		State = EWWOWaveState::Lost; // nobody left standing
 		Mode.RestartLeft = 4.f;
 	}
 }
@@ -249,7 +249,7 @@ FString FWWOWaveRules::StatusText(FLinearColor& OutColor) const
 {
 	const int32 Total = FMath::RoundToInt(Mode.WavesToWin);
 	OutColor = FLinearColor::White;
-	switch (Mode.State)
+	switch (State)
 	{
 	case EWWOWaveState::Countdown:
 		return Wave > 0 ? FString::Printf(TEXT("Wave %d of %d in %d"), Wave + 1, Total, FMath::CeilToInt(Timer))

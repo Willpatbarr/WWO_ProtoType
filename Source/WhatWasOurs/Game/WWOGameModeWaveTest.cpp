@@ -42,7 +42,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 		return;
 	}
 	const int32 Wave = W->Wave;
-	if ((!bWaveTestNavChecked || (Wave == 3 && WaveTestFight > 20.f && WaveTestFight - DeltaSeconds <= 20.f)) && State == EWWOWaveState::Spawning && WaveTestFight > 5.f)
+	if ((!bWaveTestNavChecked || (Wave == 3 && WaveTestFight > 20.f && WaveTestFight - DeltaSeconds <= 20.f)) && W->State == EWWOWaveState::Spawning && WaveTestFight > 5.f)
 	{
 		// Can every spawn point reach you on the navmesh?
 		bWaveTestNavChecked = true;
@@ -110,7 +110,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 			}
 		}
 	}
-	if (State == EWWOWaveState::Won)
+	if (W->State == EWWOWaveState::Won)
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest done: cleared %d waves; %d stuck, %d blocked by others, %d holding range, %d not facing, %d overlaps; %d enemy shots hit the player"),
 			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, AWWOEnemyProjectile::PlayerHits);
@@ -120,7 +120,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 		GetWorldTimerManager().SetTimer(Quit, []() { FPlatformMisc::RequestExit(false); }, 1.f, false);
 		return;
 	}
-	if (State != EWWOWaveState::Spawning)
+	if (W->State != EWWOWaveState::Spawning)
 	{
 		WaveTestFight = 0.f;
 		WaveTestTracks.Reset();

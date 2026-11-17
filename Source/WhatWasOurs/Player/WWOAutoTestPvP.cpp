@@ -146,13 +146,13 @@ void FWWOAutoTest::UpdateAutoPvPTest(float DeltaTime)
 	if (bHost && Crossed(13.f) && GM) GM->SetTeam(const_cast<AWWOPlayerState*>(OtherPS), MyPS ? 1 - MyPS->Team : 1);
 
 	// The host kills the joiner (credited to the host) until the kill target ends the match.
-	if (bHost && GM && T >= 13.5f && GM->State == EWWOWaveState::Match && !Other->Health->bDead)
+	if (bHost && GM && T >= 13.5f && GM->MatchState() == EWWOWaveState::Match && !Other->Health->bDead)
 	{
 		FWWODamageBy By(P);
 		Other->TakeHit(99999.f, false, Other->GetActorLocation());
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: host killed the joiner at %.1f s: %s"), T, *Score());
 	}
-	if (bHost && GM && GM->State == EWWOWaveState::MatchOver && GPvPRound == 0)
+	if (bHost && GM && GM->MatchState() == EWWOWaveState::MatchOver && GPvPRound == 0)
 	{
 		GPvPRound = 1;
 		GPvPRound1 = PC;

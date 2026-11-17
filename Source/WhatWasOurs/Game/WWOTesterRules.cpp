@@ -20,7 +20,7 @@ void FWWOTesterRules::Begin()
 	for (TActorIterator<AWWOEnemy> It(World); It; ++It) It->Destroy();
 	for (TActorIterator<AWWOAlly> It(World); It; ++It) It->Destroy();
 	for (TActorIterator<AWWOTarget> It(World); It; ++It) It->Destroy();
-	Mode.State = EWWOWaveState::Idle;
+	State = EWWOWaveState::Idle;
 }
 
 void FWWOTesterRules::Update(float DeltaSeconds)

@@ -1,15 +1,15 @@
 #pragma once
 
-// The game's rules and the arena wave loop (Godot: wave_manager.gd).
-// - If the level has enemy spawn points (Target Points tagged "EnemySpawn", plus a tag per
-//   enemy kind they allow), the hand-placed enemies are cleared, a countdown runs, then waves.
-// - Each wave's enemies come in one by one from spawn points away from you and hunt you.
-//   Clear them all and the next wave starts after a short break.
-// - Clear WavesToWin waves: ARENA CLEARED. Go down with no teammate standing: DEFEATED, and
-//   the run restarts. Enabled = 0 keeps the level as a sandbox.
-// - PvP (hosted with ?pvp): team deathmatch instead of waves. Players join the smaller team, kill
-//   the other team's players, respawn after PvPRespawnTime away from them; first team to KillTarget
-//   kills wins, or the most kills when TimeLimit runs out (either can be 0 = off). Then it restarts.
+// The game mode: a shell around one match's rules. It logs players in (names, the full-game
+// check), spawns them (the ring of spots around the one Player Start), changes maps, writes the
+// status line every tick, restarts when the rules ask, and owns:
+// - one rules object (Rules, Game/WWOMatchRules.h), chosen in InitGame: the PvE waves
+//   (FWWOWaveRules), team deathmatch with ?pvp (FWWOTeamDeathmatch), or the firing tester with
+//   ?tester / -WWOTester (FWWOTesterRules);
+// - the PvP match's bot roster (Roster, FWWOBotRoster);
+// - the tunables of all of them, here because Settings binds its sliders to these properties by name.
+// Runs on the host only (a joiner has no game mode). The stress harness and the wave test are test
+// code beside it (WWOGameModeStress.*, WWOGameModeWaveTest.cpp).
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
@@ -31,7 +31,7 @@ public:
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	// Names the player from the gamer tag in their login options (?Tag=, UWWONetSubsystem::WithName).
 	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
-	virtual void Logout(AController* Exiting) override; // PvP: a bot takes a leaving player's place
+	virtual void Logout(AController* Exiting) override; // the rules hear of it before and after the engine's own
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	// Every map has one Player Start. Online, each player arriving takes the first free spot in
@@ -65,14 +65,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotCalloutRange = 40.f;  // m: teammates this near hear about an enemy one of them sees (0 = no callouts)
 
 	bool bPvP = false; // this match is team deathmatch (the map was opened with ?pvp)
-	float MatchLeft = 0.f; // seconds
-	int32 Winner = -1;     // the team that won (-1: a draw or not over)
+	// Team calls, forwarded to FWWOTeamDeathmatch (the health component respawns at PvPSpawnFor
+	// whenever the game state says PvP; tests set teams with SetTeam).
 	FTransform PvPSpawnFor(const class AWWOCharacter* Player) const; // away from the other team
 	void SetTeam(class AWWOPlayerState* PS, int32 Team);
 	void BalanceTeam(AController* Player); // the smaller team
-	// A player asks to change sides: only onto a team no bigger than theirs would become, at most
-	// every 10 s, and they start over at a spawn spot (no switching mid-fight to dodge a shot).
-	void SwitchTeam(AController* Player);
+	void SwitchTeam(AController* Player); // a player asks to change sides (in a match only)
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	int32 People() const; // players who aren't bots
 	// for -WWOAutoTestNet
@@ -81,33 +79,30 @@ public:
 	// The firing tester (?tester, from the launch screen; -WWOTester): no waves, no enemies, one
 	// target dummy ahead of the start (FWWOTesterRules). UWWOFiringTester is the screen over it.
 	bool bTester = false;
-	// The rules of this match (Game/WWOMatchRules.h), chosen in InitGame; null for the rules still here.
+	// The rules of this match (Game/WWOMatchRules.h), chosen in InitGame, and typed views of them.
 	TUniquePtr<FWWOMatchRules> Rules;
 	FWWOTesterRules* Tester() const { return Rules ? Rules->AsTester() : nullptr; }
+	FWWOWaveRules* Waves() const { return Rules ? Rules->AsWaves() : nullptr; }
+	FWWOTeamDeathmatch* Deathmatch() const { return Rules ? Rules->AsDeathmatch() : nullptr; }
+	EWWOWaveState MatchState() const { return Rules ? Rules->State : EWWOWaveState::Idle; }
 	// The PvP match's bot players (-WWOBots=N, ?bots=N, the Bots setting; Game/WWOBotRoster.h). -WWOStress logs the load.
 	FWWOBotRoster Roster;
 	float CmdKillTarget = -1.f; // -WWOKillTarget= (tests): wins over the saved setting
 	bool bTestRun = false;      // a -WWOAutoTest... run
-	float MatchElapsed = 0.f; // seconds of this PvP match played
 	float PublishLeft = 0.f; // host: seconds to the next refresh of the advertised game
 	TUniquePtr<FWWOStressHarness> Stress; // test runs with a WWOStress switch only (WWOGameModeStress.cpp)
-
-	EWWOWaveState State = EWWOWaveState::Idle;
 
 	void Restart(); // the same map again (online: the host takes everyone along)
 	void SkipWave(); // test helper (wwo.SkipWave, Settings): FWWOWaveRules::SkipWave, in waves only
 	void JumpToWave(int32 Number); // test helper (wwo.Wave): FWWOWaveRules::JumpToWave, in waves only
-	FWWOWaveRules* Waves() const { return Rules ? Rules->AsWaves() : nullptr; }
 	TArray<AActor*> SpawnPoints() const; // the level's enemy spawn points (Target Points tagged EnemySpawn)
 	// Alone: opens the map. Hosting: moves everyone to it (ServerTravel, still a LAN game).
 	// In someone else's game: only the host changes maps, so it just says so.
 	static void LoadMap(UObject* WorldContext, FName Level);
-	FString StatusText(FLinearColor& OutColor) const;
+	FString StatusText(FLinearColor& OutColor) const; // the rules' line
 
 private:
-	float RestartLeft = -1.f;
-	TSet<TWeakObjectPtr<class AWWOCharacter>> PvPBound;     // players whose death PvP scores
-	TSet<TWeakObjectPtr<class AWWOPlayerState>> TeamGiven;  // players BalanceTeam already placed
+	float RestartLeft = -1.f; // seconds to Restart (a lost round, a test run's match over); the rules set it
 	bool bStarted = false;
 
 	// -WWOWaveTest: plays every wave with god mode on, cuts each fight short after a while
@@ -129,14 +124,12 @@ private:
 	void UpdateWaveTest(float DeltaSeconds);
 
 	void Begin();
-	void UpdateMatch(float DeltaSeconds);
-	void OnPvPDeath(class AWWOCharacter* Victim);
-	void EndMatch(int32 WinningTeam);
-	class AWWOGameState* WGS() const;
 
-	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the wave spawn directly; no gameplay code uses this.
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the rules directly; no gameplay code uses this.
 	friend class FWWORegress;
+	// The rules and the roster read and set the shell's private state (bStarted, RestartLeft).
 	friend struct FWWOBotRoster;
 	friend class FWWOTesterRules;
 	friend class FWWOWaveRules;
+	friend class FWWOTeamDeathmatch;
 };
