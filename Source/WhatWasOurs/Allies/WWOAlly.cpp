@@ -189,7 +189,7 @@ void AWWOAlly::Tick(float DeltaSeconds)
 		FireCooldown -= DeltaSeconds;
 		if (FireCooldown <= 0.f)
 		{
-			FireCooldown = Data->FireInterval * FMath::FRandRange(0.85f, 1.2f);
+			FireCooldown = Data->FireInterval * WWO::FRandRange(0.85f, 1.2f);
 			Shoot(Enemy);
 		}
 	}

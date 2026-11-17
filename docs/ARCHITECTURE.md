@@ -213,4 +213,6 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
 ## Tests
 
 Scripted runs live in the test driver `FWWOAutoTest` (`Player/WWOAutoTest*.cpp`, made by the player controller only for a test run), driven by `-WWOAutoTest...` switches;
-`Player/WWOTestRun.*` counts failures and sets the exit code. See `TESTING.md`.
+`Player/WWOTestRun.*` counts failures and sets the exit code. The regression scenarios (`-WWORegress`,
+`Tools/regress.sh`) are `FWWORegress` (`Player/WWORegress*.cpp`), made by that driver: exact numbers on a
+fixed time step, compared with `Tools/regress/golden.json`. See `TESTING.md`.

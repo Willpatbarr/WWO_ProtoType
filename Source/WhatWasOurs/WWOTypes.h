@@ -82,15 +82,26 @@ namespace WWO
 		return FLinearColor(C.R, C.G, C.B, A);
 	}
 
-	// A random direction within Cone radians of Direction (evenly over the cone's area).
-	inline FVector RandomInCone(const FVector& Direction, float Cone)
+	// Gameplay's random numbers: what a shot, a recoil kick, an enemy's choice draw on. Exactly
+	// FMath's (the engine's shared generator) in every run but the regression scenarios
+	// (-WWORegress), which give gameplay its own seeded stream (SeedGameRandom): the shared one is
+	// also drawn on by effects, sounds and, when the game draws, by other threads, so a scenario's
+	// numbers wouldn't repeat. Looks-only randomness (effects, flashes, sounds) stays on FMath.
+	void SeedGameRandom(int32 Seed); // regression scenarios only: from now on gameplay draws from a stream with this seed
+	float FRand();                          // FMath::FRand
+	float FRandRange(float Min, float Max); // FMath::FRandRange
+	int32 RandRange(int32 Min, int32 Max);  // FMath::RandRange (inclusive)
+
+	// A random direction within Cone radians of Direction (evenly over the cone's area). From
+	// gameplay's numbers (WWO::FRand), or with bLooksOnly from FMath's (effects).
+	inline FVector RandomInCone(const FVector& Direction, float Cone, bool bLooksOnly = false)
 	{
 		if (Cone <= 0.f) return Direction;
 		const FVector Dir = Direction.GetSafeNormal();
 		FVector Side, Up;
 		Dir.FindBestAxisVectors(Side, Up);
-		const float Radius = FMath::Tan(Cone) * FMath::Sqrt(FMath::FRand());
-		const float Turn = FMath::FRand() * UE_TWO_PI;
+		const float Radius = FMath::Tan(Cone) * FMath::Sqrt(bLooksOnly ? FMath::FRand() : WWO::FRand());
+		const float Turn = (bLooksOnly ? FMath::FRand() : WWO::FRand()) * UE_TWO_PI;
 		return (Dir + Side * FMath::Cos(Turn) * Radius + Up * FMath::Sin(Turn) * Radius).GetSafeNormal();
 	}
 }

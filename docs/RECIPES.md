@@ -146,6 +146,30 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
    your own backup. If the switch has no `WWOAutoTest` in it, call `WWOTest::GuardLoadout()` yourself first.
 6. Add the switch to the comment table in `WWOSwitches.h` and to the table in `TESTING.md`.
 
+## A regression scenario
+
+1. Find the family it belongs to: guns (`Player/WWORegressGuns.cpp`), kit (`WWORegressKit.cpp`: grenades,
+   abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies).
+   A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
+   called from `BuildScenarios` in `WWORegress.cpp`).
+2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it
+   needs team rules, and `MaxTicks` if it runs longer than 20 s. Generate from the catalogs (`L.Weapons`,
+   `L.WeaponMods`, `L.Grenades`, `L.Abilities`, `L.Floras`) where the scenario applies to each item.
+3. `Setup`: spawn with `R.SpawnDummy` / `SpawnEnemy` (inert) / `SpawnAlly` (inert) / `SpawnBot(Team, At)`
+   (parked, fixed kit), at `R.Ahead(Metres, SideMetres)`; equip with `R.EquipWeapon` / `EquipMod` /
+   `EquipFlora` / `EquipGrenade` / `EquipAbility`; change a float tunable for this scenario with
+   `R.Tune(Object, "Property", Value)`. Keep per-scenario state in a `TSharedRef` struct captured by both
+   lambdas and reset it at the top of `Setup`.
+4. `Step(R, Tick)`: drive it by tick number (`FWWORegress::Ticks(Seconds)`), with `R.Press` / `Hold` /
+   `Move` / `AimAt` / `Face` for input, or by calling the game's own functions. Never use real time.
+   `Record` every number that would change if the logic changed, then return true.
+5. Run it alone (`Tools/regress.sh both -WWORegressOnly=<name>`) a few times: the numbers must be the
+   same every time and in both modes. If they legitimately differ with rendering, set `Modes` to
+   `PerMode` (or `RenderOnly`) with a `ModeReason`.
+6. Add its golden entry in its own commit: `Tools/regress.sh both -WWORegressOnly=<name> -WWORegressUpdate`.
+7. Randomness in gameplay code goes through `WWO::FRand` / `FRandRange` / `RandRange` / `RandomInCone`
+   (`WWOTypes.h`), so the scenarios can seed it; looks-only randomness stays on `FMath`.
+
 ## A JSON config file
 
 1. The file in `Config/`, and its name in the list in `WhatWasOurs.Build.cs` so packaged builds stage it.

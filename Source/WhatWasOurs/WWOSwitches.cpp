@@ -73,7 +73,13 @@ bool WWOSwitches::HasStressText()
 	return bHas;
 }
 
+bool WWOSwitches::IsRegress()
+{
+	static const bool bIs = Has(TEXT("WWORegress"));
+	return bIs;
+}
+
 bool WWOSwitches::UsesDefaultBinds()
 {
-	return HasAutoTestText() || IsStress();
+	return HasAutoTestText() || IsStress() || IsRegress();
 }

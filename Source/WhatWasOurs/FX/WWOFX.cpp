@@ -508,7 +508,7 @@ void AWWOParticles::EmitOne()
 	}
 	if (Shape == EWWOEmitShape::Box) Offset = GetActorQuat().RotateVector(Offset);
 	P.Pos = GetActorLocation() + Offset * WWO::M;
-	const FVector Dir = WWO::RandomInCone(Direction.GetSafeNormal(), FMath::DegreesToRadians(FMath::Min(SpreadDegrees, 179.f)));
+	const FVector Dir = WWO::RandomInCone(Direction.GetSafeNormal(), FMath::DegreesToRadians(FMath::Min(SpreadDegrees, 179.f)), true);
 	const FVector FinalDir = SpreadDegrees >= 180.f ? FMath::VRand() : Dir;
 	P.Vel = FinalDir * FMath::FRandRange(SpeedMin, SpeedMax) * WWO::M;
 	P.Age = 0.f;

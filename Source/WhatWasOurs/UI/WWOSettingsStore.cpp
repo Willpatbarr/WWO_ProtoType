@@ -1,5 +1,6 @@
 #include "UI/WWOSettingsMenu.h"
 #include "Systems/WWOConfig.h"
+#include "WWOSwitches.h"
 #include "Dom/JsonObject.h"
 
 namespace
@@ -103,7 +104,9 @@ void UWWOSettingsMenu::LoadSaved()
 {
 	// Your saved values, or in a fresh packaged build the ones it shipped with (Config/ShippedSettings.json).
 	bool bMine = false;
-	const TSharedPtr<FJsonObject> Root = WWOConfig::LoadSavedElseShipped(SavePath(), TEXT("ShippedSettings.json"), &bMine);
+	// The regression scenarios (-WWORegress) start from the shipped values whatever this machine saved.
+	const TSharedPtr<FJsonObject> Root = WWOSwitches::IsRegress() ? WWOConfig::Load(WWOConfig::Path(TEXT("ShippedSettings.json")))
+		: WWOConfig::LoadSavedElseShipped(SavePath(), TEXT("ShippedSettings.json"), &bMine);
 	if (!Root.IsValid()) return;
 	for (const auto& SectionPair : Root->Values)
 	{

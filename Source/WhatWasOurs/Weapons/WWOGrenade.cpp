@@ -531,7 +531,7 @@ void AWWOGrenade::Burst(const FVector& Center)
 		Seed.BlastRadius = Spec.BlastRadius * Spec.Seedburst->SubScale;
 		Seed.Fuse = Spec.Seedburst->SubFuse;
 		Seed.Flavor = Spec.Flavor;
-		const float Angle = UE_TWO_PI * i / FMath::Max(Count, 1) + FMath::FRandRange(-0.3f, 0.3f); // spread evenly around
+		const float Angle = UE_TWO_PI * i / FMath::Max(Count, 1) + WWO::FRandRange(-0.3f, 0.3f); // spread evenly around
 		const FVector Out(FMath::Cos(Angle), FMath::Sin(Angle), 0.f);
 		const float Spread = Spec.Seedburst->SubSpread;
 		Throw(GetWorld(), Seed, Center + FVector(0, 0, 30.f), (Out * Spread + FVector(0, 0, Spread * 0.8f)) * WWO::M, Thrower.Get());

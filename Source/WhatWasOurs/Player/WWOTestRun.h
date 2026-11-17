@@ -18,6 +18,8 @@ namespace WWOTest
 	void Watch();     // start counting (safe to call again)
 	int32 Failures();
 	void Exit();
+	// Exit with this many failures, the result line starting with Label ("Regress result: PASS").
+	void ExitWith(int32 Failed, const TCHAR* Label);
 
 	// Copies the saved loadout aside, the first time it is called in this process (so it holds over
 	// map loads), and puts those exact bytes back when the game shuts down, after the game's own

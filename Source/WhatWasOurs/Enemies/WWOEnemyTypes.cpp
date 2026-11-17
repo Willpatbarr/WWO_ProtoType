@@ -71,14 +71,14 @@ void AWWOSoldier::Setup()
 	UStaticMeshComponent* Muzzle = Box(FVector(0.03f, 0.06f, 0.06f), FVector(23.f, 0, 0), GlowColor, 0.4f);
 	GlowMat = WWOFX::MID(Muzzle);
 	MuzzleLight = WWOFX::AddPointLight(this, Gun, GlowColor, 0.f, 200.f, FVector(26.f, 0, 0));
-	if (const UWWOSoldierData* S = D()) Cooldown = FMath::FRandRange(0.5f, S->BurstCooldown);
-	StrafeDir = FMath::FRand() < 0.5f ? 1.f : -1.f;
+	if (const UWWOSoldierData* S = D()) Cooldown = WWO::FRandRange(0.5f, S->BurstCooldown);
+	StrafeDir = WWO::FRand() < 0.5f ? 1.f : -1.f;
 }
 
 void AWWOSoldier::OnReset()
 {
 	CancelAttack();
-	if (const UWWOSoldierData* S = D()) Cooldown = FMath::FRandRange(0.5f, S->BurstCooldown);
+	if (const UWWOSoldierData* S = D()) Cooldown = WWO::FRandRange(0.5f, S->BurstCooldown);
 	Cover = nullptr;
 	if (Gun) Gun->SetVisibility(true, true);
 }
@@ -162,7 +162,7 @@ FVector AWWOSoldier::ChooseMove(const FVector& ToTarget, float Distance, float D
 	StrafeLeft -= DeltaSeconds;
 	if (StrafeLeft <= 0.f)
 	{
-		StrafeLeft = S->StrafeTime * FMath::FRandRange(0.6f, 1.4f);
+		StrafeLeft = S->StrafeTime * WWO::FRandRange(0.6f, 1.4f);
 		StrafeDir = -StrafeDir;
 	}
 	FVector Strafe = FVector::CrossProduct(Toward, FVector::UpVector) * StrafeDir;
@@ -217,7 +217,7 @@ void AWWOSoldier::UpdateAttack(float DeltaSeconds, bool bCanSee)
 			Fire();
 			ShotsLeft -= 1;
 			ShotTimer = S->BurstInterval;
-			if (ShotsLeft == 0) Cooldown = S->BurstCooldown * FMath::FRandRange(0.85f, 1.15f);
+			if (ShotsLeft == 0) Cooldown = S->BurstCooldown * WWO::FRandRange(0.85f, 1.15f);
 		}
 		return;
 	}
@@ -332,7 +332,7 @@ void AWWOSwarm::Setup()
 {
 	Body->SetHunch(55.f, 45.f); // HunchModifier: bent forward at the spine, head lifted to look ahead
 	PinCrit("head", BonePos(GetMesh(), "head") + FVector(0, 0, 10.f * ModelScale) + GetActorForwardVector() * 2.f, FVector(12.f, 11.f, 13.f));
-	if (const UWWOSwarmData* S = D()) LeapCooldown = FMath::FRandRange(0.f, S->LeapCooldown);
+	if (const UWWOSwarmData* S = D()) LeapCooldown = WWO::FRandRange(0.f, S->LeapCooldown);
 }
 
 FString AWWOSwarm::DebugState() const
