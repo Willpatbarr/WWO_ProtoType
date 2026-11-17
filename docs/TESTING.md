@@ -6,7 +6,7 @@ checks, save screenshots and quit with an exit code.
 ## Running a test
 
 ```
-pkill -f "WhatWasOurs.uproject.*-game"
+Tools/close_game.sh   # closes a running game (never pkill -f on the project name: it kills shells too)
 "$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PROJ" /Game/WWO/Maps/L_Arena \
   -game -windowed -ResX=1600 -ResY=900 -WWOAutoTest -abslog=/tmp/run.log
 ```
@@ -28,6 +28,11 @@ file in git, `Tools/regress/golden.json`. The numbers are exactly the same every
 keeps behaviour passes with no differences at all; any difference is a change in behaviour.
 
 **Before a refactor that touches gameplay logic, run `Tools/regress.sh`: it must pass before and after.**
+
+**Which mode.** The default before / after check is the no-draw run, `Tools/regress.sh norender` (about
+20 s). Run the drawn mode (`render`, or `both`, about 14 min) only when the change touches something that
+exists only when the game draws: the view, the low reticle and target marks, the real grenade throw, the
+HUD or menus; and when updating the golden file, which needs both modes (`both -WWORegressUpdate`).
 
 ```
 Tools/regress.sh                    # both modes (no rendering, then a small window); about 14 min
