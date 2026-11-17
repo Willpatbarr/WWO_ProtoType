@@ -109,7 +109,7 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 `EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
 `Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
 numbers; return true when done). Add it to the list in one of the family files
-(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`), generating from the catalogs
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
 friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
 checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the

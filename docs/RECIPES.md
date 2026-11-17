@@ -80,6 +80,22 @@ host's check of a joiner's shot both read it, so nothing else needs to know the 
    `kit.host.ability.<id>`, `grenade.<id>.*`, `kit.impact.<id>`); add a `kit.*` scenario for what the new
    entry does that those don't record. `-WWOAutoTest` sets off every ability and throws every grenade.
 
+## An area effect
+
+Anything that acts on "everyone within R of a point" (a blast, a pool, an aura, a slam):
+
+1. Fill an `FWWOAreaQuery` (`Systems/WWOWorldSubsystem.h`): `Center`, `Radius` (cm), `Measure` (feet,
+   centre, chest, nearest part, body centre, last part), `bInclusive`, `bFlat` / `MaxHeight` for a ground
+   effect, who (`Targets`, `Players`, `bTeammates`), `For` (whose effect: the team rules), and `SightParams` /
+   `SightFrom` if walls should block it.
+2. `UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [&](const FWWOAreaHit& Hit) { ...; return true; })`
+   (return false to stop at the first), or `NearestTargetInRadius` for one victim. Hurt through `Hit.Target`
+   inside an `FWWODamageBy`; AI teammates come with no `Target`.
+3. Never a hand loop over `LivingTargets` / `GetPlayers`. A cone (melee, aim) is `BestAimPart` with your
+   own score.
+4. Test: an `area.*` scenario (`Player/WWORegressArea.cpp`) with one victim just inside and one just
+   outside, measured your effect's way.
+
 ## An enemy type
 
 1. An `AWWOEnemy` subclass in `Enemies/WWOEnemyTypes.*` overriding the hooks it needs (`Setup`, `Think`,
@@ -183,7 +199,8 @@ host's check of a joiner's shot both read it, so nothing else needs to know the 
 ## A regression scenario
 
 1. Find the family it belongs to: guns (`Player/WWORegressGuns.cpp`), kit (`WWORegressKit.cpp`: grenades,
-   abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies).
+   abilities, ults, flora effects) or combat (`WWORegressCombat.cpp`: melee, the damage pipeline, enemies), or area
+   (`WWORegressArea.cpp`: the edges of area effects and aim cones).
    A new family is a new `FWWORegress::Add<Family>Scenarios` member (declared in `Player/WWORegress.h`,
    called from `BuildScenarios` in `WWORegress.cpp`).
 2. Add one `FWWORegressScenario` to `Out`: a unique dotted `Name` (`family.subject.case`), `bPvP` if it

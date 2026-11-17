@@ -84,7 +84,8 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
   player (or their kit) in co-op. `PlayerOf(Actor)` walks Owner and
   Instigator to find the player behind a grenade, pool or fog.
 - **Targets** come from `UWWOWorldSubsystem::LivingTargets` (PvE enemies, dummies, and in PvP the other
-  team).
+  team). Area effects ask `ForEachTargetInRadius` / `NearestTargetInRadius` with an `FWWOAreaQuery` (where to
+  measure, who, line of sight); melee and aim assist pick a part with `BestAimPart`.
 - Enemy-to-player damage does not use `TakeHit`: enemies call `Health->DamageCameFrom` and
   `Health->TakeDamage` directly, and `AWWOAlly::TakeAllyDamage` for teammates.
 

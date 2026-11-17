@@ -42,6 +42,10 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 - Wrap host-side damage in an `FWWODamageBy` scope.
 - Spawned kit sets `Params.Owner` (or Instigator) to the character that made it.
 - Ask `UWWOWorldSubsystem::CanHurt` before hurting a player; don't re-derive team rules.
+- An area effect ("everyone within R of this point") is a `FWWOAreaQuery` passed to
+  `UWWOWorldSubsystem::ForEachTargetInRadius` (or `NearestTargetInRadius`), never a hand loop over
+  `LivingTargets` / `GetPlayers`: say where it measures, `<` or `<=`, who it includes and whether it needs a
+  line of sight. "The best part inside my aim cone" is `BestAimPart` with your own score.
 - Effects everyone should see: the `AWWOGameState` statics. Sounds only this machine should hear:
   `UWWOSound`.
 
@@ -98,6 +102,7 @@ Look here before writing a new one.
 | A command-line switch, "is this a test run" | `WWOSwitches::Has`, `Value`, and the named predicates (`HasAutoTestText`, `IsStress`, ...). Each predicate's comment says exactly what it matches (`WWOSwitches.h`) |
 | This machine's player; every player and bot | `UWWOWorldSubsystem::GetPlayer()`, `GetPlayers()` |
 | Living targets for an attacker | `UWWOWorldSubsystem::LivingTargets` |
+| Everyone within a radius (measure point, `<` / `<=`, who, line of sight); the nearest such; the best aim part in a cone | `ForEachTargetInRadius`, `NearestTargetInRadius` with an `FWWOAreaQuery`; `BestAimPart` (`Systems/WWOWorldSubsystem.h`) |
 | Team rules, the player behind an actor | `UWWOWorldSubsystem::CanHurt`, `TeamOf`, `IsPvP`, `PlayerOf` |
 | A data asset by id | `UWWOLoadoutSubsystem::FindById` |
 | A modified stat | `Character->M("stat_name", Base)` |
