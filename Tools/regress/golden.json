@@ -324,25 +324,25 @@
     "can.enemy>foe": "0",
     "can.enemy>mate": "0",
     "can.enemy>player": "0",
-    "can.foe>ally": "1",
+    "can.foe>ally": "0",
     "can.foe>dummy": "1",
     "can.foe>enemy": "1",
     "can.foe>foe": "0",
     "can.foe>mate": "0",
     "can.foe>player": "0",
-    "can.kit>ally": "1",
+    "can.kit>ally": "0",
     "can.kit>dummy": "1",
     "can.kit>enemy": "1",
     "can.kit>foe": "0",
     "can.kit>mate": "0",
     "can.kit>player": "0",
-    "can.mate>ally": "1",
+    "can.mate>ally": "0",
     "can.mate>dummy": "1",
     "can.mate>enemy": "1",
     "can.mate>foe": "0",
     "can.mate>mate": "0",
     "can.mate>player": "0",
-    "can.player>ally": "1",
+    "can.player>ally": "0",
     "can.player>dummy": "1",
     "can.player>enemy": "1",
     "can.player>foe": "0",
@@ -385,7 +385,7 @@
   },
   "damage.gun_at_player.handcannon.foe.body": {
     "aim_at": "0.00,1000.00,87.15",
-    "confirms": "2",
+    "confirms": "1",
     "credit": "player",
     "crits": "0",
     "dealt": "55",
@@ -395,9 +395,9 @@
   },
   "damage.gun_at_player.handcannon.foe.head": {
     "aim_at": "11.13,995.87,167.12",
-    "confirms": "2",
+    "confirms": "1",
     "credit": "player",
-    "crits": "2",
+    "crits": "1",
     "dealt": "110",
     "health": "90",
     "hitboxes_on": "1",
@@ -425,7 +425,7 @@
   },
   "damage.gun_at_player.rifle.foe.body": {
     "aim_at": "0.00,1000.00,87.15",
-    "confirms": "2",
+    "confirms": "1",
     "credit": "player",
     "crits": "0",
     "dealt": "12",
@@ -435,9 +435,9 @@
   },
   "damage.gun_at_player.rifle.foe.head": {
     "aim_at": "11.13,995.87,167.12",
-    "confirms": "2",
+    "confirms": "1",
     "credit": "player",
-    "crits": "2",
+    "crits": "1",
     "dealt": "19.1999969",
     "health": "100",
     "hitboxes_on": "1",
@@ -2178,7 +2178,7 @@
   "gun.burstrifle.dummy.body": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -2200,9 +2200,9 @@
   "gun.burstrifle.dummy.head": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "2",
-    "crits": "4",
+    "crits": "2",
     "damage": "15",
     "dealt": "60",
     "eye": "0.00,0.00,162.15",
@@ -2222,9 +2222,9 @@
   "gun.burstrifle.dummy_default.head": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "2",
-    "crits": "4",
+    "crits": "2",
     "damage": "15",
     "dealt": "60",
     "eye": "0.00,0.00,162.15",
@@ -2244,7 +2244,7 @@
   "gun.burstrifle.five_pulls": {
     "ammo_used": "9",
     "burst": "3",
-    "confirms": "18",
+    "confirms": "9",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -2266,7 +2266,7 @@
   "gun.burstrifle.soldier.body": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -2288,9 +2288,9 @@
   "gun.burstrifle.soldier.head": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "15",
     "dealt": "30",
     "eye": "0.00,0.00,162.15",
@@ -2310,7 +2310,7 @@
   "gun.handcannon.dummy.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -2332,9 +2332,9 @@
   "gun.handcannon.dummy.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "55",
     "dealt": "110",
     "eye": "0.00,0.00,162.15",
@@ -2354,9 +2354,9 @@
   "gun.handcannon.dummy_default.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "55",
     "dealt": "110",
     "eye": "0.00,0.00,162.15",
@@ -2376,7 +2376,7 @@
   "gun.handcannon.five_pulls": {
     "ammo_used": "3",
     "burst": "1",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -2398,7 +2398,7 @@
   "gun.handcannon.soldier.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -2420,9 +2420,9 @@
   "gun.handcannon.soldier.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "55",
     "dealt": "110",
     "eye": "0.00,0.00,162.15",
@@ -2442,7 +2442,7 @@
   "gun.rifle.dummy.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -2464,9 +2464,9 @@
   "gun.rifle.dummy.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
-    "crits": "2",
+    "crits": "1",
     "damage": "12",
     "dealt": "19.2000122",
     "eye": "0.00,0.00,162.15",
@@ -2486,9 +2486,9 @@
   "gun.rifle.dummy_default.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
-    "crits": "2",
+    "crits": "1",
     "damage": "12",
     "dealt": "19.1999969",
     "eye": "0.00,0.00,162.15",
@@ -2508,7 +2508,7 @@
   "gun.rifle.five_pulls": {
     "ammo_used": "5",
     "burst": "1",
-    "confirms": "10",
+    "confirms": "5",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -2530,7 +2530,7 @@
   "gun.rifle.soldier.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -2552,9 +2552,9 @@
   "gun.rifle.soldier.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
-    "crits": "2",
+    "crits": "1",
     "damage": "12",
     "dealt": "19.2000122",
     "eye": "0.00,0.00,162.15",
@@ -2574,7 +2574,7 @@
   "gun.shotgun.dummy.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2618,7 +2618,7 @@
   "gun.shotgun.dummy_default.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2640,7 +2640,7 @@
   "gun.shotgun.five_pulls": {
     "ammo_used": "2",
     "burst": "1",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2662,7 +2662,7 @@
   "gun.shotgun.pellets.15m.ads": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2682,7 +2682,7 @@
   "gun.shotgun.pellets.15m.hip": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2704,7 +2704,7 @@
   "gun.shotgun.pellets.5m.ads": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2724,7 +2724,7 @@
   "gun.shotgun.pellets.5m.hip": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2746,7 +2746,7 @@
   "gun.shotgun.soldier.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2768,7 +2768,7 @@
   "gun.shotgun.soldier.head": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -2790,7 +2790,7 @@
   "gun.sniper.dummy.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -2856,7 +2856,7 @@
   "gun.sniper.five_pulls": {
     "ammo_used": "2",
     "burst": "1",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -2878,7 +2878,7 @@
   "gun.sniper.soldier.body": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -2920,7 +2920,7 @@
     "target_after": "325"
   },
   "melee.melee_guard.dummy.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "2.65000129",
     "hits_marked": "1",
@@ -2932,7 +2932,7 @@
     "target_at": "0.00,150.00,0.00"
   },
   "melee.melee_guard.foe.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "2.65000129",
     "hits_marked": "1",
@@ -2956,7 +2956,7 @@
     "target_at": "0.00,150.00,102.15"
   },
   "melee.melee_guard.soldier.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "2.65000129",
     "hits_marked": "1",
@@ -2968,7 +2968,7 @@
     "target_at": "0.00,295.00,92.40"
   },
   "melee.melee_guard.swarm.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "75",
     "guard_left": "2.65000129",
     "hits_marked": "1",
@@ -2980,7 +2980,7 @@
     "target_at": "0.00,954.56,84.40"
   },
   "melee.plain.dummy.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -2992,7 +2992,7 @@
     "target_at": "0.00,150.00,0.00"
   },
   "melee.plain.dummy.3.2m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3016,7 +3016,7 @@
     "target_at": "0.00,500.00,0.00"
   },
   "melee.plain.foe.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3028,7 +3028,7 @@
     "target_at": "0.00,150.00,102.15"
   },
   "melee.plain.foe.3.2m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3088,7 +3088,7 @@
     "target_at": "0.00,500.00,102.15"
   },
   "melee.plain.soldier.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3100,7 +3100,7 @@
     "target_at": "0.00,295.00,92.40"
   },
   "melee.plain.soldier.3.2m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "130",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3124,7 +3124,7 @@
     "target_at": "0.00,500.00,92.40"
   },
   "melee.plain.swarm.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "75",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3136,7 +3136,7 @@
     "target_at": "0.00,954.56,84.40"
   },
   "melee.plain.swarm.3.2m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "75",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3162,7 +3162,7 @@
   "melee.static_charge.dummy.1.5m": {
     "armed": "1",
     "armed_after": "0",
-    "confirms": "5",
+    "confirms": "4",
     "dealt": "250",
     "guard_left": "0",
     "hits_marked": "4",
@@ -3177,7 +3177,7 @@
   "melee.static_charge.foe.1.5m": {
     "armed": "1",
     "armed_after": "0",
-    "confirms": "5",
+    "confirms": "4",
     "dealt": "200",
     "guard_left": "0",
     "hits_marked": "4",
@@ -3207,7 +3207,7 @@
   "melee.static_charge.soldier.1.5m": {
     "armed": "1",
     "armed_after": "0",
-    "confirms": "5",
+    "confirms": "4",
     "dealt": "250",
     "guard_left": "0",
     "hits_marked": "4",
@@ -3222,7 +3222,7 @@
   "melee.static_charge.swarm.1.5m": {
     "armed": "1",
     "armed_after": "0",
-    "confirms": "4",
+    "confirms": "3",
     "dealt": "75",
     "guard_left": "0",
     "hits_marked": "3",
@@ -3235,7 +3235,7 @@
     "target_at": "0.00,954.56,84.40"
   },
   "melee.thornfist.dummy.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "195",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3248,7 +3248,7 @@
     "target_at": "0.00,150.00,0.00"
   },
   "melee.thornfist.foe.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "195",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3261,7 +3261,7 @@
     "target_at": "0.00,150.00,102.15"
   },
   "melee.thornfist.mate.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "0",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3274,7 +3274,7 @@
     "target_at": "0.00,150.00,102.15"
   },
   "melee.thornfist.soldier.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "195",
     "guard_left": "0",
     "hits_marked": "1",
@@ -3287,7 +3287,7 @@
     "target_at": "0.00,295.00,92.40"
   },
   "melee.thornfist.swarm.1.5m": {
-    "confirms": "2",
+    "confirms": "1",
     "dealt": "75",
     "guard_left": "0",
     "hits_marked": "1",
@@ -4733,7 +4733,7 @@
     "ammo_after_reload": "27",
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4743,7 +4743,7 @@
     "kick_pitch": "0.4357",
     "kick_yaw": "0.0186",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "150",
@@ -4758,7 +4758,7 @@
     "ammo_after_reload": "27",
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4782,7 +4782,7 @@
   "perk.burstrifle.burst_brace_stock.met": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4804,7 +4804,7 @@
   "perk.burstrifle.burst_brace_stock.unmet": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4826,9 +4826,9 @@
   "perk.burstrifle.burst_hunters_lens.met": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "2.29999995",
-    "crits": "4",
+    "crits": "2",
     "damage": "15",
     "dealt": "69",
     "eye": "0.00,0.00,162.15",
@@ -4846,9 +4846,9 @@
   "perk.burstrifle.burst_hunters_lens.unmet": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "4",
+    "confirms": "2",
     "crit_mult": "2",
-    "crits": "4",
+    "crits": "2",
     "damage": "15",
     "dealt": "60",
     "eye": "0.00,0.00,162.15",
@@ -4868,7 +4868,7 @@
   "perk.burstrifle.burst_scavenger_mag.met": {
     "ammo_used": "-2",
     "burst": "3",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4878,7 +4878,7 @@
     "kick_pitch": "0.4357",
     "kick_yaw": "-0.0057",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "150",
@@ -4890,7 +4890,7 @@
   "perk.burstrifle.burst_scavenger_mag.unmet": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4912,7 +4912,7 @@
   "perk.burstrifle.fourth_round.met": {
     "ammo_used": "4",
     "burst": "4",
-    "confirms": "8",
+    "confirms": "4",
     "crit_mult": "2",
     "crits": "0",
     "damage": "12",
@@ -4934,7 +4934,7 @@
   "perk.burstrifle.fourth_round.unmet": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4956,7 +4956,7 @@
   "perk.burstrifle.full_burst_barrel.met": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -4978,7 +4978,7 @@
   "perk.burstrifle.full_burst_barrel.unmet": {
     "ammo_used": "3",
     "burst": "3",
-    "confirms": "6",
+    "confirms": "3",
     "crit_mult": "2",
     "crits": "0",
     "damage": "15",
@@ -5000,7 +5000,7 @@
   "perk.handcannon.anchor_stock.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5020,7 +5020,7 @@
   "perk.handcannon.anchor_stock.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5042,7 +5042,7 @@
   "perk.handcannon.final_round_mag.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5064,7 +5064,7 @@
   "perk.handcannon.final_round_mag.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5086,7 +5086,7 @@
   "perk.handcannon.hammer_grip.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5096,7 +5096,7 @@
     "kick_pitch": "2.1491",
     "kick_yaw": "0.0000",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "140",
@@ -5110,7 +5110,7 @@
   "perk.handcannon.hammer_grip.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5134,7 +5134,7 @@
   "perk.handcannon.overpressure_barrel.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5156,7 +5156,7 @@
   "perk.handcannon.overpressure_barrel.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "55",
@@ -5178,9 +5178,9 @@
   "perk.handcannon.patient_sight.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "55",
     "dealt": "143",
     "eye": "0.00,0.00,162.15",
@@ -5198,9 +5198,9 @@
   "perk.handcannon.patient_sight.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "55",
     "dealt": "110",
     "eye": "0.00,0.00,162.15",
@@ -5219,9 +5219,9 @@
     "ammo_used": "1",
     "burst": "1",
     "chain_dealt": "31.3499756",
-    "confirms": "3",
+    "confirms": "2",
     "crit_mult": "2",
-    "crits": "2",
+    "crits": "1",
     "damage": "52.25",
     "dealt": "104.5",
     "eye": "0.00,0.00,162.15",
@@ -5242,7 +5242,7 @@
     "ammo_used": "1",
     "burst": "1",
     "chain_dealt": "0",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2",
     "crits": "0",
     "damage": "52.25",
@@ -5265,7 +5265,7 @@
     "ammo_after_reload": "30",
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5275,7 +5275,7 @@
     "kick_pitch": "0.8000",
     "kick_yaw": "0.0753",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "600",
@@ -5290,7 +5290,7 @@
     "ammo_after_reload": "30",
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5314,7 +5314,7 @@
   "perk.rifle.brace_stock.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5336,7 +5336,7 @@
   "perk.rifle.brace_stock.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5358,7 +5358,7 @@
   "perk.rifle.focus_barrel.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "13.7999992",
@@ -5380,7 +5380,7 @@
   "perk.rifle.focus_barrel.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5402,9 +5402,9 @@
   "perk.rifle.hunters_lens.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.9000001",
-    "crits": "2",
+    "crits": "1",
     "damage": "12",
     "dealt": "22.7999878",
     "eye": "0.00,0.00,162.15",
@@ -5422,9 +5422,9 @@
   "perk.rifle.hunters_lens.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
-    "crits": "2",
+    "crits": "1",
     "damage": "12",
     "dealt": "19.2000122",
     "eye": "0.00,0.00,162.15",
@@ -5444,7 +5444,7 @@
   "perk.rifle.scavenger_mag.met": {
     "ammo_used": "-4",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5454,7 +5454,7 @@
     "kick_pitch": "0.8000",
     "kick_yaw": "-0.0267",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "600",
@@ -5466,7 +5466,7 @@
   "perk.rifle.scavenger_mag.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "12",
@@ -5489,7 +5489,7 @@
     "ammo_used": "1",
     "burst": "1",
     "chain_dealt": "19.3800049",
-    "confirms": "3",
+    "confirms": "2",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "11.3999996",
@@ -5512,7 +5512,7 @@
     "ammo_used": "1",
     "burst": "1",
     "chain_dealt": "0",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.60000002",
     "crits": "0",
     "damage": "11.3999996",
@@ -5534,7 +5534,7 @@
   "perk.shotgun.last_shell.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "35.1499977",
@@ -5556,7 +5556,7 @@
   "perk.shotgun.last_shell.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "35.1499977",
@@ -5578,7 +5578,7 @@
   "perk.shotgun.point_blank_barrel.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5600,7 +5600,7 @@
   "perk.shotgun.point_blank_barrel.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5622,7 +5622,7 @@
   "perk.shotgun.rampage_grip.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5632,7 +5632,7 @@
     "kick_pitch": "1.2698",
     "kick_yaw": "-0.1364",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "4",
     "perks": "-",
     "rate": "65",
@@ -5646,7 +5646,7 @@
   "perk.shotgun.rampage_grip.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5670,7 +5670,7 @@
   "perk.shotgun.shell_catcher.met": {
     "ammo_used": "0",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5680,7 +5680,7 @@
     "kick_pitch": "1.2698",
     "kick_yaw": "0.0716",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "4",
     "perks": "-",
     "rate": "65",
@@ -5692,7 +5692,7 @@
   "perk.shotgun.shell_catcher.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5714,7 +5714,7 @@
   "perk.shotgun.slide_stock.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "42.5499992",
@@ -5735,7 +5735,7 @@
   "perk.shotgun.slide_stock.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5757,7 +5757,7 @@
   "perk.shotgun.tight_sight.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5777,7 +5777,7 @@
   "perk.shotgun.tight_sight.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "1.10000002",
     "crits": "0",
     "damage": "37",
@@ -5799,7 +5799,7 @@
   "perk.sniper.breath_stock.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5819,7 +5819,7 @@
   "perk.sniper.breath_stock.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5839,7 +5839,7 @@
   "perk.sniper.cold_bore_barrel.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5859,7 +5859,7 @@
   "perk.sniper.cold_bore_barrel.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5879,7 +5879,7 @@
   "perk.sniper.finisher_rounds.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "152",
@@ -5899,7 +5899,7 @@
   "perk.sniper.finisher_rounds.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "152",
@@ -5920,7 +5920,7 @@
     "ammo_after_reload": "4",
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5928,7 +5928,7 @@
     "eye": "0.00,0.00,162.15",
     "hip_spread": "3",
     "killed": "1",
-    "kills": "2",
+    "kills": "1",
     "pellet_spread": "0",
     "perks": "-",
     "rate": "70",
@@ -5943,7 +5943,7 @@
     "ammo_after_reload": "4",
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -5965,9 +5965,9 @@
   "perk.sniper.marksman_mag.met": {
     "ammo_used": "0",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
-    "crits": "2",
+    "crits": "1",
     "damage": "160",
     "dealt": "400",
     "eye": "0.00,0.00,162.15",
@@ -5985,7 +5985,7 @@
   "perk.sniper.marksman_mag.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -6005,7 +6005,7 @@
   "perk.sniper.rangefinder.met": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",
@@ -6025,7 +6025,7 @@
   "perk.sniper.rangefinder.unmet": {
     "ammo_used": "1",
     "burst": "1",
-    "confirms": "2",
+    "confirms": "1",
     "crit_mult": "2.5",
     "crits": "0",
     "damage": "160",

@@ -268,21 +268,24 @@ void UWWOWeaponComponent::Shoot()
 	}
 	NetShot.Origin = P->EyeLocation();
 	NetShot.Ends = Ends;
-	for (const auto& Pair : Totals)
 	{
-		if (IWWOTargetable* Target = Cast<IWWOTargetable>(Pair.Key))
+		TGuardValue<bool> Seen(UWWOWorldSubsystem::bAttackerSawHit, true); // this shot marks its hits once, below
+		for (const auto& Pair : Totals)
 		{
-			const float Before = Target->GetHealth() + Target->GetShield();
-			bool bKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point);
-			if (bJoiner)
+			if (IWWOTargetable* Target = Cast<IWWOTargetable>(Pair.Key))
 			{
-				bKilled = Before > 0.f && Before - Pair.Value.Damage <= 0.f;
-				NetShot.Hits.Add({ Pair.Key, Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point });
+				const float Before = Target->GetHealth() + Target->GetShield();
+				bool bKilled = Target->TakeHit(Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point);
+				if (bJoiner)
+				{
+					bKilled = Before > 0.f && Before - Pair.Value.Damage <= 0.f;
+					NetShot.Hits.Add({ Pair.Key, Pair.Value.Damage, Pair.Value.bCritical, Pair.Value.Point });
+				}
+				bAnyKilled |= bKilled;
+				Kills += bKilled ? 1 : 0;
+				bAnyCritical |= Pair.Value.bCritical;
+				if (!FirstHit) FirstHit = Pair.Key;
 			}
-			bAnyKilled |= bKilled;
-			Kills += bKilled ? 1 : 0;
-			bAnyCritical |= Pair.Value.bCritical;
-			if (!FirstHit) FirstHit = Pair.Key;
 		}
 	}
 	if (bJoiner) P->ServerGunShot(NetShot);
