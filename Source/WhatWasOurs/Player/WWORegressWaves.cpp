@@ -6,6 +6,7 @@
 
 #include "Player/WWORegress.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOWaveRules.h"
 #include "Enemies/WWOEnemy.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
@@ -59,11 +60,11 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		}
 	};
 	// Every enemy the game mode added to its Alive list since the scenario began, recorded once each.
-	auto RecordEnemies = [](FWWORegress& R, AWWOGameMode* GM, int32 From)
+	auto RecordEnemies = [](FWWORegress& R, FWWOWaveRules* W, int32 From)
 	{
-		for (int32 i = From; i < GM->Alive.Num(); ++i)
+		for (int32 i = From; i < W->Alive.Num(); ++i)
 		{
-			const AWWOEnemy* E = GM->Alive[i].Get();
+			const AWWOEnemy* E = W->Alive[i].Get();
 			const FString K = FString::Printf(TEXT("e%d"), i - From);
 			if (!E) { R.Record(K, TEXT("gone")); continue; }
 			const UWWOEnemyData* D = E->Data();
@@ -95,14 +96,15 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		{
 			if (NavBusy(R.World()) && Tick < 600) return false; // the spawn checks the navmesh
 			AWWOGameMode* GM = R.World()->GetAuthGameMode<AWWOGameMode>();
-			if (!GM) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
-			const int32 From = GM->Alive.Num();
+			FWWOWaveRules* W = GM ? GM->Waves() : nullptr;
+			if (!W) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
+			const int32 From = W->Alive.Num();
 			R.Record(TEXT("points"), GM->SpawnPoints().Num());
-			for (int32 i = 0; i < 3; ++i) GM->SpawnEnemy(Kind);
-			RecordEnemies(R, GM, From);
-			R.Record(TEXT("spawned"), GM->Alive.Num() - From);
+			for (int32 i = 0; i < 3; ++i) W->SpawnEnemy(Kind);
+			RecordEnemies(R, W, From);
+			R.Record(TEXT("spawned"), W->Alive.Num() - From);
 			R.Record(TEXT("rand_next"), WWO::FRand());
-			GM->Alive.SetNum(From);
+			W->Alive.SetNum(From);
 			RemovePoints();
 			return true;
 		};
@@ -117,25 +119,26 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		S.Step = [Number](FWWORegress& R, int32 Tick)
 		{
 			AWWOGameMode* GM = R.World()->GetAuthGameMode<AWWOGameMode>();
-			if (!GM) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
+			FWWOWaveRules* W = GM ? GM->Waves() : nullptr;
+			if (!W) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
 			const EWWOWaveState StateBefore = GM->State;
-			const int32 WaveBefore = GM->Wave;
-			const float TimerBefore = GM->Timer;
-			const TArray<FName> QueueBefore = GM->Queue;
+			const int32 WaveBefore = W->Wave;
+			const float TimerBefore = W->Timer;
+			const TArray<FName> QueueBefore = W->Queue;
 			R.Record(TEXT("state_before"), (int32)StateBefore);
 			R.Record(TEXT("size_scale"), GM->SizeScale);
-			GM->Wave = Number - 1;
-			GM->StartWave();
-			R.Record(TEXT("wave"), GM->Wave);
+			W->Wave = Number - 1;
+			W->StartWave();
+			R.Record(TEXT("wave"), W->Wave);
 			R.Record(TEXT("state"), (int32)GM->State);
-			R.Record(TEXT("timer"), GM->Timer);
-			R.Record(TEXT("count"), GM->Queue.Num());
-			R.Record(TEXT("queue"), Joined(GM->Queue));
+			R.Record(TEXT("timer"), W->Timer);
+			R.Record(TEXT("count"), W->Queue.Num());
+			R.Record(TEXT("queue"), Joined(W->Queue));
 			R.Record(TEXT("rand_next"), WWO::FRand());
 			GM->State = StateBefore;
-			GM->Wave = WaveBefore;
-			GM->Timer = TimerBefore;
-			GM->Queue = QueueBefore;
+			W->Wave = WaveBefore;
+			W->Timer = TimerBefore;
+			W->Queue = QueueBefore;
 			return true;
 		};
 		Out.Add(S);
@@ -157,28 +160,29 @@ void FWWORegress::AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		{
 			if (NavBusy(R.World()) && Tick < 600) return false;
 			AWWOGameMode* GM = R.World()->GetAuthGameMode<AWWOGameMode>();
-			if (!GM) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
+			FWWOWaveRules* W = GM ? GM->Waves() : nullptr;
+			if (!W) { R.Record(TEXT("no_game_mode"), 1); RemovePoints(); return true; }
 			const EWWOWaveState StateBefore = GM->State;
-			const int32 WaveBefore = GM->Wave;
-			const float TimerBefore = GM->Timer;
-			const TArray<FName> QueueBefore = GM->Queue;
-			const int32 From = GM->Alive.Num();
-			GM->Wave = 1;
-			GM->StartWave();
-			R.Record(TEXT("queue"), Joined(GM->Queue));
-			while (GM->Queue.Num() > 0)
+			const int32 WaveBefore = W->Wave;
+			const float TimerBefore = W->Timer;
+			const TArray<FName> QueueBefore = W->Queue;
+			const int32 From = W->Alive.Num();
+			W->Wave = 1;
+			W->StartWave();
+			R.Record(TEXT("queue"), Joined(W->Queue));
+			while (W->Queue.Num() > 0)
 			{
-				GM->SpawnEnemy(GM->Queue[0]);
-				GM->Queue.RemoveAt(0);
+				W->SpawnEnemy(W->Queue[0]);
+				W->Queue.RemoveAt(0);
 			}
-			RecordEnemies(R, GM, From);
-			R.Record(TEXT("spawned"), GM->Alive.Num() - From);
+			RecordEnemies(R, W, From);
+			R.Record(TEXT("spawned"), W->Alive.Num() - From);
 			R.Record(TEXT("rand_next"), WWO::FRand());
-			GM->Alive.SetNum(From);
+			W->Alive.SetNum(From);
 			GM->State = StateBefore;
-			GM->Wave = WaveBefore;
-			GM->Timer = TimerBefore;
-			GM->Queue = QueueBefore;
+			W->Wave = WaveBefore;
+			W->Timer = TimerBefore;
+			W->Queue = QueueBefore;
 			RemovePoints();
 			return true;
 		};

@@ -12,6 +12,7 @@
 #include "WhatWasOurs.h"
 #include "Game/WWOGameMode.h"
 #include "Game/WWOTesterRules.h"
+#include "Game/WWOWaveRules.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
 #include "Player/WWOCharacter.h"
@@ -92,11 +93,10 @@ namespace
 		bool bPvP = false, bTester = false;
 		TUniquePtr<FWWOMatchRules> SavedRules; // the level's own rules, while the scenario's run
 		EWWOWaveState State = EWWOWaveState::Idle;
-		int32 Wave = 0, Winner = -1;
+		int32 Winner = -1;
 		FWWOBotRoster Roster;
-		float Timer = 0.f, RestartLeft = -1.f, MatchLeft = 0.f, MatchElapsed = 0.f;
+		float RestartLeft = -1.f, MatchLeft = 0.f, MatchElapsed = 0.f;
 		TArray<FName> Queue;
-		TArray<TWeakObjectPtr<AWWOEnemy>> AliveList;
 		TSet<TWeakObjectPtr<AWWOCharacter>> PvPBound;
 		TSet<TWeakObjectPtr<AWWOPlayerState>> TeamGiven;
 		bool bGSPvP = false, bMatchOver = false;
@@ -184,11 +184,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			S.bPvP = G->bPvP;
 			S.bTester = G->bTester;
 			S.State = G->State;
-			S.Wave = G->Wave;
-			S.Timer = G->Timer;
 			S.RestartLeft = G->RestartLeft;
-			S.Queue = G->Queue;
-			S.AliveList = G->Alive;
 			S.MatchLeft = G->MatchLeft;
 			S.MatchElapsed = G->MatchElapsed;
 			S.Winner = G->Winner;
@@ -217,6 +213,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		static TUniquePtr<FWWOMatchRules> MakeRules(AWWOGameMode* G, ERules Rules)
 		{
 			if (Rules == ERules::Tester) return MakeUnique<FWWOTesterRules>(*G);
+			if (Rules == ERules::Waves) return MakeUnique<FWWOWaveRules>(*G);
 			return nullptr;
 		}
 
@@ -250,11 +247,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			G->bTester = S.bTester;
 			G->Rules = MoveTemp(S.SavedRules);
 			G->State = S.State;
-			G->Wave = S.Wave;
-			G->Timer = S.Timer;
 			G->RestartLeft = S.RestartLeft;
-			G->Queue = S.Queue;
-			G->Alive = S.AliveList;
 			G->MatchLeft = S.MatchLeft;
 			G->MatchElapsed = S.MatchElapsed;
 			G->Winner = S.Winner;
@@ -282,15 +275,15 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 
 		// --- Reading the rules ---
 		static int32 State(AWWOGameMode* G) { return (int32)G->State; }
-		static int32 Wave(AWWOGameMode* G) { return G->Wave; }
-		static float Timer(AWWOGameMode* G) { return G->Timer; }
+		static int32 Wave(AWWOGameMode* G) { return G->Waves() ? G->Waves()->Wave : -1; }
+		static float Timer(AWWOGameMode* G) { return G->Waves() ? G->Waves()->Timer : -1.f; }
 		static float RestartLeft(AWWOGameMode* G) { return G->RestartLeft; }
 		static void NoRestart(AWWOGameMode* G) { G->RestartLeft = -1.f; } // a lost round would reload the level
-		static const TArray<FName>& Queue(AWWOGameMode* G) { return G->Queue; }
+		static TArray<FName> Queue(AWWOGameMode* G) { return G->Waves() ? G->Waves()->Queue : TArray<FName>(); }
 		static TArray<AWWOEnemy*> AliveEnemies(AWWOGameMode* G)
 		{
 			TArray<AWWOEnemy*> Out;
-			for (const TWeakObjectPtr<AWWOEnemy>& E : G->Alive) Out.Add(E.Get());
+			if (const FWWOWaveRules* W = G->Waves()) for (const TWeakObjectPtr<AWWOEnemy>& E : W->Alive) Out.Add(E.Get());
 			return Out;
 		}
 		static float MatchLeft(AWWOGameMode* G) { return G->MatchLeft; }
@@ -300,18 +293,24 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		// The status line for a state, with the fields a line reads set for it (put back by Leave).
 		static FString StatusFor(AWWOGameMode* G, EWWOWaveState St, int32 Wave, float Timer, int32 Left, float MatchLeft, int32 Winner, bool bTestRun, FLinearColor& Color)
 		{
+			// A wave line from fresh wave rules, a match line from fresh match rules.
+			const bool bMatchLine = St == EWWOWaveState::Match || St == EWWOWaveState::MatchOver;
+			TUniquePtr<FWWOMatchRules> Was = MoveTemp(G->Rules);
+			G->Rules = MakeRules(G, bMatchLine ? ERules::Deathmatch : ERules::Waves);
 			G->State = St;
-			G->Wave = Wave;
-			G->Timer = Timer;
-			G->Queue.Reset();
-			G->Alive.Reset();
-			for (int32 i = 0; i < Left; ++i) G->Queue.Add("swarm");
+			if (FWWOWaveRules* W = G->Waves())
+			{
+				W->Wave = Wave;
+				W->Timer = Timer;
+				for (int32 i = 0; i < Left; ++i) W->Queue.Add("swarm");
+			}
 			G->MatchLeft = MatchLeft;
 			G->Winner = Winner;
 			const bool bWasTest = G->bTestRun;
 			G->bTestRun = bTestRun;
 			const FString Line = G->StatusText(Color);
 			G->bTestRun = bWasTest;
+			G->Rules = MoveTemp(Was);
 			return Line;
 		}
 		static void SkipWave(AWWOGameMode* G) { G->SkipWave(); }

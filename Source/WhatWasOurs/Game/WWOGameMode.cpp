@@ -8,6 +8,7 @@
 #include "Allies/WWOAlly.h"
 #include "World/WWOTarget.h"
 #include "Game/WWOTesterRules.h"
+#include "Game/WWOWaveRules.h"
 #include "Game/WWOPlayerState.h"
 #include "Game/WWOGameState.h"
 #include "Player/WWOCharacter.h"
@@ -31,9 +32,6 @@
 
 namespace
 {
-	constexpr float MinSpawnDistance = 1400.f; // enemies don't appear right next to you (cm)
-	constexpr float CorpseCleanup = 4.f;
-
 	AWWOGameMode* WaveMode(UWorld* World) { return World ? Cast<AWWOGameMode>(World->GetAuthGameMode()) : nullptr; }
 
 	// Adds the players and bots on each PvP team to Count, leaving out Except (someone about to be placed).
@@ -51,21 +49,8 @@ namespace
 	FAutoConsoleCommandWithWorldAndArgs WaveCommand(TEXT("wwo.Wave"), TEXT("wwo.Wave <n>: clear this wave and start wave n now"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			if (AWWOGameMode* GM = WaveMode(World)) GM->JumpToWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : GM->Wave + 1);
+			if (AWWOGameMode* GM = WaveMode(World)) GM->JumpToWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : (GM->Waves() ? GM->Waves()->Wave : 0) + 1);
 		}));
-
-	// The waves, in order: kinds of the enemy registry (WWOEnemyKinds) and how many. Past the last one, it repeats the last wave 25% bigger each time.
-	const TArray<TMap<FName, int32>>& Waves()
-	{
-		static const TArray<TMap<FName, int32>> List = {
-			{ { WWOIds::Enemy::Swarm, 6 } },
-			{ { WWOIds::Enemy::Swarm, 6 }, { WWOIds::Enemy::Soldier, 2 } },
-			{ { WWOIds::Enemy::Swarm, 8 }, { WWOIds::Enemy::Soldier, 3 } },
-			{ { WWOIds::Enemy::Soldier, 4 }, { WWOIds::Enemy::Tank, 1 } },
-			{ { WWOIds::Enemy::Swarm, 10 }, { WWOIds::Enemy::Soldier, 3 }, { WWOIds::Enemy::Tank, 1 } },
-		};
-		return List;
-	}
 }
 
 AWWOGameMode::AWWOGameMode()
@@ -86,6 +71,7 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	bPvP = UGameplayStatics::HasOption(Options, TEXT("pvp"));
 	bTester = !bPvP && (UGameplayStatics::HasOption(Options, TEXT("tester")) || WWOSwitches::Has(TEXT("WWOTester")));
 	if (bTester) Rules = MakeUnique<FWWOTesterRules>(*this);
+	else if (!bPvP) Rules = MakeUnique<FWWOWaveRules>(*this);
 	FString Value;
 	if (WWOSwitches::Value(TEXT("WWOKillTarget="), Value)) KillTarget = CmdKillTarget = FCString::Atof(*Value); // tests
 	bTestRun = WWOSwitches::HasAutoTestText();
@@ -146,9 +132,7 @@ void AWWOGameMode::Logout(AController* Exiting)
 		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place"), *GetNameSafe(Exiting->PlayerState));
 	}
 	Super::Logout(Exiting);
-	// Co-op: if the last player standing leaves, those who are down have nobody to revive them.
-	// (Checked a moment later, once the leaver's character is gone.)
-	if (!bPvP) GetWorldTimerManager().SetTimerForNextTick(this, &AWWOGameMode::OnPlayerDied);
+	if (Rules) Rules->OnPlayerLeft(Exiting);
 }
 
 int32 AWWOGameMode::People() const
@@ -250,19 +234,7 @@ void AWWOGameMode::Begin()
 		State = EWWOWaveState::Match;
 		return;
 	}
-	if (Rules)
-	{
-		Rules->Begin();
-		return;
-	}
-	if (Enabled < 0.5f || SpawnPoints().Num() == 0)
-	{
-		State = EWWOWaveState::Idle;
-		return;
-	}
-	for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It) It->Destroy(); // waves replace the hand-placed enemies
-	Wave = 0;
-	Countdown(StartDelay);
+	if (Rules) Rules->Begin();
 }
 
 AActor* AWWOGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -343,43 +315,18 @@ void AWWOGameMode::LoadMap(UObject* WorldContext, FName Level)
 
 void AWWOGameMode::SkipWave()
 {
-	Queue.Reset();
-	for (const TWeakObjectPtr<AWWOEnemy>& Enemy : Alive)
-	{
-		if (Enemy.IsValid() && !Enemy->IsDead()) Enemy->TakeHit(99999.f, false, Enemy->GetActorLocation());
-	}
+	if (FWWOWaveRules* W = Waves()) W->SkipWave();
 }
 
 void AWWOGameMode::JumpToWave(int32 Number)
 {
-	if (State == EWWOWaveState::Idle || Number < 1) return;
-	Queue.Reset();
-	for (const TWeakObjectPtr<AWWOEnemy>& Enemy : Alive)
-	{
-		if (Enemy.IsValid()) Enemy->Destroy();
-	}
-	Alive.Reset();
-	Wave = Number - 1;
-	StartWave();
-}
-
-void AWWOGameMode::Countdown(float Seconds)
-{
-	State = EWWOWaveState::Countdown;
-	Timer = Seconds;
+	if (FWWOWaveRules* W = Waves()) W->JumpToWave(Number);
 }
 
 void AWWOGameMode::Tick(float DeltaSeconds)
 {
 	WWO_PROF("GameMode");
 	Super::Tick(DeltaSeconds);
-	// Every player's death counts (online, players join later and respawn as new characters).
-	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())
-	{
-		if (BoundPlayers.Contains(P)) continue;
-		P->Health->OnDied.AddUObject(this, &AWWOGameMode::OnPlayerDied);
-		BoundPlayers.Add(P);
-	}
 	// Hosting: the game others see in their list follows this match (map, mode, players in it).
 	if (GetNetMode() == NM_ListenServer && (PublishLeft -= DeltaSeconds) <= 0.f)
 	{
@@ -407,145 +354,12 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 		Restart();
 		return;
 	}
-	switch (State)
-	{
-	case EWWOWaveState::Countdown:
-		Timer -= DeltaSeconds;
-		if (Timer <= 0.f) StartWave();
-		break;
-	case EWWOWaveState::Spawning:
-		Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
-		if (Queue.Num() > 0)
-		{
-			Timer -= DeltaSeconds;
-			if (Timer <= 0.f)
-			{
-				Timer = SpawnStagger;
-				SpawnEnemy(Queue[0]);
-				Queue.RemoveAt(0);
-			}
-		}
-		else if (Alive.Num() == 0)
-		{
-			WaveCleared();
-		}
-		break;
-	default:
-		break;
-	}
-}
-
-void AWWOGameMode::StartWave()
-{
-	Wave += 1;
-	const TMap<FName, int32>& Plan = Waves()[FMath::Min(Wave - 1, Waves().Num() - 1)];
-	const float Growth = FMath::Pow(1.25f, FMath::Max(Wave - Waves().Num(), 0));
-	Queue.Reset();
-	for (const auto& Pair : Plan)
-	{
-		const int32 Count = FMath::Max(FMath::RoundToInt(Pair.Value * SizeScale * Growth), 1);
-		for (int32 i = 0; i < Count; ++i) Queue.Add(Pair.Key);
-	}
-	for (int32 i = Queue.Num() - 1; i > 0; --i) Queue.Swap(i, WWO::RandRange(0, i)); // shuffle
-	Timer = 0.f;
-	State = EWWOWaveState::Spawning;
-}
-
-void AWWOGameMode::WaveCleared()
-{
-	if (Wave >= FMath::RoundToInt(WavesToWin))
-	{
-		State = EWWOWaveState::Won;
-		return;
-	}
-	Countdown(BreakTime);
-}
-
-void AWWOGameMode::OnPlayerDied()
-{
-	if (bPvP) return; // PvP deaths are scored per player (OnPvPDeath)
-	if (State == EWWOWaveState::Idle || State == EWWOWaveState::Won || State == EWWOWaveState::Lost) return;
-	// Alone, a living ally keeps the run going (you respawn). Online, downed players stay down
-	// until revived, and only players can revive: everyone down loses.
-	bool bAnyoneUp = GetNetMode() == NM_Standalone && UWWOWorldSubsystem::Get(this)->LivingTeammates().Num() > 0;
-	for (const AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers()) bAnyoneUp |= !P->Health->bDead;
-	if (!bAnyoneUp)
-	{
-		State = EWWOWaveState::Lost; // nobody left standing
-		RestartLeft = 4.f;
-	}
-}
-
-AActor* AWWOGameMode::PickPoint(FName Kind) const
-{
-	// A spawn point that suits this enemy (if any are marked for it), away from you.
-	const TArray<AActor*> All = SpawnPoints();
-	TArray<AActor*> Points = All.FilterByPredicate([Kind](const AActor* P) { return P->Tags.Num() <= 1 || P->ActorHasTag(Kind); });
-	if (Points.Num() == 0) Points = All;
-	const TArray<AWWOCharacter*> Players = UWWOWorldSubsystem::Get(this)->GetPlayers();
-	const TArray<AActor*> Far = Points.FilterByPredicate([&Players](const AActor* P)
-	{
-		for (const AWWOCharacter* Player : Players)
-		{
-			if (FVector::Dist(P->GetActorLocation(), Player->GetActorLocation()) < MinSpawnDistance) return false; // away from everyone
-		}
-		return true;
-	});
-	if (Far.Num() > 0) Points = Far;
-	return Points.Num() > 0 ? Points[WWO::RandRange(0, Points.Num() - 1)] : nullptr;
-}
-
-void AWWOGameMode::SpawnEnemy(FName Kind)
-{
-	const AActor* Point = PickPoint(Kind);
-	if (!Point) return;
-	const FWWOEnemyKind& Entry = WWOEnemyKinds::FindOrSwarm(Kind);
-	UClass* Class = Entry.Class;
-	// Godot drops the enemy within 1.5 m of the marker (the Tank right on it: the kind's SpawnScatter) with its feet on
-	// the marker, wherever that lands. Here the actor is its capsule's center, and a spot inside a
-	// crate stack or off the navmesh is tried again (up to 8 times), so nobody starts boxed in.
-	const UCapsuleComponent* Capsule = Class->GetDefaultObject<AWWOEnemy>()->GetCapsuleComponent();
-	const float Radius = Capsule->GetScaledCapsuleRadius();
-	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	FCollisionQueryParams Overlap(SCENE_QUERY_STAT(WWOWaveSpawn), false);
-	FVector Feet = Point->GetActorLocation();
-	for (int32 Try = 0; Try < 8; ++Try)
-	{
-		const float Scatter = Entry.SpawnScatter;
-		const FVector Offset = Scatter > 0.f ? FVector(WWO::FRandRange(-Scatter, Scatter), WWO::FRandRange(-Scatter, Scatter), 0.f) : FVector::ZeroVector;
-		const FVector Spot = Point->GetActorLocation() + Offset;
-		FNavLocation OnMesh;
-		const bool bOnMesh = !Nav || Nav->ProjectPointToNavigation(Spot, OnMesh, FVector(Radius, Radius, 100.f));
-		const bool bClear = !GetWorld()->OverlapBlockingTestByChannel(Spot + FVector(0, 0, HalfHeight), FQuat::Identity, ECC_Pawn,
-			FCollisionShape::MakeCapsule(Radius, HalfHeight - 2.f), Overlap);
-		if (bOnMesh && bClear)
-		{
-			Feet = Spot;
-			break;
-		}
-		FNavLocation Near;
-		if (Try == 7 && Nav && Nav->ProjectPointToNavigation(Point->GetActorLocation(), Near, FVector(300.f, 300.f, 100.f)))
-		{
-			Feet = FVector(Near.Location.X, Near.Location.Y, Point->GetActorLocation().Z); // nothing clear nearby: the closest navmesh spot
-		}
-	}
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	Params.bDeferConstruction = true;
-	const FTransform Where(FRotator(0.f, WWO::FRandRange(0.f, 360.f), 0.f), Feet + FVector(0, 0, HalfHeight));
-	AWWOEnemy* Enemy = GetWorld()->SpawnActor<AWWOEnemy>(Class, Where, Params);
-	if (!Enemy) return;
-	Enemy->bRespawns = false; // wave enemies don't respawn
-	Enemy->FinishSpawning(Where);
-	Enemy->bAlerted = true; // waves come looking for you
-	Enemy->OnDied.AddLambda([](AWWOEnemy* Dead) { Dead->SetLifeSpan(CorpseCleanup); });
-	Alive.Add(Enemy);
+	if (Rules) Rules->Advance(DeltaSeconds);
 }
 
 FString AWWOGameMode::StatusText(FLinearColor& OutColor) const
 {
-	const int32 Total = FMath::RoundToInt(WavesToWin);
+	if (Rules) return Rules->StatusText(OutColor);
 	OutColor = FLinearColor::White;
 	const AWWOGameState* GS = GetGameState<AWWOGameState>();
 	const int32 Blue = GS && GS->TeamScores.Num() > 0 ? GS->TeamScores[0] : 0;
@@ -567,18 +381,6 @@ FString AWWOGameMode::StatusText(FLinearColor& OutColor) const
 		OutColor = Winner < 0 ? FLinearColor(0.9f, 0.9f, 0.9f) : AWWOPlayerState::TeamColor(Winner);
 		return Winner < 0 ? FString::Printf(TEXT("DRAW  %d – %d%s"), Blue, Orange, bTestRun ? TEXT("   ·   restarting") : TEXT(""))
 			: FString::Printf(TEXT("%s WINS  %d – %d%s"), *AWWOPlayerState::TeamName(Winner), Blue, Orange, bTestRun ? TEXT("   ·   restarting") : TEXT(""));
-	case EWWOWaveState::Countdown:
-		return Wave > 0 ? FString::Printf(TEXT("Wave %d of %d in %d"), Wave + 1, Total, FMath::CeilToInt(Timer))
-			: FString::Printf(TEXT("Get ready: wave 1 of %d in %d"), Total, FMath::CeilToInt(Timer));
-	case EWWOWaveState::Spawning:
-		OutColor = FLinearColor(1.f, 0.9f, 0.75f);
-		return FString::Printf(TEXT("WAVE %d / %d   ·   %d enemies left"), Wave, Total, Alive.Num() + Queue.Num());
-	case EWWOWaveState::Won:
-		OutColor = FLinearColor(0.6f, 1.f, 0.65f);
-		return FString::Printf(TEXT("ARENA CLEARED   ·   %d waves"), Wave);
-	case EWWOWaveState::Lost:
-		OutColor = FLinearColor(1.f, 0.45f, 0.4f);
-		return FString::Printf(TEXT("DEFEATED on wave %d   ·   restarting"), Wave);
 	default:
 		return FString();
 	}

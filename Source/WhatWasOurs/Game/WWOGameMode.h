@@ -93,22 +93,19 @@ public:
 	TUniquePtr<FWWOStressHarness> Stress; // test runs with a WWOStress switch only (WWOGameModeStress.cpp)
 
 	EWWOWaveState State = EWWOWaveState::Idle;
-	int32 Wave = 0;
 
 	void Restart(); // the same map again (online: the host takes everyone along)
-	void SkipWave(); // test helper: kill everything in the current wave
-	void JumpToWave(int32 Number); // test helper: clear this wave and start wave Number now
+	void SkipWave(); // test helper (wwo.SkipWave, Settings): FWWOWaveRules::SkipWave, in waves only
+	void JumpToWave(int32 Number); // test helper (wwo.Wave): FWWOWaveRules::JumpToWave, in waves only
+	FWWOWaveRules* Waves() const { return Rules ? Rules->AsWaves() : nullptr; }
+	TArray<AActor*> SpawnPoints() const; // the level's enemy spawn points (Target Points tagged EnemySpawn)
 	// Alone: opens the map. Hosting: moves everyone to it (ServerTravel, still a LAN game).
 	// In someone else's game: only the host changes maps, so it just says so.
 	static void LoadMap(UObject* WorldContext, FName Level);
 	FString StatusText(FLinearColor& OutColor) const;
 
 private:
-	float Timer = 0.f;
 	float RestartLeft = -1.f;
-	TArray<FName> Queue;
-	TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
-	TSet<TWeakObjectPtr<class AWWOCharacter>> BoundPlayers; // players whose death the waves listen for
 	TSet<TWeakObjectPtr<class AWWOCharacter>> PvPBound;     // players whose death PvP scores
 	TSet<TWeakObjectPtr<class AWWOPlayerState>> TeamGiven;  // players BalanceTeam already placed
 	bool bStarted = false;
@@ -132,20 +129,14 @@ private:
 	void UpdateWaveTest(float DeltaSeconds);
 
 	void Begin();
-	void Countdown(float Seconds);
 	void UpdateMatch(float DeltaSeconds);
 	void OnPvPDeath(class AWWOCharacter* Victim);
 	void EndMatch(int32 WinningTeam);
 	class AWWOGameState* WGS() const;
-	void StartWave();
-	void WaveCleared();
-	void OnPlayerDied();
-	void SpawnEnemy(FName Kind);
-	AActor* PickPoint(FName Kind) const;
-	TArray<AActor*> SpawnPoints() const;
 
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the wave spawn directly; no gameplay code uses this.
 	friend class FWWORegress;
 	friend struct FWWOBotRoster;
 	friend class FWWOTesterRules;
+	friend class FWWOWaveRules;
 };

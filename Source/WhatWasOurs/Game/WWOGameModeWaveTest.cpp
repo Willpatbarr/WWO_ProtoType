@@ -4,6 +4,7 @@
 // target. Ends with a "WaveTest done" summary line and quits.
 
 #include "Game/WWOGameMode.h"
+#include "Game/WWOWaveRules.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
@@ -32,6 +33,15 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (!P) return;
 	P->Health->GodMode = 1.f;
 	if (WaveTestHome.IsZero()) WaveTestHome = P->GetActorLocation();
+	FWWOWaveRules* W = Waves();
+	if (!W)
+	{
+		// Not a waves match: nothing to fight, as between waves.
+		WaveTestFight = 0.f;
+		WaveTestTracks.Reset();
+		return;
+	}
+	const int32 Wave = W->Wave;
 	if ((!bWaveTestNavChecked || (Wave == 3 && WaveTestFight > 20.f && WaveTestFight - DeltaSeconds <= 20.f)) && State == EWWOWaveState::Spawning && WaveTestFight > 5.f)
 	{
 		// Can every spawn point reach you on the navmesh?
@@ -136,9 +146,9 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	{
 		WWOTest::Shot(FString::Printf(TEXT("wave_%d"), Wave));
 	}
-	if (Queue.Num() == 0 && WaveTestFight >= FightTime)
+	if (W->Queue.Num() == 0 && WaveTestFight >= FightTime)
 	{
-		UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d fought %.0f s, skipping the %d left"), Wave, WaveTestFight, Alive.Num());
+		UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d fought %.0f s, skipping the %d left"), Wave, WaveTestFight, W->Alive.Num());
 		SkipWave();
 		return;
 	}
@@ -256,7 +266,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (WaveTestLog > 0.f) return;
 	WaveTestLog = 3.f;
 	UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d at %.0f s, %d alive, %d queued; player %s health %.0f; enemy shots hit the player %d times"), Wave, WaveTestFight,
-		Alive.Num(), Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, AWWOEnemyProjectile::PlayerHits);
+		W->Alive.Num(), W->Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, AWWOEnemyProjectile::PlayerHits);
 	for (AWWOAlly* A : WS->AllTeammates())
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest   %s %s at %s speed %.1f"), *A->GetName(), *A->StatusText(), *A->GetActorLocation().ToCompactString(),
