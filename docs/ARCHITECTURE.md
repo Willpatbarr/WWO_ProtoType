@@ -133,10 +133,15 @@ walks the table in its order (the HUD line's).
 - **A joiner's kit**: the host's checks (`HostThrow`, `HostUseAbility`) return an `EWWOKitRefusal`
   (`ServerActivateUlt` logs one); `ClientKitRefused(What)` names the kit with an `EWWOKit` (a `uint8` on the wire);
   `WWOKit::RefusalText` (`Player/WWOKitRefusal.h`) is the one place a reason becomes words (the host's log).
-- Flora effects (`Flora/`) are actors with static `Spawn` / `Raise` factories. They age in `Tick`; the
-  host deals damage every 0.5 s inside an `FWWODamageBy` scope.
+- Flora effects (`Flora/`) are actors with static `Spawn` / `Raise` factories. The lingering ones (spore
+  pool, spore fog, spore patch, bark wall, Entrench roots) each keep an `FWWOEffectLife`
+  (`Flora/WWOEffectLife.h`): the age, the step through hold, tail and over (`Advance` with the effect's own
+  replicated `Duration`), the grow-in and fade fractions, and `End` (the host destroys; a joiner's copy
+  waits for the host's to go, the not-replicated roots destroy themselves). Each effect keeps its own
+  numbers and per-tick work. The host deals damage every 0.5 s inside an `FWWODamageBy` scope.
 - Effects everyone must see go through the `AWWOGameState` statics (`Blast`, `Bolt`, `Text`, `Sound`,
-  `Poison`, `Tracer`, `Shockwave`, `Discharge`): do it here, and multicast if this is a listen server.
+  `Poison`, `Tracer`, `Shockwave`, `Discharge`): do it here, then `HostRelay(World)` gives the game state to
+  multicast through when this is a listen server (null otherwise).
 - `FX/WWOFX` is hand-built: shape and material helpers, `AWWOFXActor` (a list of tweens),
   `AWWOParticles` (CPU instanced particles), lightning. No Niagara.
 - `UWWOSound` plays `Config/Sounds.json` events on this machine only (`Play`, `PlayFlat`, `PlayFor`).

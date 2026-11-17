@@ -96,6 +96,25 @@ Anything that acts on "everyone within R of a point" (a blast, a pool, an aura, 
 4. Test: an `area.*` scenario (`Player/WWORegressArea.cpp`) with one victim just inside and one just
    outside, measured your effect's way.
 
+## A lingering effect
+
+A world effect that appears, lasts a while and goes (a pool, a fog, a wall):
+
+1. An actor in `Flora/` with a static `Spawn` that sets its numbers (as replicated `COND_InitialOnly`
+   properties if a joiner must see it: `Duration` at least) before `FinishSpawning`; `BeginPlay` builds the
+   looks on every machine.
+2. A member `FWWOEffectLife Life`, made in the constructor with its grow time, tail time and whether the
+   tail has its own clock (`Flora/WWOEffectLife.h`): no tail if it fades inside its duration (pool, fog),
+   a tail on the same clock (patch), or a restarted one (wall, roots).
+3. `Tick`: `const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);` then its own work by step:
+   looks from `Life.GrowIn()`, `FadeIn`, `LeftOf(Duration, Seconds)`, `TailLeft(Duration)`; what happens
+   once on `Leaving` (the wall drops its cover); on `Over`, `FWWOEffectLife::End(*this)` (the host destroys;
+   a joiner's copy keeps getting `Over` until the host's goes: decide what it shows meanwhile). Damage only
+   under `HasAuthority()`, every 0.5 s, inside an `FWWODamageBy`, through an `FWWOAreaQuery` (above).
+4. Opt out of the navmesh and set Owner (AGENTS.md rules 4 and 8).
+5. Test: a `life.*` scenario (`Player/WWORegressLife.cpp`): hits by tick, its looks around each edge of its
+   life, its switches and the tick it goes, and a `.joiner` copy if it replicates.
+
 ## An enemy type
 
 1. An `AWWOEnemy` subclass in `Enemies/WWOEnemyTypes.*` overriding the hooks it needs (`Setup`, `Think`,

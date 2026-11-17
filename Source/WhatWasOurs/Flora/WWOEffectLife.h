@@ -61,7 +61,6 @@ struct FWWOEffectLife
 		return bOver ? EWWOLifeStep::Over : EWWOLifeStep::Tail;
 	}
 
-	bool InTail() const { return bLeft; }
 	float GrowIn() const { return WWO::BackOut(Age / GrowTime); }                     // 0 -> 1 (overshoots)
 	float FadeIn(float Seconds) const { return FMath::Clamp(Age / Seconds, 0.f, 1.f); } // 0 -> 1, linear
 	float LeftOf(float Duration, float Seconds) const { return FMath::Clamp((Duration - Age) / Seconds, 0.f, 1.f); } // 1 -> 0 over the duration's last Seconds

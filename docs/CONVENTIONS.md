@@ -107,6 +107,8 @@ Look here before writing a new one.
 | A data asset by id | `UWWOLoadoutSubsystem::FindById` |
 | A modified stat | `Character->M("stat_name", Base)` |
 | Another character's loadout | `UWWOLoadoutSubsystem::Get(Context)` |
+| An effect's age, grow-in, fade, tail and end (the host destroys) | `FWWOEffectLife` (`Flora/WWOEffectLife.h`) |
+| Show an effect on every machine (from the host) | the `AWWOGameState` statics; a new one ends with `HostRelay(World)` and its multicast |
 | Basic shapes, materials, lights, ground lookup for effects | `WWOFX::Sphere` / `Cube` / `AddShape` / `AddSoftSphere` / `AddGroundDisc` / `GroundBelow`, `WWOFX::AddPointLight` (any actor), `AWWOFXActor::AddLight` (`FX/WWOFX.*`) |
 | A navmesh path | `WWONav::FindPath` (`Enemies/WWOEnemy.*`) |
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
