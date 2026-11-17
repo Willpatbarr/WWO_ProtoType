@@ -123,6 +123,9 @@ int32 UWWOWorldSubsystem::TeamOf(const AActor* Player)
 
 bool UWWOWorldSubsystem::CanHurt(const UObject* Attacker, const AActor* Victim)
 {
+	// An AI teammate is on every player's side in co-op. PvP has none (the game mode removes them) and
+	// they have no team, so there it stays as it was.
+	if (Cast<AWWOAlly>(Victim)) return IsPvP(Victim) || !PlayerOf(Attacker);
 	if (!Cast<AWWOCharacter>(Victim)) return true; // enemies, dummies
 	if (!IsPvP(Victim)) return false;              // co-op: players never hurt each other
 	const AWWOCharacter* By = PlayerOf(Attacker);

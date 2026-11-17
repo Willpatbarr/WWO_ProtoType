@@ -80,7 +80,8 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
 - **Who did it** is ambient: an `FWWODamageBy` scope sets `UWWOWorldSubsystem::CurrentAttacker` for the
   hits made inside it. Kill credit, hit markers and which damage numbers show all read it.
 - **Who may hurt whom** is one function, `UWWOWorldSubsystem::CanHurt(Attacker, Victim)`: non-players
-  always; players only in PvP, on the other team, never themselves. `PlayerOf(Actor)` walks Owner and
+  always; players only in PvP, on the other team, never themselves; AI teammates (`AWWOAlly`) never by a
+  player (or their kit) in co-op. `PlayerOf(Actor)` walks Owner and
   Instigator to find the player behind a grenade, pool or fog.
 - **Targets** come from `UWWOWorldSubsystem::LivingTargets` (PvE enemies, dummies, and in PvP the other
   team).

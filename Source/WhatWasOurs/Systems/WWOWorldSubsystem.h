@@ -77,7 +77,8 @@ public:
 	static bool IsPvP(const UObject* WorldContext);
 	static int32 TeamOf(const AActor* Player); // -1: not a player (or no team yet)
 	// Can Attacker (a player or anything they own) hurt Victim? Enemies and dummies always; players
-	// only in PvP, and only the other team's (no friendly fire, never yourself).
+	// only in PvP, and only the other team's (no friendly fire, never yourself); AI teammates
+	// (AWWOAlly) never by a player in co-op (anyone else, enemies, still can).
 	static bool CanHurt(const UObject* Attacker, const AActor* Victim);
 	// The player a context belongs to: itself, a component's owner, or an actor's owner (or
 	// instigator), a few levels up (a grenade's thrower, a pool's...).
