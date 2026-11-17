@@ -506,15 +506,11 @@ FString AWWOEnemy::PathDebug() const
 
 bool AWWOEnemy::LedgeAhead(const FVector& Direction) const
 {
-	// A step that way, is there floor within a short drop? (Level geometry only.)
+	// A step that way (its radius + 70 cm), is there floor within a short drop (150 cm below its feet)?
+	// Level geometry only.
 	const FVector Step = GetActorLocation() + Direction.GetSafeNormal2D() * (GetCapsuleComponent()->GetScaledCapsuleRadius() + 70.f);
 	const float Feet = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-	FHitResult Hit;
-	return !GetWorld()->LineTraceSingleByObjectType(Hit, Step, Step - FVector(0, 0, Feet + 150.f), Objects,
-		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyLedge), false, this));
+	return WWONav::LedgeAhead(GetWorld(), FWWOProbe(), Step, Feet + 150.f, FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyLedge), false, this));
 }
 
 float AWWOEnemy::HeightToTarget() const
@@ -527,18 +523,14 @@ float AWWOEnemy::HeightToTarget() const
 
 bool AWWOEnemy::WallAhead(const FVector& Direction, FVector* OutNormal) const
 {
-	// Level geometry (not people) within a step of its capsule along Direction?
+	// Level geometry (not people) within a step of its capsule along Direction: its capsule 15 cm
+	// shorter, from 10 cm up (clear of the floor), swept 30 cm; the first hit (for its normal).
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
-	const FVector From = GetActorLocation() + FVector(0, 0, 10.f); // clear of the floor
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-	FHitResult Hit;
-	const bool bHit = GetWorld()->SweepSingleByObjectType(Hit, From, From + Direction.GetSafeNormal2D() * 30.f, FQuat::Identity, Objects,
-		FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
-		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyWall), false, this));
-	if (bHit && OutNormal) *OutNormal = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
-	return bHit;
+	FWWOProbe Probe;
+	Probe.Radius = Capsule->GetScaledCapsuleRadius();
+	Probe.HalfHeight = Capsule->GetScaledCapsuleHalfHeight() - 15.f;
+	return WWONav::WallAhead(GetWorld(), Probe, GetActorLocation() + FVector(0, 0, 10.f), Direction.GetSafeNormal2D() * 30.f,
+		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyWall), false, this), OutNormal);
 }
 
 void AWWOEnemy::PinCrit(FName Bone, const FVector& WorldPoint, const FVector& HalfExtentCm)

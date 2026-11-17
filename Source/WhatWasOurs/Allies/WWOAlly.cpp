@@ -227,13 +227,13 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 		// Give you some room. Godot backs straight off even into a wall; here it stays put
 		// when a wall is right behind it.
 		const FVector Away = -To.GetSafeNormal();
+		// The enemies' wall probe (its capsule 15 cm shorter, from 10 cm up, swept 30 cm), as a sweep test.
 		const UCapsuleComponent* Capsule = GetCapsuleComponent();
-		FCollisionObjectQueryParams Objects;
-		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-		const FVector From = GetActorLocation() + FVector(0, 0, 10.f);
-		const bool bWall = GetWorld()->SweepTestByObjectType(From, From + Away * 30.f, FQuat::Identity, Objects,
-			FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
+		FWWOProbe Probe;
+		Probe.Radius = Capsule->GetScaledCapsuleRadius();
+		Probe.HalfHeight = Capsule->GetScaledCapsuleHalfHeight() - 15.f;
+		Probe.bAnyHit = true;
+		const bool bWall = WWONav::WallAhead(GetWorld(), Probe, GetActorLocation() + FVector(0, 0, 10.f), Away * 30.f,
 			FCollisionQueryParams(SCENE_QUERY_STAT(WWOAllyBack), false, this));
 		return bWall ? FVector::ZeroVector : Away * 0.5f;
 	}

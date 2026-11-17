@@ -10,7 +10,7 @@
 #include "Player/WWOUltComponent.h"
 #include "NavigationSystem.h"
 #include "Data/WWOData.h"
-#include "Enemies/WWOEnemy.h" // WWONav
+#include "Systems/WWONav.h"
 #include "Flora/WWOSporeFog.h"
 #include "Game/WWOGameMode.h"
 #include "Game/WWOGameState.h"
@@ -553,13 +553,16 @@ void AWWOBotController::PickGoal(const AWWOCharacter* Me)
 
 bool AWWOBotController::SideIsClear(const AWWOCharacter* Me, const FVector& Direction) const
 {
+	// Lines on the Visibility channel from its centre: a wall within 130 cm, then floor within 350 cm
+	// below a point 150 cm out.
 	const UWorld* World = GetWorld();
 	const FVector Here = Me->GetActorLocation();
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOBotSide), false, Me);
-	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, Here, Here + Direction * 130.f, ECC_Visibility, Params)) return false; // a wall
-	const FVector Over = Here + Direction * 150.f;
-	return World->LineTraceSingleByChannel(Hit, Over, Over - FVector(0, 0, 350.f), ECC_Visibility, Params); // floor to stand on
+	FWWOProbe Probe;
+	Probe.bByChannel = true;
+	Probe.Channel = ECC_Visibility;
+	if (WWONav::WallAhead(World, Probe, Here, Direction * 130.f, Params)) return false; // a wall
+	return !WWONav::LedgeAhead(World, Probe, Here + Direction * 150.f, 350.f, Params); // floor to stand on
 }
 
 void AWWOBotController::SetMove(const AWWOCharacter* Me, const FVector& WorldDirection)
