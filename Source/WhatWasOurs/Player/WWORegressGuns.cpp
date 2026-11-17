@@ -283,7 +283,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			Plan.Weapon = Mod->Frame;
 			Plan.Mods = { Mod->Id };
 			Plan.TargetHealth = 1000.f;
-			if (Perk == "focus") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.HitStreak = bMet ? 5 : 0; };
+			if (Perk == "focus") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.PerkState.HitStreak = bMet ? 5 : 0; };
 			else if (Perk == "scavenger")
 			{
 				Plan.TargetHealth = bMet ? 5.f : 1000.f; // the shot kills it, or doesn't
@@ -294,14 +294,14 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			else if (Perk == "static")
 			{
 				Plan.Extras = 2;
-				Plan.Before = [bMet](UWWOWeaponComponent& G) { G.StaticHits = bMet ? 9 : 0; };
+				Plan.Before = [bMet](UWWOWeaponComponent& G) { G.PerkState.StaticHits = bMet ? 9 : 0; };
 			}
 			else if (Perk == "adrenal")
 			{
 				Plan.TargetHealth = bMet ? 5.f : 1000.f;
 				Plan.bReloadAfter = true;
 			}
-			else if (Perk == "overpressure") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.bOverpressure = bMet; };
+			else if (Perk == "overpressure") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.PerkState.bOverpressure = bMet; };
 			else if (Perk == "final_round") Plan.Before = [bMet](UWWOWeaponComponent& G) { if (bMet) G.Ammo = 1; };
 			else if (Perk == "anchor") Plan.AdsTicks = bMet ? 40 : 0;
 			else if (Perk == "patience") { Plan.bHead = true; Plan.AdsTicks = bMet ? 70 : 12; }
@@ -314,12 +314,12 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			else if (Perk == "point_blank") Plan.Distance = bMet ? 3.f : 10.f;
 			else if (Perk == "slide_shot") { Plan.bSlide = bMet; Plan.Distance = 16.f; }
 			else if (Perk == "tighten") Plan.AdsTicks = bMet ? 40 : 0;
-			else if (Perk == "cold_bore") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.SinceShot = bMet ? 100.f : 0.5f; };
+			else if (Perk == "cold_bore") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.PerkState.SinceShot = bMet ? 100.f : 0.5f; };
 			else if (Perk == "refund") Plan.bHead = bMet;
 			else if (Perk == "breath") Plan.AdsTicks = bMet ? 90 : 20;
 			else if (Perk == "longshot") Plan.Distance = bMet ? 35.f : 10.f;
 			else if (Perk == "executioner") Plan.PreDamage = bMet ? 600.f : 0.f;
-			else if (Perk == "full_burst") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.bFullBurst = bMet; };
+			else if (Perk == "full_burst") Plan.Before = [bMet](UWWOWeaponComponent& G) { G.PerkState.bFullBurst = bMet; };
 			else if (Perk == "fourth_round") { if (!bMet) Plan.Mods.Reset(); } // always on: "not met" is the gun without it
 			else Plan.Before = nullptr; // a perk this list doesn't know: still shot once, both ways alike
 			// The sniper misses from the hip (its hip spread): its perks are tried aimed in, unless the
@@ -550,7 +550,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				float Now = 0.f;
 				for (const TWeakObjectPtr<AActor>& E : St->Extras) Now += FWWORegress::HealthOf(E.Get());
 				R.Record(TEXT("chain_dealt"), St->ExtrasBefore - Now);
-				R.Record(TEXT("hammer_left"), P->Weapon->HammerLeft);
+				R.Record(TEXT("hammer_left"), P->Weapon->PerkState.HammerLeft);
 				R.Record(TEXT("confirms"), R.Confirms);
 				R.Record(TEXT("kills"), R.ConfirmKills);
 				return true;

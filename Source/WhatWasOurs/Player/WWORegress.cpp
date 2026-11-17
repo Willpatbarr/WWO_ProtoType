@@ -222,7 +222,7 @@ void FWWORegress::Tick()
 		if (P && P->Weapon)
 		{
 			P->Weapon->ResetForRespawn();
-			P->Weapon->AimHeld = 0.f;
+			P->Weapon->PerkState.AimHeld = 0.f;
 		}
 		NotePlayerShot();
 		Confirms = ConfirmCrits = ConfirmKills = 0;
@@ -352,10 +352,10 @@ void FWWORegress::ResetPlayer()
 	G->ReadyLeft = 0.f;
 	G->FireBuffer = 0.f;
 	G->bReadyShotQueued = false;
-	G->BurstLeft = G->BurstSize = G->BurstHits = 0;
+	G->BurstLeft = G->BurstSize = G->PerkState.BurstHits = 0;
 	G->BurstCooldown = 0.f;
-	G->RefundRounds = 0;
-	G->bBurstBoosted = false;
+	G->PerkState.RefundRounds = 0;
+	G->PerkState.bBurstBoosted = false;
 	G->HostStaticHits = 0;
 	G->bLastShotPredictedKill = false;
 	G->KickAge = 1000.f;

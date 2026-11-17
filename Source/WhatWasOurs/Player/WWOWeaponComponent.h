@@ -14,6 +14,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Weapons/WWOPerks.h"
 #include "WWOWeaponComponent.generated.h"
 
 class AWWOCharacter;
@@ -52,7 +53,7 @@ public:
 	FString ConfigToast; // "Config 2: Long Barrel, ..." for a moment after a quick swap
 	float ConfigToastLeft = 0.f; // active perks for the HUD, e.g. "Focus 3/5 · Static 7/10"
 	float AdsAmount = 0.f;
-	float SecondsSinceShot() const { return SinceShot; }
+	float SecondsSinceShot() const { return PerkState.SinceShot; }
 	int32 Ammo = 30;
 	bool bReloading = false;
 	float ReloadProgress = 0.f;
@@ -103,9 +104,9 @@ private:
 	void UpdateAds(float DeltaSeconds);
 
 	// --- Firing: the trigger, bursts, the shot (WWOWeaponFiring.cpp) ---
-	// Burst fire (UWWOWeaponData::Burst): the rounds still to come in the burst under way, the
-	// time to the next one, and how many of its rounds have hit (Full Burst).
-	int32 BurstLeft = 0, BurstSize = 0, BurstHits = 0;
+	// Burst fire (UWWOWeaponData::Burst): the rounds still to come in the burst under way, its size
+	// and the time to the next one (how many of its rounds hit is FWWOPerkState::BurstHits).
+	int32 BurstLeft = 0, BurstSize = 0;
 	float BurstCooldown = 0.f;
 	void BeginBurst(int32 Rounds);
 	void EndBurst();
@@ -122,7 +123,8 @@ private:
 	bool WantsToFire() const;
 	void Shoot();
 
-	// --- Perks: stats rebuilt each frame, mods and perks, the HUD's perk line (WWOWeaponPerks.cpp) ---
+	// --- Perks: stats rebuilt each frame, mods and perks, the HUD's perk line (WWOWeaponPerks.cpp;
+	// what each perk does is its entry in WWOPerk::Table(), Weapons/WWOPerks.cpp) ---
 public:
 	FString PerkStatus() const;
 	// Kills the host confirmed (online, a joiner's kill perks wait for these; see ClientKillCredit).
@@ -131,16 +133,8 @@ public:
 	FName HostStaticGun;      // ...with this gun
 
 private:
-	int32 HitStreak = 0;  // Focus: hits in a row
-	int32 StaticHits = 0; // Static: hits toward the next arc
-	float AdrenalLeft = 0.f; // Adrenal: seconds of faster reloads left
-	bool bOverpressure = true; // Overpressure: the next shot is the first since a reload
-	float AimHeld = 0.f;       // Patience: seconds fully aimed in
-	float HammerLeft = 0.f;    // Hammer: seconds of faster fire left
-	float SinceShot = 100.f;   // Cold Bore: seconds since the last shot
-	int32 RefundRounds = 0;    // Marksman: rounds to put back after this shot (a crit)
-	bool bFullBurst = false;    // Full Burst: the last burst landed every round
-	bool bBurstBoosted = false; // ...so this one hits harder
+	FWWOPerkState PerkState; // what the perks remember
+	FWWOPerkView PerkView() const; // what their conditions see this frame
 	void RefreshStats();
 	bool IsAnchored() const;
 	void OnShotResult(AActor* FirstHit, int32 HitCount, int32 Kills, bool bCritical);
