@@ -58,6 +58,9 @@ public:
 		int32 Arcs, float RadiusM, float Lifetime, AActor* Skip = nullptr);
 
 private:
+	// Each relay above draws (or plays) its thing here, then, on a listen-server host, sends it to the others
+	// through its multicast: this is the game state to send it through, or null when there is no one to tell.
+	static AWWOGameState* HostRelay(UWorld* World);
 	UFUNCTION(NetMulticast, Reliable) void MulticastKill(const class AWWOPlayerState* KillerState, const FString& Killer, int8 KillerTeam, const FString& Victim, int8 VictimTeam, FName How, uint8 Points);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastSound(FName Event, FVector_NetQuantize At, float Volume);
