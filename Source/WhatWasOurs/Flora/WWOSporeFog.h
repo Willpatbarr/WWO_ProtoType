@@ -8,6 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Flora/WWOEffectLife.h"
 #include "WWOSporeFog.generated.h"
 
 class UStaticMeshComponent;
@@ -46,7 +47,7 @@ private:
 	TWeakObjectPtr<AWWOParticles> Motes;
 	TWeakObjectPtr<AWWOParticles> Smoke; // wisps rising inside it
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Edge; // its outline on the floor
-	float Age = 0.f;
+	FWWOEffectLife Life; // its numbers are in the constructor
 	float TickLeft = 0.f;
 	friend class FWWORegress; // the life scenarios read its looks
 };

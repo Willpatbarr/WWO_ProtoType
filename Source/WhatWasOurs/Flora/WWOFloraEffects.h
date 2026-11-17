@@ -13,6 +13,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
+#include "Flora/WWOEffectLife.h"
 #include "WWOFloraEffects.generated.h"
 
 class UStaticMeshComponent;
@@ -46,7 +47,8 @@ private:
 	UPROPERTY(Replicated) float Duration = 5.f;
 	UPROPERTY(Replicated) FLinearColor Color;
 	UPROPERTY(Replicated) FName Flavor;
-	float Dps = 25.f, Age = 0.f, TickLeft = 0.f, NextArc = 0.f;
+	FWWOEffectLife Life; // its numbers are in the constructor
+	float Dps = 25.f, TickLeft = 0.f, NextArc = 0.f;
 	friend class FWWORegress; // the life scenarios read its looks
 };
 

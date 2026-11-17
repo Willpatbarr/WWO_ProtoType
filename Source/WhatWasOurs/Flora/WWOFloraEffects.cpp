@@ -27,6 +27,7 @@ namespace
 // --- Spore pool -------------------------------------------------------------------------------
 
 AWWOSporePool::AWWOSporePool()
+	: Life(0.25f, 0.f, false) // grows in over 0.25 s, fades over the last 0.5 s of its duration (Tick), no tail
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -93,29 +94,27 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 {
 	WWO_PROF("SporePool");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
-	if (Age >= Duration)
+	if (Life.Advance(DeltaSeconds, Duration) == EWWOLifeStep::Over)
 	{
-		if (HasAuthority()) Destroy(); // a joiner's copy goes when the host's does
-		else SetActorHiddenInGame(true);
+		if (!FWWOEffectLife::End(*this)) SetActorHiddenInGame(true); // a joiner's copy hides until the host's goes
 		return;
 	}
 	// Grows in quickly, shrinks and fades at the end.
-	const float Grow = WWO::BackOut(Age / 0.25f);
-	const float FadeOut = FMath::Clamp((Duration - Age) / 0.5f, 0.f, 1.f);
+	const float Grow = Life.GrowIn();
+	const float FadeOut = Life.LeftOf(Duration, 0.5f);
 	const float Scale = Radius * WWO::M / 50.f * FMath::Lerp(0.2f, 1.f, Grow) * FadeOut;
 	Disc->SetRelativeScale3D(FVector(Scale, Scale, 1.f));
 	if (Mat) Mat->SetScalarParameterValue("Alpha", FadeOut);
 	if (Haze)
 	{
 		// Breathes a little, and goes with the pool.
-		const float Breath = 1.f + 0.06f * FMath::Sin(Age * 2.3f);
+		const float Breath = 1.f + 0.06f * FMath::Sin(Life.Age * 2.3f);
 		Haze->SetRelativeScale3D(FVector(Scale * 0.95f * Breath, Scale * 0.95f * Breath, Scale * 0.22f));
 		if (UMaterialInstanceDynamic* HazeMat = WWOFX::MID(Haze)) HazeMat->SetScalarParameterValue("Alpha", 0.22f * FadeOut);
 	}
-	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Age * 5.f)));
+	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Life.Age * 5.f)));
 	if (FadeOut < 1.f && Bubbles.IsValid()) Bubbles->bEmitting = false;
-	if (Flavor == WWOIds::Flora::VoltVine && Age < Duration - 0.4f)
+	if (Flavor == WWOIds::Flora::VoltVine && Life.Age < Duration - 0.4f)
 	{
 		// The VoltVine pool crackles with little arcs along the surface.
 		NextArc -= DeltaSeconds;
