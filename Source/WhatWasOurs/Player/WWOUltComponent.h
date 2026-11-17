@@ -12,6 +12,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "WWOTypes.h"
 #include "WWOUltComponent.generated.h"
 
 class UCameraComponent;
@@ -62,8 +63,7 @@ private:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Orb;
 	UPROPERTY() TObjectPtr<UPointLightComponent> OrbLight;
 
-	enum class EKind : uint8 { Blast, Veil, Entrench };
-	EKind Kind = EKind::Blast;
+	EWWOUltKind Kind = EWWOUltKind::Blast; // the flora's (UWWOFloraData::Ult), set as it starts
 	float Clock = 0.f;
 	float Blend = 0.25f;
 	float ExplodeAt = 0.f;
