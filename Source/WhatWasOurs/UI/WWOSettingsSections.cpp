@@ -87,7 +87,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	RegisterMovementAndViewSections(P); // Walk / Sprint, Camera, Audio, HUD, Jump, Crouch / Slide
 	RegisterCombatSections(P);          // Melee, Grenades, Player, Targets, Ult
 	RegisterEnemySections(P);           // Soldier, Swarm, Tank
-	RegisterMatchSections(P);           // Maps, Multiplayer, PvP, Bots, Waves, Allies
+	RegisterMatchSections(P);           // Maps, Multiplayer, PvP, FootRace, Bots, Waves, Allies
 	RegisterAimAssistSection(P);        // Aim Assist
 	// Specific sections: one per item.
 	RegisterWeaponSections(P);
@@ -387,6 +387,14 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "KillTarget", TEXT("Team kills to win"), 0.f, 200.f, 1.f),
 		Row(Mode, "TimeLimit", TEXT("Time limit (minutes)"), 0.f, 60.f, 1.f),
 		Row(Mode, "PvPRespawnTime", TEXT("Respawn delay (s)"), 0.5f, 15.f, 0.5f),
+	});
+	AddGlobal(TEXT("FootRace"), {
+		Header(TEXT("Breach energy (FootRace; the host's settings count)")),
+		Row(Mode, "BreachThreshold", TEXT("Energy needed to enter the hub"), 0.f, 500.f, 5.f),
+		Row(Mode, "EnergyPerEnemy", TEXT("Energy per AI enemy killed"), 0.f, 100.f, 1.f),
+		Row(Mode, "EnergyPerPlayerKill", TEXT("Energy per enemy player killed"), 0.f, 200.f, 1.f),
+		Row(Mode, "BreachDrain", TEXT("Drain per player in the hub (per second)"), 0.f, 50.f, 0.5f),
+		Row(Mode, "BreachDeathLoss", TEXT("Share of the pool lost when a breacher dies"), 0.f, 1.f, 0.05f),
 	});
 	AddGlobal(TEXT("Bots"), {
 		Header(TEXT("Bot players in PvP (the host's settings count)")),

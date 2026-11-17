@@ -35,6 +35,19 @@ namespace
 	}
 
 	constexpr float BackToWall = 1.2f; // m: a doorway stands this far behind its marker, near the wall at its back
+	constexpr double KillCreditWindow = 10.0; // s: as team deathmatch, a hit longer ago than this is nobody's kill
+}
+
+FWWOFootRaceRules::~FWWOFootRaceRules()
+{
+	for (const TPair<TWeakObjectPtr<UWWOHealthComponent>, FDelegateHandle>& B : PlayerBindings)
+	{
+		if (UWWOHealthComponent* H = B.Key.Get()) H->OnDied.Remove(B.Value);
+	}
+	for (const TPair<TWeakObjectPtr<AWWOEnemy>, FDelegateHandle>& B : EnemyBindings)
+	{
+		if (AWWOEnemy* E = B.Key.Get()) E->OnDied.Remove(B.Value);
+	}
 }
 
 void FWWOFootRaceRules::Begin()
@@ -48,6 +61,8 @@ void FWWOFootRaceRules::Begin()
 		GS->TeamScores = { 0, 0 };
 		GS->bMatchOver = false;
 		GS->MatchWinner = -1;
+		GS->BreachEnergy = { 0.f, 0.f };
+		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	SpawnPortals();
 	State = EWWOWaveState::Match;
@@ -121,6 +136,9 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 {
 	UWorld* World = Mode.GetWorld();
 	const double Now = World->GetTimeSeconds();
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
+	BindDeaths();
+	Drain(DeltaSeconds);
 	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 	{
 		if (!Body || !Body->Health) continue;
@@ -143,8 +161,14 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 		{
 			if (P.IsValid() && P->Team == PS->Team && P->Contains(Feet))
 			{
+				LastThrough.Add(Body, Now); // a refused step waits the cooldown too (one log line, not one a tick)
+				if (!P->bHub && Energy(PS->Team) < Mode.BreachThreshold)
+				{
+					UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) can't breach yet: %.0f of %.0f energy"), *Body->GetName(), PS->Team,
+						Energy(PS->Team), Mode.BreachThreshold);
+					break;
+				}
 				GoThrough(Body, PS->Team, P.Get());
-				LastThrough.Add(Body, Now);
 				break;
 			}
 		}
@@ -153,21 +177,119 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 
 void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPortal* Portal)
 {
-	AWWOBreachPortal* To = nullptr;
-	if (!Portal->bHub)
+	if (Portal->bHub)
 	{
-		To = HubPortal(Team);
-		CameFrom.Add(Body, Portal);
+		LeaveHub(Body, Team);
+		return;
 	}
-	else
-	{
-		const TWeakObjectPtr<AWWOBreachPortal>* From = CameFrom.Find(Body);
-		To = From && From->IsValid() ? From->Get() : RoomPortal(Team, "Room1");
-	}
+	AWWOBreachPortal* To = HubPortal(Team);
+	if (!To) return;
+	CameFrom.Add(Body, Portal);
+	InHub.Add(Body);
+	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway into the hub (%.0f energy)"), *Body->GetName(), Team,
+		*Portal->Room.ToString(), Energy(Team));
+}
+
+void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
+{
+	InHub.Remove(Body);
+	const TWeakObjectPtr<AWWOBreachPortal>* From = CameFrom.Find(Body);
+	AWWOBreachPortal* To = From && From->IsValid() ? From->Get() : RoomPortal(Team, "Room1");
 	if (!To) return;
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
-	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway to the %s doorway"), *Body->GetName(), Team,
-		Portal->bHub ? TEXT("hub") : *Portal->Room.ToString(), To->bHub ? TEXT("hub") : *To->Room.ToString());
+	LastThrough.Add(Body, Mode.GetWorld()->GetTimeSeconds());
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) back from the hub to the %s doorway"), *Body->GetName(), Team, *To->Room.ToString());
+}
+
+float FWWOFootRaceRules::Energy(int32 Team) const
+{
+	const AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	return GS && GS->BreachEnergy.IsValidIndex(Team) ? GS->BreachEnergy[Team] : 0.f;
+}
+
+void FWWOFootRaceRules::SetEnergy(int32 Team, float Value)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (!GS || Team < 0 || Team > 1) return;
+	if (GS->BreachEnergy.Num() < 2) GS->BreachEnergy.SetNum(2);
+	GS->BreachEnergy[Team] = FMath::Max(0.f, Value);
+}
+
+void FWWOFootRaceRules::AddEnergy(int32 Team, float Amount, const TCHAR* Why)
+{
+	if (Team < 0 || Team > 1 || Amount == 0.f) return;
+	SetEnergy(Team, Energy(Team) + Amount);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d %+.0f energy (%s), now %.0f"), Team, Amount, Why, Energy(Team));
+}
+
+int32 FWWOFootRaceRules::Breachers(int32 Team) const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AWWOCharacter>& B : InHub)
+	{
+		if (B.IsValid() && !B->Health->bDead && UWWOWorldSubsystem::TeamOf(B.Get()) == Team) ++Count;
+	}
+	return Count;
+}
+
+void FWWOFootRaceRules::Drain(float DeltaSeconds)
+{
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		const int32 Count = Breachers(Team);
+		if (Count == 0) continue;
+		SetEnergy(Team, Energy(Team) - Mode.BreachDrain * Count * DeltaSeconds);
+		if (Energy(Team) > 0.f) continue;
+		// Out of energy: every breacher of the team goes back to the room they came from.
+		TArray<AWWOCharacter*> Out;
+		for (const TWeakObjectPtr<AWWOCharacter>& B : InHub)
+		{
+			if (B.IsValid() && !B->Health->bDead && UWWOWorldSubsystem::TeamOf(B.Get()) == Team) Out.Add(B.Get());
+		}
+		UE_LOG(LogWWO, Display, TEXT("FootRace: team %d is out of breach energy: %d back to their rooms"), Team, Out.Num());
+		for (AWWOCharacter* Body : Out) LeaveHub(Body, Team);
+	}
+}
+
+void FWWOFootRaceRules::BindDeaths()
+{
+	UWorld* World = Mode.GetWorld();
+	for (AWWOCharacter* P : UWWOWorldSubsystem::Get(World)->GetPlayers())
+	{
+		if (!P || !P->Health || PlayersBound.Contains(P)) continue;
+		PlayersBound.Add(P);
+		TWeakObjectPtr<AWWOCharacter> Weak = P;
+		PlayerBindings.Add({ P->Health, P->Health->OnDied.AddWeakLambda(&Mode, [this, Weak] { if (Weak.IsValid()) OnPlayerDied(Weak.Get()); }) });
+	}
+	for (TActorIterator<AWWOEnemy> It(World); It; ++It)
+	{
+		if (EnemiesBound.Contains(*It)) continue;
+		EnemiesBound.Add(*It);
+		EnemyBindings.Add({ *It, It->OnDied.AddWeakLambda(&Mode, [this](AWWOEnemy* E) { OnEnemyDied(E); }) });
+	}
+}
+
+void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
+{
+	const int32 VictimTeam = UWWOWorldSubsystem::TeamOf(Victim);
+	if (InHub.Remove(Victim) > 0)
+	{
+		const float Lost = Energy(VictimTeam) * Mode.BreachDeathLoss;
+		AddEnergy(VictimTeam, -Lost, TEXT("a breacher died"));
+	}
+	// The kill, credited as team deathmatch credits it: whoever hit them last, lately, on the other team.
+	const bool bRecent = Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= KillCreditWindow;
+	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
+	const int32 KillerTeam = Killer ? UWWOWorldSubsystem::TeamOf(Killer) : -1;
+	if (KillerTeam >= 0 && KillerTeam != VictimTeam) AddEnergy(KillerTeam, Mode.EnergyPerPlayerKill, TEXT("a player kill"));
+}
+
+void FWWOFootRaceRules::OnEnemyDied(AWWOEnemy* Enemy)
+{
+	const AWWOCharacter* Killer = Enemy ? Enemy->LastHitBy.Get() : nullptr;
+	const int32 Team = Killer ? UWWOWorldSubsystem::TeamOf(Killer) : -1;
+	if (Team >= 0) AddEnergy(Team, Mode.EnergyPerEnemy, TEXT("an enemy kill"));
 }
 
 void FWWOFootRaceRules::Teleport(AWWOCharacter* Body, const FTransform& Spot)

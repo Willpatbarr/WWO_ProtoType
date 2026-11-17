@@ -23,6 +23,10 @@ public:
 	UPROPERTY(Replicated) TArray<int32> TeamScores;
 	UPROPERTY(Replicated) bool bMatchOver = false; // the PvP match ended: every machine shows the scoreboard (UWWOScoreboard)
 	UPROPERTY(Replicated) int8 MatchWinner = -1;   // the team that won it (-1: a draw)
+	// FootRace (Game/WWOFootRaceRules.h): each team's breach energy (empty in other modes), and what it
+	// takes to enter the hub (the host's setting, here so every HUD can mark it).
+	UPROPERTY(Replicated) TArray<float> BreachEnergy;
+	UPROPERTY(Replicated) float BreachThreshold = 0.f;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

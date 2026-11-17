@@ -49,6 +49,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float KillTarget = 50.f;   // team kills to win (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
+	// FootRace breach energy (Game/WWOFootRaceRules.h): a team's shared pool.
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 100.f;   // a team needs this much to enter the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerEnemy = 10.f;     // for each AI enemy a player kills
+	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerPlayerKill = 25.f; // for each player of the other team killed
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 10.f;        // per second, for each of the team's players in the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDeathLoss = 0.25f;   // share of the pool lost when one of them dies in the hub
 	// Bot players (PvP; AWWOBotController reads these, the host's values count).
 	UPROPERTY(EditAnywhere, Category = "Bots") float Bots = 0.f;            // how many join (more can be added mid-match; -WWOBots=N too)
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotHealth = 100.f;     // every bot's health and shield, before its own shell parts and traits

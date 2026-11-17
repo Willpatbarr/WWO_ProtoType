@@ -129,6 +129,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	PaintDamageSpikes(F);
 	PaintOverlays(F);
 	PaintWaveLine(F);
+	PaintBreachEnergy(F);
 	PaintFps(F);
 	return Result + 3;
 }
@@ -848,6 +849,35 @@ void UWWOHUDWidget::PaintWaveLine(const FWWOHUDFrame& F) const
 	if (const AWWOGameState* GS = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
 		if (!GS->StatusLine.IsEmpty()) P.Text(GS->StatusLine, FVector2D(Center.X, 24.f), 28.f, GS->StatusColor, 0.5f, 8.f, 0.85f);
+	}
+}
+
+void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
+{
+	// Two bars under the match line, your team's first (left): each team's pool, a tick where the hub
+	// opens (the threshold), the number. A bar is full at twice the threshold.
+	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
+	if (!GS || GS->BreachEnergy.Num() < 2) return;
+	const FWWOPainter& P = F.P;
+	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
+	const float Threshold = FMath::Max(GS->BreachThreshold, 1.f);
+	const FVector2D BarSize(220.f, 12.f);
+	const float Gap = 40.f, Top = 128.f;
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float Energy = GS->BreachEnergy[Team];
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f); // AWWOBreachPortal::TeamColor, sRGB
+		const FVector2D Pos(F.Center.X + (Slot == 0 ? -Gap * 0.5f - BarSize.X : Gap * 0.5f), Top);
+		P.Box(Pos, BarSize, FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+		const float Fill = FMath::Clamp(Energy / (Threshold * 2.f), 0.f, 1.f);
+		P.Box(Pos, FVector2D(BarSize.X * Fill, BarSize.Y), Energy >= Threshold ? Color : WWO::Darkened(Color, 0.45f));
+		const float TickX = Pos.X + BarSize.X * 0.5f;
+		P.Box(FVector2D(TickX - 1.f, Pos.Y - 3.f), FVector2D(2.f, BarSize.Y + 6.f), FLinearColor(1, 1, 1, 0.9f));
+		P.Outline(Pos, BarSize, FLinearColor(1, 1, 1, 0.35f), 1.f);
+		const FString Label = FString::Printf(TEXT("%s%s  %.0f"), Slot == 0 ? TEXT("YOUR BREACH") : TEXT("THEIRS"),
+			Energy >= Threshold ? TEXT(" READY") : TEXT(""), Energy);
+		P.Text(Label, FVector2D(Pos.X + (Slot == 0 ? BarSize.X : 0.f), Pos.Y + BarSize.Y + 4.f), 16.f, Color, Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
 	}
 }
 

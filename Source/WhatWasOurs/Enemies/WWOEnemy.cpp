@@ -168,6 +168,7 @@ bool AWWOEnemy::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLi
 		return false;
 	}
 	bAlerted = true; // getting shot from out of sight range still wakes it up
+	if (AWWOCharacter* By = UWWOWorldSubsystem::PlayerOf(UWWOWorldSubsystem::CurrentAttacker.Get())) LastHitBy = By;
 	Flash = 1.f;
 	const float Through = Absorb(Damage, bCritical, Point); // shields take their share first
 	if (Through > 0.f)

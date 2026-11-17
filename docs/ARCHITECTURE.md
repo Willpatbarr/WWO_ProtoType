@@ -200,6 +200,10 @@ walks the table in its order (the HUD line's).
     PvP), and the breach portals (`World/WWOBreachPortal.*`, spawned on the level's `PortalAnchor` and
     `HubPortal` markers): a room's doorway takes its team to the team's hub doorway, the hub doorway back to
     the room doorway they came through. The map's markers are listed in `Tools/footrace_layout.py`.
+    Breach energy: one pool per team (`AWWOGameState::BreachEnergy`, the game mode's FootRace tunables),
+    earned by kills (an enemy's `LastHitBy`, a player's `LastAttacker`), needed to enter the hub
+    (`BreachThreshold`), drained per breacher per second; out of energy sends the team's breachers back,
+    a breacher's death costs a share. The HUD draws both pools under the match line (`PaintBreachEnergy`).
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

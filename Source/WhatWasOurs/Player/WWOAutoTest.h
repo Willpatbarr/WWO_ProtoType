@@ -89,6 +89,7 @@ private:
 	// -WWOAutoTestFootRace (WWOAutoTestFootRace.cpp): FootRace's breach portals, alone on L_FootRaceTest.
 	float AutoFootRaceClock = 0.f;
 	FVector AutoFootRaceBefore = FVector::ZeroVector;
+	TWeakObjectPtr<class AWWOEnemy> AutoFootRaceEnemy;
 	void UpdateAutoFootRaceTest(float DeltaTime);
 	// -WWOAutoTestNet (WWOAutoTestNet.cpp): online play, run on the host and the joiner.
 	float AutoNetWait = 0.f;   // seconds since start

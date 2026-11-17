@@ -5,7 +5,8 @@
 // lanes is where they fight each other. The design: LaminarFlow, Game Modes, "PvE Race Mode - v1
 // Design"; the build order: the FootRace plan (map, enemies, portals, energy, levers, boss, cores, bots).
 //
-// So far: teams (each player joins the smaller one), each team's spawn room, and the breach portals.
+// So far: teams (each player joins the smaller one), each team's spawn room, the breach portals and
+// breach energy.
 // The game state says PvP, so the teams can hurt each other and the health component respawns players
 // at PvPSpawnFor (SpawnSpot here: their team's spawn room).
 //
@@ -13,7 +14,17 @@
 // in the hub. Stepping into one of your team's room doorways puts you in front of your team's hub
 // doorway; stepping into your hub doorway puts you back in front of the room doorway you came through
 // (Room1's if you never came through one). The other team's doorways do nothing for you (hijacking
-// comes later). Nothing gates them yet: breach energy comes with its own commit.
+// comes later). Players in the hub are breachers; leaving through the hub doorway (or dying) ends it.
+//
+// Breach energy: one pool per team (AWWOGameState::BreachEnergy), the game mode's FootRace tunables.
+// - Earned: EnergyPerEnemy for each AI enemy a player of the team kills (the enemy's LastHitBy), and
+//   EnergyPerPlayerKill for each player of the other team they kill (the health component's LastAttacker,
+//   as team deathmatch credits a kill).
+// - The hub: a room doorway lets a player in only while the pool is at BreachThreshold or more.
+// - Drained: BreachDrain per second for each of the team's breachers.
+// - Out of energy: every breacher of that team goes back through the hub doorway to their room.
+// - A breacher's death costs the team BreachDeathLoss of its pool.
+// - (Later: it resets when the team opens a door; the hijack costs and bonuses.)
 //
 // The level's markers (Tools/footrace_layout.py) are TargetPoints tagged with what they are and where:
 // TeamSpawn Lane<n>; PortalAnchor Lane<n> Room<k>|Boss; HubPortal Lane<n>. Lane n is team n's.
@@ -23,11 +34,14 @@
 
 class AWWOCharacter;
 class AWWOBreachPortal;
+class AWWOEnemy;
+class UWWOHealthComponent;
 
 class FWWOFootRaceRules final : public FWWOMatchRules
 {
 public:
 	using FWWOMatchRules::FWWOMatchRules;
+	virtual ~FWWOFootRaceRules() override;
 
 	// Clears the level's enemies and AI teammates, says PvP, spawns the portals.
 	virtual void Begin() override;
@@ -48,14 +62,32 @@ public:
 	AWWOBreachPortal* RoomPortal(int32 Team, FName Room) const;
 	AWWOBreachPortal* HubPortal(int32 Team) const;
 
+	// A team's pool (0 for a team that isn't 0 or 1), and changes to it (host; never below 0).
+	float Energy(int32 Team) const;
+	void SetEnergy(int32 Team, float Value);
+	void AddEnergy(int32 Team, float Amount, const TCHAR* Why);
+	bool IsBreaching(const AWWOCharacter* Body) const { return InHub.Contains(Body); }
+	int32 Breachers(int32 Team) const; // the team's living players in the hub
+
 private:
 	void SpawnPortals();
 	// Steps Body through Portal: to its team's hub doorway, or back to the room doorway it came from.
 	void GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPortal* Portal);
+	// The hub doorway's way out: back in front of the room doorway Body came in by.
+	void LeaveHub(AWWOCharacter* Body, int32 Team);
+	void BindDeaths();                       // each new player's and enemy's death, once
+	void OnPlayerDied(AWWOCharacter* Victim);
+	void OnEnemyDied(AWWOEnemy* Enemy);
+	void Drain(float DeltaSeconds);
 	static void Teleport(AWWOCharacter* Body, const FTransform& Spot);
 
 	TArray<TWeakObjectPtr<AWWOBreachPortal>> Portals;
 	TSet<TWeakObjectPtr<AWWOCharacter>> Placed;                                    // bodies put in their spawn room
 	TMap<TWeakObjectPtr<AWWOCharacter>, TWeakObjectPtr<AWWOBreachPortal>> CameFrom; // the room doorway each one entered the hub by
 	TMap<TWeakObjectPtr<AWWOCharacter>, double> LastThrough;                        // when each last went through a doorway
+	TSet<TWeakObjectPtr<AWWOCharacter>> InHub;                                      // breachers
+	TSet<TWeakObjectPtr<AWWOCharacter>> PlayersBound;
+	TSet<TWeakObjectPtr<AWWOEnemy>> EnemiesBound;
+	TArray<TPair<TWeakObjectPtr<UWWOHealthComponent>, FDelegateHandle>> PlayerBindings; // removed when these rules go
+	TArray<TPair<TWeakObjectPtr<AWWOEnemy>, FDelegateHandle>> EnemyBindings;
 };
