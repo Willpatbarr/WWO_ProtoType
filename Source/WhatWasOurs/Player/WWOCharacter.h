@@ -27,6 +27,7 @@ class UWWOUltComponent;
 class UWWOBodyComponent;
 class AWWOPlayerController;
 class UWWOLoadoutSubsystem;
+class UWWOWeaponData;
 
 // Online movement (see AWWOCharacter::SimulateMove). The input the movement simulation runs on:
 // captured from your controller each frame, sent to the host with each move, and replayed by your
@@ -483,6 +484,8 @@ private:
 	// rate, so naming a fast gun doesn't pay for a slow one's shots) and when it last fired.
 	struct FShotBudget { float Shots = 3.f; double Time = 0.0; double LastShot = -1000.0; };
 	TMap<FName, FShotBudget> ShotBudgets;
+	// The most a gun with these mods can do (Why says what's wrong with a setup that can't exist).
+	static bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks);
 	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const struct FWWOGunLimits& Limits, FString& Why) const;
 	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
 	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight

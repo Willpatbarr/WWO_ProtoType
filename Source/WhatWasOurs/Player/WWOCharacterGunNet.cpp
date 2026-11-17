@@ -43,53 +43,53 @@ namespace
 	constexpr float MeleeDamageSlack = 10.f; // over the base punch: Thornfist (2.5x) x veiled (3x) x melee traits
 	constexpr float MeleeReachSlack = 1.5f;  // m over the reach (the lunge's own 0.5 m, plus movement since)
 	constexpr float MeleeRateSlack = 0.5f;   // hits may come this fraction of a swing apart
+}
 
-	// The most this gun can do with these mods (same data on every machine), perks at their best:
-	// Hammer's faster fire, Overpressure / Final Round on one shot, Focus, Hunter and Patience on crits.
-	// Cold Bore, Full Burst, Long Shot, Point Blank, Finisher and Slideshot on their shots.
-	// Mirrors UWWOWeaponComponent::RefreshStats and Shoot.
-	bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks)
+// The most this gun can do with these mods (same data on every machine), perks at their best:
+// Hammer's faster fire, Overpressure / Final Round on one shot, Focus, Hunter and Patience on crits.
+// Cold Bore, Full Burst, Long Shot, Point Blank, Finisher and Slideshot on their shots.
+// Mirrors UWWOWeaponComponent::RefreshStats and Shoot.
+bool AWWOCharacter::GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks)
+{
+	TMap<FName, float> Percent;
+	TSet<FName> Slots;
+	for (const FName& Id : ModIds)
 	{
-		TMap<FName, float> Percent;
-		TSet<FName> Slots;
-		for (const FName& Id : ModIds)
-		{
-			const UWWOModData* Mod = nullptr;
-			for (const UWWOModData* M : L->WeaponMods) if (M && M->Id == Id) { Mod = M; break; }
-			if (!Mod || Mod->Frame != Gun->Id) { Why = FString::Printf(TEXT("mod %s doesn't fit %s"), *Id.ToString(), *Gun->Id.ToString()); return false; }
-			bool bTaken = false;
-			Slots.Add(Mod->Slot, &bTaken);
-			if (bTaken) { Why = FString::Printf(TEXT("two mods in the %s slot"), *Mod->Slot.ToString()); return false; }
-			for (const FWWOStatModifier& S : Mod->Mods) if (S.Op == EWWOStatOp::PercentAdd) Percent.FindOrAdd(S.Stat) += S.Value;
-			if (!Mod->Perk.IsNone()) Perks.Add(Mod->Perk);
-		}
-		auto Scaled = [&Percent](float Value, FName Stat) { return Value * FMath::Max(1.f + Percent.FindRef(Stat), 0.f); };
-		// The perks the host has no way to check stay at their best in every shot's allowance...
-		float ShotScale = 1.f;
-		if (Perks.Contains("overpressure")) ShotScale *= WWOPerk::Overpressure;
-		if (Perks.Contains("final_round")) ShotScale *= WWOPerk::FinalRound;
-		if (Perks.Contains("focus")) ShotScale *= WWOPerk::Focus;
-		if (Perks.Contains("full_burst")) ShotScale *= WWOPerk::FullBurst;
-		if (Perks.Contains("slide_shot")) ShotScale *= WWOPerk::SlideShot;
-		// ...and the ones it can (range, the target's health, time since the last shot) count per hit, in CheckGunHit.
-		Out.bLongShot = Perks.Contains("longshot");
-		Out.bPointBlank = Perks.Contains("point_blank");
-		Out.bFinisher = Perks.Contains("executioner");
-		Out.bColdBore = Perks.Contains("cold_bore");
-		float Crit = Scaled(Gun->CritMultiplier, "crit_multiplier");
-		if (Perks.Contains("hunter")) Crit += WWOPerk::HunterCrit;
-		if (Perks.Contains("patience")) Crit += WWOPerk::PatienceCrit;
-		Out.Always = ShotScale;
-		Out.Crit = FMath::Max(Crit, 1.f);
-		Out.Pellets = FMath::Max(1, FMath::RoundToInt(Gun->Pellets));
-		Out.Damage = Scaled(Gun->Damage, "damage") * Out.Pellets * ShotScale * WWOPerk::LongShot * WWOPerk::PointBlank * WWOPerk::Finisher * WWOPerk::ColdBore * Out.Crit * GunSlack;
-		// A burst gun's fire rate is bursts per minute; Fourth Round adds a round to each.
-		Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
-		Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? WWOPerk::HammerRate : 1.f) * GunSlack;
-		Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
-		Out.Round = Scaled(Gun->Damage, "damage"); // what the arc perks scale from, as on the shooter's machine
-		return true;
+		const UWWOModData* Mod = nullptr;
+		for (const UWWOModData* M : L->WeaponMods) if (M && M->Id == Id) { Mod = M; break; }
+		if (!Mod || Mod->Frame != Gun->Id) { Why = FString::Printf(TEXT("mod %s doesn't fit %s"), *Id.ToString(), *Gun->Id.ToString()); return false; }
+		bool bTaken = false;
+		Slots.Add(Mod->Slot, &bTaken);
+		if (bTaken) { Why = FString::Printf(TEXT("two mods in the %s slot"), *Mod->Slot.ToString()); return false; }
+		for (const FWWOStatModifier& S : Mod->Mods) if (S.Op == EWWOStatOp::PercentAdd) Percent.FindOrAdd(S.Stat) += S.Value;
+		if (!Mod->Perk.IsNone()) Perks.Add(Mod->Perk);
 	}
+	auto Scaled = [&Percent](float Value, FName Stat) { return Value * FMath::Max(1.f + Percent.FindRef(Stat), 0.f); };
+	// The perks the host has no way to check stay at their best in every shot's allowance...
+	float ShotScale = 1.f;
+	if (Perks.Contains("overpressure")) ShotScale *= WWOPerk::Overpressure;
+	if (Perks.Contains("final_round")) ShotScale *= WWOPerk::FinalRound;
+	if (Perks.Contains("focus")) ShotScale *= WWOPerk::Focus;
+	if (Perks.Contains("full_burst")) ShotScale *= WWOPerk::FullBurst;
+	if (Perks.Contains("slide_shot")) ShotScale *= WWOPerk::SlideShot;
+	// ...and the ones it can (range, the target's health, time since the last shot) count per hit, in CheckGunHit.
+	Out.bLongShot = Perks.Contains("longshot");
+	Out.bPointBlank = Perks.Contains("point_blank");
+	Out.bFinisher = Perks.Contains("executioner");
+	Out.bColdBore = Perks.Contains("cold_bore");
+	float Crit = Scaled(Gun->CritMultiplier, "crit_multiplier");
+	if (Perks.Contains("hunter")) Crit += WWOPerk::HunterCrit;
+	if (Perks.Contains("patience")) Crit += WWOPerk::PatienceCrit;
+	Out.Always = ShotScale;
+	Out.Crit = FMath::Max(Crit, 1.f);
+	Out.Pellets = FMath::Max(1, FMath::RoundToInt(Gun->Pellets));
+	Out.Damage = Scaled(Gun->Damage, "damage") * Out.Pellets * ShotScale * WWOPerk::LongShot * WWOPerk::PointBlank * WWOPerk::Finisher * WWOPerk::ColdBore * Out.Crit * GunSlack;
+	// A burst gun's fire rate is bursts per minute; Fourth Round adds a round to each.
+	Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
+	Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? WWOPerk::HammerRate : 1.f) * GunSlack;
+	Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
+	Out.Round = Scaled(Gun->Damage, "damage"); // what the arc perks scale from, as on the shooter's machine
+	return true;
 }
 
 void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)

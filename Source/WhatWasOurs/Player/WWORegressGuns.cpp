@@ -65,6 +65,12 @@ namespace
 		return Parts.Num() > 0 ? Parts.Last().Position : Target->GetActorLocation();
 	}
 
+	// A reason as one golden value: spaces to underscores, no quotes (Quote's escape for ' isn't JSON).
+	FString Words(const FString& Why)
+	{
+		return Why.Replace(TEXT(" "), TEXT("_")).Replace(TEXT("'"), TEXT(""));
+	}
+
 	FString PerkLine(const UWWOWeaponComponent& W)
 	{
 		FString S = W.PerkStatus();
@@ -357,6 +363,196 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				R.Record(TEXT("swap_time"), P->M("swap_time", G->SwapTime));
 				R.Record(TEXT("ready_time"), P->M("ready_time", G->ReadyTime));
 				R.Record(TEXT("perks"), PerkLine(*G));
+				return true;
+			};
+			Out.Add(S);
+		}
+	}
+
+	// --- (d) The host's check of a joiner's shot (AWWOCharacter::GunLimits, CheckGunHit, ServerGunShot) ---
+	// Every weapon bare, with each of its mods, with one perk mod in every slot, and two setups that
+	// can't exist: the limits GunLimits works out, and the most damage CheckGunHit lets through for a
+	// hit near and far, close, on a hurt target, after a pause and on the head.
+	for (const UWWOWeaponData* W : L.Weapons)
+	{
+		if (!W) continue;
+		struct FSetup { FString Name; TArray<FName> Mods; };
+		TArray<FSetup> Setups = { { TEXT("none"), {} } };
+		FSetup AllPerks = { TEXT("all_perks"), {} };
+		TSet<FName> PerkSlots;
+		TMap<FName, FName> FirstInSlot;
+		FSetup TwoInSlot = { TEXT("two_in_slot"), {} };
+		for (const UWWOModData* Mod : L.WeaponMods)
+		{
+			if (!Mod || Mod->Frame != W->Id) continue;
+			Setups.Add({ Mod->Id.ToString(), { Mod->Id } });
+			if (!Mod->Perk.IsNone() && !PerkSlots.Contains(Mod->Slot)) { PerkSlots.Add(Mod->Slot); AllPerks.Mods.Add(Mod->Id); }
+			if (const FName* First = FirstInSlot.Find(Mod->Slot)) { if (TwoInSlot.Mods.Num() == 0) TwoInSlot.Mods = { *First, Mod->Id }; }
+			else FirstInSlot.Add(Mod->Slot, Mod->Id);
+		}
+		if (AllPerks.Mods.Num() > 1) Setups.Add(AllPerks);
+		if (TwoInSlot.Mods.Num() > 0) Setups.Add(TwoInSlot);
+		for (const UWWOModData* Mod : L.WeaponMods)
+		{
+			if (Mod && Mod->Frame != W->Id) { Setups.Add({ TEXT("other_frame"), { Mod->Id } }); break; }
+		}
+		FWWORegressScenario S;
+		S.Name = FString::Printf(TEXT("hostcheck.%s"), *W->Id.ToString());
+		const FName WeaponId = W->Id;
+		TSharedRef<TArray<TWeakObjectPtr<AActor>>> Dummies = MakeShared<TArray<TWeakObjectPtr<AActor>>>();
+		S.Setup = [Dummies](FWWORegress& R)
+		{
+			Dummies->Reset();
+			Dummies->Add(R.SpawnDummy(R.Ahead(10.f), 1000.f));       // near
+			Dummies->Add(R.SpawnDummy(R.Ahead(35.f, 6.f), 1000.f));  // far (Long Shot)
+			Dummies->Add(R.SpawnDummy(R.Ahead(3.f, 2.f), 1000.f));   // close (Point Blank)
+			Dummies->Add(R.SpawnDummy(R.Ahead(10.f, -4.f), 1000.f)); // hurt (Finisher)
+			Dummies->Add(R.SpawnDummy(R.Ahead(35.f, -8.f), 1000.f)); // far and hurt (every checked perk at once)
+		};
+		S.Step = [WeaponId, Setups, Dummies](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			if (Tick == 0)
+			{
+				for (const int32 i : { 3, 4 }) if (AActor* Hurt = (*Dummies)[i].Get()) Cast<IWWOTargetable>(Hurt)->TakeHit(600.f, false, Hurt->GetActorLocation());
+				return false;
+			}
+			const UWWOWeaponData* Gun = R.WeaponAsset(WeaponId);
+			// The largest damage CheckGunHit accepts for this hit, exactly (bisecting the float's bits),
+			// or why it accepts none.
+			auto Allowance = [P](const FWWOGunShot& Shot, FWWOGunHit Hit, const FWWOGunLimits& Limits)
+			{
+				FString Why;
+				Hit.Damage = 0.001f;
+				if (!P->CheckGunHit(Shot, Hit, Limits, Why)) return Words(Why);
+				uint32 Lo = FMath::AsUInt(0.001f), Hi = FMath::AsUInt(1.0e9f);
+				Hit.Damage = 1.0e9f;
+				if (P->CheckGunHit(Shot, Hit, Limits, Why)) return FString(TEXT("unbounded"));
+				while (Hi - Lo > 1)
+				{
+					const uint32 Mid = Lo + (Hi - Lo) / 2;
+					Hit.Damage = FMath::AsFloat(Mid);
+					if (P->CheckGunHit(Shot, Hit, Limits, Why)) Lo = Mid; else Hi = Mid;
+				}
+				return FString::Printf(TEXT("%.9g"), FMath::AsFloat(Lo));
+			};
+			for (const FSetup& Setup : Setups)
+			{
+				const FString K = Setup.Name + TEXT(".");
+				FWWOGunLimits Limits;
+				FString Why;
+				TSet<FName> Perks;
+				if (!AWWOCharacter::GunLimits(R.Loadout(), Gun, Setup.Mods, Limits, Why, Perks))
+				{
+					R.Record(K + TEXT("refused"), Words(Why));
+					continue;
+				}
+				R.Record(K + TEXT("damage"), Limits.Damage);
+				R.Record(K + TEXT("rate"), Limits.Rate);
+				R.Record(K + TEXT("range"), Limits.Range);
+				R.Record(K + TEXT("round"), Limits.Round);
+				R.Record(K + TEXT("always"), Limits.Always);
+				R.Record(K + TEXT("crit"), Limits.Crit);
+				R.Record(K + TEXT("burst"), Limits.Burst);
+				R.Record(K + TEXT("pellets"), Limits.Pellets);
+				R.Record(K + TEXT("checks"), FString::Printf(TEXT("%d%d%d%d"), Limits.bLongShot, Limits.bPointBlank, Limits.bFinisher, Limits.bColdBore));
+				TArray<FString> PerkNames;
+				for (const FName& Perk : Perks) PerkNames.Add(Perk.ToString());
+				PerkNames.Sort();
+				R.Record(K + TEXT("perks"), PerkNames.Num() > 0 ? FString::Join(PerkNames, TEXT("|")) : FString(TEXT("-")));
+				FWWOGunShot Shot;
+				Shot.WeaponId = WeaponId;
+				Shot.Mods = Setup.Mods;
+				Shot.Origin = P->EyeLocation();
+				auto Hit = [](AActor* T, bool bHead) { FWWOGunHit H; H.Target = T; H.bCritical = bHead; H.Point = PartOf(T, bHead); return H; };
+				Limits.SinceShot = 0.f;
+				R.Record(K + TEXT("most.near"), Allowance(Shot, Hit((*Dummies)[0].Get(), false), Limits));
+				R.Record(K + TEXT("most.far"), Allowance(Shot, Hit((*Dummies)[1].Get(), false), Limits));
+				R.Record(K + TEXT("most.close"), Allowance(Shot, Hit((*Dummies)[2].Get(), false), Limits));
+				R.Record(K + TEXT("most.hurt"), Allowance(Shot, Hit((*Dummies)[3].Get(), false), Limits));
+				R.Record(K + TEXT("most.head"), Allowance(Shot, Hit((*Dummies)[0].Get(), true), Limits));
+				Limits.SinceShot = 10.f;
+				R.Record(K + TEXT("most.rested"), Allowance(Shot, Hit((*Dummies)[0].Get(), false), Limits));
+				R.Record(K + TEXT("most.rested_head_far"), Allowance(Shot, Hit((*Dummies)[1].Get(), true), Limits));
+				R.Record(K + TEXT("most.rested_far_hurt"), Allowance(Shot, Hit((*Dummies)[4].Get(), false), Limits));
+				R.Record(K + TEXT("most.rested_far_hurt_head"), Allowance(Shot, Hit((*Dummies)[4].Get(), true), Limits));
+			}
+			return true;
+		};
+		Out.Add(S);
+	}
+
+	// --- (e) The host applying a joiner's shot: the arc perks it runs for the joiner, and kill credit ---
+	{
+		auto ModWith = [&L](FName Frame, FName Perk) -> FName
+		{
+			for (const UWWOModData* Mod : L.WeaponMods) if (Mod && Mod->Frame == Frame && Mod->Perk == Perk) return Mod->Id;
+			return NAME_None;
+		};
+		struct FHostShot { FString Name; FName Weapon; FName Mod; bool bMet = false; bool bKill = false; };
+		TArray<FHostShot> Shots;
+		for (const bool bMet : { true, false })
+		{
+			const TCHAR* Met = bMet ? TEXT("met") : TEXT("unmet");
+			Shots.Add({ FString::Printf(TEXT("hostshot.static.%s"), Met), "rifle", ModWith("rifle", "static"), bMet, false });
+			Shots.Add({ FString::Printf(TEXT("hostshot.ricochet.%s"), Met), "handcannon", ModWith("handcannon", "ricochet"), bMet, false });
+			Shots.Add({ FString::Printf(TEXT("hostshot.kill_credit.%s"), Met), "handcannon", ModWith("handcannon", "hammer"), bMet, true });
+		}
+		for (const FHostShot& H : Shots)
+		{
+			if (H.Mod.IsNone()) continue;
+			FWWORegressScenario S;
+			S.Name = H.Name;
+			TSharedRef<FShotState> St = MakeShared<FShotState>();
+			S.Setup = [H, St](FWWORegress& R)
+			{
+				*St = FShotState();
+				// The host's own gun carries the mod for the kill-credit case (its kill perks run on the
+				// joiner's machine from the host's word: here, the same player).
+				R.EquipWeapon(H.Weapon);
+				if (H.bKill) R.EquipMod(H.Mod);
+				St->Target = R.SpawnDummy(R.Ahead(10.f), H.bKill && H.bMet ? 5.f : 1000.f);
+				for (int32 i = 0; i < 2; ++i) St->Extras.Add(R.SpawnDummy(R.Ahead(10.f, i == 0 ? 3.f : -3.f), 1000.f));
+			};
+			S.Step = [H, St](FWWORegress& R, int32 Tick)
+			{
+				AWWOCharacter* P = R.Player();
+				AActor* T = St->Target.Get();
+				if (Tick == 0)
+				{
+					P->ShotBudgets.Reset();
+					P->Weapon->HostStaticGun = H.Weapon;
+					P->Weapon->HostStaticHits = H.Name.Contains(TEXT("static")) && H.bMet ? 9 : 0; // the 10th hit arcs
+					St->TargetBefore = FWWORegress::HealthOf(T);
+					for (const TWeakObjectPtr<AActor>& E : St->Extras) St->ExtrasBefore += FWWORegress::HealthOf(E.Get());
+					const int32 Taken = AWWOCharacter::NetShotsTaken, Applied = AWWOCharacter::NetHitsApplied, Rejected = AWWOCharacter::NetHitsRejected, Credited = AWWOCharacter::NetKillsCredited;
+					FWWOGunShot Shot;
+					Shot.WeaponId = H.Weapon;
+					Shot.Mods = { H.Mod };
+					Shot.Origin = P->EyeLocation();
+					FWWOGunHit Hit;
+					Hit.Target = T;
+					Hit.Damage = 10.f; // under every gun's one round
+					Hit.bCritical = H.Name.Contains(TEXT("ricochet")) ? H.bMet : false;
+					Hit.Point = PartOf(T, Hit.bCritical);
+					Shot.Hits.Add(Hit);
+					Shot.Ends.Add(Hit.Point);
+					P->ServerGunShot_Implementation(Shot);
+					R.Record(TEXT("taken"), AWWOCharacter::NetShotsTaken - Taken);
+					R.Record(TEXT("applied"), AWWOCharacter::NetHitsApplied - Applied);
+					R.Record(TEXT("rejected"), AWWOCharacter::NetHitsRejected - Rejected);
+					R.Record(TEXT("credited"), AWWOCharacter::NetKillsCredited - Credited);
+					R.Record(TEXT("static_hits"), P->Weapon->HostStaticHits);
+					return false;
+				}
+				if (Tick < 60) return false;
+				R.Record(TEXT("dealt"), St->TargetBefore - FWWORegress::HealthOf(T));
+				float Now = 0.f;
+				for (const TWeakObjectPtr<AActor>& E : St->Extras) Now += FWWORegress::HealthOf(E.Get());
+				R.Record(TEXT("chain_dealt"), St->ExtrasBefore - Now);
+				R.Record(TEXT("hammer_left"), P->Weapon->HammerLeft);
+				R.Record(TEXT("confirms"), R.Confirms);
+				R.Record(TEXT("kills"), R.ConfirmKills);
 				return true;
 			};
 			Out.Add(S);
