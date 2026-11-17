@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Player/WWOKitRefusal.h"
 #include "WWOGrenadeComponent.generated.h"
 
 class UWWOGrenadeData;
@@ -34,7 +35,7 @@ public:
 	bool IsReady() const { return Charge >= 1.f; }
 	bool ThrowGrenade();
 	void UpdateCharge(float DeltaSeconds); // the recharge (the host runs a joiner's too, to check its throws)
-	bool HostThrow(const FVector& Hand, const FVector& Dir); // host: a joiner's throw (see AWWOCharacter::ServerThrowGrenade)
+	EWWOKitRefusal HostThrow(const FVector& Hand, const FVector& Dir); // host: a joiner's throw (see AWWOCharacter::ServerThrowGrenade); None: thrown
 	// the host's tally of joiners' throws
 	static int32 NetThrows;
 	static int32 NetThrowsRejected;

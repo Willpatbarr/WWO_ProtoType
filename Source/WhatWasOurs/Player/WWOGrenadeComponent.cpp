@@ -102,23 +102,23 @@ void UWWOGrenadeComponent::Release()
 	else ThrowFrom(Hand, Dir);
 }
 
-bool UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
+EWWOKitRefusal UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	FString Why;
-	if (P->Health->bDead) Why = TEXT("dead");
-	else if (Charge < 0.95f) Why = FString::Printf(TEXT("no grenade ready (charge %.2f)"), Charge); // a little slack for timing
-	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = TEXT("thrown from somewhere else");
-	if (!Why.IsEmpty())
+	EWWOKitRefusal Why = EWWOKitRefusal::None;
+	if (P->Health->bDead) Why = EWWOKitRefusal::Dead;
+	else if (Charge < 0.95f) Why = EWWOKitRefusal::NotReady; // a little slack for timing
+	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = EWWOKitRefusal::ThrownElsewhere;
+	if (Why != EWWOKitRefusal::None)
 	{
 		++NetThrowsRejected;
-		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *Why);
-		return false;
+		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *WWOKit::RefusalText(EWWOKit::Grenade, Why, Charge));
+		return Why;
 	}
 	++NetThrows;
 	Charge = FMath::Max(Charge - 1.f, 0.f);
 	ThrowFrom(Hand, Dir.GetSafeNormal());
-	return true;
+	return EWWOKitRefusal::None;
 }
 
 void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)

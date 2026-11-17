@@ -10,6 +10,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Player/WWOKitRefusal.h"
 #include "WWOAbilityComponent.generated.h"
 
 class UWWOAbilityData;
@@ -26,7 +27,7 @@ public:
 	bool ActivateAbility(UWWOAbilityData* Ability, float Ready = 1.f);
 	// Host: a joiner used the ability in this slot (its own machine already did; this runs the
 	// world side: fog, bombs, Thornfist's boost and an armed Static Charge for its punches).
-	bool HostUseAbility(int32 Slot); // false: refused (the joiner is told)
+	EWWOKitRefusal HostUseAbility(int32 Slot); // None: used; otherwise refused (the joiner is told)
 	void UndoUse(int32 Slot);
 	bool CanLaunchNow() const;       // host: Spore Dash is equipped and ready, or was just used        // a joiner's own, when the host refused it
 	float Charge(const UWWOAbilityData* Ability) const;

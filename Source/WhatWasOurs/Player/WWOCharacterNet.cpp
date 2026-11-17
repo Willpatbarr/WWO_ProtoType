@@ -31,24 +31,28 @@ void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot, FVector_NetQuant
 {
 	++NetAbilitiesUsed;
 	NetAim = FVector(Aim).GetSafeNormal(UE_SMALL_NUMBER, GetActorForwardVector()); // this copy's camera has no pitch
-	if (!Abilities->HostUseAbility(Slot)) ClientKitRefused(1, Slot);
+	if (Abilities->HostUseAbility(Slot) != EWWOKitRefusal::None) ClientKitRefused((uint8)EWWOKit::Ability, Slot);
 }
 
 void AWWOCharacter::ClientKitRefused_Implementation(uint8 What, int32 Slot)
 {
-	UE_LOG(LogWWO, Display, TEXT("Net: the host refused %s"), What == 0 ? TEXT("the grenade") : (What == 1 ? TEXT("the ability") : TEXT("the ult")));
-	if (What == 0) Grenades->Charge = FMath::Min(Grenades->Charge + 1.f, Grenades->MaxCharges());
-	else if (What == 1) Abilities->UndoUse(Slot);
-	else Ult->Abort(true);
+	const EWWOKit Kit = (EWWOKit)What; // a uint8 on the wire
+	UE_LOG(LogWWO, Display, TEXT("Net: the host refused %s"), WWOKit::Name(Kit));
+	switch (Kit)
+	{
+	case EWWOKit::Grenade: Grenades->Charge = FMath::Min(Grenades->Charge + 1.f, Grenades->MaxCharges()); break;
+	case EWWOKit::Ability: Abilities->UndoUse(Slot); break;
+	default: Ult->Abort(true); break;
+	}
 }
 
 void AWWOCharacter::ServerActivateUlt_Implementation()
 {
 	if (Ult->Charge >= 0.95f) Ult->Fill(); // a little slack: the two charges run a frame or two apart
 	const bool bCast = Ult->ActivateUlt();
-	if (!bCast) ClientKitRefused(2, 0);
+	if (!bCast) ClientKitRefused((uint8)EWWOKit::Ult, 0);
 	NetUltsCast += bCast ? 1 : 0;
-	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), bCast ? TEXT("cast") : TEXT("refused"));
+	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), *WWOKit::RefusalText(EWWOKit::Ult, bCast ? EWWOKitRefusal::None : EWWOKitRefusal::NotReady));
 }
 
 void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)

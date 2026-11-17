@@ -106,15 +106,16 @@ void UWWOAbilityComponent::UndoUse(int32 Slot)
 	if (A->Kind == EWWOAbilityKind::Active) ChargeById.Add(A->Id, 1.f);
 }
 
-bool UWWOAbilityComponent::HostUseAbility(int32 Slot)
+EWWOKitRefusal UWWOAbilityComponent::HostUseAbility(int32 Slot)
 {
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this); // the joiner's copy
 	UWWOAbilityData* A = Loadout ? Loadout->GetAbility(Slot) : nullptr;
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	if (!A || !P || P->Health->bDead)
 	{
-		UE_LOG(LogWWO, Display, TEXT("NetAbility refused from %s: slot %d %s"), *GetNameSafe(P), Slot, A ? TEXT("dead") : TEXT("empty"));
-		return false;
+		const EWWOKitRefusal Why = A ? EWWOKitRefusal::Dead : EWWOKitRefusal::EmptySlot;
+		UE_LOG(LogWWO, Display, TEXT("NetAbility refused from %s: slot %d %s"), *GetNameSafe(P), Slot, *WWOKit::RefusalText(EWWOKit::Ability, Why));
+		return Why;
 	}
 	constexpr float Ready = 0.95f; // a little slack: the two machines' recharges run a frame or two apart
 	bool bDone = false;
@@ -124,8 +125,9 @@ bool UWWOAbilityComponent::HostUseAbility(int32 Slot)
 		bDone = true;
 	}
 	else if (A->Kind == EWWOAbilityKind::Active) bDone = ActivateAbility(A, Ready);
-	UE_LOG(LogWWO, Display, TEXT("NetAbility %s from %s: %s (charge %.2f)"), *A->Id.ToString(), *P->GetName(), bDone ? TEXT("used") : TEXT("refused, not ready"), Charge(A));
-	return bDone;
+	const EWWOKitRefusal Why = bDone ? EWWOKitRefusal::None : EWWOKitRefusal::NotReady;
+	UE_LOG(LogWWO, Display, TEXT("NetAbility %s from %s: %s (charge %.2f)"), *A->Id.ToString(), *P->GetName(), *WWOKit::RefusalText(EWWOKit::Ability, Why), Charge(A));
+	return Why;
 }
 
 bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)

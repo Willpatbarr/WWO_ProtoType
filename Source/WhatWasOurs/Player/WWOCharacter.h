@@ -434,8 +434,8 @@ public:
 	// Online kit: a joiner's ability or ult (its own machine runs it at once; the host runs the
 	// world side), the host's slow on a joiner, and roots everyone else sees.
 	UFUNCTION(Server, Reliable) void ServerUseAbility(int32 Slot, FVector_NetQuantizeNormal Aim);
-	// The host said no to something this machine already did (0 grenade, 1 ability in Slot, 2 ult):
-	// the charge comes back and what it started here stops.
+	// The host said no to something this machine already did (What: an EWWOKit, Player/WWOKitRefusal.h;
+	// Slot: the ability's): the charge comes back and what it started here stops.
 	UFUNCTION(Client, Reliable) void ClientKitRefused(uint8 What, int32 Slot);
 	FVector NetAim = FVector::ForwardVector; // host: where a joiner was looking when it last used an ability
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();

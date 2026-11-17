@@ -313,7 +313,7 @@ void AWWOCharacter::ClientHitMarker_Implementation(bool bKilled)
 
 void AWWOCharacter::ServerThrowGrenade_Implementation(FVector_NetQuantize Hand, FVector_NetQuantizeNormal Dir)
 {
-	if (!Grenades->HostThrow(Hand, Dir) && !Health->bDead) ClientKitRefused(0, 0); // its charge comes back
+	if (Grenades->HostThrow(Hand, Dir) != EWWOKitRefusal::None && !Health->bDead) ClientKitRefused((uint8)EWWOKit::Grenade, 0); // its charge comes back
 }
 
 void AWWOCharacter::ClientKillCredit_Implementation(int32 Kills, bool bMelee)

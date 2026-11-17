@@ -579,23 +579,23 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			const FVector Dir = P->AimForward();
 			const FVector Hand = P->EyeLocation() + Dir * 50.f;
 			R.Record(TEXT("charge_start"), G->Charge);
-			R.RecordBool(TEXT("throw_ready"), G->HostThrow(Hand, Dir));
+			R.RecordBool(TEXT("throw_ready"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None);
 			R.Record(TEXT("charge_after"), G->Charge);
-			R.RecordBool(TEXT("throw_again"), G->HostThrow(Hand, Dir)); // not ready
+			R.RecordBool(TEXT("throw_again"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None); // not ready
 			R.Record(TEXT("charge_again"), G->Charge);
 			G->Charge = 1.f;
-			R.RecordBool(TEXT("throw_far"), G->HostThrow(Hand + FVector(0, 0, 500.f), Dir)); // from somewhere else
+			R.RecordBool(TEXT("throw_far"), G->HostThrow(Hand + FVector(0, 0, 500.f), Dir) == EWWOKitRefusal::None); // from somewhere else
 			P->Health->bDead = true;
-			R.RecordBool(TEXT("throw_dead"), G->HostThrow(Hand, Dir));
+			R.RecordBool(TEXT("throw_dead"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None);
 			P->Health->bDead = false;
 			R.Record(TEXT("charge_end"), G->Charge);
 			R.Record(TEXT("net_throws"), UWWOGrenadeComponent::NetThrows - Throws);
 			R.Record(TEXT("net_rejected"), UWWOGrenadeComponent::NetThrowsRejected - Rejected);
 			G->Charge = 0.25f;
-			P->ClientKitRefused_Implementation(0, 0); // the charge comes back
+			P->ClientKitRefused_Implementation((uint8)EWWOKit::Grenade, 0); // the charge comes back
 			R.Record(TEXT("charge_refused"), G->Charge);
 			G->Charge = 1.f;
-			P->ClientKitRefused_Implementation(0, 0); // never above the most
+			P->ClientKitRefused_Implementation((uint8)EWWOKit::Grenade, 0); // never above the most
 			R.Record(TEXT("charge_refused_full"), G->Charge);
 			return false;
 		};
@@ -623,16 +623,16 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			if (!Ab) { R.Record(TEXT("equipped"), 0); return true; }
 			if (Tick == 0)
 			{
-				R.RecordBool(TEXT("use_empty_slot"), K->HostUseAbility(1));
+				R.RecordBool(TEXT("use_empty_slot"), K->HostUseAbility(1) == EWWOKitRefusal::None);
 				P->Health->bDead = true;
-				R.RecordBool(TEXT("use_dead"), K->HostUseAbility(0));
+				R.RecordBool(TEXT("use_dead"), K->HostUseAbility(0) == EWWOKitRefusal::None);
 				P->Health->bDead = false;
 				R.RecordBool(TEXT("can_launch_ready"), K->CanLaunchNow());
-				R.RecordBool(TEXT("use"), K->HostUseAbility(0));
+				R.RecordBool(TEXT("use"), K->HostUseAbility(0) == EWWOKitRefusal::None);
 				if (bCharged)
 				{
 					K->OnDamageTaken(Ab->ChargeDamage); // full: now it can be armed
-					R.RecordBool(TEXT("use_filled"), K->HostUseAbility(0));
+					R.RecordBool(TEXT("use_filled"), K->HostUseAbility(0) == EWWOKitRefusal::None);
 				}
 				R.Record(TEXT("charge_used"), K->Charge(Ab));
 				R.RecordBool(TEXT("can_launch_used"), K->CanLaunchNow());
@@ -646,8 +646,8 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			}
 			if (Tick == 3)
 			{
-				R.RecordBool(TEXT("use_again"), K->HostUseAbility(0));
-				P->ClientKitRefused_Implementation(1, 0); // the host said no: undone, the charge back
+				R.RecordBool(TEXT("use_again"), K->HostUseAbility(0) == EWWOKitRefusal::None);
+				P->ClientKitRefused_Implementation((uint8)EWWOKit::Ability, 0); // the host said no: undone, the charge back
 				R.Record(TEXT("charge_refused"), K->Charge(Ab));
 				R.RecordBool(TEXT("effect_refused"), K->IsEffectActive(Ab));
 			}
