@@ -409,14 +409,21 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 	TargetActor = Best;
 }
 
+AWWOCharacter* AWWOEnemy::HurtFriendly(AActor* Victim, float Amount, const FVector& CameFrom, bool bMelee)
+{
+	if (AWWOCharacter* P = Cast<AWWOCharacter>(Victim))
+	{
+		P->Health->DamageCameFrom(CameFrom);
+		P->Health->TakeDamage(Amount, bMelee);
+		return P;
+	}
+	if (AWWOAlly* A = Cast<AWWOAlly>(Victim)) A->TakeAllyDamage(Amount, bMelee);
+	return nullptr;
+}
+
 void AWWOEnemy::DamageTarget(float Amount, bool bMelee)
 {
-	if (AWWOCharacter* P = Cast<AWWOCharacter>(TargetActor.Get()))
-	{
-		P->Health->DamageCameFrom(GetActorLocation());
-		P->Health->TakeDamage(Amount, bMelee);
-	}
-	else if (AWWOAlly* A = Cast<AWWOAlly>(TargetActor.Get())) A->TakeAllyDamage(Amount, bMelee);
+	HurtFriendly(TargetActor.Get(), Amount, GetActorLocation(), bMelee);
 }
 
 FVector AWWOEnemy::FlatToTarget() const

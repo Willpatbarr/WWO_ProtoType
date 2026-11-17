@@ -4,7 +4,6 @@
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
-#include "Allies/WWOAlly.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
@@ -155,15 +154,10 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	{
 		Splash(Hit.ImpactPoint);
 	}
-	else if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()))
+	else
 	{
-		if (!P->Health->bDead) ++PlayerHits;
-		P->Health->DamageCameFrom(Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // back along its flight
-		P->Health->TakeDamage(Damage);
-	}
-	else if (AWWOAlly* A = Cast<AWWOAlly>(Hit.GetActor()))
-	{
-		A->TakeAllyDamage(Damage);
+		if (const AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()); P && !P->Health->bDead) ++PlayerHits;
+		AWWOEnemy::HurtFriendly(Hit.GetActor(), Damage, Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // the mark: back along its flight
 	}
 	AWWOFXActor::Pop(GetWorld(), Hit.ImpactPoint, Color, Size * 2.5f, 0.2f);
 	if (SplashRadius <= 0.f) LandSparks(Hit.ImpactPoint);
@@ -185,13 +179,7 @@ void AWWOEnemyProjectile::Splash(const FVector& Point)
 	Q.bTeammates = true;
 	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, &Point, R](const FWWOAreaHit& Hit)
 	{
-		const float Dealt = Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(Hit.Distance / R, 0.f, 1.f));
-		if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.Actor))
-		{
-			P->Health->DamageCameFrom(Point);
-			P->Health->TakeDamage(Dealt);
-		}
-		else if (AWWOAlly* Mate = Cast<AWWOAlly>(Hit.Actor)) Mate->TakeAllyDamage(Dealt);
+		AWWOEnemy::HurtFriendly(Hit.Actor, Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(Hit.Distance / R, 0.f, 1.f)), Point);
 		return true;
 	});
 	SplashLooks(Point);

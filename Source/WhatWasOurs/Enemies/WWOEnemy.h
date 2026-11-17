@@ -13,6 +13,7 @@
 #include "WWOEnemy.generated.h"
 
 class UBoxComponent;
+class AWWOCharacter;
 class UCapsuleComponent;
 class UWWOBodyComponent;
 class UWWOEnemyData;
@@ -83,6 +84,13 @@ public:
 	AActor* GetTargetActor() const { return TargetActor.Get(); }
 	FVector GetWish() const;
 	FString PathDebug() const;
+
+	// An enemy's attack lands on a friendly (Victim: a player or an AI teammate; anything else is left
+	// alone). A player's hit mark points back at CameFrom, then the damage (shield first; bMelee for
+	// Melee Guard); an AI teammate takes it on its shield, then its health. Every bite, leap, bolt,
+	// splash and slam goes through here: no attacker scope (FWWODamageBy), no push. Returns the player
+	// hurt, if it was one (the slam slows them).
+	static AWWOCharacter* HurtFriendly(AActor* Victim, float Amount, const FVector& CameFrom, bool bMelee = false);
 
 	void ApplyBlind(float Seconds);
 	void ApplySlow(float Amount, float Seconds);

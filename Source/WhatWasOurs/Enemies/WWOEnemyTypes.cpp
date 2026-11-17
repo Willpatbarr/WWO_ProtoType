@@ -5,7 +5,6 @@
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
-#include "Allies/WWOAlly.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -625,13 +624,7 @@ void AWWOTank::Slam()
 	Q.bTeammates = true;
 	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, T](const FWWOAreaHit& Hit)
 	{
-		if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.Actor))
-		{
-			P->Health->DamageCameFrom(GetActorLocation());
-			P->Health->TakeDamage(T->SlamDamage, true);
-			P->ApplySlow(T->SlowAmount, T->SlowTime);
-		}
-		else if (AWWOAlly* Mate = Cast<AWWOAlly>(Hit.Actor)) Mate->TakeAllyDamage(T->SlamDamage, true);
+		if (AWWOCharacter* P = HurtFriendly(Hit.Actor, T->SlamDamage, GetActorLocation(), true)) P->ApplySlow(T->SlowAmount, T->SlowTime);
 		return true;
 	});
 }
