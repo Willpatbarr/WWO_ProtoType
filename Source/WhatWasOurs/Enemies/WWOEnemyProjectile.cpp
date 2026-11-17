@@ -172,22 +172,28 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 
 void AWWOEnemyProjectile::Splash(const FVector& Point)
 {
-	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
+	// Every player (dead or not), then living AI teammates, by their centre: within the radius + 0.5 m (the
+	// body, not just its centre).
 	const float R = SplashRadius * WWO::M;
-	for (AWWOCharacter* P : WS->GetPlayers())
+	FWWOAreaQuery Q;
+	Q.Center = Point;
+	Q.Radius = R + 50.f;
+	Q.bFloatDistance = true;
+	Q.Measure = EWWOAreaMeasure::Centre;
+	Q.Targets = EWWOAreaTargets::None;
+	Q.Players = EWWOAreaPlayers::All;
+	Q.bTeammates = true;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, &Point, R](const FWWOAreaHit& Hit)
 	{
-		const float D = FVector::Dist(Point, P->GetActorLocation());
-		if (D <= R + 50.f) // +0.5 m: the player's body, not just its center
+		const float Dealt = Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(Hit.Distance / R, 0.f, 1.f));
+		if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.Actor))
 		{
 			P->Health->DamageCameFrom(Point);
-			P->Health->TakeDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
+			P->Health->TakeDamage(Dealt);
 		}
-	}
-	for (AWWOAlly* Mate : WS->LivingTeammates())
-	{
-		const float D = FVector::Dist(Point, Mate->GetActorLocation());
-		if (D <= R + 50.f) Mate->TakeAllyDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
-	}
+		else if (AWWOAlly* Mate = Cast<AWWOAlly>(Hit.Actor)) Mate->TakeAllyDamage(Dealt);
+		return true;
+	});
 	SplashLooks(Point);
 }
 

@@ -611,28 +611,29 @@ void AWWOTank::Slam()
 	const UWWOTankData* T = D();
 	Body->Play("Jump_Land", 1.4f, 0.05f);
 	AWWOGameState::Shockwave(GetWorld(), FeetLocation() + FVector(0, 0, 10.f), FLinearColor(1.f, 0.7f, 0.3f, 0.8f), T->SlamRadius, 0.45f); // everyone sees it
-	// Hits you and any teammates in range (the slam counts as melee).
-	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
-	auto InRange = [this, T](const AActor* Victim)
+	// Hits every player (online: all of them, dead or not) and living AI teammates in range, by their
+	// centre on the ground and at most 1.5 m above or below (not through a deck). The slam counts as melee.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = T->SlamRadius * WWO::M;
+	Q.bFlat = true;
+	Q.MaxHeight = 150.f;
+	Q.bHeightInclusive = true;
+	Q.Measure = EWWOAreaMeasure::Centre;
+	Q.Targets = EWWOAreaTargets::None;
+	Q.Players = EWWOAreaPlayers::All;
+	Q.bTeammates = true;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, T](const FWWOAreaHit& Hit)
 	{
-		FVector To = Victim->GetActorLocation() - GetActorLocation();
-		const float Height = FMath::Abs(To.Z);
-		To.Z = 0.f;
-		return To.Size() <= T->SlamRadius * WWO::M && Height <= 150.f; // not through a deck
-	};
-	for (AWWOCharacter* P : WS->GetPlayers()) // every player, online
-	{
-		if (InRange(P))
+		if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.Actor))
 		{
 			P->Health->DamageCameFrom(GetActorLocation());
 			P->Health->TakeDamage(T->SlamDamage, true);
 			P->ApplySlow(T->SlowAmount, T->SlowTime);
 		}
-	}
-	for (AWWOAlly* Mate : WS->LivingTeammates())
-	{
-		if (InRange(Mate)) Mate->TakeAllyDamage(T->SlamDamage, true);
-	}
+		else if (AWWOAlly* Mate = Cast<AWWOAlly>(Hit.Actor)) Mate->TakeAllyDamage(T->SlamDamage, true);
+		return true;
+	});
 }
 
 void AWWOTank::Lob()
