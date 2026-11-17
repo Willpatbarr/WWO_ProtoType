@@ -238,18 +238,16 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 		return bWall ? FVector::ZeroVector : Away * 0.5f;
 	}
 	if (Distance <= Data->FollowMax) return FVector::ZeroVector;
-	// Walk back toward you, around walls.
-	PathAge += DeltaSeconds;
-	if (PathAge > 0.4f) // on its age alone: a straight two-point path trims to one point at once
+	// Walk back toward you, around walls. It paths again every 0.4 s on its age alone (a straight
+	// two-point path trims to one point at once); a point nearer than 60 cm (flat) is reached. The clock
+	// only runs while it is walking back.
+	FWWOPathRules Rules;
+	Rules.RepathAfter = 0.4f;
+	Rules.Reach = 60.f;
+	Path.Update(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), GetActorLocation(), DeltaSeconds, Rules);
+	if (Path.Points.Num() >= 2)
 	{
-		bool bPartial = false;
-		Path = WWONav::FindPath(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), bPartial);
-		PathAge = 0.f;
-	}
-	while (Path.Num() > 1 && FVector2D(Path[0].X - GetActorLocation().X, Path[0].Y - GetActorLocation().Y).Size() < 60.f) Path.RemoveAt(0);
-	if (Path.Num() >= 2)
-	{
-		FVector Step = Path[0] - GetActorLocation();
+		FVector Step = Path.Points[0] - GetActorLocation();
 		Step.Z = 0.f;
 		if (Step.Size() > 1.f) return Step.GetSafeNormal();
 	}

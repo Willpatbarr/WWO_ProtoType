@@ -8,6 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Systems/WWONav.h"
 #include "WWOAlly.generated.h"
 
 class UWWOBodyComponent;
@@ -46,8 +47,7 @@ private:
 	void ShowDown(bool bIsDown); // collision and the gun, on every machine
 	float SinceHit = 99.f;
 	float FireCooldown = 0.5f;
-	TArray<FVector> Path;
-	float PathAge = 99.f;
+	FWWOPathFollower Path;
 
 	UWWOAllyData* D() const;
 	void GoDown();

@@ -181,7 +181,7 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 	{
 		AWWOAlly* A = Cast<AWWOAlly>(St.Mover.Get());
 		if (!A) return;
-		R.Record(TEXT("path_points"), A->Path.Num());
+		R.Record(TEXT("path_points"), A->Path.Points.Num());
 		for (int32 i = 0; i < St.Others.Num(); ++i) R.Record(FString::Printf(TEXT("other%d.health"), i), FWWORegress::HealthOf(St.Others[i].Get()));
 	};
 
@@ -607,7 +607,7 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 			A->SetActorLocation(Stand(R, Home.X + 500.f, Home.Y + 500.f, Half), false, nullptr, ETeleportType::TeleportPhysics);
 			R.PlaceAt(FVector(Home.X + 500.f, Home.Y, Home.Z), 90.f);
 			R.Record(TEXT("between"), Dir2(A->Follow(Dt)));
-			R.Record(TEXT("path_points"), A->Path.Num());
+			R.Record(TEXT("path_points"), A->Path.Points.Num());
 			return true;
 		};
 		Out.Add(S);
