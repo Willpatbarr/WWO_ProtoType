@@ -140,7 +140,7 @@ void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 	Spec.Data = Data;
 	Spec.Seedburst = P->Abilities->Equipped(WWOIds::Ability::Seedburst);
 	Spec.SporePatches = P->Abilities->Equipped(WWOIds::Ability::SporePatches);
-	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && Data->Kind != EWWOGrenadeKind::Spike && Data->Kind != EWWOGrenadeKind::Tripmine;
+	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && AWWOGrenade::KindRules(Data->Kind).bImpactFuse;
 	Spec.ThrownFrom = P->GetActorLocation();
 	AWWOGrenade::Throw(GetWorld(), Spec, Hand, Dir * Speed * WWO::M, P);
 }

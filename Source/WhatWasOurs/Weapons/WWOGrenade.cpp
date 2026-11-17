@@ -117,7 +117,8 @@ void AWWOGrenade::Setup(AActor* InThrower)
 	Look.BlastRadius = Spec.BlastRadius;
 	Look.Flavor = Spec.Flavor;
 	Look.bVisible = Spec.bVisible;
-	Look.bBlind = Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Blind;
+	const FWWOGrenadeKindRules* R = Rules();
+	Look.bBlind = R && R->bBrightFlash;
 	Movement->Bounciness = FMath::Clamp((Spec.Data ? Spec.Data->Bounce : 0.35f) + UWWOLoadoutSubsystem::Bonus(this, "more_bounce"), 0.f, 1.f);
 	Movement->OnProjectileBounce.AddDynamic(this, &AWWOGrenade::OnBounce);
 
@@ -133,14 +134,9 @@ void AWWOGrenade::Setup(AActor* InThrower)
 	}
 	BuildLooks();
 	if (Spec.SporePatches) PatchesLeft = FMath::RoundToInt(Spec.SporePatches->PatchMax);
-	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Tripmine)
+	if (R && R->Life)
 	{
-		LifeLimit = Spec.Data->MineLife; // no fuse: it waits for an enemy
-		bFuseIsFizzle = true;
-	}
-	else if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike)
-	{
-		LifeLimit = Spec.Data->SpikeLife; // no fuse: it goes off when it touches a target
+		LifeLimit = R->Life(*Spec.Data); // no fuse: it waits for a target
 		bFuseIsFizzle = true;
 	}
 	else
@@ -209,8 +205,7 @@ void AWWOGrenade::Tick(float DeltaSeconds)
 		Movement->Velocity *= Damp;
 		Spin *= Damp;
 	}
-	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike) Seek(DeltaSeconds);
-	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Tripmine && bStuck) UpdateMine(DeltaSeconds);
+	if (const FWWOGrenadeKindRules* R = Rules(); R && R->OnTick) R->OnTick(*this, DeltaSeconds);
 	if (bSpent) return;
 	if (Age >= LifeLimit)
 	{
@@ -291,16 +286,7 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 	}
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Other);
 	if (Target && !UWWOWorldSubsystem::CanHurt(this, Other)) Target = nullptr; // a teammate: just something to bounce off
-	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Spike && Target && !Target->IsDead())
-	{
-		SpikeHit(Other);
-		return;
-	}
-	if (Spec.Data && Spec.Data->Kind == EWWOGrenadeKind::Tripmine && !bStuck)
-	{
-		Stick();
-		return;
-	}
+	if (const FWWOGrenadeKindRules* R = Rules(); R && R->OnTouch && R->OnTouch(*this, Other, Target)) return;
 	if (Spec.SporePatches && PatchesLeft > 0 && PatchCooldown <= 0.f && !Target)
 	{
 		PatchesLeft -= 1;
@@ -476,47 +462,108 @@ void AWWOGrenade::Explode()
 		Spec.Data ? *Spec.Data->Id.ToString() : (Spec.bIsSeed ? TEXT("seed") : TEXT("blast")), *Center.ToCompactString(), Age, Spec.BlastRadius, HitCount, DealtTotal);
 	if (Spec.Seedburst) Burst(Center);
 	ShareShields(Center);
-	if (Spec.Data)
-	{
-		const UWWOGrenadeData* D = Spec.Data;
-		const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
-		if (D->Kind == EWWOGrenadeKind::Wall)
-		{
-			const AWWOBarkWall* Wall = AWWOBarkWall::Raise(World, Center, Spec.ThrownFrom, D->WallWidth, D->WallHeight,
-				D->WallTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "wall_longer")), Thrower.Get()); // Longer Walls
-			if (Wall) UE_LOG(LogWWO, Log, TEXT("Grenade %s: raised a %.1f x %.1f m wall at %s facing yaw %.0f"), *D->Id.ToString(), D->WallWidth, D->WallHeight,
-				*Wall->GetActorLocation().ToCompactString(), Wall->GetActorRotation().Yaw);
-		}
-		if (D->Kind == EWWOGrenadeKind::Blind || D->Kind == EWWOGrenadeKind::Tripmine)
-		{
-			int32 Affected = 0;
-			const float SlowTime = D->SlowTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "slow_longer")); // Longer Snare
-			for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
-			{
-				if (FVector::Dist(Enemy->FeetLocation(), Center) > Reach) continue;
-				if (D->Kind == EWWOGrenadeKind::Blind) Enemy->ApplyBlind(D->BlindTime);
-				else Enemy->ApplySlow(D->SlowAmount, SlowTime);
-				Affected++;
-			}
-			// PvP: the other team's players caught in it. Slowed as an enemy is; blinded = a white-out
-			// of their screen that clears over the blind time (a bot loses its target and its aim).
-			for (AWWOCharacter* Foe : UWWOWorldSubsystem::Get(this)->GetPlayers())
-			{
-				if (Foe->Health->bDead || !UWWOWorldSubsystem::CanHurt(Thrower.Get(), Foe) || FVector::Dist(Foe->GetActorLocation(), Center) > Reach) continue;
-				if (D->Kind == EWWOGrenadeKind::Blind) Foe->ApplyBlind(D->BlindTime);
-				else Foe->ApplySlow(D->SlowAmount, SlowTime);
-				Affected++;
-			}
-			UE_LOG(LogWWO, Log, TEXT("Grenade %s: %s %d enemies"), *D->Id.ToString(), D->Kind == EWWOGrenadeKind::Blind ? TEXT("blinded") : TEXT("slowed"), Affected);
-		}
-		if (D->Kind == EWWOGrenadeKind::Pool)
-		{
-			AWWOSporePool::Spawn(World, Center - FVector(0, 0, Radius * WWO::M), Spec.BlastRadius,
-				D->PoolDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")), D->PoolTime, Spec.Color, Spec.Flavor, Thrower.Get());
-			UE_LOG(LogWWO, Log, TEXT("Grenade %s: left a %.1f m pool (%.0f/s for %.1f s)"), *D->Id.ToString(), Spec.BlastRadius, D->PoolDps, D->PoolTime);
-		}
-	}
+	if (const FWWOGrenadeKindRules* R = Rules(); R && R->OnBurst) R->OnBurst(*this, Center);
 	Finish();
+}
+
+const FWWOGrenadeKindRules& AWWOGrenade::KindRules(EWWOGrenadeKind Kind)
+{
+	// One entry per kind, in the enum's order. (A member, so the handlers can use the grenade's own steps.)
+	static const FWWOGrenadeKindRules Rules[] = {
+		{ // Explosive: blows up on its fuse.
+			.Kind = EWWOGrenadeKind::Explosive,
+		},
+		{ // Pool: its blast leaves a damaging pool.
+			.Kind = EWWOGrenadeKind::Pool,
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center) { G.LeavePool(Center); },
+		},
+		{ // Spike: no fuse; curves toward targets until it touches one, then poisons it.
+			.Kind = EWWOGrenadeKind::Spike,
+			.bImpactFuse = false,
+			.Life = [](const UWWOGrenadeData& D) { return D.SpikeLife; },
+			.OnTick = [](AWWOGrenade& G, float DeltaSeconds) { G.Seek(DeltaSeconds); },
+			.OnTouch = [](AWWOGrenade& G, AActor* Other, IWWOTargetable* Target)
+			{
+				if (!Target || Target->IsDead()) return false;
+				G.SpikeHit(Other);
+				return true;
+			},
+		},
+		{ // Tripmine: sticks where it first lands, arms, blows up when a target comes close, slows.
+			.Kind = EWWOGrenadeKind::Tripmine,
+			.bImpactFuse = false,
+			.Life = [](const UWWOGrenadeData& D) { return D.MineLife; },
+			.OnTick = [](AWWOGrenade& G, float DeltaSeconds) { if (G.bStuck) G.UpdateMine(DeltaSeconds); },
+			.OnTouch = [](AWWOGrenade& G, AActor*, IWWOTargetable*)
+			{
+				if (G.bStuck) return false;
+				G.Stick();
+				return true;
+			},
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center) { G.BlindOrSlow(Center, false); },
+		},
+		{ // Wall: its blast raises a bark wall facing the thrower.
+			.Kind = EWWOGrenadeKind::Wall,
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center) { G.RaiseWall(Center); },
+		},
+		{ // Blind: a brighter blast that blinds.
+			.Kind = EWWOGrenadeKind::Blind,
+			.bBrightFlash = true,
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center) { G.BlindOrSlow(Center, true); },
+		},
+	};
+	static_assert(UE_ARRAY_COUNT(Rules) == (int32)EWWOGrenadeKind::Blind + 1, "one entry per EWWOGrenadeKind");
+	const int32 Index = (int32)Kind;
+	check(Index < UE_ARRAY_COUNT(Rules) && Rules[Index].Kind == Kind);
+	return Rules[FMath::Min(Index, (int32)UE_ARRAY_COUNT(Rules) - 1)];
+}
+
+const FWWOGrenadeKindRules* AWWOGrenade::Rules() const
+{
+	return Spec.Data ? &KindRules(Spec.Data->Kind) : nullptr;
+}
+
+void AWWOGrenade::RaiseWall(const FVector& Center)
+{
+	const UWWOGrenadeData* D = Spec.Data;
+	const AWWOBarkWall* Wall = AWWOBarkWall::Raise(GetWorld(), Center, Spec.ThrownFrom, D->WallWidth, D->WallHeight,
+		D->WallTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "wall_longer")), Thrower.Get()); // Longer Walls
+	if (Wall) UE_LOG(LogWWO, Log, TEXT("Grenade %s: raised a %.1f x %.1f m wall at %s facing yaw %.0f"), *D->Id.ToString(), D->WallWidth, D->WallHeight,
+		*Wall->GetActorLocation().ToCompactString(), Wall->GetActorRotation().Yaw);
+}
+
+void AWWOGrenade::BlindOrSlow(const FVector& Center, bool bBlind)
+{
+	// The Blinding Grenade blinds, the Snare Mine slows, whoever is caught in reach.
+	const UWWOGrenadeData* D = Spec.Data;
+	const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
+	int32 Affected = 0;
+	const float SlowTime = D->SlowTime * (1.f + UWWOLoadoutSubsystem::Bonus(this, "slow_longer")); // Longer Snare
+	for (AWWOEnemy* Enemy : UWWOWorldSubsystem::Get(this)->LivingEnemies())
+	{
+		if (FVector::Dist(Enemy->FeetLocation(), Center) > Reach) continue;
+		if (bBlind) Enemy->ApplyBlind(D->BlindTime);
+		else Enemy->ApplySlow(D->SlowAmount, SlowTime);
+		Affected++;
+	}
+	// PvP: the other team's players caught in it. Slowed as an enemy is; blinded = a white-out
+	// of their screen that clears over the blind time (a bot loses its target and its aim).
+	for (AWWOCharacter* Foe : UWWOWorldSubsystem::Get(this)->GetPlayers())
+	{
+		if (Foe->Health->bDead || !UWWOWorldSubsystem::CanHurt(Thrower.Get(), Foe) || FVector::Dist(Foe->GetActorLocation(), Center) > Reach) continue;
+		if (bBlind) Foe->ApplyBlind(D->BlindTime);
+		else Foe->ApplySlow(D->SlowAmount, SlowTime);
+		Affected++;
+	}
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: %s %d enemies"), *D->Id.ToString(), bBlind ? TEXT("blinded") : TEXT("slowed"), Affected);
+}
+
+void AWWOGrenade::LeavePool(const FVector& Center)
+{
+	const UWWOGrenadeData* D = Spec.Data;
+	AWWOSporePool::Spawn(GetWorld(), Center - FVector(0, 0, Radius * WWO::M), Spec.BlastRadius,
+		D->PoolDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")), D->PoolTime, Spec.Color, Spec.Flavor, Thrower.Get());
+	UE_LOG(LogWWO, Log, TEXT("Grenade %s: left a %.1f m pool (%.0f/s for %.1f s)"), *D->Id.ToString(), Spec.BlastRadius, D->PoolDps, D->PoolTime);
 }
 
 void AWWOGrenade::Burst(const FVector& Center)

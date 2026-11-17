@@ -16,6 +16,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Engine/NetSerialization.h"
+#include "WWOTypes.h"
 #include "WWOGrenade.generated.h"
 
 class USphereComponent;
@@ -26,6 +27,8 @@ class UWWOGrenadeData;
 class UWWOAbilityData;
 class AWWOParticles;
 class AWWOCharacter;
+class AWWOGrenade;
+class IWWOTargetable;
 
 USTRUCT()
 struct FWWOGrenadeSpec
@@ -45,6 +48,24 @@ struct FWWOGrenadeSpec
 	FVector ThrownFrom = FVector::ZeroVector; // walls face this way
 	FName Flavor; // which flora's look the blast has (voltvine / veilspore / ironbark)
 	bool bVisible = true;
+};
+
+// What one kind of grenade (EWWOGrenadeKind) does besides flying, bouncing and blowing up: one entry per
+// kind in AWWOGrenade::KindRules (Weapons/WWOGrenade.cpp), read on the host. A field left empty is
+// something the kind doesn't do. Seeds, the ult's blast and Root Bombs have no grenade asset, so no kind.
+struct FWWOGrenadeKindRules
+{
+	EWWOGrenadeKind Kind = EWWOGrenadeKind::Explosive;
+	// When thrown.
+	bool bImpactFuse = true;   // the Impact Grenades trait makes it go off on its first touch
+	bool bBrightFlash = false; // its blast flashes brighter (FWWOGrenadeLook::bBlind)
+	float (*Life)(const UWWOGrenadeData& Data) = nullptr; // no fuse: it waits this long for a target, then fizzles
+	// While it flies or waits (every host tick).
+	void (*OnTick)(AWWOGrenade& G, float DeltaSeconds) = nullptr;
+	// On a touch (Target: something it may hurt, else null). True: handled, nothing else happens on it.
+	bool (*OnTouch)(AWWOGrenade& G, AActor* Other, IWWOTargetable* Target) = nullptr;
+	// When it bursts, after the blast's damage, Seedburst and Shield Share.
+	void (*OnBurst)(AWWOGrenade& G, const FVector& Center) = nullptr;
 };
 
 // What other machines need to draw a grenade and its blast (sent once).
@@ -81,6 +102,8 @@ public:
 	void Explode();
 	// A blast's looks (no damage) at Center; Ignore: left out of the ground check.
 	static void SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore = nullptr);
+	// Each kind's own behaviour (see FWWOGrenadeKindRules).
+	static const FWWOGrenadeKindRules& KindRules(EWWOGrenadeKind Kind);
 
 	static constexpr float Radius = 0.12f; // meters (seeds are smaller)
 	static constexpr float EdgeDamage = 0.5f;
@@ -130,5 +153,10 @@ private:
 	void Fizzle();
 	void Burst(const FVector& Center);
 	void ShareShields(const FVector& Center);
+	const FWWOGrenadeKindRules* Rules() const; // its kind's, or none (no grenade asset)
+	// The kinds' bursts (KindRules).
+	void RaiseWall(const FVector& Center);
+	void BlindOrSlow(const FVector& Center, bool bBlind); // blind (Blind), else slow (Tripmine)
+	void LeavePool(const FVector& Center);
 
 };
