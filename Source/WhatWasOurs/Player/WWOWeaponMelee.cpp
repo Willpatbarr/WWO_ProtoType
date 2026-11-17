@@ -142,16 +142,19 @@ void UWWOWeaponComponent::MeleeStrike()
 	FWWODamageBy By(P);
 	const float Boosted = M("melee_damage", MeleeDamage) * P->Abilities->MeleeMultiplier() * P->VeilMeleeMultiplier();
 	bool bKilled;
-	if (GetNetMode() == NM_Client)
 	{
-		// A joiner shows the hit now (flash, number) and predicts the kill from the health the host
-		// last sent; the host applies it and the knockback.
-		const float Before = Target->GetHealth() + Target->GetShield();
-		Target->TakeHit(Boosted, false, BestPoint);
-		bKilled = Before > 0.f && Before - Boosted <= 0.f;
-		P->ServerMeleeHit(Best, Boosted, Origin, BestPoint);
+		TGuardValue<bool> Seen(UWWOWorldSubsystem::bAttackerSawHit, true); // this punch marks its hit once, below
+		if (GetNetMode() == NM_Client)
+		{
+			// A joiner shows the hit now (flash, number) and predicts the kill from the health the host
+			// last sent; the host applies it and the knockback.
+			const float Before = Target->GetHealth() + Target->GetShield();
+			Target->TakeHit(Boosted, false, BestPoint);
+			bKilled = Before > 0.f && Before - Boosted <= 0.f;
+			P->ServerMeleeHit(Best, Boosted, Origin, BestPoint);
+		}
+		else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	}
-	else bKilled = Target->TakeHit(Boosted, false, BestPoint); // melee doesn't crit
 	OnHitConfirmed.Broadcast(false, bKilled);
 	Kick = 1.f;
 	KickAge = 0.f;

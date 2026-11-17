@@ -70,6 +70,13 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
   -> UWWOWorldSubsystem::ConfirmHit   hit marker for the attacking player
 ```
 
+- **One marker per hit** (`OnHitConfirmed`, which the HUD's hit and kill marker listens to): `ConfirmHit`
+  marks every hit, except inside a `bAttackerSawHit` scope, where the attacker marks it itself. The gun's
+  `Shoot` and the fist's `MeleeStrike` set it around their own `TakeHit` and broadcast once per shot or
+  punch (with the joiner's predicted kill); the host sets it while applying a joiner's shot or punch (that
+  joiner already marked it). Kit damage (grenades, fog, lightning, ricochets) goes through `ConfirmHit`, and
+  to a joiner as `ClientHitMarker`.
+
 - **Who did it** is ambient: an `FWWODamageBy` scope sets `UWWOWorldSubsystem::CurrentAttacker` for the
   hits made inside it. Kill credit, hit markers and which damage numbers show all read it.
 - **Who may hurt whom** is one function, `UWWOWorldSubsystem::CanHurt(Attacker, Victim)`: non-players

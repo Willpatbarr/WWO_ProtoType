@@ -87,7 +87,9 @@ public:
 	static TWeakObjectPtr<AActor> CurrentAttacker;
 	// Any damage a player deals marks their reticle, whatever dealt it (gun, fist, grenade, fog,
 	// lightning...): every TakeHit ends here. On the attacker's own machine it shows at once; the
-	// host tells a joiner, unless that joiner already showed the hit itself (bAttackerSawHit).
+	// host tells a joiner. Neither happens while bAttackerSawHit is set: the attacker marks that hit
+	// itself, once (the host applying a joiner's shot or punch; the gun's Shoot and the fist's
+	// MeleeStrike on the shooter's own machine, which mark once per shot with the predicted kill).
 	static void ConfirmHit(AActor* Victim, bool bCritical, bool bKilled);
 	static bool bAttackerSawHit;
 	static int32 HitsMarked; // how many reached this machine's own reticle (tests read it)

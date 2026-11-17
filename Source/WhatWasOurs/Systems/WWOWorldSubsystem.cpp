@@ -90,7 +90,7 @@ void UWWOWorldSubsystem::ConfirmHit(AActor* Victim, bool bCritical, bool bKilled
 	if (By->IsLocallyControlled())
 	{
 		++HitsMarked;
-		By->Weapon->OnHitConfirmed.Broadcast(bCritical, bKilled);
+		if (!bAttackerSawHit) By->Weapon->OnHitConfirmed.Broadcast(bCritical, bKilled); // else the gun or fist marks it
 	}
 	else if (By->HasAuthority() && !bAttackerSawHit) By->ClientHitMarker(bKilled);
 }
