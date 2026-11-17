@@ -17,10 +17,25 @@ OUT="$PROJ_DIR/Saved/Regress"
 mkdir -p "$OUT"
 LIMIT="${REGRESS_TIMEOUT:-2400}" # seconds before a stuck run is killed (the window mode runs at the display's 60 Hz: about real time)
 
+# The game's pids: UnrealEditor processes (by process name, not just command line) running this
+# project with -game. A shell whose command line merely contains that text (this script's caller, a
+# grep, an editor) is never matched, nor this script or any of its parents.
+game_pids() {
+	local skip=" $$ " p=$$
+	while [ -n "$p" ] && [ "$p" -gt 1 ] 2> /dev/null; do p=$(ps -o ppid= -p "$p" 2> /dev/null | tr -d ' '); skip="$skip$p "; done
+	local pid
+	for pid in $(pgrep -f "UnrealEditor.*WhatWasOurs\.uproject.*-game"); do
+		case "$skip" in *" $pid "*) continue;; esac
+		[ "$(basename "$(ps -o comm= -p "$pid" 2> /dev/null)")" = "UnrealEditor" ] && echo "$pid"
+	done
+}
+
 close_game() {
-	pkill -f "WhatWasOurs.uproject.*-game"
-	for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "WhatWasOurs.uproject.*-game" > /dev/null || return; sleep 1; done
-	pkill -9 -f "WhatWasOurs.uproject.*-game"
+	local pids=$(game_pids)
+	[ -z "$pids" ] && return
+	kill $pids 2> /dev/null
+	for _ in 1 2 3 4 5 6 7 8 9 10; do [ -z "$(game_pids)" ] && return; sleep 1; done
+	pids=$(game_pids); [ -n "$pids" ] && kill -9 $pids 2> /dev/null
 }
 
 run_mode() { # $1 = norender | render, then extra switches
@@ -30,7 +45,7 @@ run_mode() { # $1 = norender | render, then extra switches
 	local log="$OUT/run-$mode.log"
 	close_game
 	local started=$(date +%s)
-	( sleep "$LIMIT"; pkill -9 -f "WhatWasOurs.uproject.*-game" ) > /dev/null 2>&1 &
+	( sleep "$LIMIT"; pids=$(game_pids); [ -n "$pids" ] && kill -9 $pids ) > /dev/null 2>&1 &
 	local watchdog=$!
 	"$BIN" "$PROJ" /Game/WWO/Maps/L_TestRange -game "${view[@]}" -nosound -WWORegress "$@" -abslog="$log" > /dev/null 2>&1
 	local code=$?
