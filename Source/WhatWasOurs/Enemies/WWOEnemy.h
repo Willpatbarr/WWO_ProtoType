@@ -132,10 +132,7 @@ private:
 	float RetargetLeft = 0.f;
 	float CorpseLeft = -1.f;
 	float RespawnLeft = -1.f;
-	TArray<FVector> Path;
-	float PathAge = 99.f;
-	FVector PathGoal = FVector(1e9f);
-	bool bPathPartial = false;
+	FWWOPathFollower Path = FWWOPathFollower(FVector(1e9f));
 	float SidestepSide = 1.f;
 
 	float StuckFor = 0.f, UnstickLeft = 0.f, UnstickSide = 1.f;

@@ -172,8 +172,8 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		AWWOEnemy* E = Cast<AWWOEnemy>(St.Mover.Get());
 		if (!E) return;
 		R.Record(TEXT("state"), E->DebugState().Replace(TEXT(" "), TEXT("_")));
-		R.Record(TEXT("path_points"), E->Path.Num());
-		R.RecordBool(TEXT("path_partial"), E->bPathPartial);
+		R.Record(TEXT("path_points"), E->Path.Points.Num());
+		R.RecordBool(TEXT("path_partial"), E->Path.bPartial);
 		R.Record(TEXT("health"), E->GetHealth());
 	};
 

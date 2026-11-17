@@ -24,6 +24,18 @@ namespace
 {
 	constexpr float CorpseTime = 3.f; // seconds the body stays before disappearing
 	constexpr float EnemyGravity = 20.f; // m/s^2, as in Godot
+
+	// Paths again every 0.3 s or when the goal has moved 1.5 m; a path point within 60 cm (flat, 60
+	// itself included) is reached.
+	const FWWOPathRules EnemyPath = []
+	{
+		FWWOPathRules R;
+		R.RepathAfter = 0.3f;
+		R.RepathMoved = 150.f;
+		R.Reach = 60.f;
+		R.bReachInclusive = true;
+		return R;
+	}();
 }
 
 UWWOEnemyMovement::UWWOEnemyMovement()
@@ -449,30 +461,19 @@ FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 {
 	// Which way to walk to reach Goal, around walls, using the level's navmesh. With no
 	// navmesh it's a straight line.
-	PathAge += DeltaSeconds;
 	FVector Straight = Goal - GetActorLocation();
 	Straight.Z = 0.f;
-	if (PathAge > 0.3f || FVector::Dist(Goal, PathGoal) > 150.f)
-	{
-		Path = WWONav::FindPath(this, FeetLocation(), Goal, bPathPartial);
-		PathAge = 0.f;
-		PathGoal = Goal;
-	}
-	while (Path.Num() > 1)
-	{
-		const FVector ToNext = Path[0] - GetActorLocation();
-		if (FVector2D(ToNext.X, ToNext.Y).Size() > 60.f) break;
-		Path.RemoveAt(0); // reached that point
-	}
-	if (Path.Num() < 2)
+	Path.Update(this, FeetLocation(), Goal, GetActorLocation(), DeltaSeconds, EnemyPath);
+	const TArray<FVector>& Points = Path.Points;
+	if (Points.Num() < 2)
 	{
 		// Godot heads straight for the goal from here. When the goal can't be reached on the
 		// navmesh (you're up on a platform it has no way onto) and a wall or rail is right in
 		// front, it would just press into it, so it stands at the closest spot instead.
-		if (bPathPartial && WallAhead(Straight)) return FVector::ZeroVector;
+		if (Path.bPartial && WallAhead(Straight)) return FVector::ZeroVector;
 		return Straight.GetSafeNormal();
 	}
-	FVector Step = Path[0] - GetActorLocation();
+	FVector Step = Points[0] - GetActorLocation();
 	Step.Z = 0.f;
 	Step = Step.Size() > 1.f ? Step.GetSafeNormal() : Straight.GetSafeNormal();
 	// Something that isn't in the navmesh (a training target, a bark wall) can sit right on the
@@ -491,15 +492,15 @@ FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 
 FString AWWOEnemy::PathDebug() const
 {
-	FString Out = FString::Printf(TEXT("path %d points%s"), Path.Num(), bPathPartial ? TEXT(" (partial)") : TEXT(""));
-	for (const FVector& Point : Path) Out += TEXT(" ") + Point.ToCompactString();
+	FString Out = FString::Printf(TEXT("path %d points%s"), Path.Points.Num(), Path.bPartial ? TEXT(" (partial)") : TEXT(""));
+	for (const FVector& Point : Path.Points) Out += TEXT(" ") + Point.ToCompactString();
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	if (Path.Num() == 0 && Nav)
+	if (Path.Points.Num() == 0 && Nav)
 	{
 		// Why there's no path.
 		FNavLocation Near;
 		Out += FString::Printf(TEXT(" (start %s, goal %s %s)"), Nav->ProjectPointToNavigation(FeetLocation(), Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"),
-			*PathGoal.ToCompactString(), Nav->ProjectPointToNavigation(PathGoal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
+			*Path.Goal.ToCompactString(), Nav->ProjectPointToNavigation(Path.Goal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
 	}
 	return Out;
 }
