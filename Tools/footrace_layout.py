@@ -33,17 +33,20 @@ WALL_T = 0.5
 FLOOR_T = 0.4       # floor top at z 0
 DOOR_W = 4.0
 DOOR_H = 4.0
-LANE_Y = (45.0, -45.0)   # lane 0 north, lane 1 south
+SCALE = 1.5         # every room's floor plan (Will, after the first build: "the rooms need to be bigger")
 
-# (name, length along x, width along y); rooms touch end to end.
-LANE_ROOMS = (
+# (name, length along x, width along y) before SCALE; rooms touch end to end.
+LANE_ROOMS = tuple((n, l * SCALE, w * SCALE) for n, l, w in (
     ("Spawn", 14.0, 14.0),
     ("Room1", 26.0, 22.0),
     ("Room2", 26.0, 22.0),
     ("Room3", 26.0, 22.0),
     ("Boss", 32.0, 30.0),
-)
-HUB = (32.0, 32.0)        # length along x, width along y, centered on the origin
+))
+HUB = (32.0 * SCALE, 32.0 * SCALE)   # length along x, width along y, centered on the origin
+LANE_GAP = 8.0                       # solid nothing between the hub and the widest lane room
+_LANE = HUB[1] * 0.5 + LANE_GAP + max(r[2] for r in LANE_ROOMS) * 0.5
+LANE_Y = (_LANE, -_LANE)             # lane 0 north, lane 1 south
 ENEMY_SPAWNS_PER_ROOM = 6
 TEAM_SPAWNS = 6
 
@@ -156,7 +159,7 @@ def build():
             inner = cy + hub_side * (width * 0.5 - 2.0)
             markers.append(Marker(mid, inner, 0.1, 90.0 if hub_side < 0 else -90.0, ["PortalAnchor", lane_tag, room_tag]))
             if name == "Boss":
-                markers.append(Marker(x1 - 8.0, cy, 0.1, 180.0, ["BossSpawn", lane_tag]))
+                markers.append(Marker(x1 - 8.0 * SCALE, cy, 0.1, 180.0, ["BossSpawn", lane_tag]))
                 continue
             # Enemies on the east two thirds of the room, away from the doorway they enter by.
             for px, py in grid(x0 + (x1 - x0) / 3.0, x1, y0, y1, ENEMY_SPAWNS_PER_ROOM, 2.5):
@@ -171,7 +174,7 @@ def build():
     for lane, cy in enumerate(LANE_Y):
         side = 1.0 if cy > 0 else -1.0
         markers.append(Marker(0.0, side * (hw * 0.5 - 2.0), 0.1, -90.0 * side, ["HubPortal", "Lane%d" % lane]))
-        for d, x in enumerate((-8.0, 0.0, 8.0)):
+        for d, x in enumerate((-8.0 * SCALE, 0.0, 8.0 * SCALE)):
             markers.append(Marker(x, side * (hw * 0.5 - 6.0), 0.1, -90.0 * side, ["LeverSlot", "Lane%d" % lane, "Door%d" % (d + 1)]))
     markers.append(Marker(0.0, 0.0, 0.1, 0.0, ["CoreSpawn"]))
     return {"boxes": boxes, "markers": markers}

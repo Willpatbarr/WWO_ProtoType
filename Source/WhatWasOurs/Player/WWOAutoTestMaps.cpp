@@ -59,13 +59,13 @@ namespace
 	};
 	// L_FootRaceTest: the same mockup meters as L_Cascade (Tools/footrace_layout.py), origin at the hub.
 	const FWWOMapView FootRaceViews[] = {
-		{TEXT("spawn"), {-59.0, 45.0, 1.7}, {-30.0, 45.0, 1.5}},
-		{TEXT("room1"), {-40.0, 37.0, 3.0}, {-14.0, 50.0, 0.5}},
-		{TEXT("door1"), {-30.0, 45.0, 1.7}, {-14.0, 45.0, 2.0}},
-		{TEXT("boss"), {40.0, 36.0, 4.0}, {60.0, 50.0, 0.0}},
-		{TEXT("hub"), {-14.0, -14.0, 4.0}, {10.0, 12.0, 0.0}},
-		{TEXT("lane1"), {-59.0, -45.0, 1.7}, {-30.0, -45.0, 1.5}},
-		{TEXT("top"), {0.0, -130.0, 110.0}, {0.0, 0.0, 0.0}},
+		{TEXT("spawn"), {-89.0, 54.5, 1.7}, {-50.0, 54.5, 1.5}},
+		{TEXT("room1"), {-68.0, 42.0, 3.0}, {-36.0, 64.0, 0.5}},
+		{TEXT("door1"), {-48.0, 54.5, 1.7}, {-25.0, 54.5, 2.0}},
+		{TEXT("boss"), {52.0, 38.0, 4.0}, {85.0, 70.0, 0.0}},
+		{TEXT("hub"), {-21.0, -21.0, 4.0}, {15.0, 18.0, 0.0}},
+		{TEXT("lane1"), {-89.0, -54.5, 1.7}, {-50.0, -54.5, 1.5}},
+		{TEXT("top"), {0.0, -190.0, 160.0}, {0.0, 0.0, 0.0}},
 	};
 	// The test range: positions are Godot meters (x, z, y), no tile grid.
 	const FWWOMapView TestRangeViews[] = {
