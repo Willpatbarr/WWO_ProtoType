@@ -24,6 +24,7 @@
 #include "Player/WWOAbilityComponent.h"
 #include "WhatWasOurs.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 int32 AWWOCharacter::NetShotsTaken = 0;
 int32 AWWOCharacter::NetHitsApplied = 0;
@@ -335,7 +336,7 @@ bool AWWOCharacter::CheckMeleeHit(AActor* Target, float Damage, const FVector& O
 	float MaxDamage = Weapon->MeleeDamage * MeleeDamageSlack;
 	if (UWWOWorldSubsystem::IsPvP(this))
 	{
-		const UWWOAbilityData* Thornfist = Abilities->Equipped("thornfist");
+		const UWWOAbilityData* Thornfist = Abilities->Equipped(WWOIds::Ability::Thornfist);
 		const float Fist = FMath::Max(Abilities->MeleeMultiplier(), Thornfist ? Thornfist->MeleeDamageMult : 1.f); // on here, or about to be (its use is on the way)
 		MaxDamage = M("melee_damage", Weapon->MeleeDamage) * Fist * FMath::Max(VeilMeleeMultiplier(), 1.f) * 1.15f;
 	}

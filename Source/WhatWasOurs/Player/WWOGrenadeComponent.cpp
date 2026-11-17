@@ -12,6 +12,7 @@
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
 #include "WhatWasOurs.h"
+#include "WWOIds.h"
 
 int32 UWWOGrenadeComponent::NetThrows = 0;
 int32 UWWOGrenadeComponent::NetThrowsRejected = 0;
@@ -137,8 +138,8 @@ void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 	Spec.BlastRadius = Data->BlastRadius * (1.f + Loadout->TraitBonus("blast_bigger")); // Bigger Explosions
 	Spec.Fuse = EffectiveFuse();
 	Spec.Data = Data;
-	Spec.Seedburst = P->Abilities->Equipped("seedburst");
-	Spec.SporePatches = P->Abilities->Equipped("spore_patches");
+	Spec.Seedburst = P->Abilities->Equipped(WWOIds::Ability::Seedburst);
+	Spec.SporePatches = P->Abilities->Equipped(WWOIds::Ability::SporePatches);
 	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && Data->Kind != EWWOGrenadeKind::Spike && Data->Kind != EWWOGrenadeKind::Tripmine;
 	Spec.ThrownFrom = P->GetActorLocation();
 	AWWOGrenade::Throw(GetWorld(), Spec, Hand, Dir * Speed * WWO::M, P);

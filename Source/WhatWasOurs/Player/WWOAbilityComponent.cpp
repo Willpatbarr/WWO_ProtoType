@@ -13,6 +13,7 @@
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
 #include "WhatWasOurs.h"
+#include "WWOIds.h"
 
 UWWOAbilityComponent::UWWOAbilityComponent()
 {
@@ -49,7 +50,7 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 	if (P && (P->HasAuthority() || P->IsLocalHuman()))
 	{
 		const UWWOAbilityData* Lit = ThornfistActive();
-		if (!Lit) { if (const UWWOAbilityData* Charge = Equipped("static_charge")) if (Armed.FindRef(Charge->Id)) Lit = Charge; }
+		if (!Lit) { if (const UWWOAbilityData* Charge = Equipped(WWOIds::Ability::StaticCharge)) if (Armed.FindRef(Charge->Id)) Lit = Charge; }
 		if (Lit != FistsLit.Get())
 		{
 			FistsLit = Lit;
@@ -90,7 +91,7 @@ bool UWWOAbilityComponent::CanLaunchNow() const
 {
 	// Its use reaches the host on another channel than the move that carries the launch, so either
 	// order is fine: still charged (the use is on its way) or just spent (it came first).
-	const UWWOAbilityData* Dash = Equipped("spore_dash");
+	const UWWOAbilityData* Dash = Equipped(WWOIds::Ability::SporeDash);
 	return Dash && (Charge(Dash) >= 0.9f || Charge(Dash) * FMath::Max(Dash->Cooldown, 0.1f) < 1.5f);
 }
 
@@ -133,8 +134,8 @@ bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
 	ChargeById.Add(A->Id, 0.f);
 	ActiveLeft.Add(A->Id, A->Duration);
 	UWWOSound::PlayFor(GetOwner(), "ability");
-	if (A->Id == "spore_dash") SporeDash(A);
-	if (A->Id == "root_bombs") RootBombs(A);
+	if (A->Id == WWOIds::Ability::SporeDash) SporeDash(A);
+	if (A->Id == WWOIds::Ability::RootBombs) RootBombs(A);
 	return true;
 }
 
@@ -152,8 +153,8 @@ bool UWWOAbilityComponent::IsEffectActive(const UWWOAbilityData* A) const
 	case EWWOAbilityKind::Active: return ActiveLeft.FindRef(A->Id) > 0.f;
 	case EWWOAbilityKind::Charged: return Armed.FindRef(A->Id);
 	case EWWOAbilityKind::Triggered:
-		if (A->Id == "melee_guard") return GuardLeft > 0.f;
-		if (A->Id == "spore_patches") return LivePatches > 0;
+		if (A->Id == WWOIds::Ability::MeleeGuard) return GuardLeft > 0.f;
+		if (A->Id == WWOIds::Ability::SporePatches) return LivePatches > 0;
 		return LiveSeeds > 0;
 	default: return true; // passives are always on
 	}
@@ -161,25 +162,25 @@ bool UWWOAbilityComponent::IsEffectActive(const UWWOAbilityData* A) const
 
 float UWWOAbilityComponent::SpeedMultiplier() const
 {
-	const UWWOAbilityData* A = Equipped("overgrowth");
+	const UWWOAbilityData* A = Equipped(WWOIds::Ability::Overgrowth);
 	return A ? A->SpeedMult : 1.f;
 }
 
 int32 UWWOAbilityComponent::ExtraJumps() const
 {
-	const UWWOAbilityData* A = Equipped("overgrowth");
+	const UWWOAbilityData* A = Equipped(WWOIds::Ability::Overgrowth);
 	return A ? FMath::RoundToInt(A->ExtraJumps) : 0;
 }
 
 void UWWOAbilityComponent::OnMeleeLanded()
 {
-	if (const UWWOAbilityData* Guard = Equipped("melee_guard")) GuardLeft = Guard->Duration;
+	if (const UWWOAbilityData* Guard = Equipped(WWOIds::Ability::MeleeGuard)) GuardLeft = Guard->Duration;
 }
 
 void UWWOAbilityComponent::OnDamageTaken(float Amount)
 {
 	// Static Charge fills up from the damage you take (not while it's armed and waiting).
-	const UWWOAbilityData* A = Equipped("static_charge");
+	const UWWOAbilityData* A = Equipped(WWOIds::Ability::StaticCharge);
 	if (A && !Armed.FindRef(A->Id))
 	{
 		ChargeById.Add(A->Id, FMath::Min(Charge(A) + Amount / FMath::Max(A->ChargeDamage, 1.f), 1.f));
@@ -188,7 +189,7 @@ void UWWOAbilityComponent::OnDamageTaken(float Amount)
 
 UWWOAbilityData* UWWOAbilityComponent::ConsumeStaticCharge()
 {
-	UWWOAbilityData* A = Equipped("static_charge");
+	UWWOAbilityData* A = Equipped(WWOIds::Ability::StaticCharge);
 	if (!A || !Armed.FindRef(A->Id)) return nullptr;
 	Armed.Add(A->Id, false);
 	ChargeById.Add(A->Id, 0.f);
@@ -197,19 +198,19 @@ UWWOAbilityData* UWWOAbilityComponent::ConsumeStaticCharge()
 
 float UWWOAbilityComponent::IncomingMeleeMultiplier() const
 {
-	const UWWOAbilityData* Guard = Equipped("melee_guard");
+	const UWWOAbilityData* Guard = Equipped(WWOIds::Ability::MeleeGuard);
 	return Guard && GuardLeft > 0.f ? 1.f - Guard->GuardReduction : 1.f;
 }
 
 float UWWOAbilityComponent::ExtraCharges() const
 {
-	const UWWOAbilityData* A = Equipped("extra_grenade");
+	const UWWOAbilityData* A = Equipped(WWOIds::Ability::ExtraGrenade);
 	return A ? A->ExtraCharges : 0.f;
 }
 
 UWWOAbilityData* UWWOAbilityComponent::ThornfistActive() const
 {
-	UWWOAbilityData* A = Equipped("thornfist");
+	UWWOAbilityData* A = Equipped(WWOIds::Ability::Thornfist);
 	return A && IsEffectActive(A) ? A : nullptr;
 }
 

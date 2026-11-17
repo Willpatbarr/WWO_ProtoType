@@ -19,6 +19,7 @@
 #include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 int32 AWWOBotController::Sightings = 0;
 int32 AWWOBotController::PathsFound = 0;
@@ -208,10 +209,10 @@ void AWWOBotController::UseKit(AWWOCharacter* Me, AWWOCharacter* Target, float D
 			const UWWOAbilityData* A = Loadout->GetAbility(Slot);
 			if (!A || Me->Abilities->Charge(A) < 1.f || Me->Abilities->IsEffectActive(A)) continue;
 			bool bUse = false;
-			if (A->Id == "thornfist") bUse = Dist < 6.f;                              // a harder punch is coming
-			else if (A->Id == "static_charge") bUse = false;                          // arms itself when full: nothing to press
-			else if (A->Id == "spore_dash") bUse = HealthLeft < 0.5f && OffDeg < 30.f; // back out of trouble, behind fog
-			else if (A->Id == "root_bombs") bUse = Dist > 5.f && Dist < 30.f && OffDeg < 4.f;
+			if (A->Id == WWOIds::Ability::Thornfist) bUse = Dist < 6.f;                              // a harder punch is coming
+			else if (A->Id == WWOIds::Ability::StaticCharge) bUse = false;                          // arms itself when full: nothing to press
+			else if (A->Id == WWOIds::Ability::SporeDash) bUse = HealthLeft < 0.5f && OffDeg < 30.f; // back out of trouble, behind fog
+			else if (A->Id == WWOIds::Ability::RootBombs) bUse = Dist > 5.f && Dist < 30.f && OffDeg < 4.f;
 			else bUse = A->Kind == EWWOAbilityKind::Active && bInRange;
 			if (!bUse || (A->Kind != EWWOAbilityKind::Active && A->Kind != EWWOAbilityKind::Charged)) continue;
 			NextAbility = Clock + 1.f;

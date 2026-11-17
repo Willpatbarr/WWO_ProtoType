@@ -14,6 +14,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "WWOIds.h"
 
 // The body's own directions and scale while the grafts are placed.
 struct FWWOGraftFrame
@@ -131,23 +132,23 @@ void UWWOBodyComponent::RebuildGrafts()
 	F.Random.Initialize(int32(GetTypeHash(Key)));
 
 	const FVector Hips = GodotBonePoint("pelvis");
-	if (FloraId == "voltvine")
+	if (FloraId == WWOIds::Flora::VoltVine)
 	{
 		VoltGrafts(F, GrenadeColor);
 	}
-	else if (Grenade && FloraId != "veilspore" && FloraId != "ironbark")
+	else if (Grenade && FloraId != WWOIds::Flora::VeilSpore && FloraId != WWOIds::Flora::IronBark)
 	{
 		AttachBall("pelvis", Hips + F.Right * 0.17f * F.U + F.Forward * 0.04f * F.U, GrenadeRadius, GrenadeColor);
 	}
-	if (F.Has("seedburst"))
+	if (F.Has(WWOIds::Ability::Seedburst))
 	{
 		for (int32 i = 0; i < 3; ++i) // in a row along the belt
 		{
 			AttachBall("pelvis", Hips - F.Right * 0.165f * F.U + F.Forward * (0.07f - 0.07f * i) * F.U, SeedRadius, GrenadeColor);
 		}
 	}
-	if (FloraId == "veilspore") SporeGrafts(F);
-	if (FloraId == "ironbark") BarkGrafts(F);
+	if (FloraId == WWOIds::Flora::VeilSpore) SporeGrafts(F);
+	if (FloraId == WWOIds::Flora::IronBark) BarkGrafts(F);
 }
 
 void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& PodColor)
@@ -194,7 +195,7 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 		AttachBuilt("thigh_l", ThighL);
 		AttachBuilt("thigh_r", ThighR);
 		const FVector Hip = Hips + F.Right * 0.19f * U + F.Forward * 0.02f * U + F.Down() * 0.04f * U;
-		const int32 Count = F.Grenade == "shock_pool" ? 2 : (F.Grenade == "snare_mine" ? 3 : 1);
+		const int32 Count = F.Grenade == WWOIds::Grenade::ShockPool ? 2 : (F.Grenade == WWOIds::Grenade::SnareMine ? 3 : 1);
 		for (int32 i = 0; i < Count; ++i)
 		{
 			const float Size = Count == 1 ? 1.f : (Count == 2 ? 0.72f : 0.55f);
@@ -206,7 +207,7 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 	for (const TCHAR* S : { TEXT("l"), TEXT("r") })
 	{
 		const FVector Outward = FCString::Strcmp(S, TEXT("r")) == 0 ? F.Right : -F.Right;
-		if (F.Has("overgrowth"))
+		if (F.Has(WWOIds::Ability::Overgrowth))
 		{
 			const FVector Knee = GodotBonePoint(Sided(TEXT("calf"), S)), Ankle = GodotBonePoint(Sided(TEXT("foot"), S));
 			G B(Knee, PodColor, U, R);
@@ -217,7 +218,7 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 			for (const float T : { 0.3f, 0.65f }) B.AddPod(FMath::Lerp(Knee, Ankle, T) + F.Forward * 0.062f * U, Ankle - Knee, F.Forward, 0.1f, 0.034f);
 			AttachBuilt(Sided(TEXT("calf"), S), B);
 		}
-		if (F.Has("thornfist"))
+		if (F.Has(WWOIds::Ability::Thornfist))
 		{
 			const FVector Elbow = GodotBonePoint(Sided(TEXT("lowerarm"), S)), Wrist = GodotBonePoint(Sided(TEXT("hand"), S));
 			G B(Elbow, PodColor, U, R);
@@ -234,7 +235,7 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 			for (const float T : { 0.3f, 0.68f }) B.AddPod(FMath::Lerp(Elbow, Wrist, T) + Outward * 0.064f * U, Wrist - Elbow, Outward, 0.085f, 0.028f);
 			AttachBuilt(Sided(TEXT("lowerarm"), S), B);
 		}
-		if (F.Has("static_charge"))
+		if (F.Has(WWOIds::Ability::StaticCharge))
 		{
 			const FVector Shoulder = GodotBonePoint(Sided(TEXT("upperarm"), S)), Elbow = GodotBonePoint(Sided(TEXT("lowerarm"), S));
 			G B(Shoulder, PodColor, U, R);
@@ -250,7 +251,7 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 			for (const float T : { 0.4f, 0.72f }) B.AddPod(FMath::Lerp(Shoulder, Elbow, T) + Outward * 0.075f * U, Elbow - Shoulder, Outward, 0.09f, 0.03f);
 			AttachBuilt(Sided(TEXT("upperarm"), S), B);
 		}
-		if (F.Has("melee_guard"))
+		if (F.Has(WWOIds::Ability::MeleeGuard))
 		{
 			const FVector Hand = GodotBonePoint(Sided(TEXT("hand"), S)), Knuckles = GodotBonePoint(Sided(TEXT("middle_01"), S));
 			G B(Hand, PodColor, U, R);
@@ -292,7 +293,7 @@ void UWWOBodyComponent::SporeGrafts(const FWWOGraftFrame& F)
 	const FVector Head = GodotBonePoint("Head");
 	const FVector HeadCenter = Head + Up * 0.12f * U;
 	const FVector Waist = GodotBonePoint("spine_01");
-	if (F.Has("spore_fog_damage"))
+	if (F.Has(WWOIds::Ability::SporeFogDamage))
 	{
 		FWWOGraftBuilder Chest = Spore(GodotBonePoint("spine_03"));
 		for (int32 i = 0; i < 14; ++i) // veins spread over the right half of the chest and back
@@ -328,7 +329,7 @@ void UWWOBodyComponent::SporeGrafts(const FWWOGraftFrame& F)
 		Hood.Shelf(HeadCenter + Up * 0.06f * U + Back * 0.12f * U, Back * 0.8f + Up * 0.3f + Right * 0.4f, Up, 0.28f, 0.16f, 0.035f);
 		AttachBuilt("Head", Hood);
 	}
-	if (F.Has("spore_dash"))
+	if (F.Has(WWOIds::Ability::SporeDash))
 	{
 		const FVector Hip = GodotBonePoint("thigh_l"), Knee = GodotBonePoint("calf_l"), Ankle = GodotBonePoint("foot_l");
 		FWWOGraftBuilder Thigh = Spore(Hip);
@@ -354,7 +355,7 @@ void UWWOBodyComponent::SporeGrafts(const FWWOGraftFrame& F)
 		Calf.Shelf(FMath::Lerp(Knee, Ankle, 0.28f) - Right * 0.075f * U, -Right + Forward * 0.2f, Up, 0.15f, 0.1f, 0.028f);
 		AttachBuilt("calf_l", Calf);
 	}
-	if (F.Has("spore_patches"))
+	if (F.Has(WWOIds::Ability::SporePatches))
 	{
 		FWWOGraftBuilder Belt = Spore(Hips);
 		for (int32 i = 0; i < 5; ++i) // veins wrapping round the back of the waist
@@ -403,12 +404,12 @@ void UWWOBodyComponent::BarkGrafts(const FWWOGraftFrame& F)
 	};
 	const FVector Right = F.Right, Forward = F.Forward, Up = F.Up;
 	const FVector Hips = GodotBonePoint("pelvis");
-	if (!F.Grenade.IsNone() || F.Has("extra_grenade"))
+	if (!F.Grenade.IsNone() || F.Has(WWOIds::Ability::ExtraGrenade))
 	{
 		FWWOGraftBuilder Belt = BarkB(Hips);
 		TArray<float> Sides;
 		if (!F.Grenade.IsNone()) Sides.Add(-1.f); // the concept hangs them left of center
-		if (F.Has("extra_grenade")) Sides.Add(1.f);
+		if (F.Has(WWOIds::Ability::ExtraGrenade)) Sides.Add(1.f);
 		for (const float Side : Sides)
 		{
 			for (int32 k = 0; k < 2; ++k)
@@ -419,7 +420,7 @@ void UWWOBodyComponent::BarkGrafts(const FWWOGraftFrame& F)
 		}
 		AttachBuilt("pelvis", Belt);
 	}
-	if (F.Has("shield_share"))
+	if (F.Has(WWOIds::Ability::ShieldShare))
 	{
 		const FVector Waist = GodotBonePoint("spine_01"), Neck = GodotBonePoint("neck_01");
 		const FVector Axis = (Neck - Waist).GetSafeNormal();
@@ -472,7 +473,7 @@ void UWWOBodyComponent::BarkGrafts(const FWWOGraftFrame& F)
 			AttachBuilt(Sided(TEXT("upperarm"), S), Pauldron);
 		}
 	}
-	if (F.Has("root_bombs"))
+	if (F.Has(WWOIds::Ability::RootBombs))
 	{
 		for (const TCHAR* S : { TEXT("l"), TEXT("r") })
 		{

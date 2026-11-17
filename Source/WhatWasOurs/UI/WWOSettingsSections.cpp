@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 using namespace WWOSettingsUI;
 
@@ -573,32 +574,32 @@ void UWWOSettingsMenu::RegisterAbilitySections(AWWOCharacter* P)
 		S.Title = A->DisplayName;
 		S.Rows.Add(Header(KindName(A->Kind) + TEXT(" · ") + A->Description));
 		const FName Id = A->Id;
-		if (Id == "overgrowth") S.Rows.Append({ Row(A, "SpeedMult", TEXT("Speed multiplier"), 1.f, 2.f, 0.05f), Row(A, "ExtraJumps", TEXT("Extra jumps"), 0.f, 3.f, 1.f) });
-		if (Id == "thornfist") S.Rows.Append({
+		if (Id == WWOIds::Ability::Overgrowth) S.Rows.Append({ Row(A, "SpeedMult", TEXT("Speed multiplier"), 1.f, 2.f, 0.05f), Row(A, "ExtraJumps", TEXT("Extra jumps"), 0.f, 3.f, 1.f) });
+		if (Id == WWOIds::Ability::Thornfist) S.Rows.Append({
 			Row(A, "MeleeDamageMult", TEXT("Melee damage multiplier"), 1.f, 5.f, 0.05f), Row(A, "Duration", TEXT("Duration (s)"), 1.f, 30.f, 0.5f),
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Header(TEXT("Electric discharge (when a boosted melee lands)")),
 			Row(A, "DischargeArcs", TEXT("Lightning arcs"), 0.f, 16.f, 1.f), Row(A, "DischargeRadius", TEXT("Arc reach (m)"), 0.2f, 4.f, 0.05f),
 			Row(A, "DischargeTime", TEXT("Crackle time (s)"), 0.05f, 1.5f, 0.05f) });
-		if (Id == "static_charge") S.Rows.Append({
+		if (Id == WWOIds::Ability::StaticCharge) S.Rows.Append({
 			Row(A, "ChargeDamage", TEXT("Damage taken to fill it"), 10.f, 1000.f, 10.f), Row(A, "ChainDamage", TEXT("Damage to the enemy you punch"), 0.f, 1000.f, 5.f),
 			Row(A, "ChainJumps", TEXT("Jumps to more enemies"), 0.f, 20.f, 1.f), Row(A, "ChainRange", TEXT("Jump range (m)"), 1.f, 30.f, 0.5f),
 			Row(A, "ChainFalloff", TEXT("Each jump does (of the last)"), 0.3f, 1.f, 0.05f, Percent()), Row(A, "ChainDelay", TEXT("Time between jumps (s)"), 0.f, 0.4f, 0.01f) });
-		if (Id == "root_bombs") S.Rows.Append({
+		if (Id == WWOIds::Ability::RootBombs) S.Rows.Append({
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Row(A, "BombDamage", TEXT("Damage per bomb (center)"), 0.f, 1000.f, 5.f),
 			Row(A, "BombRadius", TEXT("Blast radius (m)"), 0.5f, 12.f, 0.25f), Row(A, "BombSpeed", TEXT("Throw speed (m/s)"), 5.f, 60.f, 1.f) });
-		if (Id == "shield_share") S.Rows.Add(Row(A, "ShieldAmount", TEXT("Shield given per explosion"), 0.f, 300.f, 5.f));
-		if (Id == "extra_grenade") S.Rows.Add(Row(A, "ExtraCharges", TEXT("Extra grenade charges"), 0.f, 3.f, 1.f));
-		if (Id == "melee_guard") S.Rows.Append({ Row(A, "GuardReduction", TEXT("Melee damage cut by"), 0.f, 1.f, 0.05f, Percent()),
+		if (Id == WWOIds::Ability::ShieldShare) S.Rows.Add(Row(A, "ShieldAmount", TEXT("Shield given per explosion"), 0.f, 300.f, 5.f));
+		if (Id == WWOIds::Ability::ExtraGrenade) S.Rows.Add(Row(A, "ExtraCharges", TEXT("Extra grenade charges"), 0.f, 3.f, 1.f));
+		if (Id == WWOIds::Ability::MeleeGuard) S.Rows.Append({ Row(A, "GuardReduction", TEXT("Melee damage cut by"), 0.f, 1.f, 0.05f, Percent()),
 			Row(A, "Duration", TEXT("Lasts after a melee hit (s)"), 0.5f, 20.f, 0.5f) });
-		if (Id == "spore_fog_damage") S.Rows.Add(Row(A, "FogDps", TEXT("Fog damage per second"), 0.f, 100.f, 1.f));
-		if (Id == "spore_dash") S.Rows.Append({
+		if (Id == WWOIds::Ability::SporeFogDamage) S.Rows.Add(Row(A, "FogDps", TEXT("Fog damage per second"), 0.f, 100.f, 1.f));
+		if (Id == WWOIds::Ability::SporeDash) S.Rows.Append({
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Row(A, "DashSpeed", TEXT("Dash speed backwards (m/s)"), 2.f, 40.f, 0.5f),
 			Row(A, "DashUp", TEXT("Dash lift (m/s)"), 0.f, 15.f, 0.25f), Row(A, "DashFogRadius", TEXT("Fog radius (m)"), 0.5f, 12.f, 0.25f),
 			Row(A, "DashFogTime", TEXT("Fog time (s)"), 0.5f, 30.f, 0.5f) });
-		if (Id == "spore_patches") S.Rows.Append({
+		if (Id == WWOIds::Ability::SporePatches) S.Rows.Append({
 			Row(A, "PatchMax", TEXT("Patches per grenade"), 1.f, 10.f, 1.f), Row(A, "PatchRadius", TEXT("Fog radius per patch (m)"), 0.5f, 8.f, 0.25f),
 			Row(A, "PatchTime", TEXT("Patch time (s)"), 0.5f, 30.f, 0.5f) });
-		if (Id == "seedburst") S.Rows.Append({
+		if (Id == WWOIds::Ability::Seedburst) S.Rows.Append({
 			Row(A, "SubCount", TEXT("Seed count"), 1.f, 8.f, 1.f), Row(A, "SubScale", TEXT("Seed size (blast and damage)"), 0.1f, 1.f, 0.05f),
 			Row(A, "SubSpread", TEXT("Seed spread (m/s)"), 1.f, 15.f, 0.5f), Row(A, "SubFuse", TEXT("Seed fuse (s)"), 0.1f, 3.f, 0.05f) });
 		Sections.Add(MoveTemp(S));

@@ -23,6 +23,7 @@
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
+#include "WWOIds.h"
 
 AWWOGrenade::AWWOGrenade()
 {
@@ -542,7 +543,7 @@ void AWWOGrenade::ShareShields(const FVector& Center)
 {
 	// Shield Share (IronBark): explosions refill the shields of teammates caught in them.
 	AWWOCharacter* P = Cast<AWWOCharacter>(Thrower.Get());
-	const UWWOAbilityData* Share = P ? P->Abilities->Equipped("shield_share") : nullptr;
+	const UWWOAbilityData* Share = P ? P->Abilities->Equipped(WWOIds::Ability::ShieldShare) : nullptr;
 	if (!Share) return;
 	const float Reach = (Spec.BlastRadius + 0.5f) * WWO::M;
 	for (AWWOAlly* Mate : UWWOWorldSubsystem::Get(this)->LivingTeammates())
@@ -595,7 +596,7 @@ void AWWOGrenade::SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const F
 	const bool bGround = WWOFX::GroundBelow(World, Center, FMath::Max(R * 0.5f, 0.6f) * WWO::M, Ground, Ignore);
 	if (bGround && R >= 1.f) AWWOFXActor::Shockwave(World, Ground, Color, R * 1.2f, 0.4f);
 	if (bGround && R >= 1.f) AWWOFXActor::Scorch(World, Ground, R * 0.7f);
-	if (Look.Flavor == "voltvine")
+	if (Look.Flavor == WWOIds::Flora::VoltVine)
 	{
 		// A few bolts crackle out from the middle of the blast.
 		for (int32 i = 0; i < FMath::Clamp(FMath::RoundToInt(R * 1.2f), 2, 8); ++i)
@@ -604,12 +605,12 @@ void AWWOGrenade::SpawnBlast(UWorld* World, const FWWOGrenadeLook& Look, const F
 			AWWOLightningBolt::Spawn(World, Center, Center + Dir * R * WWO::M * FMath::FRandRange(0.35f, 0.65f), Color, FMath::FRandRange(0.2f, 0.32f));
 		}
 	}
-	else if (Look.Flavor == "veilspore")
+	else if (Look.Flavor == WWOIds::Flora::VeilSpore)
 	{
 		AWWOParticles::Burst(World, Center, WWO::WithAlpha(WWO::Darkened(Color, 0.1f), 0.55f), FMath::Clamp(FMath::RoundToInt(R * 5.f), 6, 45),
 			1.6f, R * 0.4f, R, R * 0.4f, FVector(0, 0, 0.4f), EWWOParticleStyle::Smoke);
 	}
-	else if (Look.Flavor == "ironbark")
+	else if (Look.Flavor == WWOIds::Flora::IronBark)
 	{
 		if (AWWOParticles* Chunks = AWWOParticles::Burst(World, Center, FLinearColor(0.32f, 0.2f, 0.11f), FMath::Clamp(FMath::RoundToInt(R * 3.f), 4, 30),
 			0.9f, R * 0.8f, R * 2.f, FMath::Clamp(R * 0.04f, 0.07f, 0.25f), FVector(0, 0, -14.f), EWWOParticleStyle::Chunk, false))

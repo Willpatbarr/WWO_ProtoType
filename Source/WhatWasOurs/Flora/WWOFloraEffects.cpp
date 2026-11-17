@@ -17,6 +17,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "WWOIds.h"
 
 namespace
 {
@@ -114,7 +115,7 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	}
 	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Age * 5.f)));
 	if (FadeOut < 1.f && Bubbles.IsValid()) Bubbles->bEmitting = false;
-	if (Flavor == "voltvine" && Age < Duration - 0.4f)
+	if (Flavor == WWOIds::Flora::VoltVine && Age < Duration - 0.4f)
 	{
 		// The VoltVine pool crackles with little arcs along the surface.
 		NextArc -= DeltaSeconds;

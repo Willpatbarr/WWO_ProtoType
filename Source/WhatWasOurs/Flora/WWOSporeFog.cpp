@@ -13,6 +13,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 namespace
 {
@@ -161,7 +162,7 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
 	const AWWOCharacter* Player = UWWOWorldSubsystem::PlayerOf(this);
 	if (!Player && !GetOwner()) Player = WS->GetPlayer();
-	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
+	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped(WWOIds::Ability::SporeFogDamage) : nullptr;
 	if (!Ability || Strength() < 0.3f) return;
 	const float Hit = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(Player, "poison_damage")) * FogTick; // Stronger Poison
 	const FLinearColor Tint = WWO::Lightened(Color(), 0.3f);

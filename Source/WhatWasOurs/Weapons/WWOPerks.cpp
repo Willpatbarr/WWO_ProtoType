@@ -6,6 +6,7 @@
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
 #include "WWOTypes.h"
+#include "WWOIds.h"
 
 using namespace WWOPerk;
 
@@ -35,13 +36,13 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 	// Built on first use (FNames), in the HUD line's order.
 	static const FWWOPerk Perks[] = {
 		{ // Focus: after 5 hits in a row (a miss ends the streak), more damage.
-			.Id = "focus",
+			.Id = WWOIds::Perk::Focus,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V) { if (V.State.HitStreak >= 5) G.Damage *= Focus; },
 			.Hud = [](const FWWOPerkView& V) { return V.State.HitStreak >= 5 ? FString(TEXT("Focus ACTIVE")) : FString::Printf(TEXT("Focus %d/5"), V.State.HitStreak); },
 			.HostDamage = Focus,
 		},
 		{ // Static: every 10th hit arcs to two more targets for twice the gun's damage.
-			.Id = "static",
+			.Id = WWOIds::Perk::Static,
 			.Hud = [](const FWWOPerkView& V) { return FString::Printf(TEXT("Static %d/10"), V.State.StaticHits); },
 			.OnShot = [](FWWOPerkShot& S)
 			{
@@ -63,12 +64,12 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			},
 		},
 		{ // Adrenal: faster reloads for a while after a kill (UWWOWeaponComponent::UpdateReload).
-			.Id = "adrenal",
+			.Id = WWOIds::Perk::Adrenal,
 			.Hud = [](const FWWOPerkView& V) { return V.State.AdrenalLeft > 0.f ? FString::Printf(TEXT("Adrenal %.1fs"), V.State.AdrenalLeft) : FString(); },
 			.OnKill = [](FWWOPerkKill& K) { K.State.AdrenalLeft = AdrenalTime; },
 		},
 		{ // Brace: less recoil crouched or sliding.
-			.Id = "brace",
+			.Id = WWOIds::Perk::Brace,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V)
 			{
 				if (V.bCrouching || V.bSliding)
@@ -80,27 +81,27 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.bCrouching || V.bSliding, TEXT("Braced")); },
 		},
 		{ // Hunter: crits hit harder the further you're aimed in.
-			.Id = "hunter",
+			.Id = WWOIds::Perk::Hunter,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V) { G.CritMultiplier += HunterCrit * V.AdsAmount; },
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.AdsAmount > 0.5f, TEXT("Hunter")); },
 			.HostCrit = HunterCrit,
 		},
 		{ // Overpressure: the first shot after a reload.
-			.Id = "overpressure",
+			.Id = WWOIds::Perk::Overpressure,
 			.ShotOn = [](const FWWOPerkView& V) { return V.State.bOverpressure; },
 			.ShotScale = Overpressure,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.State.bOverpressure, TEXT("Overpressure READY")); },
 			.HostDamage = Overpressure,
 		},
 		{ // Final Round: the last round in the magazine (Ammo drops after the shot).
-			.Id = "final_round",
+			.Id = WWOIds::Perk::FinalRound,
 			.ShotOn = [](const FWWOPerkView& V) { return V.Ammo == 1; },
 			.ShotScale = FinalRound,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.Ammo == 1, TEXT("Final Round")); },
 			.HostDamage = FinalRound,
 		},
 		{ // Anchor: half the recoil aimed in and standing still.
-			.Id = "anchor",
+			.Id = WWOIds::Perk::Anchor,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V)
 			{
 				if (V.bAnchored)
@@ -112,21 +113,21 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.bAnchored, TEXT("Anchored")); },
 		},
 		{ // Patience: a crit after PatienceTime fully aimed in hits harder.
-			.Id = "patience",
+			.Id = WWOIds::Perk::Patience,
 			.ShotOn = [](const FWWOPerkView& V) { return V.State.AimHeld >= PatienceTime; },
 			.ShotCrit = PatienceCrit,
 			.Hud = [](const FWWOPerkView& V) { return V.AdsAmount > 0.5f ? FString(V.State.AimHeld >= PatienceTime ? TEXT("Patience READY") : TEXT("Patience")) : FString(); },
 			.HostCrit = PatienceCrit,
 		},
 		{ // Hammer: faster fire for a while after a kill.
-			.Id = "hammer",
+			.Id = WWOIds::Perk::Hammer,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V) { if (V.State.HammerLeft > 0.f) G.FireRate *= HammerRate; },
 			.Hud = [](const FWWOPerkView& V) { return V.State.HammerLeft > 0.f ? FString::Printf(TEXT("Hammer %.1fs"), V.State.HammerLeft) : FString(); },
 			.OnKill = [](FWWOPerkKill& K) { K.State.HammerLeft = HammerTime; },
 			.HostRate = HammerRate,
 		},
 		{ // Cold Bore: the first shot after ColdBoreTime without firing.
-			.Id = "cold_bore",
+			.Id = WWOIds::Perk::ColdBore,
 			.ShotOn = [](const FWWOPerkView& V) { return V.State.SinceShot >= ColdBoreTime; },
 			.ShotScale = ColdBore,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.State.SinceShot >= ColdBoreTime, TEXT("Cold Bore READY")); },
@@ -134,23 +135,23 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostOnShot = [](float SinceShot) { return SinceShot >= ColdBoreTime - 0.5f; },
 		},
 		{ // Tighten: the pellets close up as you aim in.
-			.Id = "tighten",
+			.Id = WWOIds::Perk::Tighten,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V) { G.PelletSpread *= 1.f - 0.3f * V.AdsAmount; },
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.AdsAmount > 0.5f, TEXT("Tightened")); },
 		},
 		{ // Marksman: a crit's round comes back (UWWOWeaponComponent::FireRound).
-			.Id = "refund",
+			.Id = WWOIds::Perk::Refund,
 			.Hud = [](const FWWOPerkView&) { return FString(TEXT("Marksman")); },
 			.OnShot = [](FWWOPerkShot& S) { if (S.bCritical) ++S.State.RefundRounds; },
 		},
 		{ // Fourth Round: a burst gun fires one more round a burst.
-			.Id = "fourth_round",
+			.Id = WWOIds::Perk::FourthRound,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView&) { if (G.BurstCount() > 1) G.Burst = G.BurstCount() + 1.f; },
 			.Hud = [](const FWWOPerkView&) { return FString(TEXT("Fourth Round")); },
 			.HostBurst = 1,
 		},
 		{ // Long Shot: far targets.
-			.Id = "longshot",
+			.Id = WWOIds::Perk::LongShot,
 			.TargetOn = [](float Meters, const IWWOTargetable&) { return Meters >= LongShotRange; },
 			.TargetScale = LongShot,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.Aimed && V.AimedMeters >= LongShotRange, TEXT("Long Shot")); },
@@ -158,7 +159,7 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostOnTarget = [](float Meters, const IWWOTargetable&) { return Meters >= LongShotRange - 3.f; },
 		},
 		{ // Point Blank: close targets.
-			.Id = "point_blank",
+			.Id = WWOIds::Perk::PointBlank,
 			.TargetOn = [](float Meters, const IWWOTargetable&) { return Meters <= PointBlankRange; },
 			.TargetScale = PointBlank,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.Aimed && V.AimedMeters <= PointBlankRange, TEXT("Point Blank")); },
@@ -166,7 +167,7 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostOnTarget = [](float Meters, const IWWOTargetable&) { return Meters <= PointBlankRange + 2.f; },
 		},
 		{ // Finisher: targets under half their health and shield.
-			.Id = "executioner",
+			.Id = WWOIds::Perk::Executioner,
 			.TargetOn = [](float, const IWWOTargetable& T) { return UnderHalf(T, 0.5f); },
 			.TargetScale = Finisher,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.Aimed && UnderHalf(*V.Aimed, 0.5f), TEXT("Finisher")); },
@@ -174,7 +175,7 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostOnTarget = [](float, const IWWOTargetable& T) { return UnderHalf(T, 0.65f); },
 		},
 		{ // Held Breath: aimed in for BreathTime, the gun steadies.
-			.Id = "breath",
+			.Id = WWOIds::Perk::Breath,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V)
 			{
 				if (V.State.AimHeld >= BreathTime)
@@ -187,7 +188,7 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.Hud = [](const FWWOPerkView& V) { return V.AdsAmount > 0.5f ? FString(V.State.AimHeld >= BreathTime ? TEXT("Breath HELD") : TEXT("Breath")) : FString(); },
 		},
 		{ // Slideshot: while sliding, tighter pellets and more damage.
-			.Id = "slide_shot",
+			.Id = WWOIds::Perk::SlideShot,
 			.Stats = [](FWWOGunStats& G, const FWWOPerkView& V)
 			{
 				if (V.bSliding)
@@ -200,7 +201,7 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostDamage = SlideShot,
 		},
 		{ // Full Burst: the burst after one that landed every round hits harder.
-			.Id = "full_burst",
+			.Id = WWOIds::Perk::FullBurst,
 			.ShotOn = [](const FWWOPerkView& V) { return V.State.bBurstBoosted; },
 			.ShotScale = FullBurst,
 			.Hud = [](const FWWOPerkView& V) { return Lit(V.State.bFullBurst || V.State.bBurstBoosted, TEXT("Full Burst READY")); },
@@ -208,12 +209,12 @@ TConstArrayView<FWWOPerk> WWOPerk::Table()
 			.HostDamage = FullBurst,
 		},
 		{ // Ricochet: a crit bounces to one more target for 60% of the gun's damage.
-			.Id = "ricochet",
+			.Id = WWOIds::Perk::Ricochet,
 			.OnShot = [](FWWOPerkShot& S) { if (!S.bJoiner && S.bCritical && S.FirstHit) RicochetArc(S.World, S.FirstHit, S.Shooter, S.Damage * 0.6f); },
 			.HostShot = [](FWWOPerkHostShot& S) { if (S.FirstCrit) RicochetArc(S.World, S.FirstCrit, S.Shooter, S.Round * 0.6f); },
 		},
 		{ // Scavenger: a kill puts a fifth of a magazine back.
-			.Id = "scavenger",
+			.Id = WWOIds::Perk::Scavenger,
 			.OnKill = [](FWWOPerkKill& K) { K.Ammo = FMath::Min(K.Ammo + FMath::Max(1, FMath::RoundToInt(K.MagazineSize * 0.2f)) * K.Kills, K.MagazineSize); },
 		},
 	};
