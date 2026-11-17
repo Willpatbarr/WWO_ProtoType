@@ -495,6 +495,112 @@ void FWWORegress::AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWW
 		Out.Add(S);
 	}
 
+	// --- (j) An enemy's attack landing on a friendly ---
+	// Each way an enemy hurts the player or an AI teammate: the Swarm's bite and leap (its AI on, from
+	// bite range and from leap range), a Soldier's bolt and a lobbed shell's splash (fired straight at
+	// the victim), the Tank's slam (called directly). Each at a healthy victim and at one on 5 health
+	// with no shield (the kill). What it took, the shield / health split, where the player's hit mark
+	// says it came from, any push, who is credited, the slow.
+	struct FFriendlyHit { const TCHAR* Attack; FName Enemy; float Meters; };
+	const TArray<FFriendlyHit> Hits = { { TEXT("bite"), "swarm", 1.2f }, { TEXT("leap"), "swarm", 3.f }, { TEXT("bolt"), NAME_None, 5.f },
+		{ TEXT("splash"), NAME_None, 1.f }, { TEXT("slam"), "tank", 3.f } };
+	for (const FFriendlyHit& Hit : Hits)
+	{
+		for (const bool bAlly : { false, true })
+		{
+			for (const bool bKill : { false, true })
+			{
+				FWWORegressScenario S;
+				S.Name = FString::Printf(TEXT("enemyhit.%s.%s%s"), Hit.Attack, bAlly ? TEXT("ally") : TEXT("player"), bKill ? TEXT(".kill") : TEXT(""));
+				S.MaxTicks = Ticks(4.f);
+				TSharedRef<FCombatState> St = MakeShared<FCombatState>();
+				// The victim: the player at home, or an ally 20 m ahead (the player then 20 m behind it, out of reach).
+				auto VictimAt = [bAlly](const FWWORegress& R) { return bAlly ? R.Ahead(20.f) : R.Home(); };
+				S.Setup = [St, Hit, bAlly, VictimAt](FWWORegress& R)
+				{
+					*St = FCombatState();
+					const FVector At = VictimAt(R);
+					const FVector Out = R.Ahead(1.f) - R.Home(); // 1 m along the way the player faces
+					St->Target = bAlly ? (AActor*)R.SpawnAlly(At) : (AActor*)R.Player();
+					if (!Hit.Enemy.IsNone()) St->Others.Add(R.SpawnEnemy(Hit.Enemy, At + Out * Hit.Meters));
+					R.Tune(R.Player()->Health, "RechargeDelay", 100.f);
+				};
+				S.Step = [St, Hit, bKill](FWWORegress& R, int32 Tick)
+				{
+					AActor* V = St->Target.Get();
+					AWWOCharacter* P = Cast<AWWOCharacter>(V);
+					AWWOAlly* A = Cast<AWWOAlly>(V);
+					AWWOEnemy* E = St->Others.Num() > 0 ? Cast<AWWOEnemy>(St->Others[0].Get()) : nullptr;
+					if (!V) return true;
+					const FString Attack = Hit.Attack;
+					if (Tick == 0)
+					{
+						if (bKill && P) { P->Health->Shield = 0.f; P->Health->Health = 5.f; }
+						if (bKill && A) { A->Shield = 0.f; A->Health = 5.f; }
+						St->Before = FWWORegress::HealthOf(V);
+						St->From = V->GetActorLocation();
+						const FVector Out = R.Ahead(1.f) - R.Home();
+						UWWOLoadoutSubsystem* L = R.Loadout();
+						if (Attack == TEXT("bite") || Attack == TEXT("leap"))
+						{
+							R.Tune(L->SwarmData, "AiEnabled", 1.f);
+							if (AWWOSwarm* Sw = Cast<AWWOSwarm>(E)) Sw->LeapCooldown = Attack == TEXT("leap") ? 0.f : 99.f;
+						}
+						else if (Attack == TEXT("bolt"))
+						{
+							// A Soldier's shot, at the victim's chest from 5 m in front, at its speed and damage.
+							const UWWOSoldierData* D = L->SoldierData;
+							const FVector Chest = V->GetActorLocation() + FVector(0, 0, P ? 0.f : 30.f);
+							const FVector From = Chest + Out * Hit.Meters;
+							AWWOEnemyProjectile::Fire(R.World(), From, (Chest - From).GetSafeNormal() * D->ProjectileSpeed * WWO::M, D->ProjectileDamage);
+						}
+						else if (Attack == TEXT("splash"))
+						{
+							// A Tank's shell, its damage and radius, coming straight down 1 m in front of the victim.
+							const UWWOTankData* D = L->TankData;
+							const FVector Ground = (P ? P->FeetLocation() : A->GetActorLocation() - FVector(0, 0, 100.f)) + Out * Hit.Meters;
+							AWWOEnemyProjectile::Fire(R.World(), Ground + FVector(0, 0, 300.f), FVector(0, 0, -2000.f), D->LobDamage, 3.f, 0.f, D->LobRadius);
+						}
+						else if (AWWOTank* Tank = Cast<AWWOTank>(E)) Tank->Slam();
+					}
+					const float Now = FWWORegress::HealthOf(V);
+					if (St->Mark < 0 && Now < St->Before)
+					{
+						St->Mark = Tick;
+						R.Record(TEXT("first_hit_tick"), Tick);
+						R.Record(TEXT("first_taken"), St->Before - Now);
+					}
+					if (Tick < Ticks(Attack == TEXT("leap") ? 1.5f : 1.f)) return false;
+					R.Record(TEXT("taken"), St->Before - Now);
+					R.Record(TEXT("first_hit_tick"), St->Mark); // -1: never hit
+					const FVector Vel = V->GetVelocity();
+					R.Record(TEXT("velocity"), FString::Printf(TEXT("%.2f,%.2f,%.2f"), Vel.X, Vel.Y, Vel.Z));
+					R.RecordVec(TEXT("victim_at"), V->GetActorLocation());
+					if (P)
+					{
+						R.Record(TEXT("shield"), P->Health->Shield);
+						R.Record(TEXT("health"), P->Health->Health);
+						R.RecordBool(TEXT("dead"), P->Health->bDead);
+						R.Record(TEXT("damage_marks"), P->Health->DamageMarks.Num());
+						if (P->Health->DamageMarks.Num() > 0) R.RecordVec(TEXT("mark_from"), P->Health->DamageMarks[0].From);
+						R.Record(TEXT("attacker"), GetNameSafe(P->Health->LastAttacker.Get()));
+						R.RecordBool(TEXT("slowed"), P->SlowLeft > 0.f);
+						R.Record(TEXT("slow_amount"), P->SlowAmount);
+					}
+					if (A)
+					{
+						R.Record(TEXT("shield"), A->Shield);
+						R.Record(TEXT("health"), A->Health);
+						R.RecordBool(TEXT("down"), A->IsDown());
+					}
+					if (E) R.Record(TEXT("enemy_state"), E->DebugState().Replace(TEXT(" "), TEXT("_")));
+					return true;
+				};
+				Out.Add(S);
+			}
+		}
+	}
+
 	// --- What the view decides: the low reticle's angle (from the viewport's shape), the target under
 	// the reticle, what is marked (health bars, the outline flash) and which teammates are in sight.
 	// Worked out from the screen, so this is the scenario most likely to differ without rendering.

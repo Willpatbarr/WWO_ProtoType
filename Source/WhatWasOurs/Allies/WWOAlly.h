@@ -57,4 +57,6 @@ private:
 	void Face(const FVector& Direction, float DeltaSeconds);
 	AWWOEnemy* NearestVisibleEnemy() const;
 	void Shoot(AWWOEnemy* Enemy);
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };

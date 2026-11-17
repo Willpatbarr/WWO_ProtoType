@@ -146,4 +146,6 @@ private:
 	void Die();
 	void SetCollision(bool bOn);
 	bool TargetIsInvisible() const;
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };

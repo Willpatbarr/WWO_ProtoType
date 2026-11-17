@@ -66,6 +66,8 @@ private:
 	void CancelAttack() { Windup = -1.f; ShotsLeft = 0; }
 	void Fire();
 	FVector MuzzleLocation() const;
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };
 
 UCLASS()
@@ -94,6 +96,8 @@ private:
 	UWWOSwarmData* D() const;
 	void Leap(const FVector& Toward);
 	FVector SpreadPush() const;
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };
 
 UCLASS()

@@ -148,4 +148,6 @@ private:
 
 	enum class EState : uint8 { Roam, Hunt, Fight, Retreat };
 	EState State = EState::Roam;
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };
