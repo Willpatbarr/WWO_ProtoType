@@ -89,11 +89,11 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	bTestRun = WWOSwitches::HasAutoTestText();
 	if (WWOSwitches::HasStressText()) Stress = MakeUnique<FWWOStressHarness>();
 	if (WWOSwitches::Value(TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
-	if (bPvP && WWOSwitches::Value(TEXT("WWOBots="), Value)) BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
+	if (bPvP && WWOSwitches::Value(TEXT("WWOBots="), Value)) Roster.BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
 	// ?bots=N: the launch screen's count for this match (a local PvP match fills both teams).
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
-	OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
-	// (The launch screen's count is exact, not a floor under the Bots setting: see UpdateBots.)
+	Roster.OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
+	// (The launch screen's count is exact, not a floor under the Bots setting: see FWWOBotRoster::Wanted.)
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
@@ -119,7 +119,7 @@ void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
 	if (bPvP)
 	{
 		const bool bMidMatch = State == EWWOWaveState::Match && !NewPlayer->IsLocalController();
-		if (bMidMatch) RetireBotFor(NewPlayer); // before the team is picked: the person takes the bot's side
+		if (bMidMatch) Roster.RetireFor(*this, NewPlayer); // before the team is picked: the person takes the bot's side
 		BalanceTeam(NewPlayer);
 		TeamGiven.Add(NewPlayer->GetPlayerState<AWWOPlayerState>());
 		// Into a match under way: at a spot away from the other team, not the map's one Player Start.
@@ -133,38 +133,14 @@ void AWWOGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 }
 
-void AWWOGameMode::RetireBotFor(AController* Joiner)
-{
-	// One bot leaves, from the bigger team, so the match stays the size it was.
-	int32 Count[2] = { 0, 0 };
-	TArray<AWWOBotController*> BotsNow;
-	for (TActorIterator<AWWOBotController> It(GetWorld()); It; ++It)
-	{
-		BotsNow.Add(*It);
-		if (const AWWOPlayerState* PS = It->GetPlayerState<AWWOPlayerState>(); PS && PS->Team >= 0 && PS->Team <= 1) ++Count[PS->Team];
-	}
-	if (BotsNow.Num() == 0) return;
-	const int32 From = Count[1] > Count[0] ? 1 : 0;
-	AWWOBotController* Leaving = BotsNow[0];
-	for (AWWOBotController* Bot : BotsNow)
-	{
-		if (const AWWOPlayerState* PS = Bot->GetPlayerState<AWWOPlayerState>(); PS && PS->Team == From) Leaving = Bot;
-	}
-	UE_LOG(LogWWO, Display, TEXT("PvP: %s makes room for %s"), *GetNameSafe(Leaving->PlayerState), *GetNameSafe(Joiner));
-	if (APawn* Body = Leaving->GetPawn()) Body->Destroy();
-	Leaving->Destroy();
-	--BotsSpawned;
-	--BotsExtra;
-}
-
 void AWWOGameMode::Logout(AController* Exiting)
 {
 	// A person leaving a PvP match (Quit to main menu, or a dropped connection): a bot fills their
-	// place, so the teams stay the size they were. UpdateBots spawns it and puts it on the smaller team.
+	// place, so the teams stay the size they were. The roster spawns it and puts it on the smaller team.
 	const APlayerController* Person = Cast<APlayerController>(Exiting);
 	if (bPvP && Person && !Person->IsLocalController() && State == EWWOWaveState::Match)
 	{
-		++BotsExtra;
+		Roster.PersonLeft();
 		UE_LOG(LogWWO, Display, TEXT("PvP: %s left, a bot takes the place"), *GetNameSafe(Exiting->PlayerState));
 	}
 	Super::Logout(Exiting);
@@ -351,7 +327,7 @@ void AWWOGameMode::LoadMap(UObject* WorldContext, FName Level)
 	if (!World) return;
 	const AWWOGameMode* Mode = World->GetAuthGameMode<AWWOGameMode>();
 	const bool bStayPvP = Mode && Mode->bPvP; // a PvP match stays PvP (with its bots) across restarts and map changes
-	const int32 StayBots = Mode ? Mode->OptionBots : -1;
+	const int32 StayBots = Mode ? Mode->Roster.OptionBots : -1;
 	switch (World->GetNetMode())
 	{
 	case NM_ListenServer:
@@ -416,21 +392,11 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 	if (bTester) UpdateTester();
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
 	if (bPvP) UpdateMatch(DeltaSeconds);
-	if (bPvP) UpdateBots();
 	if (bPvP)
 	{
-		// Bots' health and shield follow the Bots settings (a player's own are on the Player page).
-		for (AWWOCharacter* P : UWWOWorldSubsystem::Get(this)->GetPlayers())
-		{
-			if (!P->GetBot() || (P->Health->BaseHealth == BotHealth && P->Health->BaseShield == BotShield)) continue;
-			P->Health->BaseHealth = BotHealth;
-			P->Health->BaseShield = BotShield;
-			if (!P->Health->bDead)
-			{
-				P->Health->Health = P->Health->MaxHealth();
-				P->Health->Shield = P->Health->MaxShield();
-			}
-		}
+		if (Stress) Stress->LogBots(*this); // stress runs only: bot states, sight lines, test shots at every head
+		Roster.Update(*this);
+		Roster.FollowSettings(*this);
 	}
 	if (Stress) Stress->Tick(*this, DeltaSeconds);
 	if (AWWOGameState* GS = GetGameState<AWWOGameState>())
@@ -765,46 +731,4 @@ void AWWOGameMode::UpdateTester()
 	if (GetWorld()->LineTraceSingleByChannel(Floor, At + FVector(0, 0, 300.f), At - FVector(0, 0, 1000.f), ECC_Visibility)) At = Floor.ImpactPoint;
 	TesterTarget = GetWorld()->SpawnActor<AWWOTarget>(AWWOTarget::StaticClass(), At, FRotator(0.f, TesterHome.Rotator().Yaw + 180.f, 0.f), WWO::AlwaysSpawn());
 	UE_LOG(LogWWO, Display, TEXT("Tester: target dummy %.0f m ahead of the start (%s)"), TesterTargetDistance, TesterTarget.IsValid() ? TEXT("placed") : TEXT("FAILED"));
-}
-
-// --- Bots and load (PvP stress test) -------------------------------------------------------------
-
-void AWWOGameMode::UpdateBots()
-{
-	if (Stress) Stress->LogBots(*this); // stress runs only: bot states, sight lines, test shots at every head
-	// One a frame, once the host's own player is in.
-	// How many: the launch screen's count when it gave one (a local match fills the map's teams
-	// exactly), else the Bots setting (or -WWOBots); then one more per person who left, one fewer
-	// per person who joined.
-	// (A test run takes only what its command line asks for, not the saved Bots setting.)
-	const int32 Asked = OptionBots >= 0 ? OptionBots : FMath::Max(BotsWanted, bTestRun ? 0 : FMath::RoundToInt(Bots));
-	const int32 Wanted = FMath::Clamp(Asked + BotsExtra, 0, 11);
-	if (BotsSpawned >= Wanted || State != EWWOWaveState::Match || !UWWOWorldSubsystem::Get(this)->GetPlayer()) return;
-	AWWOBotController* Bot = GetWorld()->SpawnActor<AWWOBotController>();
-	if (!Bot) return;
-	++BotsSpawned;
-	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("bot%d"), BotsSpawned));
-	BalanceTeam(Bot);
-	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
-	// steady scene of moving characters for performance tests).
-	if (WWOSwitches::Has(TEXT("WWOBotsPeace"))) SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
-	TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
-	RestartPlayer(Bot);
-	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
-	{
-		const FTransform Spot = PvPSpawnFor(Body);
-		Body->TeleportTo(Spot.GetLocation(), Spot.Rotator());
-		// -WWOBotsLineUp: a repeatable scene for performance tests. The bots stand in rows of four in
-		// front of the host, facing it, and do nothing.
-		if (const AWWOCharacter* Host = UWWOWorldSubsystem::Get(this)->GetPlayer(); Host && WWOSwitches::Has(TEXT("WWOBotsLineUp")))
-		{
-			Bot->bParked = true;
-			const int32 Index = BotsSpawned - 1;
-			const FVector Forward = Host->GetActorForwardVector(), Right = Host->GetActorRightVector();
-			const FVector At = Host->GetActorLocation() + Forward * (500.f + (Index / 4) * 220.f) + Right * ((Index % 4) - 1.5f) * 170.f + FVector(0, 0, 150.f);
-			Body->TeleportTo(At, (-Forward).Rotation(), false, true);
-			Body->SetViewRotation(0.f, (-Forward).Rotation().Yaw);
-		}
-	}
-	UE_LOG(LogWWO, Display, TEXT("PvP: bot %d of %d joined (%s)"), BotsSpawned, Wanted, Bot->GetPawn() ? *Bot->GetPawn()->GetName() : TEXT("no body"));
 }

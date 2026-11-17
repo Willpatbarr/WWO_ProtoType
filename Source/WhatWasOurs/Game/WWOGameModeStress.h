@@ -10,7 +10,7 @@ class AWWOGameMode;
 
 struct FWWOStressHarness
 {
-	// Called from UpdateBots, before the next bot is spawned. Any switch containing "WWOStress":
+	// Called from the game mode's Tick in PvP, before the roster adds the next bot. Any switch containing "WWOStress":
 	// the "Bots:" lines every 10 s, and -WWOStressShots' pictures.
 	void LogBots(AWWOGameMode& GM);
 	// Called once a tick, after the match and bots have updated. -WWOStress exactly: the load lines

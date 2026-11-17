@@ -41,7 +41,7 @@
 void FWWOStressHarness::LogBots(AWWOGameMode& GM)
 {
 	UWorld* World = GM.GetWorld();
-	if (GM.BotsSpawned <= 0 || (BotLogClock += World->GetDeltaSeconds()) < BotLogNext) return;
+	if (GM.Roster.BotsSpawned <= 0 || (BotLogClock += World->GetDeltaSeconds()) < BotLogNext) return;
 	// How the bots are getting on (every 10 s).
 	BotLogNext += WWOSwitches::Has(TEXT("WWOStressShots")) ? 4.f : 10.f;
 	int32 Count[4] = {}, Following = 0;
@@ -304,7 +304,7 @@ void FWWOStressHarness::Tick(AWWOGameMode& GM, float DeltaSeconds)
 		}
 	}
 	UE_LOG(LogWWO, Display, TEXT("Stress host: t=%.0f %d players (%d bots), frame avg %.1f ms worst %.1f ms, out %.1f KB/s in %.1f KB/s to %d joiners, lost %d, kills %d, %s"),
-		StressClock, UWWOWorldSubsystem::Get(&GM)->GetPlayers().Num(), GM.BotsSpawned, 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
+		StressClock, UWWOWorldSubsystem::Get(&GM)->GetPlayers().Num(), GM.Roster.BotsSpawned, 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,
 		Out / 1024.f, In / 1024.f, Driver ? Driver->ClientConnections.Num() : 0, Lost, AWWOGameMode::PvPKills, *GM.GetGameState<AWWOGameState>()->StatusLine);
 	UE_LOG(LogWWO, Display, TEXT("Stress threads: t=%.0f game %.1f ms, render %.1f ms, GPU %.1f ms (averages)"), StressClock,
 		StressGame / FMath::Max(StressFrames, 1.f), StressRender / FMath::Max(StressFrames, 1.f), StressGpu / FMath::Max(StressFrames, 1.f));

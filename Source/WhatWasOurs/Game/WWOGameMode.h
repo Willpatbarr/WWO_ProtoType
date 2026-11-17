@@ -14,6 +14,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Game/WWOGameModeStress.h"
+#include "Game/WWOBotRoster.h"
 #include "WWOGameMode.generated.h"
 
 class AWWOEnemy;
@@ -87,17 +88,13 @@ public:
 	TWeakObjectPtr<class AWWOTarget> TesterTarget;
 	float TesterTargetDistance = 20.f; // m
 	void UpdateTester();
-	// -WWOBots=N (PvP): N bot players join the match (AWWOBotController). -WWOStress logs the load.
-	int32 BotsWanted = 0, BotsSpawned = 0;
+	// The PvP match's bot players (-WWOBots=N, ?bots=N, the Bots setting; Game/WWOBotRoster.h). -WWOStress logs the load.
+	FWWOBotRoster Roster;
 	float CmdKillTarget = -1.f; // -WWOKillTarget= (tests): wins over the saved setting
 	bool bTestRun = false;      // a -WWOAutoTest... run
-	int32 BotsExtra = 0;   // +1 for each person who left this match, -1 for each who joined it since
 	float MatchElapsed = 0.f; // seconds of this PvP match played
-	void RetireBotFor(AController* Joiner); // a person joined: a bot makes room
-	int32 OptionBots = -1; // ?bots=N from the launch screen (-1: none given); kept across restarts
 	float PublishLeft = 0.f; // host: seconds to the next refresh of the advertised game
 	TUniquePtr<FWWOStressHarness> Stress; // test runs with a WWOStress switch only (WWOGameModeStress.cpp)
-	void UpdateBots();
 
 	EWWOWaveState State = EWWOWaveState::Idle;
 	int32 Wave = 0;
@@ -153,4 +150,5 @@ private:
 
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the wave spawn directly; no gameplay code uses this.
 	friend class FWWORegress;
+	friend struct FWWOBotRoster;
 };

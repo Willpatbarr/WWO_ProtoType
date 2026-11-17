@@ -90,7 +90,8 @@ namespace
 		// The game mode as it was (put back by M::Leave).
 		bool bPvP = false, bTester = false, bTesterHomeSet = false;
 		EWWOWaveState State = EWWOWaveState::Idle;
-		int32 Wave = 0, Winner = -1, OptionBots = -1, BotsWanted = 0, BotsSpawned = 0, BotsExtra = 0;
+		int32 Wave = 0, Winner = -1;
+		FWWOBotRoster Roster;
 		float Timer = 0.f, RestartLeft = -1.f, MatchLeft = 0.f, MatchElapsed = 0.f;
 		TArray<FName> Queue;
 		TArray<TWeakObjectPtr<AWWOEnemy>> AliveList;
@@ -196,10 +197,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			S.Winner = G->Winner;
 			S.PvPBound = G->PvPBound;
 			S.TeamGiven = G->TeamGiven;
-			S.OptionBots = G->OptionBots;
-			S.BotsWanted = G->BotsWanted;
-			S.BotsSpawned = G->BotsSpawned;
-			S.BotsExtra = G->BotsExtra;
+			S.Roster = G->Roster;
 			S.PvPKills = AWWOGameMode::PvPKills;
 			S.PvPMatchesEnded = AWWOGameMode::PvPMatchesEnded;
 			if (const AWWOGameState* GS = G->GetGameState<AWWOGameState>())
@@ -226,7 +224,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 				AWWOCharacter* P = R.Player();
 				G->PvPBound.Add(P);
 				G->TeamGiven.Add(P->GetPlayerState<AWWOPlayerState>());
-				G->OptionBots = 0; // the roster adds no bots of its own unless a scenario asks
+				G->Roster.OptionBots = 0; // the roster adds no bots of its own unless a scenario asks
 			}
 			G->Begin();
 		}
@@ -252,10 +250,7 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 			G->Winner = S.Winner;
 			G->PvPBound = S.PvPBound;
 			G->TeamGiven = S.TeamGiven;
-			G->OptionBots = S.OptionBots;
-			G->BotsWanted = S.BotsWanted;
-			G->BotsSpawned = S.BotsSpawned;
-			G->BotsExtra = S.BotsExtra;
+			G->Roster = S.Roster;
 			AWWOGameMode::PvPKills = S.PvPKills;
 			AWWOGameMode::PvPMatchesEnded = S.PvPMatchesEnded;
 			if (AWWOGameState* GS = G->GetGameState<AWWOGameState>())
@@ -312,12 +307,12 @@ void FWWORegress::AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWO
 		static void SkipWave(AWWOGameMode* G) { G->SkipWave(); }
 		static void JumpToWave(AWWOGameMode* G, int32 N) { G->JumpToWave(N); }
 		// --- The roster ---
-		static void SetOptionBots(AWWOGameMode* G, int32 N) { G->OptionBots = N; }
-		static int32 BotsSpawned(AWWOGameMode* G) { return G->BotsSpawned; }
-		static int32 BotsExtra(AWWOGameMode* G) { return G->BotsExtra; }
-		static void PersonLeft(AWWOGameMode* G) { ++G->BotsExtra; } // what Logout does for a person leaving mid-match
-		static void UpdateBots(AWWOGameMode* G) { G->UpdateBots(); }
-		static void RetireBotFor(AWWOGameMode* G, AController* Joiner) { G->RetireBotFor(Joiner); }
+		static void SetOptionBots(AWWOGameMode* G, int32 N) { G->Roster.OptionBots = N; }
+		static int32 BotsSpawned(AWWOGameMode* G) { return G->Roster.BotsSpawned; }
+		static int32 BotsExtra(AWWOGameMode* G) { return G->Roster.BotsExtra; }
+		static void PersonLeft(AWWOGameMode* G) { G->Roster.PersonLeft(); } // what Logout does for a person leaving mid-match
+		static void UpdateBots(AWWOGameMode* G) { G->Roster.Update(*G); } // as the game mode's PvP tick runs it (no stress harness here)
+		static void RetireBotFor(AWWOGameMode* G, AController* Joiner) { G->Roster.RetireFor(*G, Joiner); }
 		// --- The tester ---
 		static void UpdateTester(AWWOGameMode* G) { G->UpdateTester(); }
 		static AWWOTarget* TesterTarget(AWWOGameMode* G) { return G->TesterTarget.Get(); }
