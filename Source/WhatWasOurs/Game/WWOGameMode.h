@@ -150,4 +150,7 @@ private:
 	void SpawnEnemy(FName Kind);
 	AActor* PickPoint(FName Kind) const;
 	TArray<AActor*> SpawnPoints() const;
+
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) drive the wave spawn directly; no gameplay code uses this.
+	friend class FWWORegress;
 };

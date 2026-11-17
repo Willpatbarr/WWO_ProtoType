@@ -132,6 +132,7 @@ private:
 	static void AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressArea.cpp: the edges of area effects and aim cones
 	static void AddLifeScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressLife.cpp: lingering effects' lives, tick by tick
 	static void AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressMove.cpp: AI walking, turning and probing
+	static void AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressWaves.cpp: wave spawns and queues
 	enum class EPhase : uint8 { Boot, Setup, Settle, Run, Teardown, Gap, Done };
 	EPhase Phase = EPhase::Boot;
 	int32 PhaseTicks = 0;
