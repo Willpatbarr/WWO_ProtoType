@@ -108,7 +108,9 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 numbers; return true when done). Add it to the list in one of the family files
 (`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
-friend, so a scenario can set a perk's private state (`G.HitStreak = 5`). See `RECIPES.md`.
+friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
+checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the
+`hostcheck.*` and `hostshot.*` scenarios). See `RECIPES.md`.
 
 ### Updating the golden file
 

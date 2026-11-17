@@ -21,14 +21,31 @@ behaviour is keyed by id in several files, `CODE_REVIEW_2026-11.md` has the plan
 
 ## A weapon perk
 
-1. Its numbers in `Weapons/WWOPerks.h`.
-2. Its effect in `UWWOWeaponComponent`: `Shoot` (scales the shot, `Player/WWOWeaponFiring.cpp`),
-   `RefreshStats` (stat changes while active) or `OnShotResult` (triggers on hits and kills), both in
-   `Player/WWOWeaponPerks.cpp`.
-3. Its HUD counter in `PerkStatus` (`WWOWeaponPerks.cpp`).
-4. The host's mirror in `Player/WWOCharacterGunNet.cpp` (`GunLimits`, `CheckGunHit`), or the host will
-   cap a joiner's damage below what the perk allows.
-5. A mod carrying it in `Config/WeaponMods.json`. Perks are keyed by name, so any frame can carry one.
+A perk is one entry in the perk table, `WWOPerk::Table()` in `Weapons/WWOPerks.cpp`; the gun and the
+host's check of a joiner's shot both read it, so nothing else needs to know the id.
+
+1. Its numbers in the `WWOPerk` namespace (`Weapons/WWOPerks.h`).
+2. Its entry (an `FWWOPerk`, written with designated fields; leave out what it doesn't do). Put it where
+   it should show in the HUD line: the table's order is the line's order, and the order in which perks
+   scaling the same number multiply.
+   - `Id`: the perk name a mod carries.
+   - `Stats`: stat changes while it is on (`RefreshStats`, every frame), on an `FWWOGunStats`.
+   - `ShotOn` with `ShotScale` / `ShotCrit`: this shot does more (`Shoot`); `TargetOn` with
+     `TargetScale`: per target hit, given the distance and the target.
+   - `Hud`: its text on the HUD's perk line while lit (`PerkStatus`), empty when not.
+   - `OnShot`, `OnKill`, `OnBurstEnd`: handlers for behaviour of its own (counters, arcs, refunds).
+     State it keeps goes in `FWWOPerkState` (and its resets in `UWWOWeaponComponent::Equip`,
+     `ResetForRespawn` and the mod-change handler in `RebindLoadout`, if it should reset there).
+     Conditions read `FWWOPerkView`; add a field there if they need something new.
+   - The host's allowance, or it will refuse a joiner's honest shot: `HostDamage` (with no check it is
+     allowed on every shot; with `HostOnTarget` or `HostOnShot`, only on hits where the host's own
+     numbers agree, with some room), `HostCrit`, `HostRate`, `HostBurst`, and `HostShot` if the host
+     must run something for the joiner (an arc).
+3. A mod carrying it in `Config/WeaponMods.json` (`"perk"`, and its words in `perk_text`). Any frame can
+   carry any perk.
+4. Its regression scenario: the perk family in `Player/WWORegressGuns.cpp` ((b), one met and one not met
+   per mod) sets up each perk's condition by id; add a branch for the new one, and the golden entries
+   in their own commit. The `hostcheck.*` scenarios pick it up from the catalog.
 
 ## An ability or a grenade
 

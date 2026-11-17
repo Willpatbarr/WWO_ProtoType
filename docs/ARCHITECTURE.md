@@ -103,7 +103,16 @@ follow the same shape: predict locally, the host confirms, `ClientKitRefused` un
 
 **Weapon stats**: the component's `Weapon` is a copy of the data asset. `RefreshStats` re-copies it every
 frame (`WWOWeaponPerks.cpp`) and applies mod percentages and active perks, so never store state on it. Timing stats (reload,
-aim-in, swap, ready) go through `M()` instead. Perk numbers live in `Weapons/WWOPerks.h`.
+aim-in, swap, ready) go through `M()` instead. The mods' scaling is `WWOPerk::ComputeGunStats`, which the
+host's `GunLimits` calls too, so the gun and the host's check work from the same stats.
+
+**Perks** are a table (`Weapons/WWOPerks.h` / `.cpp`): one `FWWOPerk` per perk id, holding its stat
+changes, shot and per-target conditions and multipliers, HUD text, handlers (shot, kill, finished
+burst) and the host's allowance (per-shot best, per-hit checks, crit, rate, burst, the arcs it runs for
+a joiner). The gun keeps the perks' state in one `FWWOPerkState` (`UWWOWeaponComponent::PerkState`), and
+its conditions read an `FWWOPerkView` of the frame. `WWOPerk::Equipped(Loadout)` gives the equipped
+weapon's entries; the host's `FWWOGunLimits::Perks` the entries of the mods a shot names. Every user
+walks the table in its order (the HUD line's).
 
 ## Kit: grenades, abilities, ults, flora effects
 
