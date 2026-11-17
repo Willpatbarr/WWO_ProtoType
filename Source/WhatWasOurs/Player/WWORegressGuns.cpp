@@ -6,6 +6,7 @@
 #include "Player/WWOCharacter.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOWeaponComponent.h"
+#include "Weapons/WWOPerks.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOTargetable.h"
 #include "World/WWOTarget.h"
@@ -441,8 +442,7 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				const FString K = Setup.Name + TEXT(".");
 				FWWOGunLimits Limits;
 				FString Why;
-				TSet<FName> Perks;
-				if (!AWWOCharacter::GunLimits(R.Loadout(), Gun, Setup.Mods, Limits, Why, Perks))
+				if (!AWWOCharacter::GunLimits(R.Loadout(), Gun, Setup.Mods, Limits, Why))
 				{
 					R.Record(K + TEXT("refused"), Words(Why));
 					continue;
@@ -455,9 +455,10 @@ void FWWORegress::AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				R.Record(K + TEXT("crit"), Limits.Crit);
 				R.Record(K + TEXT("burst"), Limits.Burst);
 				R.Record(K + TEXT("pellets"), Limits.Pellets);
-				R.Record(K + TEXT("checks"), FString::Printf(TEXT("%d%d%d%d"), Limits.bLongShot, Limits.bPointBlank, Limits.bFinisher, Limits.bColdBore));
+				auto Checks = [&Limits](FName Id) { return Limits.Perks.ContainsByPredicate([Id](const FWWOPerk* Perk) { return Perk->Id == Id; }) ? 1 : 0; };
+				R.Record(K + TEXT("checks"), FString::Printf(TEXT("%d%d%d%d"), Checks("longshot"), Checks("point_blank"), Checks("executioner"), Checks("cold_bore")));
 				TArray<FString> PerkNames;
-				for (const FName& Perk : Perks) PerkNames.Add(Perk.ToString());
+				for (const FWWOPerk* Perk : Limits.Perks) PerkNames.Add(Perk->Id.ToString());
 				PerkNames.Sort();
 				R.Record(K + TEXT("perks"), PerkNames.Num() > 0 ? FString::Join(PerkNames, TEXT("|")) : FString(TEXT("-")));
 				FWWOGunShot Shot;

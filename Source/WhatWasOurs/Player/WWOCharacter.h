@@ -120,13 +120,14 @@ struct FWWOGunShot
 // Damage: per hit at the very most. Rate: shots per s. Range: cm. Burst: rounds per trigger pull.
 // Round: one round's modded damage. Pellets: per shot. Always: the perks the host can't check
 // (Overpressure, Final Round, Focus, Full Burst, Slideshot) at their best. Crit: the crit
-// multiplier with its perks. The rest say which checkable perks the gun carries; SinceShot is how
-// long before this shot that gun last fired (Cold Bore).
+// multiplier with its perks. Perks: the gun's perks (entries of WWOPerk::Table(); CheckGunHit
+// counts the checkable ones per hit, ServerGunShot runs their arcs); SinceShot is how long before
+// this shot that gun last fired (Cold Bore).
 struct FWWOGunLimits
 {
 	float Damage = 0.f, Rate = 0.f, Range = 0.f, Round = 0.f, Always = 1.f, Crit = 1.f, SinceShot = 100.f;
 	int32 Burst = 1, Pellets = 1;
-	bool bLongShot = false, bPointBlank = false, bFinisher = false, bColdBore = false;
+	TArray<const struct FWWOPerk*, TInlineAllocator<6>> Perks;
 };
 
 // A player. In PvP also a target for the other team (IWWOTargetable): shots hit its body and head
@@ -485,7 +486,7 @@ private:
 	struct FShotBudget { float Shots = 3.f; double Time = 0.0; double LastShot = -1000.0; };
 	TMap<FName, FShotBudget> ShotBudgets;
 	// The most a gun with these mods can do (Why says what's wrong with a setup that can't exist).
-	static bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks);
+	static bool GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why);
 	bool CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, const struct FWWOGunLimits& Limits, FString& Why) const;
 	bool CheckMeleeHit(AActor* Target, float Damage, const FVector& Origin, const FVector& Point, FString& Why);
 	bool CheckReach(AActor* Target, const FVector& Origin, const FVector& Point, FString& Why) const; // on the target, in sight

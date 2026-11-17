@@ -45,14 +45,16 @@ namespace
 	constexpr float MeleeRateSlack = 0.5f;   // hits may come this fraction of a swing apart
 }
 
-// The most this gun can do with these mods (same data on every machine), perks at their best:
-// Hammer's faster fire, Overpressure / Final Round on one shot, Focus, Hunter and Patience on crits.
-// Cold Bore, Full Burst, Long Shot, Point Blank, Finisher and Slideshot on their shots.
-// Mirrors UWWOWeaponComponent::RefreshStats and Shoot.
-bool AWWOCharacter::GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why, TSet<FName>& Perks)
+// The most this gun can do with these mods (same data on every machine): its stats as the gun works
+// them out (WWOPerk::ComputeGunStats), and each perk's allowance from the perk table (FWWOPerk's Host
+// fields). The perks the host has no way to check are at their best in every shot (Always, Crit,
+// Rate, Burst); the ones it can (range, the target's health, time since the last shot) count per hit,
+// in CheckGunHit.
+bool AWWOCharacter::GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponData* Gun, const TArray<FName>& ModIds, FWWOGunLimits& Out, FString& Why)
 {
 	TMap<FName, float> Percent;
 	TSet<FName> Slots;
+	TSet<FName> PerkIds;
 	for (const FName& Id : ModIds)
 	{
 		const UWWOModData* Mod = nullptr;
@@ -62,33 +64,32 @@ bool AWWOCharacter::GunLimits(const UWWOLoadoutSubsystem* L, const UWWOWeaponDat
 		Slots.Add(Mod->Slot, &bTaken);
 		if (bTaken) { Why = FString::Printf(TEXT("two mods in the %s slot"), *Mod->Slot.ToString()); return false; }
 		for (const FWWOStatModifier& S : Mod->Mods) if (S.Op == EWWOStatOp::PercentAdd) Percent.FindOrAdd(S.Stat) += S.Value;
-		if (!Mod->Perk.IsNone()) Perks.Add(Mod->Perk);
+		if (!Mod->Perk.IsNone()) PerkIds.Add(Mod->Perk);
 	}
-	auto Scaled = [&Percent](float Value, FName Stat) { return Value * FMath::Max(1.f + Percent.FindRef(Stat), 0.f); };
-	// The perks the host has no way to check stay at their best in every shot's allowance...
-	float ShotScale = 1.f;
-	if (Perks.Contains("overpressure")) ShotScale *= WWOPerk::Overpressure;
-	if (Perks.Contains("final_round")) ShotScale *= WWOPerk::FinalRound;
-	if (Perks.Contains("focus")) ShotScale *= WWOPerk::Focus;
-	if (Perks.Contains("full_burst")) ShotScale *= WWOPerk::FullBurst;
-	if (Perks.Contains("slide_shot")) ShotScale *= WWOPerk::SlideShot;
-	// ...and the ones it can (range, the target's health, time since the last shot) count per hit, in CheckGunHit.
-	Out.bLongShot = Perks.Contains("longshot");
-	Out.bPointBlank = Perks.Contains("point_blank");
-	Out.bFinisher = Perks.Contains("executioner");
-	Out.bColdBore = Perks.Contains("cold_bore");
-	float Crit = Scaled(Gun->CritMultiplier, "crit_multiplier");
-	if (Perks.Contains("hunter")) Crit += WWOPerk::HunterCrit;
-	if (Perks.Contains("patience")) Crit += WWOPerk::PatienceCrit;
+	const FWWOGunStats Stats = WWOPerk::ComputeGunStats(*Gun, [&Percent](FName Stat) { return Percent.FindRef(Stat); });
+	Out.Perks = WWOPerk::Collect([&PerkIds](FName Id) { return PerkIds.Contains(Id); });
+	float ShotScale = 1.f, Crit = Stats.CritMultiplier, Rate = 1.f;
+	int32 ExtraRounds = 0;
+	for (const FWWOPerk* Perk : Out.Perks)
+	{
+		if (!Perk->HostOnTarget && !Perk->HostOnShot) ShotScale *= Perk->HostDamage;
+		Crit += Perk->HostCrit;
+		Rate *= Perk->HostRate;
+		ExtraRounds += Perk->HostBurst;
+	}
 	Out.Always = ShotScale;
 	Out.Crit = FMath::Max(Crit, 1.f);
-	Out.Pellets = FMath::Max(1, FMath::RoundToInt(Gun->Pellets));
-	Out.Damage = Scaled(Gun->Damage, "damage") * Out.Pellets * ShotScale * WWOPerk::LongShot * WWOPerk::PointBlank * WWOPerk::Finisher * WWOPerk::ColdBore * Out.Crit * GunSlack;
+	Out.Pellets = FMath::Max(1, FMath::RoundToInt(Stats.Pellets));
+	// Damage: the most a hit could ever be, every checked perk counted whether the gun has it or not.
+	Out.Damage = Stats.Damage * Out.Pellets * ShotScale;
+	for (const FWWOPerk& Perk : WWOPerk::Table()) if (Perk.HostOnTarget) Out.Damage *= Perk.HostDamage;
+	for (const FWWOPerk& Perk : WWOPerk::Table()) if (Perk.HostOnShot) Out.Damage *= Perk.HostDamage;
+	Out.Damage = Out.Damage * Out.Crit * GunSlack;
 	// A burst gun's fire rate is bursts per minute; Fourth Round adds a round to each.
-	Out.Burst = Gun->BurstCount() > 1 ? Gun->BurstCount() + (Perks.Contains("fourth_round") ? 1 : 0) : 1;
-	Out.Rate = Scaled(FMath::Max(Gun->FireRate, 1.f), "fire_rate") / 60.f * Out.Burst * (Perks.Contains("hammer") ? WWOPerk::HammerRate : 1.f) * GunSlack;
-	Out.Range = (Scaled(Gun->FireRange, "range") + 2.f) * WWO::M;
-	Out.Round = Scaled(Gun->Damage, "damage"); // what the arc perks scale from, as on the shooter's machine
+	Out.Burst = Stats.BurstCount() > 1 ? Stats.BurstCount() + ExtraRounds : 1;
+	Out.Rate = FMath::Max(Stats.FireRate, 1.f) / 60.f * Out.Burst * Rate * GunSlack;
+	Out.Range = (Stats.FireRange + 2.f) * WWO::M;
+	Out.Round = Stats.Damage; // what the arc perks scale from, as on the shooter's machine
 	return true;
 }
 
@@ -102,9 +103,8 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		for (const UWWOWeaponData* W : L->Weapons) if (W && W->Id == Shot.WeaponId) { Gun = W; break; }
 	}
 	FWWOGunLimits Limits;
-	TSet<FName> Perks;
 	FString Why = Gun ? TEXT("dead") : FString::Printf(TEXT("unknown gun %s"), *Shot.WeaponId.ToString());
-	if (!Gun || Health->bDead || !GunLimits(L, Gun, Shot.Mods, Limits, Why, Perks))
+	if (!Gun || Health->bDead || !GunLimits(L, Gun, Shot.Mods, Limits, Why))
 	{
 		NetHitsRejected += Shot.Hits.Num();
 		UE_LOG(LogWWO, Display, TEXT("NetShot rejected from %s: %s"), *GetName(), *Why);
@@ -161,21 +161,15 @@ void AWWOCharacter::ServerGunShot_Implementation(const FWWOGunShot& Shot)
 		if (!FirstHit) FirstHit = Hit.Target;
 		if (Hit.bCritical && !FirstCrit) FirstCrit = Hit.Target;
 	}
-	// The joiner's arc perks (UWWOWeaponComponent::OnShotResult runs them for the host's own shots).
-	if (FirstCrit && Perks.Contains("ricochet"))
-	{
-		AWWOChainLightning::SpawnFrom(GetWorld(), FirstCrit, this, FLinearColor(1.f, 0.62f, 0.2f), Limits.Round * 0.6f, 8.f, 1.f, 1, 0.04f);
-	}
+	// The joiner's arc perks (FWWOPerk::HostShot; UWWOWeaponComponent::OnShotResult runs them for the
+	// host's own shots).
 	if (Weapon->HostStaticGun != Shot.WeaponId)
 	{
 		Weapon->HostStaticGun = Shot.WeaponId; // another gun: its own count, as the joiner's starts over on a swap
 		Weapon->HostStaticHits = 0;
 	}
-	if (FirstHit && Perks.Contains("static") && ++Weapon->HostStaticHits >= 10)
-	{
-		Weapon->HostStaticHits = 0;
-		AWWOChainLightning::SpawnFrom(GetWorld(), FirstHit, this, FLinearColor(0.45f, 0.75f, 1.f), Limits.Round * 2.f, 6.f, 0.85f, 2, 0.07f);
-	}
+	FWWOPerkHostShot Arcs{ GetWorld(), this, FirstHit, FirstCrit, Limits.Round, Weapon->HostStaticHits };
+	for (const FWWOPerk* Perk : Limits.Perks) if (Perk->HostShot) Perk->HostShot(Arcs);
 	if (Kills > 0)
 	{
 		NetKillsCredited += Kills;
@@ -197,10 +191,8 @@ bool AWWOCharacter::CheckGunHit(const FWWOGunShot& Shot, const FWWOGunHit& Hit, 
 	// perk the host can check only where its own numbers agree (with room for what moved since).
 	float Most = Limits.Round * Limits.Pellets * Limits.Always;
 	const float Meters = Range / WWO::M;
-	if (Limits.bLongShot && Meters >= WWOPerk::LongShotRange - 3.f) Most *= WWOPerk::LongShot;
-	if (Limits.bPointBlank && Meters <= WWOPerk::PointBlankRange + 2.f) Most *= WWOPerk::PointBlank;
-	if (Limits.bFinisher && Target->GetHealth() + Target->GetShield() < 0.65f * (Target->GetMaxHealth() + Target->GetMaxShield())) Most *= WWOPerk::Finisher;
-	if (Limits.bColdBore && Limits.SinceShot >= WWOPerk::ColdBoreTime - 0.5f) Most *= WWOPerk::ColdBore;
+	for (const FWWOPerk* Perk : Limits.Perks) if (Perk->HostOnTarget && Perk->HostOnTarget(Meters, *Target)) Most *= Perk->HostDamage;
+	for (const FWWOPerk* Perk : Limits.Perks) if (Perk->HostOnShot && Perk->HostOnShot(Limits.SinceShot)) Most *= Perk->HostDamage;
 	if (Hit.bCritical)
 	{
 		// A crit lands by the crit spot (a head): within arm's reach of it, give or take its movement.
