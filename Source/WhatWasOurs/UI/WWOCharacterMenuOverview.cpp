@@ -243,8 +243,7 @@ void UWWOCharacterMenu::BuildOverview()
 		const bool bSymbol = Big != nullptr;
 		if (bSymbol)
 		{
-			// The badge covers the whole card (it is a little wider than tall: the badge's top and bottom are
-			// trimmed, where its symbol leaves room: Tools/make_flora_symbols.py, BADGE_ART).
+			// The badge covers the whole card, which is square with it (below).
 			UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
 			Fit->SetStretch(EStretch::ScaleToFill);
 			Fit->AddChild(Big);
@@ -267,7 +266,7 @@ void UWWOCharacterMenu::BuildOverview()
 			In->AddChildToVerticalBox(Label);
 		}
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
-		Size->SetWidthOverride(172.f * K);
+		Size->SetWidthOverride((bSymbol ? 156.f : 172.f) * K); // with its badge: square, as tall as the row (TopBox, 156)
 		// The badge's edge is the flora's colour at 20% (Tools/make_flora_symbols.py, EDGE_SHADE).
 		const FLinearColor BadgeEdge = Flora ? FLinearColor(Flora->Color.R * 0.2f, Flora->Color.G * 0.2f, Flora->Color.B * 0.2f) : WWOUI::CardColor;
 		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), bSymbol ? BadgeEdge : WWOUI::CardColor, Accent, 2.f, bSymbol ? FMargin(2.f) : FMargin(8.f, 10.f));

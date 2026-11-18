@@ -21,8 +21,7 @@ OUT = os.path.join(HERE, "art", "ui")
 SIZE = 512
 FLOOR, FULL = 24, 190   # brightness under FLOOR is background (noise in the black); FULL and up is fully opaque
 EDGE_SHADE = 0.20       # the badge's edge: the flora colour this bright (sRGB)
-BADGE_ART = 0.86        # how much of the badge the symbol spans: room to spare, since the Loadout tab's card
-                        # (wider than tall) shows the badge scaled to fill it, its top and bottom trimmed
+BADGE_ART = 1.0         # how much of the badge the symbol spans (the symbol's own crop leaves a 3% margin)
 MIDDLE_SHADE = 0.36     # and its middle
 
 
