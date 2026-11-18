@@ -9,6 +9,7 @@
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/Texture2D.h"
 #include "Rendering/DrawElements.h"
 #include "Rendering/SlateRenderer.h"
 #include "Styling/CoreStyle.h"
@@ -158,6 +159,16 @@ struct FWWOPainter
 		const FVector2D At = Pos - FVector2D(M.X * AlignX, M.Y * AlignY);
 		FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
 			ESlateDrawEffect::None, WWO::Lin(Color));
+	}
+	// A texture (a UI symbol, say) stretched over the box; Tint multiplies it (white: as it is).
+	void Image(UTexture2D* Texture, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Tint = FLinearColor::White) const
+	{
+		if (!Texture || Tint.A <= 0.001f) return;
+		FSlateBrush Brush;
+		Brush.SetResourceObject(Texture);
+		Brush.ImageSize = FVector2D(BoxSize * S);
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
+			ESlateDrawEffect::None, Tint);
 	}
 	void Material(UMaterialInstanceDynamic* Mat, FVector2D Offset = FVector2D::ZeroVector) const
 	{

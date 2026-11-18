@@ -18,6 +18,7 @@
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOGrenadeComponent.h"
 
 namespace
 {
@@ -144,26 +145,41 @@ void FWWOAutoTest::UpdateAutoTabsTest(float DeltaTime)
 	// The Loadout tab (the overview): the flora's card among the rest.
 	case 8: if (TabsClock > 0.6f) { PC->CharacterMenu->AutoTestShow(TEXT(""), FString()); Next(); } break;
 	case 9: if (TabsClock > 1.f) { Fits(TEXT("the Loadout tab"), TEXT("82_tab_loadout")); Next(); } break;
-	// The Loadout tab with each flora equipped in turn: its badge in the flora card (82_tab_loadout_<flora>).
-	case 10: case 12: case 14:
-		if (TabsClock > 0.6f)
+	// Each flora equipped in turn (its grenades change with it), six steps each from stage 10 (a shot is
+	// taken a frame late, so nothing changes on screen in the step that takes one):
+	//   the Loadout tab: the flora's badge in its card, the grenade's in its tile (82_tab_loadout_<flora>);
+	//   the cursor on the grenade tile: its hover row of the flora's grenades' badges (82_tab_loadout_<flora>_grenades);
+	//   the Flora tab with the grenade picker open: the badges beside the slot and above each choice (82_tab_flora_<flora>_grenades).
+	case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17: case 18: case 19: case 20: case 21:
+	case 22: case 23: case 24: case 25: case 26: case 27:
+	{
+		const int32 Index = (TabsStage - 10) / 6;
+		const int32 Step = (TabsStage - 10) % 6;
+		const FString Id = L->Catalog.Floras.IsValidIndex(Index) ? L->Catalog.Floras[Index]->Id.ToString() : FString(TEXT("none"));
+		if (TabsClock < (Step % 2 == 0 ? 0.6f : 1.f)) break;
+		switch (Step)
 		{
-			const int32 Index = (TabsStage - 10) / 2;
+		case 0:
 			if (L->Catalog.Floras.IsValidIndex(Index)) L->EquipFlora(L->Catalog.Floras[Index]);
 			PC->CharacterMenu->AutoTestShow(TEXT(""), FString());
-			Next();
+			break;
+		case 1: Fits(*FString::Printf(TEXT("the Loadout tab with %s"), *Id), *FString::Printf(TEXT("82_tab_loadout_%s"), *Id)); break;
+		case 2: PC->CharacterMenu->AutoTestShow(TEXT(""), TEXT("grenade")); break;
+		case 3: Shot(*FString::Printf(TEXT("82_tab_loadout_%s_grenades"), *Id)); break;
+		case 4: PC->CharacterMenu->AutoTestShow(TEXT("Flora"), TEXT("grenade")); break;
+		default: Fits(*FString::Printf(TEXT("the Flora tab with %s's grenade picker"), *Id), *FString::Printf(TEXT("82_tab_flora_%s_grenades"), *Id)); break;
 		}
+		Next();
 		break;
-	case 11: case 13: case 15:
-		if (TabsClock > 1.f)
-		{
-			const int32 Index = (TabsStage - 11) / 2;
-			const FString Id = L->Catalog.Floras.IsValidIndex(Index) ? L->Catalog.Floras[Index]->Id.ToString() : FString(TEXT("none"));
-			Fits(*FString::Printf(TEXT("the Loadout tab with %s"), *Id), *FString::Printf(TEXT("82_tab_loadout_%s"), *Id));
-			Next();
-		}
+	}
+	// The HUD's grenade (the last flora's): its badge, charged (82_hud_grenade) and refilling (82_hud_grenade_charging).
+	case 28: if (TabsClock > 0.6f) { PC->ToggleCharacterMenu(); Next(); } break;
+	case 29: if (TabsClock > 1.f) { Shot(TEXT("82_hud_grenade")); Next(); } break;
+	case 30:
+		if (AWWOCharacter* P = PC->GetWWOCharacter()) P->Grenades->Charge = 0.4f;
+		if (TabsClock > 0.5f) { Shot(TEXT("82_hud_grenade_charging")); Next(); }
 		break;
-	case 16:
+	case 31:
 		if (TabsClock < 1.f) break;
 		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
 		WWOTest::RestoreLoadout();

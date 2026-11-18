@@ -369,10 +369,19 @@ FString UWWOCharacterMenu::DebugState() const
 void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerName)
 {
 	// "mod_<slot>" opens that slot's popup; "mod_<slot>:<mod id>" also previews that mod.
-	// An empty Tile is the Loadout tab: the overview, which the menu shows by collapsing to it.
+	// An empty Tile is the Loadout tab: the overview, which the menu shows by collapsing to it. With a
+	// PickerName there (flora, grenade, ability0...) the cursor goes onto that tile, so its hover row of
+	// choices opens (UpdateHoverPicker) as it does for someone resting the mouse on it.
 	if (Tile.IsEmpty())
 	{
-		Collapse();
+		if (!Expanded.IsEmpty() || PickerName.IsEmpty()) Collapse();
+		if (PickerName.IsEmpty() && FSlateApplication::IsInitialized()) FSlateApplication::Get().SetCursorPos(FVector2D::ZeroVector); // off every tile
+		for (const TPair<TWeakObjectPtr<UWidget>, FString>& Hover : HoverTiles)
+		{
+			if (PickerName.IsEmpty() || Hover.Value != PickerName || !Hover.Key.IsValid() || !FSlateApplication::IsInitialized()) continue;
+			const FGeometry& Geo = Hover.Key->GetCachedGeometry();
+			FSlateApplication::Get().SetCursorPos(Geo.LocalToAbsolute(Geo.GetLocalSize() * 0.5f));
+		}
 		return;
 	}
 	if (Expanded != Tile) Expand(Tile);

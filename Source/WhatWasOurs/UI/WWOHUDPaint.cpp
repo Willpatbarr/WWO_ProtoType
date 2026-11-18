@@ -1,5 +1,6 @@
 #include "UI/WWOHUDWidget.h"
 #include "UI/WWOPainter.h"
+#include "UI/WWOUI.h"
 #include "Player/WWOProf.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
@@ -54,6 +55,26 @@ namespace
 	const FLinearColor HealthColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor HealthLowColor(1.f, 0.3f, 0.25f);
 	constexpr float LowAmmo = 0.25f;
+
+	// A square with a symbol (a grenade's badge, UI/WWOUI.h): the badge as it is when charged, white edged;
+	// charging, darkened above the line it has filled up to from the bottom.
+	void SymbolChargeBox(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, UTexture2D* Badge, float Charge)
+	{
+		P.Image(Badge, Pos, BoxSize);
+		// Over it a layer up: Slate batches a layer's textures and boxes apart, so on the same layer the
+		// badge could land on top.
+		FWWOPainter Over = P;
+		++Over.Layer;
+		if (Charge >= 1.f)
+		{
+			Over.Outline(Pos, BoxSize, FLinearColor(1, 1, 1, 0.85f), 3.f);
+			return;
+		}
+		const float Empty = BoxSize.Y * (1.f - FMath::Clamp(Charge, 0.f, 1.f));
+		Over.Box(Pos, FVector2D(BoxSize.X, Empty), FLinearColor(0.04f, 0.04f, 0.05f, 0.72f));
+		Over.Box(Pos + FVector2D(0, Empty - 1.f), FVector2D(BoxSize.X, 2.f), FLinearColor(1, 1, 1, 0.6f)); // the fill line
+		Over.Outline(Pos, BoxSize, FLinearColor(0.6f, 0.6f, 0.6f, 0.7f), 2.f);
+	}
 
 	void ChargeBox(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Color, float Charge)
 	{
@@ -658,15 +679,24 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 		if (const UWWOGrenadeData* G = Loadout->GetGrenade())
 		{
 			const float Charges = Pl->Grenades->Charge;
-			ChargeBox(P, Pos, FVector2D(64, 64), G->Color, Charges >= 1.f ? 1.f : Charges);
+			if (UTexture2D* Badge = WWOUI::SymbolTexture("Grenade", G->Id))
+			{
+				SymbolChargeBox(P, Pos, FVector2D(64, 64), Badge, Charges >= 1.f ? 1.f : Charges);
+			}
+			else
+			{
+				ChargeBox(P, Pos, FVector2D(64, 64), G->Color, Charges >= 1.f ? 1.f : Charges);
+			}
 			if (Pl->Grenades->MaxCharges() > 1.f)
 			{
 				// Extra Grenade: how many are ready, and the next one filling.
 				const int32 Ready = FMath::FloorToInt(Charges);
-				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(4, 2), 16.f, Ready > 0 ? FLinearColor::Black : FLinearColor::White, 0.f, 0);
+				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(4, 2), 16.f, FLinearColor::White, 0.f, 4.f); // over the dark badge
 				if (Ready >= 1 && Charges < Pl->Grenades->MaxCharges())
 				{
-					P.Box(Pos + FVector2D(0, 59), FVector2D(64 * (Charges - Ready), 5), FLinearColor(1, 1, 1, 0.8f));
+					FWWOPainter Over = P; // above the badge (SymbolChargeBox)
+					++Over.Layer;
+					Over.Box(Pos + FVector2D(0, 59), FVector2D(64 * (Charges - Ready), 5), FLinearColor(1, 1, 1, 0.8f));
 				}
 			}
 			P.Text(G->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);

@@ -268,21 +268,31 @@ void UWWOCharacterMenu::BuildOverview()
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
 		Size->SetWidthOverride((bSymbol ? 156.f : 172.f) * K); // with its badge: square, as tall as the row (TopBox, 156)
 		// The badge's edge is the flora's colour at 20% (Tools/make_flora_symbols.py, EDGE_SHADE).
-		const FLinearColor BadgeEdge = Flora ? FLinearColor(Flora->Color.R * 0.2f, Flora->Color.G * 0.2f, Flora->Color.B * 0.2f) : WWOUI::CardColor;
+		const FLinearColor BadgeEdge = Flora ? WWOUI::BadgeEdge(Flora->Color) : WWOUI::CardColor;
 		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), bSymbol ? BadgeEdge : WWOUI::CardColor, Accent, 2.f, bSymbol ? FMargin(2.f) : FMargin(8.f, 10.f));
 		HoverTiles.Add({ FloraCard, FString(TEXT("flora")) });
 		Size->AddChild(FloraCard);
 		Top->AddChildToHorizontalBox(Size);
 	}
 	UVerticalBox* Small = Tree->ConstructWidget<UVerticalBox>();
-	auto Tile = [&](UHorizontalBox* Row, const FString& Name, const FLinearColor& Fill, const FLinearColor& Edge, const FString& PickerName)
+	// Symbol: the item's badge (UI/WWOUI.h), filling the tile in place of its initials.
+	auto Tile = [&](UHorizontalBox* Row, const FString& Name, const FLinearColor& Fill, const FLinearColor& Edge, const FString& PickerName, UTexture2D* Symbol = nullptr)
 	{
-		UTextBlock* Text = WWOUI::Spaced(WidgetTree, Name.IsEmpty() ? FString(TEXT("")) : Initials(Name), 20.f, FLinearColor(1, 1, 1, 0.92f), 40);
-		Text->SetJustification(ETextJustify::Center);
-		UVerticalBox* In = Tree->ConstructWidget<UVerticalBox>();
-		UVerticalBoxSlot* TextSlot = In->AddChildToVerticalBox(Text);
-		TextSlot->SetSize(WWOUI::Fill(1.f));
-		TextSlot->SetVerticalAlignment(VAlign_Center);
+		UWidget* In = nullptr;
+		if (Symbol && !Name.IsEmpty())
+		{
+			In = WWOUI::FillWithSymbol(WidgetTree, Symbol);
+		}
+		else
+		{
+			UTextBlock* Text = WWOUI::Spaced(WidgetTree, Name.IsEmpty() ? FString(TEXT("")) : Initials(Name), 20.f, FLinearColor(1, 1, 1, 0.92f), 40);
+			Text->SetJustification(ETextJustify::Center);
+			UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>();
+			UVerticalBoxSlot* TextSlot = Column->AddChildToVerticalBox(Text);
+			TextSlot->SetSize(WWOUI::Fill(1.f));
+			TextSlot->SetVerticalAlignment(VAlign_Center);
+			In = Column;
+		}
 		UWidget* Box = Card(In, Open(TEXT("Flora")), Name.IsEmpty() ? WWOUI::CardColor : Fill, Name.IsEmpty() ? FLinearColor(1, 1, 1, 0.2f) : Edge, Name.IsEmpty() ? 1.5f : 2.f, FMargin(2.f));
 		HoverTiles.Add({ Box, PickerName }); // hovering it offers the other choices (UpdateHoverPicker)
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Box);
@@ -293,7 +303,9 @@ void UWWOCharacterMenu::BuildOverview()
 	// The same colors as on the Flora tab: each item's own, darkened, inside an edge of it; traits blue.
 	{
 		const UWWOGrenadeData* G = L->GetGrenade();
-		Tile(Kit, G ? G->DisplayName : FString(), G ? WWO::Darkened(G->Color, 0.6f) : WWOUI::CardColor, G ? G->Color : WWOUI::CardEdgeStrong, TEXT("grenade"));
+		UTexture2D* Badge = G ? WWOUI::SymbolTexture("Grenade", G->Id) : nullptr;
+		Tile(Kit, G ? G->DisplayName : FString(), G ? (Badge ? WWOUI::BadgeEdge(G->Color) : WWO::Darkened(G->Color, 0.6f)) : WWOUI::CardColor,
+			G ? G->Color : WWOUI::CardEdgeStrong, TEXT("grenade"), Badge);
 	}
 	for (int32 i = 0; i < 2; ++i)
 	{
@@ -524,8 +536,23 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	const FLinearColor Accent = WWOUI::Accent(this);
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
 	// One choice: a square of initials (wider, with a second line, for a weapon config).
-	auto Option = [&](const FString& Label, const FString& Under, const FString& Tip, bool bOn, const FLinearColor& Fill, const FLinearColor& Edge, TFunction<void()> Pick) -> UWidget*
+	// Symbol: the item's badge filling the square in place of the initials.
+	auto Option = [&](const FString& Label, const FString& Under, const FString& Tip, bool bOn, const FLinearColor& Fill, const FLinearColor& Edge, TFunction<void()> Pick,
+		UTexture2D* Symbol = nullptr) -> UWidget*
 	{
+		if (Symbol)
+		{
+			UWidget* Box = Card(WWOUI::FillWithSymbol(WidgetTree, Symbol), [WeakThis, Pick] { Pick(); if (WeakThis.IsValid()) WeakThis->BuildOverview(); },
+				Fill, Edge, bOn ? 4.f : 2.f, FMargin(bOn ? 4.f : 2.f));
+			Box->SetToolTipText(FText::FromString(Tip));
+			HoverNames.Add({ Box, Tip });
+			USizeBox* Size = Tree->ConstructWidget<USizeBox>();
+			Size->SetWidthOverride(56.f * K);
+			Size->SetHeightOverride(56.f * K);
+			Size->AddChild(Box);
+			Row->AddChildToHorizontalBox(Size)->SetPadding(FMargin(Row->GetChildrenCount() > 1 ? 8.f * K : 0.f, 0, 0, 0));
+			return Box;
+		}
 		UVerticalBox* In = Tree->ConstructWidget<UVerticalBox>();
 		UTextBlock* Text = WWOUI::Spaced(WidgetTree, Label, Under.IsEmpty() ? 18.f : 13.f, bOn ? FLinearColor::White : FLinearColor(1, 1, 1, 0.85f), 40);
 		Text->SetJustification(ETextJustify::Center);
@@ -555,14 +582,18 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	{
 		for (UWWOFloraData* F : L->Catalog.Floras)
 		{
-			if (F->bUnlocked) Option(Initials(F->DisplayName), FString(), F->DisplayName, F == L->GetFlora(), In(F->Color), Rim(F->Color, F == L->GetFlora()), [WL, F] { if (WL.IsValid()) WL->EquipFlora(F); });
+			UTexture2D* Badge = WWOUI::SymbolTexture("Flora", F->Id);
+			if (F->bUnlocked) Option(Initials(F->DisplayName), FString(), F->DisplayName, F == L->GetFlora(), Badge ? WWOUI::BadgeEdge(F->Color) : In(F->Color),
+				Rim(F->Color, F == L->GetFlora()), [WL, F] { if (WL.IsValid()) WL->EquipFlora(F); }, Badge);
 		}
 	}
 	else if (Name == TEXT("grenade"))
 	{
 		for (UWWOGrenadeData* G : L->GrenadesForFlora())
 		{
-			if (G->bUnlocked) Option(Initials(G->DisplayName), FString(), G->DisplayName, G == L->GetGrenade(), In(G->Color), Rim(G->Color, G == L->GetGrenade()), [WL, G] { if (WL.IsValid()) WL->EquipGrenade(G); });
+			UTexture2D* Badge = WWOUI::SymbolTexture("Grenade", G->Id);
+			if (G->bUnlocked) Option(Initials(G->DisplayName), FString(), G->DisplayName, G == L->GetGrenade(), Badge ? WWOUI::BadgeEdge(G->Color) : In(G->Color),
+				Rim(G->Color, G == L->GetGrenade()), [WL, G] { if (WL.IsValid()) WL->EquipGrenade(G); }, Badge);
 		}
 	}
 	else if (Name.StartsWith(TEXT("ability")))

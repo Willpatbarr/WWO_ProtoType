@@ -94,11 +94,17 @@ namespace WWOUI
 	// its width; the mark is square). Keeps, if given, is put under it unseen: the text the logo
 	// stands in for, so everything around stays exactly where it was.
 	UWidget* MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps = nullptr);
-	// A flora's symbol (Tools/make_flora_symbols.py, import_flora_symbols.py) by its id (voltvine, veilspore,
-	// ironbark), Size big: the badge (white symbol on a dark shade of the flora's colour) or the bare symbol
-	// (white on clear). Null for a flora with no symbol.
-	UTexture2D* FloraSymbolTexture(FName FloraId, bool bBadge);
-	UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool bBadge = true);
+	// The UI symbols (Tools/make_symbols.py, import_symbols.py) by kind ("Flora", "Grenade") and item id
+	// (voltvine; volt_grenade): the badge (white symbol on a dark shade of the item's colour) or the bare
+	// symbol (white on clear). Null for an item with no symbol.
+	UTexture2D* SymbolTexture(FName Kind, FName Id, bool bBadge = true);
+	UWidget* MakeSymbol(UWidgetTree* Tree, FName Kind, FName Id, FVector2D Size, bool bBadge = true);
+	// A symbol filling whatever holds it (cropped to its shape if that isn't square).
+	UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture);
+	// The colour at a badge's edge (Tools/make_symbols.py's EDGE_SHADE): a card round a badge filled with it shows no seam.
+	inline FLinearColor BadgeEdge(const FLinearColor& ItemColor) { return FLinearColor(ItemColor.R * 0.2f, ItemColor.G * 0.2f, ItemColor.B * 0.2f); }
+	inline UTexture2D* FloraSymbolTexture(FName FloraId, bool bBadge) { return SymbolTexture("Flora", FloraId, bBadge); }
+	inline UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool bBadge = true) { return MakeSymbol(Tree, "Flora", FloraId, Size, bBadge); }
 	// Godot's ring cursor, drawn over an open menu (see FWWOMenuCursor).
 	void PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer);
 

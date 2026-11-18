@@ -96,6 +96,8 @@ void UWWOCharacterMenu::BuildFloraRows()
 		UHorizontalBox* R = Row();
 		if (const UWWOGrenadeData* G = L->GetGrenade())
 		{
+			// The grenade's badge beside it, as the flora's is.
+			if (UWidget* Badge = WWOUI::MakeSymbol(WidgetTree, "Grenade", G->Id, FVector2D(110.f, 110.f) * K)) AddToRow(R, Badge);
 			AddToRow(R, Slot(TEXT("Grenade\n") + G->DisplayName, FVector2D(220, 110), WWO::Darkened(G->Color, 0.6f), 20.f,
 				[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("grenade")); }, &G->Color, 3.f));
 		}
@@ -125,8 +127,17 @@ void UWWOCharacterMenu::BuildFloraRows()
 			const FString Stats = FString::Printf(TEXT("%s · %d dmg · %s m"), *StaticEnum<EWWOGrenadeKind>()->GetNameStringByValue((int64)Option->Kind),
 				FMath::RoundToInt(Option->Damage), *FString::SanitizeFloat(Option->BlastRadius));
 			const FLinearColor Edge = bOn ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
-			AddToRow(R, Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(200, 90), WWO::Darkened(Option->Color, 0.45f), 20.f,
+			// Its badge above its card, as in the flora picker.
+			UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
+			if (UWidget* Badge = WWOUI::MakeSymbol(WidgetTree, "Grenade", Option->Id, FVector2D(62.f, 62.f) * K))
+			{
+				UVerticalBoxSlot* BadgeSlot = Column->AddChildToVerticalBox(Badge);
+				BadgeSlot->SetHorizontalAlignment(HAlign_Center);
+				BadgeSlot->SetPadding(FMargin(0, 0, 0, 4.f * K));
+			}
+			Column->AddChildToVerticalBox(Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(200, 90), WWO::Darkened(Option->Color, 0.45f), 20.f,
 				Pick([WL, Option] { if (WL.IsValid()) WL->EquipGrenade(Option); }), &Edge, bOn ? 5.f : 2.f));
+			AddToRow(R, Column);
 		}
 		AddContent(R);
 	}

@@ -18,6 +18,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
+#include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
@@ -46,19 +47,32 @@ namespace WWOUI
 		return Brush;
 	}
 
-UTexture2D* FloraSymbolTexture(FName FloraId, bool bBadge)
+UTexture2D* SymbolTexture(FName Kind, FName Id, bool bBadge)
 {
-	// The texture names are the flora's in title case: T_Flora_VoltVine, T_Flora_VoltVine_Badge.
-	static const TMap<FName, FString> Titles = { { "voltvine", TEXT("VoltVine") }, { "veilspore", TEXT("VeilSpore") }, { "ironbark", TEXT("IronBark") } };
-	const FString* Title = Titles.Find(FloraId);
-	if (!Title) return nullptr;
-	const FString Name = FString::Printf(TEXT("T_Flora_%s%s"), **Title, bBadge ? TEXT("_Badge") : TEXT(""));
-	return LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/WWO/Textures/UI/%s.%s"), *Name, *Name));
+	// T_<Kind>_<Name>[_Badge]: the id in title case (Tools/import_symbols.py), the floras' as they're written.
+	static const TMap<FName, FString> FloraNames = { { "voltvine", TEXT("VoltVine") }, { "veilspore", TEXT("VeilSpore") }, { "ironbark", TEXT("IronBark") } };
+	FString Name;
+	if (Kind == "Flora")
+	{
+		const FString* Found = FloraNames.Find(Id);
+		if (!Found) return nullptr;
+		Name = *Found;
+	}
+	else
+	{
+		TArray<FString> Parts;
+		Id.ToString().ParseIntoArray(Parts, TEXT("_"));
+		for (FString& Part : Parts) Name += Part.Left(1).ToUpper() + Part.Mid(1);
+	}
+	const FString Asset = FString::Printf(TEXT("T_%s_%s%s"), *Kind.ToString(), *Name, bBadge ? TEXT("_Badge") : TEXT(""));
+	const FString Path = FString::Printf(TEXT("/Game/WWO/Textures/UI/%s.%s"), *Asset, *Asset);
+	if (UTexture2D* Loaded = FindObject<UTexture2D>(nullptr, *Path)) return Loaded;
+	return LoadObject<UTexture2D>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
 }
 
-UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool bBadge)
+UWidget* MakeSymbol(UWidgetTree* Tree, FName Kind, FName Id, FVector2D Size, bool bBadge)
 {
-	UTexture2D* Texture = FloraSymbolTexture(FloraId, bBadge);
+	UTexture2D* Texture = SymbolTexture(Kind, Id, bBadge);
 	if (!Texture) return nullptr;
 	UImage* Image = Tree->ConstructWidget<UImage>();
 	FSlateBrush Brush;
@@ -68,6 +82,22 @@ UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool 
 	Image->SetBrush(Brush);
 	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
 	return Image;
+}
+
+UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture)
+{
+	UImage* Image = Tree->ConstructWidget<UImage>();
+	FSlateBrush Brush;
+	Brush.SetResourceObject(Texture);
+	Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Image->SetBrush(Brush);
+	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+	Fit->SetStretch(EStretch::ScaleToFill);
+	Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Fit->AddChild(Image);
+	return Fit;
 }
 
 	UWidget* MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps)
