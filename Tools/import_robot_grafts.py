@@ -302,7 +302,8 @@ def voltvine_materials(root, textures, flat, glass):
     out["VV_Crystal"] = instance(root, "VV_Crystal", make_crystal(), crystal_tex,
                                  {"EmissiveStrength": ATLAS_GLOW["voltvine_crystal"], "Opacity": 0.2, "RimOpacity": 0.7, "CoreOpacity": 0.5})
     if "T_voltvine_leaves_BaseColor" in textures:   # the whole leaves, all six kinds on one sheet (one draw)
-        out["VV_Leaf"] = instance(root, "VV_Leaf", leaf, tex_set("leaves"), {"EmissiveStrength": 2.5, "Recolor": 0.0, "Subsurface": 0.4})
+        # (3.0: the vine core's glow, which is on this sheet with the stems; the leaves' own glow is scaled in the sheet)
+        out["VV_Leaf"] = instance(root, "VV_Leaf", leaf, tex_set("leaves"), {"EmissiveStrength": 3.0, "Recolor": 0.0, "Subsurface": 0.4})
     for n in ("01", "02", "03", "04", "05", "06"):   # older meshes' leaves, if their textures are there
         if "T_voltvine_leaf_%s_BaseColor" % n in textures:
             out["VV_Leaf" + n] = instance(root, "VV_Leaf" + n, leaf, tex_set("leaf_" + n), {"EmissiveStrength": 2.5, "Recolor": 0.0, "Subsurface": 0.4})
