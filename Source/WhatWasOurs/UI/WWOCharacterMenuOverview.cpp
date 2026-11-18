@@ -236,11 +236,19 @@ void UWWOCharacterMenu::BuildOverview()
 	UHorizontalBox* Top = Tree->ConstructWidget<UHorizontalBox>();
 	{
 		UVerticalBox* In = Tree->ConstructWidget<UVerticalBox>();
-		UTextBlock* Big = WWOUI::Spaced(WidgetTree, Initials(Flora ? Flora->DisplayName : TEXT("?")), 52.f, Accent, 0);
-		Big->SetJustification(ETextJustify::Center);
+		// The flora's badge (its symbol on its colour); its initials for a flora with no symbol.
+		UWidget* Big = Flora ? WWOUI::MakeFloraSymbol(WidgetTree, Flora->Id, FVector2D(104.f, 104.f) * K) : nullptr;
+		if (!Big)
+		{
+			UTextBlock* Letters = WWOUI::Spaced(WidgetTree, Initials(Flora ? Flora->DisplayName : TEXT("?")), 52.f, Accent, 0);
+			Letters->SetJustification(ETextJustify::Center);
+			Big = Letters;
+		}
 		UVerticalBoxSlot* BigSlot = In->AddChildToVerticalBox(Big);
 		BigSlot->SetSize(WWOUI::Fill(1.f));
+		BigSlot->SetHorizontalAlignment(HAlign_Center);
 		BigSlot->SetVerticalAlignment(VAlign_Center);
+		BigSlot->SetPadding(FMargin(0, 0, 0, 6.f * K));
 		UTextBlock* Label = WWOUI::Spaced(WidgetTree, Flora ? Flora->DisplayName : TEXT("No flora"), 13.f, FLinearColor::White, 200);
 		Label->SetJustification(ETextJustify::Center);
 		In->AddChildToVerticalBox(Label);
