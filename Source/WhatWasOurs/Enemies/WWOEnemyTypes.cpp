@@ -720,6 +720,11 @@ void AWWOBoss::SetShielded(bool bOn)
 	ShowShield();
 }
 
+void AWWOBoss::Heal(float Amount)
+{
+	if (!IsDead()) Health = FMath::Min(MaxHealth, Health + Amount);
+}
+
 void AWWOBoss::OnRep_Shielded()
 {
 	ShowShield();

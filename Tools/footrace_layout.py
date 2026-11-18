@@ -16,7 +16,8 @@ the hub's center. A box: center (x, y, z), size (length along x, thickness along
   portals teleport (the game spawns them; this file only marks where).
 - No roofs: walls are too tall to jump or mantle over, and the sun lights the floors.
 - Markers are TargetPoints with tags; the game spawns the gameplay actors on them:
-    EnemySpawn PvEOnly Lane<n> Room<k>   room enemies (PvEOnly keeps them out of PvP respawns)
+    EnemySpawn PvEOnly Lane<n> Room<k>|Boss  room enemies, and the boss room's core waves
+                                         (PvEOnly keeps them out of PvP respawns)
     TeamSpawn Lane<n>                    a team's spawn spots
     PortalAnchor Lane<n> Room<k>|Boss    where a room's breach portal stands (on the hub side)
     DoorSlot Lane<n> Door<d>             the doorway a door closes, facing east (into the lane)
@@ -165,6 +166,9 @@ def build():
             markers.append(Marker(mid, inner, 0.1, 90.0 if hub_side < 0 else -90.0, ["PortalAnchor", lane_tag, room_tag]))
             if name == "Boss":
                 markers.append(Marker(x1 - 8.0 * SCALE, cy, 0.1, 180.0, ["BossSpawn", lane_tag]))
+                # The core waves' enemies: the west half, between the doorway and the boss.
+                for px, py in grid(x0 + 4.0, (x0 + x1) * 0.5, y0, y1, ENEMY_SPAWNS_PER_ROOM, 3.0):
+                    markers.append(Marker(px, py, 0.1, 180.0, ["EnemySpawn", "PvEOnly", lane_tag, name]))
                 continue
             # Enemies on the east two thirds of the room, away from the doorway they enter by.
             for px, py in grid(x0 + (x1 - x0) / 3.0, x1, y0, y1, ENEMY_SPAWNS_PER_ROOM, 2.5):
@@ -214,7 +218,7 @@ def check(layout):
         for room in ("Room1", "Room2", "Room3", "Boss"):
             if sum(1 for t in tags if t[0] == "PortalAnchor" and lt in t and room in t) != 1:
                 problems.append("PortalAnchor %s %s missing or doubled" % (lt, room))
-        for room in ("Room1", "Room2", "Room3"):
+        for room in ("Room1", "Room2", "Room3", "Boss"):
             n = sum(1 for t in tags if t[0] == "EnemySpawn" and lt in t and room in t)
             if n != ENEMY_SPAWNS_PER_ROOM:
                 problems.append("EnemySpawn %s %s: %d" % (lt, room, n))

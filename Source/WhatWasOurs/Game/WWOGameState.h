@@ -37,6 +37,8 @@ public:
 	// damage window (0: the shield is up).
 	UPROPERTY(Replicated) TArray<float> BossHealth;
 	UPROPERTY(Replicated) TArray<float> BossWindow;
+	// Each team's boss core: 0 none, 1 in the hub, 2 carried, 3 dropped.
+	UPROPERTY(Replicated) TArray<uint8> CoreState;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

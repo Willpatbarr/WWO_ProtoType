@@ -15,6 +15,7 @@
 #include "World/WWOBreachPortal.h"
 #include "World/WWOBreachDoor.h"
 #include "World/WWOBreachLever.h"
+#include "World/WWOBossCore.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
@@ -72,6 +73,7 @@ void FWWOFootRaceRules::Begin()
 		GS->DoorsOpen = { 0, 0 };
 		GS->BossHealth = { -1.f, -1.f };
 		GS->BossWindow = { 0.f, 0.f };
+		GS->CoreState = { 0, 0 };
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	SpawnPortals();
@@ -155,6 +157,7 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	UpdateLevers(DeltaSeconds);
 	UpdateRooms(DeltaSeconds);
 	UpdateBosses(DeltaSeconds);
+	UpdateCores(DeltaSeconds);
 	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 	{
 		if (!Body || !Body->Health) continue;
@@ -215,6 +218,15 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
 {
 	InHub.Remove(Body);
+	// Carrying a core out through the hub doorway delivers it.
+	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
+	{
+		if (Cores[CoreTeam].IsValid() && Cores[CoreTeam]->Carrier == Body)
+		{
+			RemoveCore(CoreTeam);
+			DeliverCore(CoreTeam, Team);
+		}
+	}
 	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
 	if (!To) return;
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
@@ -331,7 +343,7 @@ void FWWOFootRaceRules::FindRooms()
 	{
 		if (!It->ActorHasTag("EnemySpawn")) continue;
 		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
-		for (int32 I = 1; I <= 3; ++I)
+		for (int32 I = 1; I <= 4; ++I)
 		{
 			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I))) Rooms[*Slot].Spawns.Add(It->GetActorLocation());
 		}
@@ -377,7 +389,8 @@ void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
 	for (FRoom& Room : Rooms)
 	{
 		Room.Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
-		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty()) continue; // only the live room spawns (not the boss room)
+		// Only the live room spawns, and not the boss room: it gets a wave with each core (SpawnBossWave).
+		if (Room.Index != Furthest[Room.Team] || Room.Index == 4 || Room.Spawns.IsEmpty()) continue;
 		if (Room.Alive.Num() >= Want)
 		{
 			Room.bFilled = true;
@@ -656,6 +669,7 @@ void FWWOFootRaceRules::SpawnBoss(int32 Team)
 	Bosses[Team] = Boss;
 	Cycles[Team] = 0;
 	WindowLeft[Team] = 0.f;
+	CoreLeft[Team] = Mode.CoreDelay;
 	BindEnemy(Boss);
 	EnemyBindings.Add({ Boss, Boss->OnDied.AddWeakLambda(&Mode, [this, Team](AWWOEnemy*) { EndMatch(Team); }) });
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossHealth);
@@ -705,5 +719,129 @@ void FWWOFootRaceRules::EndMatch(int32 WinningTeam)
 		GS->MatchWinner = (int8)WinningTeam;
 	}
 	if (Mode.bTestRun) Mode.RestartLeft = 6.f;
+	RemoveCore(0);
+	RemoveCore(1);
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d killed its boss and wins"), WinningTeam);
+}
+
+// --- Boss cores ------------------------------------------------------------------------------------
+
+void FWWOFootRaceRules::UpdateCores(float DeltaSeconds)
+{
+	UWorld* World = Mode.GetWorld();
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		AWWOBoss* Boss = BossOf(Team);
+		AWWOBossCore* Core = CoreOf(Team);
+		if (!Boss || Boss->IsDead() || State != EWWOWaveState::Match)
+		{
+			RemoveCore(Team);
+		}
+		else if (!Core)
+		{
+			// The next core: CoreDelay s after the shield is up (counting starts when it is).
+			if (Boss->bShielded && WindowLeft[Team] <= 0.f)
+			{
+				if (CoreLeft[Team] < 0.f) CoreLeft[Team] = Mode.CoreDelay;
+				CoreLeft[Team] -= DeltaSeconds;
+				if (CoreLeft[Team] <= 0.f)
+				{
+					CoreLeft[Team] = -1.f;
+					SpawnCore(Team);
+					SpawnBossWave(Team);
+				}
+			}
+		}
+		else if (Core->Carrier)
+		{
+			// A carrier who dies (or goes) drops it where they fell.
+			AWWOCharacter* Carrier = Core->Carrier;
+			if (!IsValid(Carrier) || Carrier->Health->bDead)
+			{
+				const FVector Where = IsValid(Carrier) ? Carrier->GetActorLocation() : Core->GetActorLocation();
+				Core->Drop(Where, Mode.CoreDropTime);
+				UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's core dropped"), Team);
+			}
+		}
+		else
+		{
+			if (Core->bDropped && (Core->DroppedLeft -= DeltaSeconds) <= 0.f)
+			{
+				Core->GoHome();
+				UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's dropped core went back to the hub"), Team);
+			}
+			// A fresh core is its team's to take; a dropped one is anyone's.
+			for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
+			{
+				const int32 BodyTeam = UWWOWorldSubsystem::TeamOf(Body);
+				if (!Body || Body->Health->bDead || BodyTeam < 0 || (!Core->bDropped && BodyTeam != Team)) continue;
+				if (!Core->InReach(Body->GetActorLocation())) continue;
+				Core->PickUp(Body);
+				UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) picked up team %d's core"), *Body->GetName(), BodyTeam, Team);
+				break;
+			}
+		}
+		if (GS)
+		{
+			if (GS->CoreState.Num() < 2) GS->CoreState.Init(0, 2);
+			Core = CoreOf(Team);
+			GS->CoreState[Team] = !Core ? 0 : Core->Carrier ? 2 : Core->bDropped ? 3 : 1;
+		}
+	}
+}
+
+void FWWOFootRaceRules::SpawnCore(int32 Team)
+{
+	UWorld* World = Mode.GetWorld();
+	const ATargetPoint* Marker = nullptr;
+	for (TActorIterator<ATargetPoint> It(World); It; ++It) if (It->ActorHasTag("CoreSpawn")) Marker = *It;
+	if (!Marker) return;
+	// On the team's side of the marker: toward its hub doorway.
+	FVector At = Marker->GetActorLocation();
+	if (const AWWOBreachPortal* Doorway = HubPortal(Team)) At += (Doorway->GetActorLocation() - At).GetSafeNormal2D() * 4.f * WWO::M;
+	FVector Ground = At;
+	WWOFX::GroundBelow(World, At + FVector(0, 0, 100.f), 400.f, Ground);
+	At = Ground + FVector(0, 0, 1.1f * WWO::M);
+	AWWOBossCore* Core = World->SpawnActorDeferred<AWWOBossCore>(AWWOBossCore::StaticClass(), FTransform(At), nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Core) return;
+	Core->Team = (int8)Team;
+	Core->Home = At;
+	Core->FinishSpawning(FTransform(At));
+	Cores[Team] = Core;
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss core is in the hub"), Team);
+}
+
+void FWWOFootRaceRules::SpawnBossWave(int32 Team)
+{
+	const int32 Count = FMath::RoundToInt(Mode.BossWave);
+	for (FRoom& Room : Rooms)
+	{
+		if (Room.Team != Team || Room.Index != 4 || Room.Spawns.IsEmpty()) continue;
+		for (int32 I = 0; I < Count; ++I) SpawnInRoom(Room);
+		UE_LOG(LogWWO, Display, TEXT("FootRace: a wave of %d in team %d's boss room"), Count, Team);
+	}
+}
+
+void FWWOFootRaceRules::RemoveCore(int32 Team)
+{
+	if (AWWOBossCore* Core = CoreOf(Team)) Core->Destroy();
+	Cores[Team] = nullptr;
+}
+
+void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
+{
+	AWWOBoss* Boss = BossOf(CoreTeam);
+	if (!Boss || Boss->IsDead()) return;
+	if (CoreTeam == CarrierTeam)
+	{
+		UE_LOG(LogWWO, Display, TEXT("FootRace: team %d delivered its core"), CoreTeam);
+		OpenBossWindow(CoreTeam);
+		return;
+	}
+	const float Before = Boss->GetHealth();
+	Boss->Heal(Mode.CoreHeal);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d delivered team %d's core: its boss heals %.0f (%.0f -> %.0f)"), CarrierTeam, CoreTeam,
+		Boss->GetHealth() - Before, Before, Boss->GetHealth());
 }

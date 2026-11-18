@@ -9,8 +9,10 @@
 //   a breach from Room2 opens Door2; leaving lands in Room3;
 // - lane rooms: both Room1s fill at the start, Room3 fills (with its Tank) once stood in, a lane's
 //   enemies leave the other team's players alone, a kill is refilled after RoomRefillTime;
-// - the boss: Door3 brings it up shielded (hits do nothing), a window (opened as wwo.BossWindow does)
-//   lets hits land and ends on time, the next window is a third longer, killing it wins the race.
+// - the boss: Door3 brings it up shielded (hits do nothing); CoreDelay later its core appears in the hub
+//   with a wave in the boss room; the core carried out through the hub doorway opens a window, hits land,
+//   the window ends on time; the next core is dropped by a carrier who dies; the other team delivering it
+//   heals the boss (never past full); the next window is a third longer; killing the boss wins the race.
 // Screenshots 88_footrace_*. Logs `AutoTest footrace: ... ok|FAIL`.
 
 #include "Player/WWOAutoTest.h"
@@ -28,6 +30,7 @@
 #include "World/WWOBreachPortal.h"
 #include "World/WWOBreachDoor.h"
 #include "World/WWOBreachLever.h"
+#include "World/WWOBossCore.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOIds.h"
 #include "WWOTypes.h"
@@ -325,25 +328,34 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		P->SetViewRotation(0.f, Spot.Rotator().Yaw);
 	}
 	if (Crossed(Rooms + 1.5f + GM->RoomRefillTime)) Shot(TEXT("88_footrace_room_enemies"));
-	// The boss. Door3 opened straight (the levers are tested above), with a short window to wait out.
+	// The boss and its cores. Door3 opened straight (the levers are tested above), with short times.
 	const float B = Rooms + 2.f + GM->RoomRefillTime;
 	AWWOGameMode* Mutable = Cast<AWWOGameMode>(World->GetAuthGameMode());
 	AWWOBoss* Boss = F->BossOf(Team);
+	AWWOBossCore* Core = F->CoreOf(Team);
+	AWWOBreachPortal* BossDoorway = F->RoomPortal(Team, "Boss");
 	auto Hit = [P](AWWOBoss* Target, float Amount)
 	{
 		FWWODamageBy By(P);
 		Target->ApplyHit(Amount, false, Target->GetActorLocation(), FLinearColor::White);
 	};
+	auto StandOn = [P](const AWWOBossCore* C)
+	{
+		P->TeleportTo(C->GetActorLocation() + FVector(0, 0, 10.f), P->GetActorRotation(), false, true);
+	};
 	const float Window = 2.f;
+	const int32 Wave = FMath::RoundToInt(GM->BossWave);
 	if (Crossed(B))
 	{
 		Mutable->BossWindow = Window;
+		Mutable->CoreDelay = 1.f;
 		F->OpenDoor(Team, 3);
 	}
 	if (Crossed(B + 0.5f))
 	{
 		Check(F->DoorsOpen(Team) == 3 && Boss != nullptr, TEXT("opening Door3 brings the team's boss up"));
 		Check(F->BossOf(1 - Team) == nullptr, TEXT("and not the other team's"));
+		Check(F->AliveIn(Team, "Boss") == 0, TEXT("the boss room has no enemies before its first core"));
 		if (Boss)
 		{
 			Check(Boss->bShielded && FMath::IsNearlyEqual(Boss->GetMaxHealth(), GM->BossHealth), FString::Printf(TEXT("shielded, with %.0f health (%.0f)"), GM->BossHealth, Boss->GetMaxHealth()));
@@ -351,39 +363,97 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		}
 	}
 	if (Boss && Crossed(B + 0.7f)) Check(Boss->GetHealth() == Boss->GetMaxHealth(), FString::Printf(TEXT("a hit on the shield does nothing (%.0f)"), Boss->GetHealth()));
-	if (Boss && Crossed(B + 1.f))
+	// The first core: CoreDelay after the boss, with its wave.
+	if (Crossed(B + 1.6f))
 	{
-		F->OpenBossWindow(Team);
-		Check(!Boss->bShielded && F->BossCycle(Team) == 1 && FMath::IsNearlyEqual(F->BossWindowLeft(Team), Window, 0.05f),
-			FString::Printf(TEXT("a window drops the shield for %.1f s (%.2f)"), Window, F->BossWindowLeft(Team)));
+		Check(Core != nullptr && !Core->Carrier && !Core->bDropped, TEXT("a core for the team appears in the hub CoreDelay after the boss"));
+		Check(F->AliveIn(Team, "Boss") == Wave, FString::Printf(TEXT("with a wave of %d in the boss room (%d)"), Wave, F->AliveIn(Team, "Boss")));
+		Check(F->CoreOf(1 - Team) == nullptr, TEXT("and no core for the other team"));
+		F->SetEnergy(Team, Rich);
+		if (BossDoorway) StepInto(P, BossDoorway);
+	}
+	if (Core && Crossed(B + 2.2f)) { Check(F->IsBreaching(P), TEXT("breaching from the boss room")); StandOn(Core); }
+	if (Core && Crossed(B + 2.5f))
+	{
+		Check(Core->Carrier == P, TEXT("walking onto the core picks it up"));
+		Shot(TEXT("88_footrace_core"));
+		StepInto(P, Hub);
+	}
+	if (Boss && Crossed(B + 2.8f))
+	{
+		Check(!Boss->bShielded && F->BossCycle(Team) == 1 && F->CoreOf(Team) == nullptr,
+			FString::Printf(TEXT("carried out through the hub doorway, the core drops the shield for window 1 (%.2f s)"), F->BossWindowLeft(Team)));
+		Check(BossDoorway && At(P, BossDoorway), FString::Printf(TEXT("and the carrier lands in the boss room (at %s)"), *Where()));
 		Hit(Boss, 500.f);
 	}
-	if (Boss && Crossed(B + 1.2f)) Check(FMath::IsNearlyEqual(Boss->GetHealth(), GM->BossHealth - 500.f, 1.f), FString::Printf(TEXT("hits land in the window (%.0f)"), Boss->GetHealth()));
-	if (Boss && Crossed(B + 1.f + Window + 0.3f)) Check(Boss->bShielded && F->BossWindowLeft(Team) == 0.f, TEXT("the shield is back when the window ends"));
-	if (Boss && Crossed(B + 3.6f))
+	if (Boss && Crossed(B + 3.f)) Check(FMath::IsNearlyEqual(Boss->GetHealth(), GM->BossHealth - 500.f, 1.f), FString::Printf(TEXT("hits land in the window (%.0f)"), Boss->GetHealth()));
+	if (Boss && Crossed(B + 2.8f + Window + 0.3f)) Check(Boss->bShielded && F->BossWindowLeft(Team) == 0.f, TEXT("the shield is back when the window ends"));
+	// The next core: dropped by a carrier who dies, then lying where they fell.
+	const float C2 = B + 2.8f + Window + 1.6f;
+	if (Crossed(C2))
+	{
+		Check(Core != nullptr, TEXT("the next core comes CoreDelay after the shield is back"));
+		F->SetEnergy(Team, Rich);
+		if (BossDoorway) StepInto(P, BossDoorway);
+	}
+	if (Core && Crossed(C2 + 0.5f)) StandOn(Core);
+	if (Core && Crossed(C2 + 0.8f))
+	{
+		Check(Core->Carrier == P, TEXT("picked up again"));
+		AutoFootRaceBefore = P->GetActorLocation();
+		P->Health->GodMode = 0.f;
+		P->Health->Kill();
+	}
+	if (Core && Crossed(C2 + 1.1f))
+	{
+		Check(!Core->Carrier && Core->bDropped && FVector::Dist2D(Core->GetActorLocation(), AutoFootRaceBefore) < 1.f * WWO::M,
+			TEXT("a carrier who dies drops the core where they fell"));
+		const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+		Check(GS && GS->CoreState.IsValidIndex(Team) && GS->CoreState[Team] == 3, TEXT("and every machine is told it lies dropped"));
+	}
+	// The other team delivering this team's core: a heal, up to full.
+	if (Boss && Crossed(C2 + 1.3f))
+	{
+		EnergyMark = Boss->GetHealth();
+		F->DeliverCore(Team, 1 - Team);
+		Check(FMath::IsNearlyEqual(Boss->GetHealth(), FMath::Min(EnergyMark + GM->CoreHeal, Boss->GetMaxHealth()), 1.f),
+			FString::Printf(TEXT("the other team's delivery heals the boss %.0f (%.0f -> %.0f)"), GM->CoreHeal, EnergyMark, Boss->GetHealth()));
+		F->DeliverCore(Team, 1 - Team);
+		F->DeliverCore(Team, 1 - Team);
+		Check(Boss->GetHealth() == Boss->GetMaxHealth(), FString::Printf(TEXT("never past full (%.0f)"), Boss->GetHealth()));
+	}
+	// Killing it in a window wins the race.
+	if (Boss && Crossed(C2 + 1.5f))
 	{
 		F->OpenBossWindow(Team);
 		Check(F->BossCycle(Team) == 2 && FMath::IsNearlyEqual(F->BossWindowLeft(Team), Window * 4.f / 3.f, 0.05f),
 			FString::Printf(TEXT("the second window is a third longer (%.2f s)"), F->BossWindowLeft(Team)));
-		Check(PC->GetWorld()->GetGameState<AWWOGameState>()->BossWindow.IsValidIndex(Team), TEXT("the boss shows on the game state"));
-		// A look at it: from the boss room's doorway.
-		if (AWWOBreachPortal* BossDoorway = F->RoomPortal(Team, "Boss"))
+	}
+	if (Boss && Crossed(C2 + 4.f))
+	{
+		// A look at it from the boss room's doorway (respawned by now), then the kill.
+		if (BossDoorway)
 		{
 			const FTransform Spot = BossDoorway->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-			const FRotator Facing = (Boss->GetActorLocation() - Spot.GetLocation()).Rotation();
-			P->TeleportTo(Spot.GetLocation(), FRotator(0.f, Facing.Yaw, 0.f), false, true);
-			PC->SetControlRotation(FRotator(0.f, Facing.Yaw, 0.f));
+			const FRotator Facing(0.f, (Boss->GetActorLocation() - Spot.GetLocation()).Rotation().Yaw, 0.f);
+			P->TeleportTo(Spot.GetLocation(), Facing, false, true);
+			PC->SetControlRotation(Facing);
 			P->SetViewRotation(0.f, Facing.Yaw);
 		}
 	}
-	if (Boss && Crossed(B + 4.f)) Shot(TEXT("88_footrace_boss"));
-	if (Boss && Crossed(B + 4.2f)) Hit(Boss, GM->BossHealth * 2.f);
-	if (Crossed(B + 4.6f))
+	if (Boss && Crossed(C2 + 4.4f))
+	{
+		F->OpenBossWindow(Team); // the second window has run out by now: a third, for the kill
+		Shot(TEXT("88_footrace_boss"));
+	}
+	if (Boss && Crossed(C2 + 4.6f)) Hit(Boss, GM->BossHealth * 2.f);
+	if (Crossed(C2 + 5.f))
 	{
 		Check(F->IsOver() && F->Winner == Team, FString::Printf(TEXT("killing the boss wins the race for its team (winner %d)"), F->Winner));
-		const AWWOGameState* GS = PC->GetWorld()->GetGameState<AWWOGameState>();
+		const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
 		Check(GS && GS->bMatchOver && GS->MatchWinner == Team, TEXT("and every machine is told"));
+		Check(F->CoreOf(Team) == nullptr, TEXT("the cores go with the match"));
 		Shot(TEXT("88_footrace_win"));
 	}
-	if (Crossed(B + 5.f)) WWOTest::Exit();
+	if (Crossed(C2 + 5.4f)) WWOTest::Exit();
 }

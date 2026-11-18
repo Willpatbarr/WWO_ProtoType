@@ -43,8 +43,16 @@
 // The boss (Enemies/WWOEnemyTypes.h, AWWOBoss; a BossSpawn marker per lane): spawned when the team
 // opens Door3, shielded. OpenBossWindow drops the shield for a damage window, BossWindow s long the
 // first time and a third of that longer each time after (t, 1.33t, 1.67t...); then the shield is back.
-// (The boss cores will open the windows; for now the console's wwo.BossWindow does.) The first team to
-// kill its boss wins the match.
+// The first team to kill its boss wins the match.
+//
+// Boss cores (World/WWOBossCore.h; the hub's CoreSpawn marker): CoreDelay s after a team's boss is up and
+// shielded, a core for that team appears in the hub (on the team's side of the marker), and a wave of
+// BossWave enemies in its boss room so the team can earn the energy to breach for it. Its team picks it
+// up by walking over it; carried out through the team's hub doorway it opens the boss's next window. A
+// carrier who dies drops it where they fell: then either team can take it, and the other team carrying
+// it out through their own hub doorway heals its boss CoreHeal (up to full). A dropped core goes back to
+// its spot after CoreDropTime. The next core comes CoreDelay s after the shield is back.
+// (The console's wwo.BossWindow still opens a window without a core, for testing.)
 //
 // Two pools (the design doc's 2.1): a door opened while the team's breachers are in the hub freezes
 // the pool they are on. They keep draining it; what the team earns goes to the next pool
@@ -63,6 +71,7 @@ class AWWOBreachPortal;
 class AWWOBreachDoor;
 class AWWOBreachLever;
 class AWWOBoss;
+class AWWOBossCore;
 class AWWOEnemy;
 class UWWOHealthComponent;
 
@@ -125,6 +134,11 @@ public:
 	float WindowLength(int32 Cycle) const; // the Cycle'th damage window (1-based)
 	void OpenBossWindow(int32 Team);       // drops the team's boss shield for its next window (if it's up)
 	int32 Winner = -1;
+	// The boss cores.
+	AWWOBossCore* CoreOf(int32 Team) const { return Team >= 0 && Team <= 1 ? Cores[Team].Get() : nullptr; }
+	// A core of CoreTeam's carried out through CarrierTeam's hub doorway: CoreTeam's own opens its boss's
+	// next window; the other team's heals CoreTeam's boss CoreHeal.
+	void DeliverCore(int32 CoreTeam, int32 CarrierTeam);
 	// Energy earned by Killer's team: to the pool, or (while frozen) to the next pool, or split in the hub.
 	void CreditKill(int32 Team, float Amount, const AWWOCharacter* Killer, const TCHAR* Why);
 
@@ -145,6 +159,12 @@ private:
 	void SpawnBoss(int32 Team);
 	void UpdateBosses(float DeltaSeconds);
 	void EndMatch(int32 WinningTeam);
+	void UpdateCores(float DeltaSeconds);
+	void SpawnCore(int32 Team);
+	void SpawnBossWave(int32 Team);
+	void RemoveCore(int32 Team);
+	TWeakObjectPtr<AWWOBossCore> Cores[2];
+	float CoreLeft[2] = { -1.f, -1.f }; // s to the team's next core (-1: not counting)
 	TWeakObjectPtr<AWWOBoss> Bosses[2];
 	int32 Cycles[2] = { 0, 0 };
 	float WindowLeft[2] = { 0.f, 0.f };

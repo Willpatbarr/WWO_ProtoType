@@ -17,6 +17,7 @@
 #include "Allies/WWOAlly.h"
 #include "Game/WWOGameMode.h"
 #include "World/WWOBreachLever.h"
+#include "World/WWOBossCore.h"
 #include "EngineUtils.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -864,7 +865,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
 	const float Threshold = FMath::Max(GS->BreachThreshold, 1.f);
 	const FVector2D BarSize(220.f, 12.f);
-	const float Gap = 40.f, Top = 128.f;
+	const float Gap = 40.f, Top = 176.f; // under the vitals' status chip row (SLOWED, POISONED...)
 	for (int32 Slot = 0; Slot < 2; ++Slot)
 	{
 		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
@@ -897,10 +898,20 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 			const FVector2D BossPos(Pos.X, Pos.Y + BarSize.Y + 32.f);
 			P.Box(BossPos, FVector2D(BarSize.X, 8.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 			P.Box(BossPos, FVector2D(BarSize.X * FMath::Clamp(BossLeft, 0.f, 1.f), 8.f), Window > 0.f ? FLinearColor(1.f, 0.3f, 0.25f) : FLinearColor(0.55f, 0.3f, 0.3f));
+			const uint8 Core = GS->CoreState.IsValidIndex(Team) ? GS->CoreState[Team] : 0;
+			const TCHAR* CoreText = Core == 1 ? TEXT("  CORE IN HUB") : Core == 2 ? TEXT("  CORE CARRIED") : Core == 3 ? TEXT("  CORE DROPPED") : TEXT("");
 			const FString BossLine = Window > 0.f ? FString::Printf(TEXT("BOSS %.0f%%  WINDOW %.0fs"), BossLeft * 100.f, FMath::CeilToFloat(Window))
-				: FString::Printf(TEXT("BOSS %.0f%%  SHIELDED"), BossLeft * 100.f);
+				: FString::Printf(TEXT("BOSS %.0f%%  SHIELDED%s"), BossLeft * 100.f, CoreText);
 			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), 15.f, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
 		}
+	}
+	// Carrying a core: where to take it.
+	for (TActorIterator<AWWOBossCore> It(F.Pl->GetWorld()); It; ++It)
+	{
+		if (It->Carrier != F.Pl) continue;
+		const FString Line = It->Team == Mine ? TEXT("You have your core: take it through your hub doorway to drop your boss's shield")
+			: TEXT("You have their core: take it through your hub doorway to heal their boss");
+		P.Text(Line, F.Center + FVector2D(0, 160), 24.f, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f); // sRGB (the painter converts)
 	}
 	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
 	const AWWOBreachLever* Near = nullptr;

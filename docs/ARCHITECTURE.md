@@ -217,6 +217,10 @@ walks the table in its order (the HUD line's).
     The boss (`AWWOBoss`, a bigger Tank, on `BossSpawn`): up and shielded when Door3 opens; `OpenBossWindow`
     (for now the console's `wwo.BossWindow`) drops the shield for `BossWindow` s, a third longer each
     window; killing it ends the match (`EndMatch`, `IsOver`) with that team the winner.
+    Boss cores (`World/WWOBossCore.*`, on `CoreSpawn`): `CoreDelay` after a boss is shielded a core for its
+    team appears in the hub with a wave of `BossWave` in its boss room; carried out through the team's hub
+    doorway (`LeaveHub`) it opens the next window; a carrier's death drops it (anyone can take it then);
+    the other team delivering it heals the boss `CoreHeal`; a dropped core goes home after `CoreDropTime`.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

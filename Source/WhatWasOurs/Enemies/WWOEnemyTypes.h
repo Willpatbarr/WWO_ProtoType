@@ -166,6 +166,7 @@ public:
 	float BossHealth = 0.f;               // host, before FinishSpawning: its health (0: the Tank's)
 	UPROPERTY(ReplicatedUsing = OnRep_Shielded) bool bShielded = true;
 	void SetShielded(bool bOn);           // host
+	void Heal(float Amount);              // host: up to full health
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual bool IsRankAndFile() const override { return false; }

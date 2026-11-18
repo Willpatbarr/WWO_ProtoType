@@ -58,6 +58,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.5f;      // s of holding the Revive key at a lever to pull it
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 3000.f;       // each team's boss
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWindow = 15.f;         // s: the first damage window (t); each next is t/3 longer
+	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDelay = 5.f;          // s after a boss shield goes up before the next core (and its wave)
+	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreHeal = 400.f;         // a core the other team delivers heals the boss this much
+	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDropTime = 15.f;      // s a dropped core lies before it goes back to the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWave = 6.f;           // enemies in the boss room with each core
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomEnemies = 8.f;         // enemies a team's live room holds
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomSpawnStagger = 0.4f;   // s between spawns while a room first fills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomRefillTime = 3.f;      // s between spawns once it has filled
