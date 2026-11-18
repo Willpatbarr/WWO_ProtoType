@@ -119,7 +119,22 @@ UWidget* UWWOCharacterMenu::ItemCard(const FItemCard& Spec, TFunction<void()> Fn
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
 	if (Badge)
 	{
-		UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, FVector2D(Spec.Badge, Spec.Badge) * K));
+		// The bare symbol (white on clear) on the card's own fill, which is the badge's edge shade: the
+		// badge's square would show as a faint seam against the rounded card.
+		// Its fine lines lose alpha at card size, so it is drawn twice over itself to read as bright as on
+		// the badge.
+		const FVector2D SymbolSize = FVector2D(Spec.Badge, Spec.Badge) * K;
+		UWidget* Symbol = nullptr;
+		if (UWidget* Once = WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize, false))
+		{
+			UOverlay* Twice = Tree->ConstructWidget<UOverlay>();
+			Twice->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Twice->AddChildToOverlay(Once);
+			Twice->AddChildToOverlay(WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize, false));
+			Symbol = Twice;
+		}
+		if (!Symbol) Symbol = WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize);
+		UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(Symbol);
 		BadgeSlot->SetVerticalAlignment(VAlign_Center);
 		BadgeSlot->SetPadding(FMargin(0, 0, 10.f * K, 0));
 	}

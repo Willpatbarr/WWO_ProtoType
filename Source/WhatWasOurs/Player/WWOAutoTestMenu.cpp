@@ -351,7 +351,7 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		else if (Sub == 2 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_hover")); Sub = 3; SubAt = AutoMenuClock; }
 		// Then on the head's shell card (the part you have on: yellow on the bars), and on another
 		// head in the row that opens (green and red for what swapping would do).
-		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f && (!FindButton(Character, TEXT("/"), At) || Steer(At) || AutoMenuClock > SubAt + 5.f)) { Sub = 4; SubAt = AutoMenuClock; }
+		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f && (!FindButton(Character, TEXT("HEAD"), At) || Steer(At) || AutoMenuClock > SubAt + 5.f)) { Sub = 4; SubAt = AutoMenuClock; }
 		else if (Sub == 4 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_part")); Sub = 5; SubAt = AutoMenuClock; }
 		else if (Sub == 5 && AutoMenuClock > SubAt + 0.3f)
 		{

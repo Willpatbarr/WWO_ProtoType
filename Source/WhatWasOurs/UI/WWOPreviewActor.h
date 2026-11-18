@@ -33,8 +33,10 @@ public:
 	UPROPERTY() TObjectPtr<USceneComponent> Turntable;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Backdrop;
 
-	// The preview's area in the Godot layout: what's left of the menu row beside the tiles.
-	static inline const FVector2D Size = FVector2D(600.f, 780.f);
+	// The preview's area in the Godot layout: the Loadout tab's middle column's shape (tall), so the
+	// render fills that column's height with no band under it (the Flora tab's wider column shows it
+	// with the page's shade either side, which its backdrop's edges match).
+	static inline const FVector2D Size = FVector2D(540.f, 780.f);
 	// The capture camera (level, 45 degrees tall): 2.55 m out and 0.93 m up, so the robot fills about
 	// 90% of the preview image's height (measured on the menu screenshots: 640 of its 710 pixels at
 	// 1600 x 900), with room above for a VeilSpore hood and below for the floor shadow.
