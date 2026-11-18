@@ -172,11 +172,22 @@ void UWWOLoadoutSubsystem::DeleteConfig(int32 Index)
 	if (ModConfigs.Delete(Index)) Changed();
 }
 
+void UWWOLoadoutSubsystem::AutoTestSetConfigs(const TArray<FWWOModConfig>& Configs)
+{
+	if (!bNeverSave) UE_LOG(LogWWO, Display, TEXT("Loadout: test configs in memory only; the saved file is not written again this run"));
+	bNeverSave = true;
+	ModConfigs.Configs = Configs;
+	ModConfigs.Active = INDEX_NONE;
+	for (int32 i = 0; i < WeaponSlotCount; ++i) ModConfigs.SlotConfigs[i] = Configs.IsValidIndex(i) ? i : INDEX_NONE;
+	Changed();
+}
+
 // --- Saving -------------------------------------------------------------------------------
 
 void UWWOLoadoutSubsystem::Save() const
 {
 	if (bCopy) return; // a joiner's copy: their own machine saves theirs
+	if (bNeverSave) return; // the hover test's configs (AutoTestSetConfigs)
 	if (Catalog.WeaponMods.Num() == 0 || Catalog.Weapons.Num() == 0)
 	{
 		// The mod file didn't load (a slip in a hand edit) or no assets did: what's equipped now is

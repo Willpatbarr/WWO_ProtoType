@@ -32,6 +32,7 @@ struct FWWOAutoTestModes
 	bool bAutoTestHiddenOnly = false; // -WWOAutoTestHidden: the hidden aim assist, off then on (in the mods test)
 	bool bAutoTestTitle = false;      // -WWOAutoTestTitle / TitleJoin / TitleJoinFail
 	bool bAutoTestTabs = false;       // -WWOAutoTestTabs / Vignette / Pose
+	bool bAutoTestHover = false;      // -WWOAutoTestHover
 	bool bAutoTestTester = false;     // -WWOAutoTestTester
 	bool bAutoTestNet = false;        // -WWOAutoTestNet
 	bool bAutoTestPvP = false;        // -WWOAutoTestPvP
@@ -86,6 +87,8 @@ private:
 	void UpdateAutoTitleTest(float DeltaTime);
 	// -WWOAutoTestTabs (WWOAutoTestTabs.cpp): the Weapon and Shell tabs fit on one screen.
 	void UpdateAutoTabsTest(float DeltaTime);
+	// -WWOAutoTestHover (WWOAutoTestHover.cpp): the character menu's hover rows stay on screen and clickable.
+	void UpdateAutoHoverTest(float DeltaTime);
 	void UpdateAutoTesterTest(float DeltaTime); // -WWOAutoTestTester: the firing tester
 	// -WWOAutoTestFootRace (WWOAutoTestFootRace.cpp): FootRace's breach portals, alone on L_FootRaceTest.
 	float AutoFootRaceClock = 0.f;

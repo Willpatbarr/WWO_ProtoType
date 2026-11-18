@@ -16,6 +16,7 @@
 //   -WWOAutoTestHidden          (mods test) hidden aim assist, off then on
 //   -WWOAutoTestFrames          (mods test) the newer frames and burst counts
 //   -WWOAutoTestTabs            character menu's Weapon and Shell tabs fit on one screen
+//   -WWOAutoTestHover           character menu's hover rows on screen and clickable with many saved configs
 //   -WWOAutoTestVignette        (tabs test) low-health vignette steps
 //   -WWOAutoTestPose            (tabs test) your body seen from outside
 //   -WWOPoseWeapon=<id>         (pose test) with that weapon in hand; changes the saved loadout

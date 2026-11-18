@@ -187,6 +187,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestMods` | Weapon mods and perks against the mod data | `L_TestRange` |
 | `-WWOAutoTestGuns`, `-WWOAutoTestHidden`, `-WWOAutoTestFrames` | Variants inside the mods test: gun screenshots, hidden aim assist, the newer frames and burst counts | `L_TestRange` |
 | `-WWOAutoTestTabs` | Character menu's Weapon, Shell and Flora (picker open) tabs fit on one screen; the Weapon tab with each weapon (`80_tab_weapon_<id>`, the gun's render) | any |
+| `-WWOAutoTestHover` | Character menu's hover rows with 3, 12, 40 and 150 saved configs (in memory only, never saved; every third a long name): each Loadout tile's row and every choice inside the window, no overlaps, the row stays open from a weapon slot to its last choice and that click lands; Weapon tab fits, mod lists open inside the window (`90_hover_*`, `91_hover_*`; about 2.5 min) | any |
 | `-WWOAutoTestVignette`, `-WWOAutoTestPose` | Low-health vignette steps; your body seen from outside | any |
 | `-WWOAutoTestTitle` | Launch screen, a local PvP match, quit to title, host (no map on the command line) | none |
 | `-WWOAutoTestTitleJoin`, `-WWOAutoTestTitleJoinFail` | A second copy joins the first; a join that fails | none |

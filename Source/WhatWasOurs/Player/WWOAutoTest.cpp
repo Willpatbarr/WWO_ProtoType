@@ -72,6 +72,7 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 	M.bAutoTestNet = WWOSwitches::Has(TEXT("WWOAutoTestNet"));
 	M.bAutoTestTabs = WWOSwitches::Has(TEXT("WWOAutoTestTabs")) || WWOSwitches::Has(TEXT("WWOAutoTestVignette"))
 		|| WWOSwitches::Has(TEXT("WWOAutoTestPose"));
+	M.bAutoTestHover = WWOSwitches::Has(TEXT("WWOAutoTestHover"));
 	M.bAutoTestTitle = WWOSwitches::Has(TEXT("WWOAutoTestTitle")) || WWOSwitches::Has(TEXT("WWOAutoTestTitleJoin"))
 		|| WWOSwitches::Has(TEXT("WWOAutoTestTitleJoinFail"));
 	M.bAutoTestPvP = WWOSwitches::Has(TEXT("WWOAutoTestPvP"));
@@ -90,7 +91,7 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 
 bool FWWOAutoTestModes::Any() const
 {
-	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestTester || bAutoTestFootRace || bAutoTestFootRaceBots || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
+	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestHover || bAutoTestTester || bAutoTestFootRace || bAutoTestFootRaceBots || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
 }
 
 TSharedPtr<FWWOAutoTest> FWWOAutoTest::MakeIfAsked(AWWOPlayerController& Controller)
@@ -135,6 +136,7 @@ void FWWOAutoTest::Tick(float DeltaTime)
 	}
 	else if (bAutoTestTitle) { if (PC->IsLocalController()) UpdateAutoTitleTest(DeltaTime); }
 	else if (bAutoTestTabs) { if (PC->IsLocalController()) UpdateAutoTabsTest(DeltaTime); }
+	else if (bAutoTestHover) { if (PC->IsLocalController()) UpdateAutoHoverTest(DeltaTime); }
 	else if (bAutoTestTester) { if (PC->IsLocalController()) UpdateAutoTesterTest(DeltaTime); }
 	else if (bAutoTestFootRace) { if (PC->IsLocalController()) UpdateAutoFootRaceTest(DeltaTime); }
 	else if (bAutoTestFootRaceBots) { if (PC->IsLocalController()) UpdateAutoFootRaceBotsTest(DeltaTime); }

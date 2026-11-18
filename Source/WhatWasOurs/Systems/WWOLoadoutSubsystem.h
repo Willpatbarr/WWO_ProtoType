@@ -106,6 +106,9 @@ public:
 	int32 GetActiveSlot() const { return ModConfigs.ActiveSlot; }
 	void SetSlotConfig(int32 Slot, int32 ConfigIndex);
 	bool SwapWeaponSlot(); // false when the other slot is empty
+	// The hover test (Player/WWOAutoTestHover.cpp): put these configs in place of the saved ones, in
+	// memory only. From the first call this loadout never writes Loadout.sav again (this run).
+	void AutoTestSetConfigs(const TArray<FWWOModConfig>& Configs);
 
 	// --- Stat maths (WWOLoadoutStats) ---
 	float Apply(FName Stat, float Base) const { return WWOLoadoutStats::Apply(Equipped, PointValue, Stat, Base); }
@@ -128,6 +131,7 @@ private:
 
 	bool bCopy = false; // a joiner's loadout on the host
 	bool bSaveDue = false;
+	bool bNeverSave = false; // set by AutoTestSetConfigs: test data that must not reach the saved file
 	void Save() const;
 	UWWOLoadoutSave* MakeSave() const; // what Save writes (the regression scenarios hash it)
 	bool LoadSave();
