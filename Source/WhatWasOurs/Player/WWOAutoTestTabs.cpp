@@ -1,7 +1,7 @@
 // -WWOAutoTestTabs: the character menu's Weapon and Shell tabs each fit on one screen.
 // With the fullest case set up (every perk mod on the rifle, four more saved configs), it opens
 // the Weapon tab, the Weapon tab with a slot's mods showing, and the Shell tab, and checks that
-// none of them has anything to scroll to. Shots 80_tab_weapon, 81_tab_weapon_mods, 82_tab_shell, 82_tab_flora;
+// none of them has anything to scroll to. Shots 80_tab_weapon, 81_tab_weapon_mods, 82_tab_shell, 82_tab_flora, 82_tab_loadout;
 // lines `AutoTest tabs: ... ok|FAIL`. The saved loadout file is put back at the end (WWOTest's guard).
 // Run it at a few window sizes (-ResX / -ResY): the menus scale with the window.
 
@@ -141,7 +141,10 @@ void FWWOAutoTest::UpdateAutoTabsTest(float DeltaTime)
 	// The Flora tab with its picker open: each flora's badge (its symbol on its colour) beside its card.
 	case 6: if (TabsClock > 0.6f) { PC->CharacterMenu->AutoTestShow(TEXT("Flora"), TEXT("flora")); Next(); } break;
 	case 7: if (TabsClock > 1.f) { Fits(TEXT("the Flora tab with its picker open"), TEXT("82_tab_flora")); Next(); } break;
-	case 8:
+	// The Loadout tab (the overview): the flora's card among the rest.
+	case 8: if (TabsClock > 0.6f) { PC->CharacterMenu->AutoTestShow(TEXT(""), FString()); Next(); } break;
+	case 9: if (TabsClock > 1.f) { Fits(TEXT("the Loadout tab"), TEXT("82_tab_loadout")); Next(); } break;
+	case 10:
 		if (TabsClock < 1.f) break;
 		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
 		WWOTest::RestoreLoadout();

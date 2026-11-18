@@ -369,6 +369,12 @@ FString UWWOCharacterMenu::DebugState() const
 void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerName)
 {
 	// "mod_<slot>" opens that slot's popup; "mod_<slot>:<mod id>" also previews that mod.
+	// An empty Tile is the Loadout tab: the overview, which the menu shows by collapsing to it.
+	if (Tile.IsEmpty())
+	{
+		Collapse();
+		return;
+	}
 	if (Expanded != Tile) Expand(Tile);
 	FString Name = PickerName, ModId;
 	PickerName.Split(TEXT(":"), &Name, &ModId);
