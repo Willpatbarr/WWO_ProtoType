@@ -51,7 +51,7 @@ FLAT_VV = {
     "VV_Fluid": ((0.04, 0.15, 0.5), (0.06, 0.28, 1.0), 3.0, 0.2),
 }
 # Glow (EmissiveStrength) of each flora's atlas.
-ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 2.4, "voltvine_crystal": 4.5}
+ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 2.4, "voltvine_crystal": 3.2}
 # Base colour tint of VeilSpore's atlas: its caps and net a little darker and less pastel, as on the
 # sheet (the atlas's lavender glow over the caps reads washed out at full strength in the game's light).
 VS_TINT = (1.0, 1.0, 1.0)
@@ -179,6 +179,59 @@ def make_glass():
     return m
 
 
+CRYSTAL_OPACITY = """
+float lum = dot(E.rgb, float3(0.3, 0.59, 0.11));
+return saturate(lerp(Body, Rim, F) + lum * Core);
+"""
+
+
+def make_crystal():
+    # VoltVine's crystal pods: see-through blue glass. The body lets what is behind it show (the vines
+    # that cradle it, the leaves), the facets' rims are more solid (a fresnel), and the atlas's glow
+    # (the white-blue core and its star) is both the light and what makes the core solid: opacity =
+    # lerp(Opacity, RimOpacity, fresnel) + the glow's brightness x CoreOpacity. Lit as a surface, so
+    # the studio's lights still glint on the facets.
+    m = new_material("M_WWO_GraftCrystal")
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    m.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE)
+    m.set_editor_property("two_sided", False)
+
+    def tex(name, default, x, y):
+        e = mel.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
+        e.set_editor_property("parameter_name", name)
+        e.set_editor_property("texture", unreal.load_asset(default))
+        return e
+
+    base = tex("BaseColorTexture", "/Engine/EngineResources/WhiteSquareTexture", -900, -300)
+    emis = tex("EmissiveTexture", "/Engine/EngineResources/Black", -900, 0)
+    fresnel = mel.create_material_expression(m, unreal.MaterialExpressionFresnel, -900, 300)
+    fresnel.set_editor_property("exponent", 2.0)
+    op = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -400, 300)
+    op.set_editor_property("code", CRYSTAL_OPACITY)
+    op.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    op.set_editor_property("description", "CrystalOpacity")
+    ins = []
+    for n in ("E", "F", "Body", "Rim", "Core"):
+        ci = unreal.CustomInput()
+        ci.set_editor_property("input_name", n)
+        ins.append(ci)
+    op.set_editor_property("inputs", ins)
+    mel.connect_material_expressions(emis, "RGB", op, "E")
+    mel.connect_material_expressions(fresnel, "", op, "F")
+    mel.connect_material_expressions(scalar_param(m, "Opacity", 0.3, -900, 450), "", op, "Body")
+    mel.connect_material_expressions(scalar_param(m, "RimOpacity", 0.8, -900, 530), "", op, "Rim")
+    mel.connect_material_expressions(scalar_param(m, "CoreOpacity", 1.2, -900, 610), "", op, "Core")
+    glow = multiply(m, emis, "RGB", scalar_param(m, "EmissiveStrength", 4.0, -900, 150), "", -500, 50)
+    mel.connect_material_property(base, "RGB", MP.MP_BASE_COLOR)
+    mel.connect_material_property(glow, "", MP.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(op, "", MP.MP_OPACITY)
+    mel.connect_material_property(scalar_param(m, "Roughness", 0.08, -900, 700), "", MP.MP_ROUGHNESS)
+    mel.layout_material_expressions(m)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
 def for_skeletal(path):
     m = eal.load_asset(path)
     if m and not m.get_editor_property("used_with_skeletal_mesh"):
@@ -245,7 +298,9 @@ def voltvine_materials(root, textures, flat, glass):
     out = {"VV_Bark": instance(root, "VV_Bark", flora, tex_set("vine_twin"), {"EmissiveStrength": 2.0})}
     # The leaf cards and the crystals share the flora's atlas (leaf cards alpha-cut, two-sided).
     out["VV_LeafCard"] = instance(root, "VV_LeafCard", leaf, tex_set("atlas"), {"EmissiveStrength": 0.0, "Recolor": 0.0, "Subsurface": 0.35})
-    out["VV_Crystal"] = instance(root, "VV_Crystal", flora, tex_set("atlas"), {"EmissiveStrength": ATLAS_GLOW["voltvine_crystal"]})
+    crystal_tex = {k: v for k, v in tex_set("atlas").items() if k in ("BaseColorTexture", "EmissiveTexture")}
+    out["VV_Crystal"] = instance(root, "VV_Crystal", make_crystal(), crystal_tex,
+                                 {"EmissiveStrength": ATLAS_GLOW["voltvine_crystal"], "Opacity": 0.2, "RimOpacity": 0.7, "CoreOpacity": 0.5})
     for n in ("01", "02", "03", "04", "05", "06"):   # older meshes' leaves, if their textures are there
         if "T_voltvine_leaf_%s_BaseColor" % n in textures:
             out["VV_Leaf" + n] = instance(root, "VV_Leaf" + n, leaf, tex_set("leaf_" + n), {"EmissiveStrength": 2.5, "Recolor": 0.0, "Subsurface": 0.4})

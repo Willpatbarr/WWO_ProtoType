@@ -147,7 +147,7 @@ void AWWOGunPreviewActor::Frame()
 	const float Across = Half.X * FMath::Cos(Least) + Half.Y * FMath::Sin(Least);
 	const float Nearer = Half.X * FMath::Sin(FMath::DegreesToRadians(FMath::Abs(BaseYaw) + SwayYaw)); // how much nearer the near end gets at the most turn
 	const float Tall = Half.Z + Half.X * FMath::Sin(FMath::DegreesToRadians(-Pitch)) * 0.5f;
-	const float Distance = FMath::Max(Across * 1.08f / TanH, Tall * 1.3f / TanV) + Nearer;
+	const float Distance = FMath::Max(Across * 1.02f / TanH, Tall * 1.3f / TanV) + Nearer;
 	const FVector Forward = Capture->GetRelativeRotation().Vector();
 	Capture->SetRelativeLocation(-Forward * Distance);
 }

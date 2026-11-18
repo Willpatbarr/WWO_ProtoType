@@ -32,7 +32,7 @@ public:
 
 	// The render's shape in the Godot layout (the Weapon tab's gun panel); the target is twice that
 	// many 1080p pixels, for clean edges when it's scaled down.
-	static inline const FVector2D Size = FVector2D(340.f, 204.f);
+	static inline const FVector2D Size = FVector2D(340.f, 330.f); // the weapon column's width, down to the panel's foot
 
 	// Builds Weapon's model (with Loadout's mods when it is the loadout's weapon) and frames it.
 	void ShowGun(const UWWOWeaponData* Weapon, const UWWOLoadoutSubsystem* Loadout);
@@ -61,7 +61,7 @@ private:
 	float Clock = 0.f;
 	// The three-quarter view: the gun turned this far toward the camera, and the camera's pitch down.
 	static constexpr float SwayRate = 0.45f, CameraPitch = -12.f;
-	float BaseYaw = -28.f, SwayYaw = 14.f, Pitch = CameraPitch;
+	float BaseYaw = -28.f, SwayYaw = 10.f, Pitch = CameraPitch;
 	FVector2D Shape = Size;     // the picture's shape (Frame fits the gun to it)
 	bool bPicture = false;
 	int32 PictureFrames = 0;    // picture mode: captures still to take
