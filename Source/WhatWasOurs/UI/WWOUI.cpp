@@ -36,6 +36,9 @@ namespace WWOUI
 
 	namespace
 	{
+		// Barlow's digits against Poppins' letters at the same size: a touch larger, so they stand as tall
+		// as Poppins' capitals.
+		constexpr float DigitScale = 1.06f;
 		// Each weight's face, read from its file once and kept (null: no file for it).
 		TSharedPtr<const FCompositeFont> LoadFace(EWeight Weight)
 		{
@@ -54,6 +57,18 @@ namespace WWOUI
 					const TSharedRef<const FCompositeFont> Engine = FCoreStyle::GetDefaultFont();
 					Poppins->FallbackTypeface = Engine->FallbackTypeface;
 					Poppins->SubTypefaces = Engine->SubTypefaces;
+					// Numbers: every digit comes from Barlow Semi Condensed in the same weight (narrow, even,
+					// instrument-panel figures; Poppins' are wide and round). Digits only, so words, their
+					// punctuation and units stay Poppins. First in the list: it wins over the engine's ranges.
+					const FString Digits = FPaths::ProjectContentDir() / FString::Printf(TEXT("WWO/Fonts/BarlowSemiCondensed-%s.ttf"), Names[Index]);
+					if (FPaths::FileExists(Digits))
+					{
+						FCompositeSubFont Numbers;
+						Numbers.CharacterRanges.Add(FInt32Range(FInt32Range::BoundsType::Inclusive(TEXT('0')), FInt32Range::BoundsType::Inclusive(TEXT('9'))));
+						Numbers.ScalingFactor = DigitScale;
+						Numbers.Typeface.Fonts.Add(FTypefaceEntry(FName(Names[Index]), Digits, EFontHinting::Default, EFontLoadingPolicy::LazyLoad));
+						Poppins->SubTypefaces.Insert(Numbers, 0);
+					}
 					Faces[Index] = Poppins;
 				}
 			}
