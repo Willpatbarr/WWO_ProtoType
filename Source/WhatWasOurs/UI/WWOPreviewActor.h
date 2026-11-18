@@ -73,6 +73,9 @@ public:
 	// capture's own temporal AA on top).
 	static constexpr float Supersample = 1.6f;
 
+	// The loop the preview character stands in (UWWOBodyComponent::Play).
+	static inline const FName IdleAnim = FName("Idle_Unarmed"); // hands empty: the armed idle aims a gun it does not hold here
+
 	// Capture and lights on (menu open) or off.
 	void SetLive(bool bLive);
 };

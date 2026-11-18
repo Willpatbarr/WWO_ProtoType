@@ -260,6 +260,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	Model->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Model->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());
 	Model->AddTickPrerequisiteComponent(Driver); // the mannequin poses first, then the model copies it
+	Model->PrimaryComponentTick.bTickEvenWhenPaused = Driver->PrimaryComponentTick.bTickEvenWhenPaused; // the menu preview idles while the game is paused
 	TArray<FString> HideSlots;
 	if (Config->TryGetStringArrayField(TEXT("hide_slots"), HideSlots) && HideSlots.Num() > 0) Model->bDisableClothSimulation = true;
 	Model->RegisterComponent();

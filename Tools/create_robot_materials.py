@@ -43,8 +43,11 @@ ROLES = {
     "Joint": dict(Color=(0.018, 0.018, 0.02), Roughness=0.3, Metallic=0.6, Speckle=0.08, Blotch=0.08, RoughnessVar=0.08, Bump=0.02),
     # The visor slit: white light.
     "Visor": dict(Color=(0.8, 0.82, 0.85), Roughness=0.2, Metallic=0.0, Speckle=0.0, Blotch=0.0, RoughnessVar=0.0, Bump=0.0,
-                  EmissiveColor=(0.86, 0.93, 1.0), Glow=6.0),
+                  EmissiveColor=(0.9, 0.95, 1.0), Glow=16.0),
 }
+# The visor slit's light bar is an inside-out box in the source mesh (its front faces point into the
+# head), so one-sided it is culled and only a scrap at the top shows past the dark part behind it.
+TWO_SIDED = {"Visor"}
 SLOTS = {
     "M_Robot_00_0c0c0c": "Joint",   # neck inner bits
     "M_Robot_01_9e9e9e": "Joint",   # inside the chest (hidden)
@@ -185,6 +188,12 @@ def make_instance(parent, role, values):
             mel.set_material_instance_vector_parameter_value(mi, k, unreal.LinearColor(*v, 1.0))
         else:
             mel.set_material_instance_scalar_parameter_value(mi, k, float(v))
+    if role in TWO_SIDED:
+        ov = mi.get_editor_property("base_property_overrides")
+        ov.set_editor_property("override_two_sided", True)
+        ov.set_editor_property("two_sided", True)
+        mi.set_editor_property("base_property_overrides", ov)
+        mel.update_material_instance(mi)
     eal.save_loaded_asset(mi)
     return mi
 

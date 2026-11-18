@@ -89,10 +89,10 @@ AWWOPreviewActor::AWWOPreviewActor()
 		Light->LightingChannels.bChannel2 = true;
 		return Light;
 	};
-	KeyLight = MakeLight(TEXT("KeyLight"), -26.f, -145.f, 8.5f, FLinearColor(1.f, 0.97f, 0.93f));        // front, upper left
+	KeyLight = MakeLight(TEXT("KeyLight"), -26.f, -145.f, 6.5f, FLinearColor(1.f, 0.97f, 0.93f));        // front, upper left
 	FillLight = MakeLight(TEXT("FillLight"), -8.f, 145.f, 2.4f, FLinearColor(0.82f, 0.88f, 1.f));        // front right, low, cool
-	RimLeft = MakeLight(TEXT("RimLeft"), -28.f, -35.f, 9.f, FLinearColor(0.9f, 0.94f, 1.f));             // behind, left
-	RimRight = MakeLight(TEXT("RimRight"), -22.f, 38.f, 11.f, FLinearColor(0.85f, 0.9f, 1.f));           // behind, right
+	RimLeft = MakeLight(TEXT("RimLeft"), -28.f, -35.f, 5.5f, FLinearColor(0.9f, 0.94f, 1.f));             // behind, left
+	RimRight = MakeLight(TEXT("RimRight"), -22.f, 38.f, 6.5f, FLinearColor(0.85f, 0.9f, 1.f));           // behind, right
 	TopLight = MakeLight(TEXT("TopLight"), -82.f, 180.f, 0.3f, FLinearColor(1.f, 1.f, 1.f));             // overhead (faint: the feet's flat tops caught it most)
 	BounceLight = MakeLight(TEXT("BounceLight"), 55.f, 180.f, 0.5f, FLinearColor(1.f, 0.95f, 0.9f));     // from the floor
 	// Only the key casts shadows: soft (a wide source), with short contact shadows for the creases.
@@ -140,6 +140,7 @@ void AWWOPreviewActor::BeginPlay()
 	Capture->TextureTarget = Target;
 	Capture->ShowOnlyActors.Add(this);
 	Body->FollowLoadout(false); // flora grafts follow the loadout
+	Body->Play(IdleAnim, 1.f, 0.f); // stands idling (the game's own idle loop), whatever the flora
 }
 
 void AWWOPreviewActor::SetLive(bool bLive)
