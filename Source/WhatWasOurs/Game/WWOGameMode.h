@@ -50,13 +50,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
 	// FootRace breach energy (Game/WWOFootRaceRules.h): a team's shared pool.
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 137.5f;   // a team needs this much to enter the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 158.125f;   // a team needs this much to enter the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerEnemy = 10.f;     // for each AI enemy a player kills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerPlayerKill = 25.f; // for each player of the other team killed
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 10.f;        // per second, for each of the team's players in the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 15.f;        // per second, for each of the team's players in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDeathLoss = 0.25f;   // share of the pool lost when one of them dies in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.725f;      // s of holding the Revive key at a lever to pull it
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 4500.f;       // each team's boss
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 9000.f;       // each team's boss
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWindow = 15.f;         // s: the first damage window (t); each next is t/3 longer
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDelay = 5.f;          // s after a boss shield goes up before the next core (and its wave)
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreHeal = 400.f;         // a core the other team delivers heals the boss this much
@@ -78,7 +78,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotAggression = 0.5f;  // 0 = backs off to cover early, 1 = never backs off
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotKitUse = 1.f;       // 0-1: how readily it uses grenades, abilities and its ult
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotStickToPlayer = 0.5f; // 0-1: the share of a team's bots that escort its human (the rest pair up)
-	UPROPERTY(EditAnywhere, Category = "Bots") float BotCalloutRange = 40.f;  // m: teammates this near hear about an enemy one of them sees (0 = no callouts)
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotCalloutRange = 40.f;
+	UPROPERTY(EditAnywhere, Category = "Bots") float BotBreachAt = 0.65f;   // FootRace: how full the breach meter (twice the threshold) is before bots breach  // m: teammates this near hear about an enemy one of them sees (0 = no callouts)
 
 	bool bPvP = false; // this match is team deathmatch (the map was opened with ?pvp)
 	// Team calls, forwarded to FWWOTeamDeathmatch (the health component respawns at PvPSpawnFor

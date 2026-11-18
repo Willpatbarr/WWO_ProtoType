@@ -423,6 +423,7 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "BotKitUse", TEXT("Grenade, ability and ult use (0 = never)"), 0.f, 1.f, 0.05f),
 		Header(TEXT("Teamwork")),
 		Row(Mode, "BotStickToPlayer", TEXT("Share of your team's bots that escort you (the rest pair up)"), 0.f, 1.f, 0.05f),
+		Row(Mode, "BotBreachAt", TEXT("FootRace: breach meter full enough for bots to breach (the meter is twice the threshold)"), 0.5f, 1.f, 0.05f),
 		Row(Mode, "BotCalloutRange", TEXT("Callout range (m; teammates this near come to help; 0 = off)"), 0.f, 100.f, 5.f),
 	});
 	AddGlobal(TEXT("Waves"), {

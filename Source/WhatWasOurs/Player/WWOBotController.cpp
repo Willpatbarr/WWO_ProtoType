@@ -1115,7 +1115,9 @@ void AWWOBotController::FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race,
 	const int32 Doors = Race.DoorsOpen(Team);
 	const AWWOBossCore* OwnCore = Race.CoreOf(Team);
 	const bool bReason = Doors < 3 || (OwnCore && !OwnCore->Carrier);
-	const bool bCan = Mode && Race.Energy(Team) >= Mode->BreachThreshold && !Race.IsFrozen(Team) && Race.Breachers(Team) < 2;
+	// Bots wait for a fuller meter than the threshold (BotBreachAt of the meter, which is twice the threshold).
+	const float Enough = Mode ? FMath::Max(Mode->BreachThreshold, Mode->BotBreachAt * 2.f * Mode->BreachThreshold) : 0.f;
+	const bool bCan = Mode && Race.Energy(Team) >= Enough && !Race.IsFrozen(Team) && Race.Breachers(Team) < 2;
 	BreachReady = bReason && bCan ? BreachReady + DeltaSeconds : 0.f;
 	if (Patience <= 0.f) Patience = FMath::FRandRange(0.3f, 3.f);
 	if (BreachReady >= Patience)

@@ -24,8 +24,8 @@
 //   enemy its teammates are already on and the weaker one; some bots escort the human on their
 //   team and the rest move in pairs, the follower covering its leader's flank.
 // - In FootRace (Game/WWOFootRaceRules.h), when no enemy player has its attention, it plays the race
-//   (FootRaceTick): it fights its lane's AI enemies in the team's furthest room, breaches when the team
-//   has the energy and a reason (a lever to pull, a core to fetch; at most two at once), in the hub picks
+//   (FootRaceTick): it fights its lane's AI enemies in the team's furthest room, breaches when the team's
+//   meter is BotBreachAt full (65%: 1.3 times the threshold) and it has a reason (a lever to pull, a core to fetch; at most two at once), in the hub picks
 //   up a core it can take, pulls the live lever, and leaves; carrying a core it heads for its hub doorway.
 //   In a boss window it shoots the boss. Enemy players in the hub are fought as in team deathmatch.
 
