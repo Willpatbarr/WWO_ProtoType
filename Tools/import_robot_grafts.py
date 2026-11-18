@@ -13,12 +13,17 @@ Run headless from the project folder:
 - Meshes: /Game/WWO/Characters/RobotFrame/Grafts/SK_<prefix>_<Graft>, on SK_RobotFrame's skeleton,
   three LODs each (UWWOBodyComponent::AddModelGraft plays them on the robot's pose).
 - Textures and materials: /Game/WWO/Flora/<Flora>/Textures and /Materials, named for the meshes' slots.
-  - VoltVine: VV_Bark (M_WWO_Flora with the vine bark), VV_Leaf01-06 (M_WWO_FloraLeaf with each leaf),
-    VV_Core, VV_Stem, VV_Tip, VV_Glow, VV_Fluid (M_WWO_GraftFlat), VV_Glass (M_WWO_GraftGlass).
-  - VeilSpore: VS_Scale (M_WWO_Flora with the scale's painted textures: dark purple, glowing violet
-    veins), VS_Under and VS_Mycelium (M_WWO_GraftFlat).
-  - IronBark: IB_Bark (M_WWO_Flora with the bark: plates split by glowing orange cracks), IB_Pod and
-    IB_Cord (M_WWO_GraftFlat).
+  Each flora has one 2K atlas, T_<flora>_atlas_{BaseColor,Normal,ORM,Emissive}.png (base colour,
+  OpenGL normal map, occlusion/roughness/metallic, the glow's mask and colour), painted by the Blender
+  builds; every textured slot reads it through M_WWO_Flora (opaque) or M_WWO_FloraLeaf (alpha-cut by
+  the base colour's alpha, two-sided foliage), the glow scaled by EmissiveStrength.
+  - IronBark: IB_Bark (M_WWO_Flora, the atlas: bark plates and their glowing cracks, the seed pods).
+  - VeilSpore: VS_Fungus (M_WWO_Flora, the atlas: caps, glowing gills, mycelium).
+  - VoltVine: VV_LeafCard (M_WWO_FloraLeaf, the atlas: the leaf cards), VV_Crystal (M_WWO_Flora,
+    the atlas: the glowing crystal pods), VV_Bark (M_WWO_Flora with the vine's own bark textures,
+    T_voltvine_vine_twin_*), VV_Core, VV_Stem, VV_Glow (M_WWO_GraftFlat: the vines' glowing core and
+    the arcs, the tendrils). VV_Leaf01-06, VV_Tip, VV_Fluid, VV_Glass are older slots kept so older
+    meshes still import.
   M_WWO_GraftFlat and M_WWO_GraftGlass are made here (in /Game/WWO/Materials); every parent is marked
   for skeletal meshes.
 Safe to rerun: everything is rebuilt in place.
@@ -37,23 +42,16 @@ MP = unreal.MaterialProperty
 REPORT = []
 
 # The flat materials: base color, emissive color, glow (emissive strength), roughness.
+# (Kept moderate: the menu preview blows out strong glow; the colour is in the atlas's emissive map.)
 FLAT_VV = {
-    "VV_Core": ((0.03, 0.15, 0.35), (0.10, 0.45, 1.0), 6.0, 0.3),
+    "VV_Core": ((0.03, 0.15, 0.35), (0.10, 0.45, 1.0), 3.0, 0.3),
     "VV_Stem": ((0.16, 0.30, 0.10), (0, 0, 0), 0.0, 0.55),
     "VV_Tip": ((0.55, 0.48, 0.32), (0, 0, 0), 0.0, 0.45),
-    "VV_Glow": ((0.35, 0.7, 1.0), (0.35, 0.7, 1.0), 12.0, 0.3),
-    "VV_Fluid": ((0.04, 0.15, 0.5), (0.06, 0.28, 1.0), 5.0, 0.2),
+    "VV_Glow": ((0.35, 0.7, 1.0), (0.35, 0.7, 1.0), 4.0, 0.3),
+    "VV_Fluid": ((0.04, 0.15, 0.5), (0.06, 0.28, 1.0), 3.0, 0.2),
 }
-# VeilSpore's: the scales' glowing undersides and the mycelium threads (the scale tops are textured).
-FLAT_VS = {
-    "VS_Under": ((0.10, 0.06, 0.30), (0.20, 0.30, 1.0), 0.7, 0.5),
-    "VS_Mycelium": ((0.55, 0.40, 0.85), (0.55, 0.28, 1.0), 1.5, 0.5),
-}
-# IronBark's: the seed pods and their cords (the bark is textured).
-FLAT_IB = {
-    "IB_Pod": ((0.85, 0.45, 0.08), (1.0, 0.5, 0.1), 0.8, 0.35),
-    "IB_Cord": ((0.08, 0.06, 0.05), (0, 0, 0), 0.0, 0.7),
-}
+# Glow (EmissiveStrength) of each flora's atlas.
+ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 3.0, "voltvine_crystal": 3.0}
 FLORAS = {
     "voltvine": dict(src="~/Documents/WWO_Flora/grafts", prefix="SK_VV_", root="/Game/WWO/Flora/VoltVine"),
     "veilspore": dict(src="~/Documents/WWO_Flora/grafts_veilspore", prefix="SK_VS_", root="/Game/WWO/Flora/VeilSpore"),
@@ -97,7 +95,8 @@ def import_texture(src, root, file):
     elif name.endswith("_ORM"):
         tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
         tex.set_editor_property("srgb", False)
-    tex.set_editor_property("max_texture_size", 1024)  # a graft leaf is a few cm on screen
+    # The atlases carry every graft of a flora (a hero character on the menu): full 2K. The rest 1K.
+    tex.set_editor_property("max_texture_size", 2048 if "_atlas_" in name else 1024)
     eal.save_loaded_asset(tex)
     return tex
 
@@ -219,16 +218,14 @@ def tex_params(textures, key):
 
 def veilspore_materials(root, textures, flat):
     flora = for_skeletal(MATS + "/M_WWO_Flora")
-    out = {"VS_Scale": instance(root, "VS_Scale", flora, tex_params(textures, "veilspore_scale"), {"EmissiveStrength": 5.0})}
-    out.update(flat_instances(root, flat, FLAT_VS))
-    return out
+    return {"VS_Fungus": instance(root, "VS_Fungus", flora, tex_params(textures, "veilspore_atlas"),
+                                  {"EmissiveStrength": ATLAS_GLOW["veilspore"]})}
 
 
 def ironbark_materials(root, textures, flat):
     flora = for_skeletal(MATS + "/M_WWO_Flora")
-    out = {"IB_Bark": instance(root, "IB_Bark", flora, tex_params(textures, "ironbark_bark"), {"EmissiveStrength": 6.0})}
-    out.update(flat_instances(root, flat, FLAT_IB))
-    return out
+    return {"IB_Bark": instance(root, "IB_Bark", flora, tex_params(textures, "ironbark_atlas"),
+                                {"EmissiveStrength": ATLAS_GLOW["ironbark"]})}
 
 
 def voltvine_materials(root, textures, flat, glass):
@@ -240,9 +237,13 @@ def voltvine_materials(root, textures, flat, glass):
                 for param, suffix in (("BaseColorTexture", "BaseColor"), ("ORMTexture", "ORM"), ("NormalTexture", "Normal"), ("EmissiveTexture", "Emissive"))
                 if "T_voltvine_%s_%s" % (key, suffix) in textures}
 
-    out = {"VV_Bark": instance(root, "VV_Bark", flora, tex_set("vine_twin"), {"EmissiveStrength": 4.0})}
-    for n in ("01", "02", "03", "04", "05", "06"):
-        out["VV_Leaf" + n] = instance(root, "VV_Leaf" + n, leaf, tex_set("leaf_" + n), {"EmissiveStrength": 2.5, "Recolor": 0.0, "Subsurface": 0.4})
+    out = {"VV_Bark": instance(root, "VV_Bark", flora, tex_set("vine_twin"), {"EmissiveStrength": 2.0})}
+    # The leaf cards and the crystals share the flora's atlas (leaf cards alpha-cut, two-sided).
+    out["VV_LeafCard"] = instance(root, "VV_LeafCard", leaf, tex_set("atlas"), {"EmissiveStrength": 0.0, "Recolor": 0.0, "Subsurface": 0.35})
+    out["VV_Crystal"] = instance(root, "VV_Crystal", flora, tex_set("atlas"), {"EmissiveStrength": ATLAS_GLOW["voltvine_crystal"]})
+    for n in ("01", "02", "03", "04", "05", "06"):   # older meshes' leaves, if their textures are there
+        if "T_voltvine_leaf_%s_BaseColor" % n in textures:
+            out["VV_Leaf" + n] = instance(root, "VV_Leaf" + n, leaf, tex_set("leaf_" + n), {"EmissiveStrength": 2.5, "Recolor": 0.0, "Subsurface": 0.4})
     out.update(flat_instances(root, flat, FLAT_VV))
     out["VV_Glass"] = instance(root, "VV_Glass", glass)
     return out
