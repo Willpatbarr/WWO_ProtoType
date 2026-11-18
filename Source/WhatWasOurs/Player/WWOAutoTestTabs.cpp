@@ -144,7 +144,26 @@ void FWWOAutoTest::UpdateAutoTabsTest(float DeltaTime)
 	// The Loadout tab (the overview): the flora's card among the rest.
 	case 8: if (TabsClock > 0.6f) { PC->CharacterMenu->AutoTestShow(TEXT(""), FString()); Next(); } break;
 	case 9: if (TabsClock > 1.f) { Fits(TEXT("the Loadout tab"), TEXT("82_tab_loadout")); Next(); } break;
-	case 10:
+	// The Loadout tab with each flora equipped in turn: its badge in the flora card (82_tab_loadout_<flora>).
+	case 10: case 12: case 14:
+		if (TabsClock > 0.6f)
+		{
+			const int32 Index = (TabsStage - 10) / 2;
+			if (L->Catalog.Floras.IsValidIndex(Index)) L->EquipFlora(L->Catalog.Floras[Index]);
+			PC->CharacterMenu->AutoTestShow(TEXT(""), FString());
+			Next();
+		}
+		break;
+	case 11: case 13: case 15:
+		if (TabsClock > 1.f)
+		{
+			const int32 Index = (TabsStage - 11) / 2;
+			const FString Id = L->Catalog.Floras.IsValidIndex(Index) ? L->Catalog.Floras[Index]->Id.ToString() : FString(TEXT("none"));
+			Fits(*FString::Printf(TEXT("the Loadout tab with %s"), *Id), *FString::Printf(TEXT("82_tab_loadout_%s"), *Id));
+			Next();
+		}
+		break;
+	case 16:
 		if (TabsClock < 1.f) break;
 		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
 		WWOTest::RestoreLoadout();
