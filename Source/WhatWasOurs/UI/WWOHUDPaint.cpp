@@ -854,11 +854,14 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 			}
 			Pos.X += 64 + Pad;
 		}
-		// Ult: fills in the grenade's color, pulses when ready.
+		// Ult: the flora's symbol, filling as it charges, pulsing when ready.
 		const FLinearColor UltColor = Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
 		const FVector2D UltBox(UltSide, UltSide);
 		const FVector2D UltPos = Pos - FVector2D(0.f, UltSide - 64.f); // same bottom line as the rest
-		ChargeBox(P, UltPos, UltBox, UltColor, Pl->Ult->Charge);
+		// The flora's own symbol (its badge), filling like the grenade's; the plain colour box without one.
+		UTexture2D* UltBadge = Loadout->GetFlora() ? WWOUI::SymbolTexture("Flora", Loadout->GetFlora()->Id, true) : nullptr;
+		if (UltBadge) SymbolChargeBox(P, UltPos, UltBox, UltBadge, Pl->Ult->Charge);
+		else ChargeBox(P, UltPos, UltBox, UltColor, Pl->Ult->Charge);
 		if (Pl->Ult->IsReady() && !Pl->Ult->bActive)
 		{
 			KitRing(P, UltPos, UltBox, FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)));
