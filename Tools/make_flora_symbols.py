@@ -21,6 +21,8 @@ OUT = os.path.join(HERE, "art", "ui")
 SIZE = 512
 FLOOR, FULL = 24, 190   # brightness under FLOOR is background (noise in the black); FULL and up is fully opaque
 EDGE_SHADE = 0.20       # the badge's edge: the flora colour this bright (sRGB)
+BADGE_ART = 0.86        # how much of the badge the symbol spans: room to spare, since the Loadout tab's card
+                        # (wider than tall) shows the badge scaled to fill it, its top and bottom trimmed
 MIDDLE_SHADE = 0.36     # and its middle
 
 
@@ -51,11 +53,12 @@ def badge(sym, color):
     c = SIZE / 2
     for y in range(SIZE):
         for x in range(SIZE):
-            t = min(math.hypot(x - c, y - c) / (c * 1.15), 1.0)
+            t = min(math.hypot(x - c, y - c) / c, 1.0)  # EDGE_SHADE from the middle of each side out (the menu fills round it with that)
             k = MIDDLE_SHADE + (EDGE_SHADE - MIDDLE_SHADE) * t
             px[x, y] = tuple(int(255 * min(ch * k, 1.0)) for ch in color)
     out = bg.convert("RGBA")
-    out.alpha_composite(sym)
+    art = int(SIZE * BADGE_ART)
+    out.alpha_composite(sym.resize((art, art), Image.LANCZOS), ((SIZE - art) // 2, (SIZE - art) // 2))
     return out
 
 

@@ -12,6 +12,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/ScrollBoxSlot.h"
 #include "Components/SizeBox.h"
+#include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
@@ -240,6 +241,15 @@ void UWWOCharacterMenu::BuildOverview()
 		// its initials and name for a flora with no symbol.
 		UWidget* Big = Flora ? WWOUI::MakeFloraSymbol(WidgetTree, Flora->Id, FVector2D(124.f, 124.f) * K) : nullptr;
 		const bool bSymbol = Big != nullptr;
+		if (bSymbol)
+		{
+			// The badge covers the whole card (it is a little wider than tall: the badge's top and bottom are
+			// trimmed, where its symbol leaves room: Tools/make_flora_symbols.py, BADGE_ART).
+			UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+			Fit->SetStretch(EStretch::ScaleToFill);
+			Fit->AddChild(Big);
+			Big = Fit;
+		}
 		if (!Big)
 		{
 			UTextBlock* Letters = WWOUI::Spaced(WidgetTree, Initials(Flora ? Flora->DisplayName : TEXT("?")), 52.f, Accent, 0);
@@ -248,8 +258,8 @@ void UWWOCharacterMenu::BuildOverview()
 		}
 		UVerticalBoxSlot* BigSlot = In->AddChildToVerticalBox(Big);
 		BigSlot->SetSize(WWOUI::Fill(1.f));
-		BigSlot->SetHorizontalAlignment(HAlign_Center);
-		BigSlot->SetVerticalAlignment(VAlign_Center);
+		BigSlot->SetHorizontalAlignment(bSymbol ? HAlign_Fill : HAlign_Center);
+		BigSlot->SetVerticalAlignment(bSymbol ? VAlign_Fill : VAlign_Center);
 		if (!bSymbol)
 		{
 			UTextBlock* Label = WWOUI::Spaced(WidgetTree, Flora ? Flora->DisplayName : TEXT("No flora"), 13.f, FLinearColor::White, 200);
@@ -258,7 +268,9 @@ void UWWOCharacterMenu::BuildOverview()
 		}
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
 		Size->SetWidthOverride(172.f * K);
-		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), WWOUI::CardColor, Accent, 2.f, FMargin(8.f, 10.f));
+		// The badge's edge is the flora's colour at 20% (Tools/make_flora_symbols.py, EDGE_SHADE).
+		const FLinearColor BadgeEdge = Flora ? FLinearColor(Flora->Color.R * 0.2f, Flora->Color.G * 0.2f, Flora->Color.B * 0.2f) : WWOUI::CardColor;
+		UWidget* FloraCard = Card(In, Open(TEXT("Flora")), bSymbol ? BadgeEdge : WWOUI::CardColor, Accent, 2.f, bSymbol ? FMargin(2.f) : FMargin(8.f, 10.f));
 		HoverTiles.Add({ FloraCard, FString(TEXT("flora")) });
 		Size->AddChild(FloraCard);
 		Top->AddChildToHorizontalBox(Size);
