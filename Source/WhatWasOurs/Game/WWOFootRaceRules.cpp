@@ -72,6 +72,7 @@ void FWWOFootRaceRules::Begin()
 		GS->BreachNext = { 0.f, 0.f };
 		GS->BreachFrozen = { false, false };
 		GS->DoorsOpen = { 0, 0 };
+		GS->BreachStart = { 0.f, 0.f };
 		GS->BossHealth = { -1.f, -1.f };
 		GS->BossWindow = { 0.f, 0.f };
 		GS->CoreState = { 0, 0 };
@@ -248,6 +249,15 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 	}
 	AWWOBreachPortal* To = HubPortal(Team);
 	if (!To) return;
+	if (Breachers(Team) == 0)
+	{
+		// A breach begins: the HUD's race track measures its bar against the pool it began on.
+		if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+		{
+			if (GS->BreachStart.Num() < 2) GS->BreachStart.Init(0.f, 2);
+			GS->BreachStart[Team] = FMath::Max(Energy(Team), 1.f);
+		}
+	}
 	InHub.Add(Body);
 	for (int32 I = 1; I <= 4; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
@@ -669,6 +679,7 @@ void FWWOFootRaceRules::EndBreachesDone()
 	{
 		if (Breachers(Team) > 0) continue;
 		EnteredFrom[Team].Reset();
+		if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>(); GS && GS->BreachStart.IsValidIndex(Team)) GS->BreachStart[Team] = 0.f;
 		if (!IsFrozen(Team)) continue;
 		// The breach that opened the door is over: the rest of its pool goes, the next pool takes its place.
 		AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();

@@ -183,6 +183,8 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		const bool bFeed = GS && GS->KillFeed.Num() > 0 && GS->KillFeed.Last().How == AWWOGameState::KillEvent && GS->KillFeed.Last().Victim == TEXT("breached")
 			&& PS && GS->KillFeed.Last().Killer == PS->GetPlayerName();
 		Check(bFeed, TEXT("the breach shows in the kill feed: \"<player> breached\""));
+		Check(GS && GS->BreachStart.IsValidIndex(Team) && FMath::IsNearlyEqual(GS->BreachStart[Team], Rich, 1.f),
+			TEXT("the race track's breach bar knows the pool the breach began on"));
 		EnergyMark = F->Energy(Team);
 	}
 	if (Crossed(8.5f))
@@ -201,6 +203,8 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	if (Crossed(11.f))
 	{
 		Check(F->Energy(Team) == EnergyMark, TEXT("out of the hub, nothing drains"));
+		const AWWOGameState* Track = World->GetGameState<AWWOGameState>();
+		Check(Track && Track->BreachStart.IsValidIndex(Team) && Track->BreachStart[Team] == 0.f, TEXT("and the race track's breach bar is gone"));
 		Check(!Lever1->bLive, TEXT("with the breach over, Lever1 is not live"));
 		Check(Blocks(World, Door1), TEXT("a shut door blocks its doorway"));
 	}

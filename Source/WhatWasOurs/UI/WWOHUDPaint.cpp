@@ -133,6 +133,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	PaintOverlays(F);
 	PaintWaveLine(F);
 	PaintBreachEnergy(F);
+	PaintRaceTrack(F);
 	PaintFps(F);
 	return Result + 3;
 }
@@ -942,6 +943,56 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const FVector2D BarPos(F.Center.X - 110.f, F.Center.Y + 125.f);
 		P.Box(BarPos, FVector2D(220.f, 10.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 		P.Box(BarPos, FVector2D(220.f * FMath::Clamp(Near->Progress, 0.f, 1.f), 10.f), FLinearColor::White);
+	}
+}
+
+void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
+{
+	// Two tracks on the right edge, your team's on the left: three circles each, Door1 at the bottom (the
+	// race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
+	// team breaches and shrinks from both ends toward its middle as the breach's energy drains.
+	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
+	if (!GS || GS->DoorsOpen.Num() < 2) return;
+	const FWWOPainter& P = F.P;
+	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
+	constexpr float TrackTall = 420.f, Radius = 15.f, Apart = 66.f, BarTall = 150.f;
+	const float Top = F.Center.Y - TrackTall * 0.5f;
+	const float RightX = P.Size.X - 46.f;
+	const double Now = FPlatformTime::Seconds();
+	const float Dt = RaceBarAt > 0.0 ? FMath::Min(float(Now - RaceBarAt), 0.1f) : 0.f;
+	RaceBarAt = Now;
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float X = RightX - (1 - Slot) * Apart;
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f); // sRGB, as the breach bars
+		const FLinearColor Dim = FLinearColor(Color.R, Color.G, Color.B, 0.55f);
+		const int32 Opened = GS->DoorsOpen.IsValidIndex(Team) ? GS->DoorsOpen[Team] : 0;
+		// The track: line segments between the circles (and past the first and last), the circles on it.
+		float PrevY = Top;
+		for (int32 Slot3 = 1; Slot3 <= 3; ++Slot3) // top to bottom: Door3, Door2, Door1
+		{
+			const int32 Door = 4 - Slot3;
+			const float Y = Top + TrackTall * Slot3 / 4.f;
+			P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Y - Radius - PrevY), Dim);
+			if (Door <= Opened) P.Disc(FVector2D(X, Y), Radius, Color);
+			P.Ring(FVector2D(X, Y), Radius, Color, 2.f);
+			PrevY = Y + Radius;
+		}
+		P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Top + TrackTall - PrevY), Dim);
+		// The breach bar, on the inner side of its track.
+		const float Start = GS->BreachStart.IsValidIndex(Team) ? GS->BreachStart[Team] : 0.f;
+		const float Energy = GS->BreachEnergy.IsValidIndex(Team) ? GS->BreachEnergy[Team] : 0.f;
+		const float Want = Start > 0.f ? FMath::Clamp(Energy / Start, 0.f, 1.f) : 0.f;
+		float& Shown = RaceBarShown[Slot];
+		Shown = Want > Shown ? FMath::Min(Want, Shown + Dt / 0.35f) : Want; // fills in over a moment, drains as it goes
+		if (Shown > 0.f)
+		{
+			const float BarX = X + (Slot == 0 ? 1.f : -1.f) * Apart * 0.27f;
+			const float Half = BarTall * 0.5f * Shown;
+			P.Box(FVector2D(BarX - 2.f, F.Center.Y - BarTall * 0.5f), FVector2D(4.f, BarTall), FLinearColor(0.1f, 0.1f, 0.12f, 0.5f));
+			P.Box(FVector2D(BarX - 2.f, F.Center.Y - Half), FVector2D(4.f, Half * 2.f), Color);
+		}
 	}
 }
 

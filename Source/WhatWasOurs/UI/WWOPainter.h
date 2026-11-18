@@ -53,6 +53,37 @@ struct FWWOPainter
 		for (const FVector2D& V : { A, B, C }) Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(V * S), FVector2f(0.5f, 0.5f), Packed));
 		FSlateDrawElement::MakeCustomVerts(Out, Layer, Handle, Verts, { 0, 1, 2 }, nullptr, 0, 0);
 	}
+	// A ring: Sides straight pieces round Center, Width wide (all in Godot pixels).
+	void Ring(FVector2D Center, float Radius, const FLinearColor& Color, float Width, int32 Sides = 28) const
+	{
+		if (Color.A <= 0.001f) return;
+		TArray<FVector2f> Points;
+		for (int32 I = 0; I <= Sides; ++I)
+		{
+			const float A = UE_TWO_PI * I / Sides;
+			Points.Add(FVector2f((Center + FVector2D(FMath::Cos(A), FMath::Sin(A)) * Radius) * S));
+		}
+		FSlateDrawElement::MakeLines(Out, Layer, Geo.ToPaintGeometry(), Points, ESlateDrawEffect::None, WWO::Lin(Color), true, Width * S);
+	}
+	// A filled disc, as a fan of triangles in one draw (Tri's colour note applies).
+	void Disc(FVector2D Center, float Radius, const FLinearColor& Color, int32 Sides = 28) const
+	{
+		if (Color.A <= 0.001f || !FSlateApplication::IsInitialized()) return;
+		const FSlateResourceHandle Handle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*White);
+		const FColor Packed = WWO::Lin(Color).ToFColor(false);
+		const FSlateRenderTransform& To = Geo.GetAccumulatedRenderTransform();
+		TArray<FSlateVertex> Verts;
+		TArray<SlateIndex> Indices;
+		Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(Center * S), FVector2f(0.5f, 0.5f), Packed));
+		for (int32 I = 0; I <= Sides; ++I)
+		{
+			const float A = UE_TWO_PI * I / Sides;
+			const FVector2D V = Center + FVector2D(FMath::Cos(A), FMath::Sin(A)) * Radius;
+			Verts.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(To, FVector2f(V * S), FVector2f(0.5f, 0.5f), Packed));
+			if (I > 0) Indices.Append({ 0, (SlateIndex)I, (SlateIndex)(I + 1) });
+		}
+		FSlateDrawElement::MakeCustomVerts(Out, Layer, Handle, Verts, Indices, nullptr, 0, 0);
+	}
 	// A vignette: Color over the whole screen, clear inside the ellipse that is Inner of the way
 	// from the center to the edges and rising smoothly to Color's alpha at the corners. A grid of
 	// triangles with the fade in the vertex colors, so it needs no material.

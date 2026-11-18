@@ -230,6 +230,9 @@ walks the table in its order (the HUD line's).
     breach and door; AI kills stay out. `Begin` loads every enemy's model, clips and the effect materials
     (`UWWOBodyComponent::Preload`, `PreloadAnims`; kept in `Preloaded`) and sets up one of each enemy out of
     sight for half a second, so the first Tank (Room3) or boss doesn't stall the match.
+    The HUD's race track (`PaintRaceTrack`, right edge): each team's three doors as circles (Door1 at the
+    bottom, filled when open), your team's track on the left, and between them each breaching team's bar,
+    its share of the pool the breach began on (`AWWOGameState::BreachStart`), shrinking toward its middle.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

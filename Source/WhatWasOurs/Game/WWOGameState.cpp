@@ -24,6 +24,7 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, BreachNext);
 	DOREPLIFETIME(AWWOGameState, BreachFrozen);
 	DOREPLIFETIME(AWWOGameState, DoorsOpen);
+	DOREPLIFETIME(AWWOGameState, BreachStart);
 	DOREPLIFETIME(AWWOGameState, BossHealth);
 	DOREPLIFETIME(AWWOGameState, BossWindow);
 	DOREPLIFETIME(AWWOGameState, CoreState);
