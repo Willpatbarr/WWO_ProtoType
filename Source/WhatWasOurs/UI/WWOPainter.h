@@ -161,7 +161,7 @@ struct FWWOPainter
 			// A soft shadow: a few faint copies a little down, spread sideways, so it reads as a blur
 			// under the letters rather than a hard edge round them. Grows a touch with the text.
 			const float Drop = FMath::Clamp(Px * 0.06f, 1.f, 2.5f);
-			const FLinearColor Dark(0.f, 0.f, 0.f, 0.22f * Shadow * Color.A);
+			const FLinearColor Dark(0.f, 0.f, 0.f, 0.3f * Shadow * Color.A); // Poppins Light is thin: a little more under it
 			for (const FVector2D Off : { FVector2D(0.f, Drop), FVector2D(-Drop * 0.6f, Drop * 0.8f), FVector2D(Drop * 0.6f, Drop * 0.8f), FVector2D(0.f, Drop * 1.7f) })
 			{
 				FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f((At + Off) * S))), Str, F,
@@ -185,6 +185,36 @@ struct FWWOPainter
 		Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
 		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
 			ESlateDrawEffect::None, WWO::Lin(Fill));
+	}
+	// A rounded panel with its own radius at each corner (top left, top right, bottom right, bottom
+	// left; each kept to half the box's short side): a part of a rounded box, such as its top.
+	void PanelCorners(FVector2D Pos, FVector2D BoxSize, const FLinearColor& Fill, const FVector4& Radii) const
+	{
+		if (Fill.A <= 0.001f || BoxSize.X <= 0.f || BoxSize.Y <= 0.f) return;
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		const float Most = FMath::Min(BoxSize.X, BoxSize.Y) * 0.5f;
+		const FVector4 R(FMath::Min((float)Radii.X, Most) * S, FMath::Min((float)Radii.Y, Most) * S, FMath::Min((float)Radii.Z, Most) * S, FMath::Min((float)Radii.W, Most) * S);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(R, FSlateColor(FLinearColor(0, 0, 0, 0)), 0.f);
+		Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
+			ESlateDrawEffect::None, WWO::Lin(Fill));
+	}
+	// A texture drawn as a rounded box (WWOUI's corner unless given): the HUD's badges, rounded like
+	// every other box. Tint multiplies it (white: as it is).
+	void RoundImage(UTexture2D* Texture, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Tint = FLinearColor::White, float Radius = WWOUI::Corner) const
+	{
+		if (!Texture || Tint.A <= 0.001f) return;
+		FSlateBrush Brush;
+		Brush.SetResourceObject(Texture);
+		Brush.ImageSize = FVector2D(BoxSize * S);
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		const float R = FMath::Min(Radius, FMath::Min(BoxSize.X, BoxSize.Y) * 0.5f) * S;
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(R, R, R, R), FSlateColor(FLinearColor(0, 0, 0, 0)), 0.f);
+		Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
+			ESlateDrawEffect::None, Tint);
 	}
 	// A texture (a UI symbol, say) stretched over the box; Tint multiplies it (white: as it is).
 	void Image(UTexture2D* Texture, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Tint = FLinearColor::White) const

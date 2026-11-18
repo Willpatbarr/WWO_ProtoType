@@ -85,24 +85,51 @@ namespace
 		if (Wide > 0.5f) P.Panel(Pos, FVector2D(FMath::Max(Wide, Size.Y), Size.Y), Color, FLinearColor(0, 0, 0, 0), 0.f, R);
 	}
 
-	// A square with a symbol (a grenade's badge, UI/WWOUI.h): the badge as it is when charged, white edged;
-	// charging, darkened above the line it has filled up to from the bottom.
+	// The HUD's kit squares (grenade, abilities, ult) in the menus' box style: rounded (WWOUI::Corner),
+	// a faint edge (WWOUI::BoxEdge) while charging or waiting, a bright one (WWOUI::BoxEdgeOn) when ready.
+	const FLinearColor KitEdge(1.f, 1.f, 1.f, 0.4f);
+	const FLinearColor KitEdgeReady(1.f, 1.f, 1.f, 0.85f);
+	void KitEdgeBox(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, bool bReady, const FLinearColor& Edge = KitEdge)
+	{
+		P.Panel(Pos, BoxSize, FLinearColor(0, 0, 0, 0), bReady ? KitEdgeReady : Edge, bReady ? WWOUI::BoxEdgeOn : WWOUI::BoxEdge);
+	}
+	// A glow round a kit square (an ability at work, the ult ready): a rounded ring Out px outside it.
+	void KitRing(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Color, float Out = 3.f, float Width = 3.f)
+	{
+		P.Panel(Pos - FVector2D(Out, Out), BoxSize + FVector2D(Out, Out) * 2.f, FLinearColor(0, 0, 0, 0), Color, Width, WWOUI::Corner + Out);
+	}
+	// The part of a kit square still to charge: from its top down to Empty, shaded, its top corners
+	// rounded with the square (and its bottom ones too once it reaches the rounded bottom).
+	void KitShade(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, float Empty, const FLinearColor& Color)
+	{
+		if (Empty <= 0.5f) return;
+		const float R = WWOUI::Corner;
+		const float Low = FMath::Clamp(R - (BoxSize.Y - Empty), 0.f, R); // into the bottom corners' rounding
+		P.PanelCorners(Pos, FVector2D(BoxSize.X, Empty), Color, FVector4(R, R, Low, Low));
+	}
+
+	// A square with a symbol (a grenade's badge, UI/WWOUI.h): the badge as it is when charged, bright
+	// edged; charging, shaded above the line it has filled up to from the bottom.
 	void SymbolChargeBox(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, UTexture2D* Badge, float Charge)
 	{
-		P.Image(Badge, Pos, BoxSize);
+		P.RoundImage(Badge, Pos, BoxSize);
 		// Over it a layer up: Slate batches a layer's textures and boxes apart, so on the same layer the
 		// badge could land on top.
 		FWWOPainter Over = P;
 		++Over.Layer;
 		if (Charge >= 1.f)
 		{
-			Over.Outline(Pos, BoxSize, FLinearColor(1, 1, 1, 0.85f), 3.f);
+			KitEdgeBox(Over, Pos, BoxSize, true);
 			return;
 		}
 		const float Empty = BoxSize.Y * (1.f - FMath::Clamp(Charge, 0.f, 1.f));
-		Over.Box(Pos, FVector2D(BoxSize.X, Empty), FLinearColor(0.04f, 0.04f, 0.05f, 0.72f));
-		Over.Box(Pos + FVector2D(0, Empty - 1.f), FVector2D(BoxSize.X, 2.f), FLinearColor(1, 1, 1, 0.6f)); // the fill line
-		Over.Outline(Pos, BoxSize, FLinearColor(0.6f, 0.6f, 0.6f, 0.7f), 2.f);
+		KitShade(Over, Pos, BoxSize, Empty, FLinearColor(0.04f, 0.04f, 0.05f, 0.72f));
+		if (Empty > 2.f && Empty < BoxSize.Y - 2.f)
+		{
+			const float Inset = FMath::Max(0.f, WWOUI::Corner - FMath::Min(Empty, BoxSize.Y - Empty)); // inside the rounded corners
+			Over.Box(Pos + FVector2D(Inset, Empty - 1.f), FVector2D(BoxSize.X - 2.f * Inset, 2.f), FLinearColor(1, 1, 1, 0.6f)); // the fill line
+		}
+		KitEdgeBox(Over, Pos, BoxSize, false);
 	}
 
 	void ChargeBox(const FWWOPainter& P, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Color, float Charge)
@@ -110,14 +137,14 @@ namespace
 		// Full color when charged; gray with the color filling up from the bottom otherwise.
 		if (Charge >= 1.f)
 		{
-			P.Box(Pos, BoxSize, Color);
-			P.Outline(Pos, BoxSize, FLinearColor(1, 1, 1, 0.85f), 3.f);
+			P.Panel(Pos, BoxSize, Color);
+			KitEdgeBox(P, Pos, BoxSize, true);
 			return;
 		}
-		P.Box(Pos, BoxSize, FLinearColor(0.25f, 0.25f, 0.27f, 0.9f));
-		const float Fill = BoxSize.Y * FMath::Clamp(Charge, 0.f, 1.f);
-		P.Box(FVector2D(Pos.X, Pos.Y + BoxSize.Y - Fill), FVector2D(BoxSize.X, Fill), WWO::Darkened(Color, 0.35f));
-		P.Outline(Pos, BoxSize, FLinearColor(0.6f, 0.6f, 0.6f, 0.7f), 2.f);
+		P.Panel(Pos, BoxSize, WWO::Darkened(Color, 0.35f));
+		const float Empty = BoxSize.Y * (1.f - FMath::Clamp(Charge, 0.f, 1.f));
+		KitShade(P, Pos, BoxSize, Empty, FLinearColor(0.25f, 0.25f, 0.27f, 1.f));
+		KitEdgeBox(P, Pos, BoxSize, false);
 	}
 }
 
@@ -292,7 +319,7 @@ void UWWOHUDWidget::PaintWorldLabels(const FWWOHUDFrame& F) const
 		FVector2D At;
 		if (!F.ToScreen(Ally->GetActorLocation() + FVector(0, 0, 125.f), At)) continue;
 		const FLinearColor C = Ally->IsDown() ? FLinearColor(1, 0.4f, 0.35f) : (Ally->Shield > 0.f ? ShieldColor : FLinearColor(1, 0.9f, 0.9f));
-		P.Text(Ally->StatusText(), At, Type::Small, C, 0.5f, 1.f);
+		P.Text(Ally->StatusText(), At, Type::Body, C, 0.5f, 1.f);
 	}
 }
 
@@ -420,7 +447,7 @@ void UWWOHUDWidget::PaintAssistDebug(const FWWOHUDFrame& F) const
 		{
 			const float Age = (float)(Now - M.At);
 			if (Age > 0.4f) continue;
-			P.Text(M.Label, AimAt + FVector2D(0.f, Y), Type::Caption, WWO::WithAlpha(M.Color, 1.f - Age / 0.4f), 0.5f, 0.f, EWeight::SemiBold);
+			P.Text(M.Label, AimAt + FVector2D(0.f, Y), Type::Small, WWO::WithAlpha(M.Color, 1.f - Age / 0.4f), 0.5f, 0.f, EWeight::SemiBold);
 			Y += 17.f;
 		}
 	}
@@ -449,7 +476,7 @@ void UWWOHUDWidget::PaintHealthBars(const FWWOHUDFrame& F) const
 		P.Box(Pos, FVector2D(Wide * Fraction, HealthTall), BarHealthColor);
 		if (bShield) P.Box(TopLeft, FVector2D(Wide * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), ShieldTall), BarShieldColor);
 		// (No health and shield numbers over the bars any more.) A player's gamer tag, or a bot's "bot3", sits on them.
-		if (!Name.IsEmpty()) P.Text(Name, TopLeft + FVector2D(Wide * 0.5f, -4.f), Type::Small, FLinearColor(1.f, 1.f, 1.f, 0.92f), 0.5f, 1.f);
+		if (!Name.IsEmpty()) P.Text(Name, TopLeft + FVector2D(Wide * 0.5f, -4.f), Type::Body, FLinearColor(1.f, 1.f, 1.f, 0.92f), 0.5f, 1.f);
 	};
 	// The name on a player's bars: their player state's (the gamer tag they joined with; bots are bot1, bot2...).
 	auto TagOf = [](const AActor* Actor) -> FString
@@ -555,7 +582,7 @@ void UWWOHUDWidget::PaintKillFeed(const FWWOHUDFrame& F) const
 	// name in its team's color, the newest at the bottom, each line for 6 s and fading over its last one.
 	if (const AWWOGameState* Feed = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
-		constexpr float Shown = 6.f, Fade = 1.f, Px = Type::Small, LineTall = 30.f;
+		constexpr float Shown = 6.f, Fade = 1.f, Px = Type::Body, LineTall = 30.f;
 		const double FeedNow = FPlatformTime::Seconds();
 		const FSlateFontInfo FeedFont = P.Font(Px, EWeight::SemiBold);
 		const FVector2D Pad(10.f, 4.f);
@@ -682,7 +709,7 @@ void UWWOHUDWidget::PaintAmmo(const FWWOHUDFrame& F) const
 				FVector2D(16.f, 6.f), FMath::Min(Gun->ConfigToastLeft / 0.4f, 1.f));
 		}
 		// Weapon mod perks (draft): streaks, counters and timers above the weapon name.
-		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 110) - Lift, Type::Small, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 0.f, EWeight::Medium);
+		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 110) - Lift, Type::Body, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 0.f, EWeight::Medium);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
 		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
 		const float CountPx = Gun->bReloading && Gun->Ammo < Mag ? Type::Heading : Type::Display;
@@ -727,11 +754,11 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				{
 					FWWOPainter Over = P; // above the badge (SymbolChargeBox)
 					++Over.Layer;
-					Over.Box(Pos + FVector2D(0, 59), FVector2D(64 * (Charges - Ready), 5), FLinearColor(1, 1, 1, 0.8f));
+					RoundBar(Over, Pos + FVector2D(6, 56), FVector2D(52, 4), Charges - Ready, FLinearColor(1, 1, 1, 0.85f), FLinearColor(0, 0, 0, 0.45f));
 				}
 			}
-			P.Text(G->DisplayName, Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(Type::Small)).X - 64.f);
+			P.Text(G->DisplayName, Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(Type::Body)).X - 64.f);
 		}
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 		{
@@ -748,14 +775,14 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 			case EWWOAbilityKind::Passive: // always on: halfway between ready and empty
 				if (Badge)
 				{
-					P.Image(Badge, Pos, Box);
+					P.RoundImage(Badge, Pos, Box);
 					FWWOPainter Over = P;
 					++Over.Layer;
-					Over.Outline(Pos, Box, FLinearColor(0.75f, 0.75f, 0.75f, 0.75f), 2.f);
+					KitEdgeBox(Over, Pos, Box, false, FLinearColor(1, 1, 1, 0.55f));
 					break;
 				}
-				P.Box(Pos, Box, FMath::Lerp(A->Color, FLinearColor(0.25f, 0.25f, 0.27f), 0.5f));
-				P.Outline(Pos, Box, FLinearColor(0.75f, 0.75f, 0.75f, 0.75f), 2.f);
+				P.Panel(Pos, Box, FMath::Lerp(A->Color, FLinearColor(0.25f, 0.25f, 0.27f), 0.5f));
+				KitEdgeBox(P, Pos, Box, false, FLinearColor(1, 1, 1, 0.55f));
 				break;
 			case EWWOAbilityKind::Active:
 			case EWWOAbilityKind::Charged:
@@ -764,7 +791,7 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				if (Pl->Abilities->IsEffectActive(A))
 				{
 					const float Pulse = 0.6f + 0.4f * FMath::Sin(Now * 12.0);
-					P.Outline(Pos - FVector2D(3, 3), Box + FVector2D(6, 6), WWO::WithAlpha(WWO::Lightened(A->Color, 0.5f), Pulse), 4.f);
+					KitRing(P, Pos, Box, WWO::WithAlpha(WWO::Lightened(A->Color, 0.5f), Pulse), 3.f, 3.f);
 				}
 				break;
 			case EWWOAbilityKind::Triggered:
@@ -772,35 +799,35 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				{
 					// Its badge, bright and white edged while it's working, dimmed while it waits.
 					const bool bOn = Pl->Abilities->IsEffectActive(A);
-					P.Image(Badge, Pos, Box);
+					P.RoundImage(Badge, Pos, Box);
 					FWWOPainter Over = P;
 					++Over.Layer;
-					if (!bOn) Over.Box(Pos, Box, FLinearColor(0.04f, 0.04f, 0.05f, 0.55f));
-					Over.Outline(Pos, Box, bOn ? FLinearColor(1, 1, 1, 0.85f) : WWO::WithAlpha(A->Color, 0.45f), bOn ? 3.f : 2.f);
+					if (!bOn) Over.Panel(Pos, Box, FLinearColor(0.04f, 0.04f, 0.05f, 0.55f));
+					KitEdgeBox(Over, Pos, Box, bOn, WWO::WithAlpha(A->Color, 0.5f));
 				}
 				else if (Pl->Abilities->IsEffectActive(A))
 				{
-					P.Box(Pos, Box, A->Color);
-					P.Outline(Pos, Box, FLinearColor(1, 1, 1, 0.85f), 3.f);
+					P.Panel(Pos, Box, A->Color);
+					KitEdgeBox(P, Pos, Box, true);
 				}
 				else
 				{
-					P.Box(Pos, Box, FLinearColor(0.17f, 0.17f, 0.19f, 0.9f));
-					P.Outline(Pos, Box, WWO::WithAlpha(A->Color, 0.45f), 2.f);
+					P.Panel(Pos, Box, FLinearColor(0.17f, 0.17f, 0.19f, 0.9f));
+					KitEdgeBox(P, Pos, Box, false, WWO::WithAlpha(A->Color, 0.5f));
 				}
 				break;
 			}
-			P.Text(A->DisplayName, Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(Type::Small)).X - 64.f);
+			P.Text(A->DisplayName, Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(Type::Body)).X - 64.f);
 		}
 		// Ult: fills in the grenade's color, pulses when ready.
 		const FLinearColor UltColor = Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
 		ChargeBox(P, Pos, FVector2D(64, 64), UltColor, Pl->Ult->Charge);
 		if (Pl->Ult->IsReady() && !Pl->Ult->bActive)
 		{
-			P.Outline(Pos - FVector2D(3, 3), FVector2D(70, 70), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)), 3.f);
+			KitRing(P, Pos, FVector2D(64, 64), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)));
 		}
-		P.Text(TEXT("Ult"), Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
+		P.Text(TEXT("Ult"), Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
 	}
 }
 
@@ -844,7 +871,7 @@ void UWWOHUDWidget::PaintVitals(const FWWOHUDFrame& F) const
 		P.Panel(At, ChipSize, HudPanel, WWO::WithAlpha(Chip.Color, 0.35f), 1.f);
 		if (Chip.Left > 0.f && Of > 0.f) P.Box(At + FVector2D(6.f, ChipSize.Y - 4.f), FVector2D((ChipSize.X - 12.f) * FMath::Clamp(Chip.Left / Of, 0.f, 1.f), 2.f), Chip.Color);
 		const FString Text = Chip.Left > 0.f ? FString::Printf(TEXT("%s  %.1f"), *Chip.Label, Chip.Left) : Chip.Label;
-		P.Text(Text, At + ChipSize * 0.5f + FVector2D(0.f, -0.5f), Type::Caption, Chip.Color, 0.5f, 0.5f, EWeight::SemiBold, 0.f);
+		P.Text(Text, At + ChipSize * 0.5f + FVector2D(0.f, -0.5f), Type::Small, Chip.Color, 0.5f, 0.5f, EWeight::SemiBold, 0.f);
 		X += ChipSize.X + Gap;
 	}
 }
