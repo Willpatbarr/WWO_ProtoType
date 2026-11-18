@@ -51,7 +51,7 @@ FLAT_VV = {
     "VV_Fluid": ((0.04, 0.15, 0.5), (0.06, 0.28, 1.0), 3.0, 0.2),
 }
 # Glow (EmissiveStrength) of each flora's atlas.
-ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 3.0, "voltvine_crystal": 3.0}
+ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 3.0, "voltvine_crystal": 4.5}
 # Base colour tint of VeilSpore's atlas: its caps and net a little darker and less pastel, as on the
 # sheet (the atlas's lavender glow over the caps reads washed out at full strength in the game's light).
 VS_TINT = (1.0, 1.0, 1.0)
