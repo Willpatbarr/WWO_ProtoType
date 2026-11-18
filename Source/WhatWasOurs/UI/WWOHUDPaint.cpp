@@ -467,6 +467,7 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 	const FVector2D AimAt = F.AimAt;
 	// Your own kills, to the right of the reticle for 2.5 s: "Kill +1", "Precision kill +2" (the
 	// number is what it added to your team's score). The newest is level with the reticle, older ones above it.
+	// FootRace: your team opening its next door shows there too ("Next door opened!"), whoever pulled it.
 	if (const AWWOGameState* Mine = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
 		constexpr float Shown = 2.5f, Fade = 0.5f, Px = 22.f, LineTall = 30.f, Right = 150.f;
@@ -477,6 +478,15 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 			const AWWOGameState::FKillLine& Line = Mine->KillFeed[Index];
 			const float Age = float(KillNow - Line.At);
 			if (Age > Shown) break;
+			const bool bOurDoor = Line.How == AWWOGameState::KillEvent && Line.Victim.StartsWith(TEXT("opened Door"))
+				&& Line.KillerTeam == UWWOWorldSubsystem::TeamOf(Pl);
+			if (bOurDoor)
+			{
+				const float DoorAlpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
+				P.Text(TEXT("Next door opened!"), FVector2D(AimAt.X + Right, Y), Px, WWO::WithAlpha(FLinearColor(0.6f, 1.f, 0.65f), DoorAlpha), 0.f, 5.f, 0.75f * DoorAlpha, 0.5f);
+				Y -= LineTall;
+				continue;
+			}
 			if (!Line.bMine) continue;
 			const bool bPrecision = Line.How == AWWOGameState::KillPrecision;
 			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);

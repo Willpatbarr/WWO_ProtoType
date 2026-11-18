@@ -50,13 +50,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
 	// FootRace breach energy (Game/WWOFootRaceRules.h): a team's shared pool.
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 110.f;   // a team needs this much to enter the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 137.5f;   // a team needs this much to enter the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerEnemy = 10.f;     // for each AI enemy a player kills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerPlayerKill = 25.f; // for each player of the other team killed
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 10.f;        // per second, for each of the team's players in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDeathLoss = 0.25f;   // share of the pool lost when one of them dies in the hub
-	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.5f;      // s of holding the Revive key at a lever to pull it
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 3000.f;       // each team's boss
+	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.725f;      // s of holding the Revive key at a lever to pull it
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 4500.f;       // each team's boss
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWindow = 15.f;         // s: the first damage window (t); each next is t/3 longer
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDelay = 5.f;          // s after a boss shield goes up before the next core (and its wave)
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreHeal = 400.f;         // a core the other team delivers heals the boss this much

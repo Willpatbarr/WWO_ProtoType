@@ -254,8 +254,9 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	// Frame times: the worst frame in a quiet stretch before, and around Door1 opening (a hitch there was jarring).
 	static float WorstBefore = 0.f, WorstAtDoor = 0.f;
 	if (T >= 20.5f && T < 23.f) WorstBefore = FMath::Max(WorstBefore, DeltaTime);
-	if (T >= 24.f + GM->LeverHoldTime - 0.2f && T < 24.f + GM->LeverHoldTime + 1.5f) WorstAtDoor = FMath::Max(WorstAtDoor, DeltaTime);
-	if (Crossed(24.f + GM->LeverHoldTime + 1.5f))
+	// (to 0.6 s after: the screenshot of the popup comes after that, and a screenshot's frame is a slow one)
+	if (T >= 24.f + GM->LeverHoldTime - 0.2f && T < 24.f + GM->LeverHoldTime + 0.6f) WorstAtDoor = FMath::Max(WorstAtDoor, DeltaTime);
+	if (Crossed(24.f + GM->LeverHoldTime + 0.6f))
 	{
 		UE_LOG(LogWWO, Display, TEXT("FootRace frames: worst %.1f ms before, %.1f ms around Door1 opening"), WorstBefore * 1000.f, WorstAtDoor * 1000.f);
 		Check(WorstAtDoor < FMath::Max(WorstBefore * 2.f, 0.05f), FString::Printf(TEXT("no hitch when a door opens (worst frame %.1f ms, %.1f ms before)"), WorstAtDoor * 1000.f, WorstBefore * 1000.f));
@@ -284,6 +285,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 			InRoom1.Last()->ApplyHit(100000.f, false, InRoom1.Last()->GetActorLocation(), FLinearColor::White);
 		}
 	}
+	if (Crossed(24.f + Hold + 0.35f)) Shot(TEXT("88_footrace_door_opened")); // "Next door opened!" by the reticle
 	if (Crossed(24.f + Hold + 0.5f))
 	{
 		Check(FMath::IsNearlyEqual(F->NextEnergy(Team), NextMark + GM->EnergyPerEnemy * 0.5f, 0.01f),
