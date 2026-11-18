@@ -8,6 +8,7 @@
 #include "Systems/WWOWorldSubsystem.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/WWOTestTally.h"
 
 void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -18,34 +19,41 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, TeamScores);
 	DOREPLIFETIME(AWWOGameState, bMatchOver);
 	DOREPLIFETIME(AWWOGameState, MatchWinner);
+	DOREPLIFETIME(AWWOGameState, BreachEnergy);
+	DOREPLIFETIME(AWWOGameState, BreachThreshold);
+	DOREPLIFETIME(AWWOGameState, BreachNext);
+	DOREPLIFETIME(AWWOGameState, BreachFrozen);
+	DOREPLIFETIME(AWWOGameState, DoorsOpen);
+	DOREPLIFETIME(AWWOGameState, BreachStart);
+	DOREPLIFETIME(AWWOGameState, BossHealth);
+	DOREPLIFETIME(AWWOGameState, BossWindow);
+	DOREPLIFETIME(AWWOGameState, CoreState);
+}
+
+AWWOGameState* AWWOGameState::HostRelay(UWorld* World)
+{
+	// Only a listen-server host relays: a joiner's own effects stay on its screen, a single player has no one to tell.
+	return World && World->GetNetMode() == NM_ListenServer ? World->GetGameState<AWWOGameState>() : nullptr;
 }
 
 void AWWOGameState::Bolt(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Lifetime, AActor* FromActor, AActor* ToActor)
 {
 	if (!World) return;
 	AWWOLightningBolt::Spawn(World, From, To, Color, Lifetime, FromActor, ToActor);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastBolt(From, To, Color, Lifetime, FromActor, ToActor);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastBolt(From, To, Color, Lifetime, FromActor, ToActor);
 }
 
 void AWWOGameState::Blast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore)
 {
 	if (!World) return;
 	AWWOGrenade::SpawnBlast(World, Look, Center, RadiusM, Ignore);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastBlast(Look, Center, RadiusM);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastBlast(Look, Center, RadiusM);
 }
-
-int32 AWWOGameState::BlastsSeen = 0;
 
 void AWWOGameState::MulticastBlast_Implementation(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM)
 {
 	if (HasAuthority()) return; // the host drew it already
-	++BlastsSeen;
+	FWWOTestTally::Count(&FWWOTestTally::BlastsSeen);
 	AWWOGrenade::SpawnBlast(GetWorld(), Look, Center, RadiusM);
 }
 
@@ -53,10 +61,7 @@ void AWWOGameState::Sound(UWorld* World, FName Event, const FVector& At, float V
 {
 	if (!World) return;
 	UWWOSound::Play(World, Event, At, Volume);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastSound(Event, At, Volume);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastSound(Event, At, Volume);
 }
 
 void AWWOGameState::MulticastSound_Implementation(FName Event, FVector_NetQuantize At, float Volume)
@@ -69,13 +74,11 @@ void AWWOGameState::Text(UWorld* World, const FString& Words, const FVector& At,
 {
 	if (!World) return;
 	if (UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(World)) WS->ShowText(Words, false, At, Color);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastText(Words, At, Color);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastText(Words, At, Color);
 }
 
 const FName AWWOGameState::KillPrecision(TEXT("precision"));
+const FName AWWOGameState::KillEvent(TEXT("event"));
 
 void AWWOGameState::ReportKill(const AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points)
 {
@@ -110,11 +113,7 @@ void AWWOGameState::Poison(AActor* Target, float DamagePerSecond, float Seconds)
 {
 	if (!Target) return;
 	UWWODamageOverTime::Apply(Target, DamagePerSecond, Seconds); // the damage (on a joiner its ticks only flash and show numbers)
-	UWorld* World = Target->GetWorld();
-	if (World && World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastPoison(Target, DamagePerSecond, Seconds);
-	}
+	if (AWWOGameState* GS = HostRelay(Target->GetWorld())) GS->MulticastPoison(Target, DamagePerSecond, Seconds);
 }
 
 void AWWOGameState::MulticastPoison_Implementation(AActor* Target, float DamagePerSecond, float Seconds)
@@ -126,10 +125,7 @@ void AWWOGameState::Tracer(UWorld* World, const FVector& From, const FVector& To
 {
 	if (!World) return;
 	AWWOFXActor::Tracer(World, From, To, Color);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastTracer(From, To, Color);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastTracer(From, To, Color);
 }
 
 void AWWOGameState::MulticastTracer_Implementation(FVector_NetQuantize From, FVector_NetQuantize To, FLinearColor Color)
@@ -141,10 +137,7 @@ void AWWOGameState::Shockwave(UWorld* World, const FVector& At, const FLinearCol
 {
 	if (!World) return;
 	AWWOFXActor::Shockwave(World, At, Color, RadiusM, Seconds);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastShockwave(At, Color, RadiusM, Seconds);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastShockwave(At, Color, RadiusM, Seconds);
 }
 
 void AWWOGameState::MulticastShockwave_Implementation(FVector_NetQuantize At, FLinearColor Color, float RadiusM, float Seconds)
@@ -157,10 +150,7 @@ void AWWOGameState::Discharge(UWorld* World, AActor* Target, const FVector& Impa
 {
 	if (!World) return;
 	AWWODischarge::Spawn(World, Target, Impact, Away, Color, Arcs, RadiusM, Lifetime);
-	if (World->GetNetMode() == NM_ListenServer)
-	{
-		if (AWWOGameState* GS = World->GetGameState<AWWOGameState>()) GS->MulticastDischarge(Target, Impact, Away, Color, Arcs, RadiusM, Lifetime, Skip);
-	}
+	if (AWWOGameState* GS = HostRelay(World)) GS->MulticastDischarge(Target, Impact, Away, Color, Arcs, RadiusM, Lifetime, Skip);
 }
 
 void AWWOGameState::MulticastBolt_Implementation(FVector_NetQuantize From, FVector_NetQuantize To, FLinearColor Color, float Lifetime, AActor* FromActor, AActor* ToActor)

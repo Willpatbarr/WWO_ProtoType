@@ -104,13 +104,9 @@ public:
 	// MAXCLIENTUPDATEINTERVAL in DefaultGame.ini). Logged: it throws away that player's next moves.
 	virtual bool ForcePositionUpdate(float DeltaTime) override;
 
-	// Corrections this machine got from the host since the last reset (for -WWOAutoTestNet).
-	// Error: how far the host's position was from yours after the same move, in cm (world-space corrections only).
-	static int32 NetCorrections;
-	static float NetCorrectionErrorMax;
-	static float NetCorrectionErrorSum;
-	static bool bLogNetCorrections; // log each one: the host's position, speed and rules' state against yours
-	static void ResetNetCorrections() { NetCorrections = 0; NetCorrectionErrorMax = NetCorrectionErrorSum = 0.f; }
+	// -WWOAutoTestNet: log each correction from the host: its position, speed and rules' state against
+	// yours (the count and error are FWWOTestTally's Corrections, Player/WWOTestTally.h).
+	static bool bLogNetCorrections;
 
 private:
 	FWWOMoveDataContainer MoveDataContainer;

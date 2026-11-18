@@ -102,7 +102,7 @@ void AWWOCharacter::OnRep_NetFists()
 	if (IsLocalHuman()) return;
 	const UWWOLoadoutSubsystem* Data = UWWOLoadoutSubsystem::Get(GetWorld());
 	const UWWOAbilityData* Lit = nullptr;
-	if (Data && !NetFists.IsNone()) for (const UWWOAbilityData* A : Data->Abilities) if (A && A->Id == NetFists) Lit = A;
+	if (Data && !NetFists.IsNone()) for (const UWWOAbilityData* A : Data->Catalog.Abilities) if (A && A->Id == NetFists) Lit = A;
 	Body->SetHandGlow(Lit ? Lit->Color : FLinearColor::Black, Lit ? 0.85f : 0.f);
 }
 

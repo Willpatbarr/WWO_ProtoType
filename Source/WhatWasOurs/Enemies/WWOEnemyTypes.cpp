@@ -1,11 +1,11 @@
 #include "Enemies/WWOEnemyTypes.h"
+#include "WWOIds.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
-#include "Allies/WWOAlly.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -46,7 +46,7 @@ UWWOEnemyData* AWWOSoldier::Data() const { return D(); }
 UWWOSoldierData* AWWOSoldier::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->SoldierData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOSoldierData>(WWOIds::Enemy::Soldier) : nullptr;
 }
 
 void AWWOSoldier::Setup()
@@ -325,7 +325,7 @@ UWWOEnemyData* AWWOSwarm::Data() const { return D(); }
 UWWOSwarmData* AWWOSwarm::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->SwarmData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOSwarmData>(WWOIds::Enemy::Swarm) : nullptr;
 }
 
 void AWWOSwarm::Setup()
@@ -468,7 +468,7 @@ UWWOEnemyData* AWWOTank::Data() const { return D(); }
 UWWOTankData* AWWOTank::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->TankData.Get() : nullptr;
+	return L ? L->EnemyDataAs<UWWOTankData>(WWOIds::Enemy::Tank) : nullptr;
 }
 
 void AWWOTank::Setup()
@@ -611,28 +611,23 @@ void AWWOTank::Slam()
 	const UWWOTankData* T = D();
 	Body->Play("Jump_Land", 1.4f, 0.05f);
 	AWWOGameState::Shockwave(GetWorld(), FeetLocation() + FVector(0, 0, 10.f), FLinearColor(1.f, 0.7f, 0.3f, 0.8f), T->SlamRadius, 0.45f); // everyone sees it
-	// Hits you and any teammates in range (the slam counts as melee).
-	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
-	auto InRange = [this, T](const AActor* Victim)
+	// Hits every player (online: all of them, dead or not) and living AI teammates in range, by their
+	// centre on the ground and at most 1.5 m above or below (not through a deck). The slam counts as melee.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = T->SlamRadius * WWO::M;
+	Q.bFlat = true;
+	Q.MaxHeight = 150.f;
+	Q.bHeightInclusive = true;
+	Q.Measure = EWWOAreaMeasure::Centre;
+	Q.Targets = EWWOAreaTargets::None;
+	Q.Players = EWWOAreaPlayers::All;
+	Q.bTeammates = true;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, T](const FWWOAreaHit& Hit)
 	{
-		FVector To = Victim->GetActorLocation() - GetActorLocation();
-		const float Height = FMath::Abs(To.Z);
-		To.Z = 0.f;
-		return To.Size() <= T->SlamRadius * WWO::M && Height <= 150.f; // not through a deck
-	};
-	for (AWWOCharacter* P : WS->GetPlayers()) // every player, online
-	{
-		if (InRange(P))
-		{
-			P->Health->DamageCameFrom(GetActorLocation());
-			P->Health->TakeDamage(T->SlamDamage, true);
-			P->ApplySlow(T->SlowAmount, T->SlowTime);
-		}
-	}
-	for (AWWOAlly* Mate : WS->LivingTeammates())
-	{
-		if (InRange(Mate)) Mate->TakeAllyDamage(T->SlamDamage, true);
-	}
+		if (AWWOCharacter* P = HurtFriendly(Hit.Actor, T->SlamDamage, GetActorLocation(), true)) P->ApplySlow(T->SlowAmount, T->SlowTime);
+		return true;
+	});
 }
 
 void AWWOTank::Lob()
@@ -683,4 +678,66 @@ void AWWOTank::Animate(float DeltaSeconds)
 	constexpr float WalkAnimSpeed = 1.6f; // m/s the Walk animation looks right at, at full size
 	if (Speed > 0.3f) Body->Play("Walk_Unarmed", FMath::Clamp(Speed / (WalkAnimSpeed * ModelScale), 0.5f, 2.f));
 	else Body->Play("Idle_Unarmed");
+}
+
+// --- FootRace's boss ---------------------------------------------------------------------------
+
+AWWOBoss::AWWOBoss(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ModelScale = 1.55f * Size;
+	GetCapsuleComponent()->InitCapsuleSize(45.f * Size, 140.f * Size);
+	BodyHitbox->InitCapsuleSize(42.f * Size, 130.f * Size);
+	BodyHitbox->SetRelativeLocation(FVector(0, 0, -10.f * Size));
+	Body->BodyColor = FLinearColor(0.36f, 0.2f, 0.2f); // a darker, redder Tank
+}
+
+void AWWOBoss::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOBoss, bShielded);
+}
+
+void AWWOBoss::Setup()
+{
+	Super::Setup();
+	if (HasAuthority() && BossHealth > 0.f)
+	{
+		MaxHealth = BossHealth;
+		Health = MaxHealth;
+	}
+	// No Tank bubble: the boss shield is the only one.
+	Shield = 0.f;
+	MaxShield = 0.f;
+	// The boss shield: a big soft bubble round the whole body, shown while it is up.
+	BossBubble = WWOFX::AddSoftSphere(this, GetRootComponent(), FLinearColor(1.f, 0.35f, 0.3f), 0.35f, 1.2f, false, true);
+	BossBubble->SetRelativeScale3D(FVector(1.f, 1.f, 1.4f) * BodyHeight() * 0.85f / 100.f);
+	ShowShield();
+}
+
+void AWWOBoss::SetShielded(bool bOn)
+{
+	bShielded = bOn;
+	ShowShield();
+}
+
+void AWWOBoss::Heal(float Amount)
+{
+	if (!IsDead()) Health = FMath::Min(MaxHealth, Health + Amount);
+}
+
+void AWWOBoss::OnRep_Shielded()
+{
+	ShowShield();
+}
+
+void AWWOBoss::ShowShield()
+{
+	if (BossBubble) BossBubble->SetVisibility(bShielded);
+}
+
+float AWWOBoss::Absorb(float Damage, bool bCritical, const FVector& Point)
+{
+	if (!bShielded) return Damage; // a damage window: every hit lands
+	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(0.f, false, Point, FLinearColor(1.f, 0.35f, 0.3f));
+	return 0.f;
 }

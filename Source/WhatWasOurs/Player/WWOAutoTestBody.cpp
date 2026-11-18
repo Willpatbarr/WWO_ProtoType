@@ -25,6 +25,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -227,7 +228,7 @@ bool FWWOAutoTest::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	// (The guns sit low in the view, so the grip is out of frame: for the pictures the gun is lifted
 	// to the middle and turned to show its right side, then its left.)
 	const FVector Lifted(-0.30f, 0.22f, -0.28f);
-	auto View = [&](float Yaw) { P->Weapon->DebugGunOffset = Yaw == 0.f ? FVector::ZeroVector : Lifted; P->Weapon->DebugGunRotation = FVector(0.f, Yaw, 0.f); };
+	auto View = [&](float Yaw) { FWWOTestTally::LiftGun(P->Weapon, Yaw == 0.f ? FVector::ZeroVector : Lifted, FVector(0.f, Yaw, 0.f)); };
 	if (Crossed(PlayerAt + 4.6f)) View(1.1f);
 	if (Crossed(PlayerAt + 4.85f)) Shot(TEXT("32_player_fp_hands_a_right"));
 	if (Crossed(PlayerAt + 4.9f)) View(-1.1f);

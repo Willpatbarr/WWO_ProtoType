@@ -13,6 +13,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
+#include "Flora/WWOEffectLife.h"
 #include "WWOFloraEffects.generated.h"
 
 class UStaticMeshComponent;
@@ -32,7 +33,6 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	static int32 SeenRemote; // pools this machine drew for the host (-WWOAutoTestNet)
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Haze; // the glow over the surface
 	UPROPERTY() TObjectPtr<class UPointLightComponent> Glow;
 	static AWWOSporePool* Spawn(UWorld* World, const FVector& At, float RadiusM, float Dps, float Duration, const FLinearColor& Color, FName Flavor, AActor* Thrower);
@@ -46,7 +46,9 @@ private:
 	UPROPERTY(Replicated) float Duration = 5.f;
 	UPROPERTY(Replicated) FLinearColor Color;
 	UPROPERTY(Replicated) FName Flavor;
-	float Dps = 25.f, Age = 0.f, TickLeft = 0.f, NextArc = 0.f;
+	FWWOEffectLife Life; // its numbers are in the constructor
+	float Dps = 25.f, TickLeft = 0.f, NextArc = 0.f;
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -65,8 +67,9 @@ public:
 private:
 	UPROPERTY(Replicated) float Radius = 2.f;
 	UPROPERTY(Replicated) float Duration = 6.f;
-	float Age = 0.f;
+	FWWOEffectLife Life; // its numbers are in the constructor
 	bool bCounted = false;
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -109,10 +112,10 @@ public:
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Box;
 	UPROPERTY() TObjectPtr<USceneComponent> Visual;
-	float Age = 0.f;
-	bool bSinking = false;
+	FWWOEffectLife Life; // its numbers are in the constructor
 	void Build();
 	void Dust(float Amount);
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()
@@ -127,9 +130,10 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> RingMat;
-	float Duration = 10.f, Age = 0.f, RingAge = 0.f;
-	bool bEnding = false;
+	FWWOEffectLife Life; // its numbers are in the constructor
+	float Duration = 10.f, RingAge = 0.f;
 	void BurstDirt();
+	friend class FWWORegress; // the life scenarios read its looks
 };
 
 UCLASS()

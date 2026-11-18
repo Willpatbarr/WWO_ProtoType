@@ -6,7 +6,7 @@ checks, save screenshots and quit with an exit code.
 ## Running a test
 
 ```
-pkill -f "WhatWasOurs.uproject.*-game"
+Tools/close_game.sh   # closes a running game (never pkill -f on the project name: it kills shells too)
 "$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PROJ" /Game/WWO/Maps/L_Arena \
   -game -windowed -ResX=1600 -ResY=900 -WWOAutoTest -abslog=/tmp/run.log
 ```
@@ -29,11 +29,21 @@ keeps behaviour passes with no differences at all; any difference is a change in
 
 **Before a refactor that touches gameplay logic, run `Tools/regress.sh`: it must pass before and after.**
 
+**Which mode.** The default before / after check is the no-draw run, `Tools/regress.sh norender` (about
+20 s, every scenario). When the change touches something that exists only when the game draws (the view,
+the low reticle and target marks, the real grenade throw, the HUD or menus), also run `drawn-only`: the
+drawn window, but only the scenarios whose numbers differ between the modes (the ones with `@render`
+golden entries; 11 today, about 20 s). Every other scenario gives the same numbers in both modes, so the
+slow full drawn run adds nothing for them. New scenarios get their golden entries with `update-new`. The
+full `both` (about 14 min) only when the owner asks for it.
+
 ```
-Tools/regress.sh                    # both modes (no rendering, then a small window); about 14 min
-Tools/regress.sh norender           # no rendering only: about 20 s in all (the scenarios take about 12 s)
-Tools/regress.sh render             # the small window only
-Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name contains "perk."
+Tools/regress.sh norender           # the default: no rendering, every scenario (about 20 s)
+Tools/regress.sh drawn-only         # the small window, only the per-mode scenarios (about 20 s)
+Tools/regress.sh update-new area.,hp.   # golden entries for new scenarios (see "Updating the golden file")
+Tools/regress.sh norender -WWORegressOnly=perk.,melee.   # the scenarios whose name contains "perk." or "melee."
+Tools/regress.sh both               # both modes, every scenario (about 14 min; when the owner asks)
+Tools/regress.sh render             # the small window, every scenario
 ```
 
 - Output: one `Regress <name>: key=value ...` line per scenario in the log (`Saved/Regress/run-<mode>.log`),
@@ -41,6 +51,9 @@ Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name con
   `FAIL (n)`; exit code 1 on failure. With both modes the script also fails if the two modes disagree on a
   scenario that should give the same numbers in both (`Regress MODES DIFF ...`). Results:
   `Saved/Regress/results.json` (and `results-<mode>.json`), sorted, one value per line.
+- A golden file that is not valid JSON is a FAIL (`Regress DIFF golden: ... is not valid JSON`) and is never
+  rewritten, not even by an update. Every run first checks that the results text reads back exactly
+  (values may hold quotes, apostrophes, backslashes, newlines: `Regress: results text round-trip ok`).
 - Windows: `UnrealEditor.exe <proj> /Game/WWO/Maps/L_TestRange -game -nullrhi -nosound -WWORegress
   -abslog=<log>` (no rendering), or with `-windowed -ResX=640 -ResY=360` instead of `-nullrhi`; the exit code
   is the result. (The golden was recorded on the Mac; a Windows run is expected to match, but that has not
@@ -67,8 +80,20 @@ Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name con
 - **Teardown**: everything of this game's classes that wasn't there when the run started is destroyed
   (what the scenario spawned and what that left: grenades, pools, fog, walls, effects), tuned values put
   back, the player reset again.
+- **Match flow** (`match.*`, `WWORegressMatch.cpp`): the range runs the waves, idle. A scenario switches a
+  fresh rules object on (`M::Enter`: waves, team deathmatch or the tester, and the game mode's `Begin` under
+  it), drives events directly (a hit, a kill, `OnDeath`, `SwitchTeam`, the roster's `Update`) and lets the
+  game mode's own `Tick` run what crosses ticks (a wave round, the limits, a respawn); `M::Done` puts the
+  level's rules, the roster, the restart timer and the game state's match fields back. In team deathmatch
+  the player is never bound or rebalanced by the match (its death binding would outlive the scenario) and
+  the roster adds no bots unless asked. A lost round's restart timer is cleared in the tick it is set (it
+  would reload the level). The roster scenarios are `NoRenderOnly` (a bot's kit draws on `FMath`).
 - Enemies and allies are inert (their data asset's `AiEnabled` is 0 for the scenario) and bots are parked
-  with a fixed kit, except in the `enemy.<kind>.attacks` scenarios (AI on from tick 0).
+  with a fixed kit, except in the `enemy.<kind>.attacks`, `enemyhit.bite|leap.*` and `move.*` walk
+  scenarios (AI on, unparked).
+- **The navmesh** is built at run time and is still building when the run starts (and briefly after some
+  teardowns). The `move.*` walks wait until no build is in progress before switching the AI on (logged as
+  `Regress move.x: waited N ticks for the navmesh build`, never recorded); nothing builds during a walk.
 - **Values are written exactly** (`%.9g`, every float bit), with three stated exceptions, each found by
   running the suite in reverse order (`-WWORegressReverse`): positions (`RecordVec`) to 0.01 cm and view
   angles (`kick_pitch`, `kick_yaw`) to 0.0001 degrees, because the player's eye height carries a float
@@ -76,15 +101,39 @@ Tools/regress.sh norender -WWORegressOnly=perk.   # the scenarios whose name con
   some earlier scenarios; not pinned down further); and status timers (`slow_left`, `blind_left`) to
   0.1 s, because which of two actors ticks first in a frame is the engine's choice (the order of its tick
   set) and can change with what ran before, which moves a status by one tick. Within one order every
-  value is bit-identical run to run.
+  value is bit-identical run to run. One known exception to "any order": `move.bot.wall` and
+  `move.bot.roam` differ by a few millimetres in a reversed run, because there the `wave.*` scenarios
+  (which spawn Soldiers through the game mode) run before them; in the normal order they pass. Every
+  other scenario, `wave.*`, `loadout.*` and `match.*` included, gives the same numbers reversed. Narrowed down
+  (not fixed): `-WWORegressReverse -WWORegressOnly=wave.spawn.soldier,move.bot.wall` alone reproduces it
+  (24 differences from the first 30 ticks: a few mm, 0.02 degrees); `wave.spawn.swarm` or `wave.queue.1`
+  before it don't, nor does `move.soldier.open` before it in the normal order (a Soldier the harness
+  spawns, which lives and walks for 6 s). Ruled out: the navmesh (the body's shapes and the Soldier's gun
+  have no collision, `WWOFX::AddShape` opts out of navigation, and the walk's count of ticks with a build
+  in progress stays 0); the random streams (seeded per scenario); the Soldier's one static,
+  `NextBurstTime` (read only by Soldiers that fire). What differs is a Soldier made by the game mode's
+  deferred spawn and destroyed in the tick it was made. Remaining suspect, not confirmed: the engine's
+  tick-function set (the Soldier's many component tick functions added and removed in one frame leave
+  their slots free in another order, so the bot spawned later ticks at another place relative to the
+  player). Nothing found in the harness's teardown or navmesh wait to fix.
+- **The loadout scenarios** mute the loadout's `OnChanged` listeners while they equip (the body's grafts
+  and the gun would rebuild), work on an empty set of saved configs (the owner's are put back in the same
+  tick), hash a save from the class name on (the header before it lists the engine's custom versions loaded
+  in the process), and read `Tools/regress/fixtures/Loadout.sav`, a copy of a real saved loadout, so the
+  saved format is checked against a real file. A change to the save or net format shows as a different
+  `save.md5` / `net.md5`.
 
 ### Modes
 
 The suite runs without rendering (`-nullrhi`) and in a 640 x 360 window. Each scenario says whether its
 numbers hold in both modes (`EWWORegressModes::Same`, the default), legitimately differ (`PerMode`: golden
 keeps `<name>@norender` and `<name>@render`), or need rendering (`RenderOnly`: skipped, and logged as
-skipped, without it). Today 11 scenarios are `PerMode` and none `RenderOnly`; every other scenario gives
-identical numbers in both modes:
+skipped, without it), or repeat only without it (`NoRenderOnly`: skipped in the window). Today 11 scenarios
+are `PerMode`, none `RenderOnly`, and one `NoRenderOnly`: `move.bot.fight`, because a bot's choices (its
+reactions, strafes, jumps, bursts) draw on `FMath`'s generator, which a drawn game also draws on from other
+threads (two window runs differ). The bots' other walks agree between the modes because no choice they
+make there changes their path. Every other scenario gives identical numbers in both modes. Why the
+per-mode ones differ:
 
 - `view.reticle_and_marks.*`: without rendering the viewport has no size, so the low reticle's angle is 0
   and nothing is marked (marking works in HUD pixels on the screen).
@@ -101,13 +150,24 @@ needs with `SpawnDummy` / `SpawnEnemy` / `SpawnAlly` / `SpawnBot`, equip with `E
 `EquipFlora`, `EquipGrenade`, `EquipAbility`, change a float tunable for this scenario only with `Tune`) and
 `Step` (called every tick from 0; script input with `Press` / `Hold` / `Move` / `AimAt`; `Record` the
 numbers; return true when done). Add it to the list in one of the family files
-(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`), generating from the catalogs
+(`Player/WWORegressGuns.cpp`, `WWORegressKit.cpp`, `WWORegressCombat.cpp`, `WWORegressArea.cpp`, `WWORegressLife.cpp`, `WWORegressMove.cpp`, `WWORegressWaves.cpp`, `WWORegressLoadout.cpp`, `WWORegressMatch.cpp`), generating from the catalogs
 where it is natural. Family functions are members of `FWWORegress`, which the gameplay classes name as a
-friend, so a scenario can set a perk's private state (`G.HitStreak = 5`). See `RECIPES.md`.
+friend, so a scenario can set a perk's private state (`G.PerkState.HitStreak = 5`) or call the host's
+checks directly (`AWWOCharacter::GunLimits`, `CheckGunHit`, `ServerGunShot_Implementation`: the
+`hostcheck.*` and `hostshot.*` scenarios). See `RECIPES.md`.
 
 ### Updating the golden file
 
-`Tools/regress.sh both -WWORegressUpdate` rewrites the golden entries this run produced (a filtered run only
+**New scenarios**: `Tools/regress.sh update-new <names>` (names or name prefixes, comma-separated). It runs
+every scenario without drawing and the named ones in the window, both with `-WWORegressUpdateNew`: an entry
+the golden lacks is added (`Regress: golden gains <key>`), every existing entry is left as it is and
+compared as usual, then the two modes are compared on the named scenarios. A new scenario marked `Same` that
+disagrees between the modes fails (`Regress MODES DIFF`, and a `DIFF` in the window run against the entry
+the no-draw run just added): find what drawing changes, or mark it `PerMode` and delete its shared entry by
+hand before running `update-new` again. Check with `git diff Tools/regress/golden.json` that the commit only
+adds entries.
+
+**Changed behaviour**: `Tools/regress.sh both -WWORegressUpdate` rewrites the golden entries this run produced (a filtered run only
 its own). **Only for an intended behaviour change** (a new scenario, a retune, a fix), in its own commit
 that says what changed and why, never to make a refactor pass: a refactor that needs a new golden changed
 behaviour. Run the suite again afterwards; it must pass.
@@ -130,9 +190,11 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestTitle` | Launch screen, a local PvP match, quit to title, host (no map on the command line) | none |
 | `-WWOAutoTestTitleJoin`, `-WWOAutoTestTitleJoinFail` | A second copy joins the first; a join that fails | none |
 | `-WWOAutoTestNet`, `-WWOAutoTestPvP` | Host and joiner: co-op, and team deathmatch with forged-shot checks | two copies |
+| `-WWOAutoTestFootRace` | FootRace's breach portals and energy: placing in the team's spawn room, the hub refused without energy, an enemy kill's energy, room doorway to the hub and back, the drain, another team's doorway does nothing, running out sends you back, a death in the hub costs a share, the kill feed (no AI kills; breaches and doors), no stall when a door opens or Room3's first Tank comes, doors and levers (a shut door blocks, a lever goes live on a breach from its room, the pull, the frozen pool and the split hub kill, one door per breach, the pools swapping, landing in the furthest room), the lane rooms' enemies, the boss and its cores (shielded; the core and its wave; delivery opens a window; a carrier's death drops it; the other team's delivery heals, never past full; the next window a third longer; the kill wins) (about 60 s) | `L_FootRaceTest` |
+| `-WWOAutoTestFootRaceBots -WWOBots=7` | A FootRace bot match (4 v 4 with the parked player) played to a win; logs `FootRaceBots:` every 10 s (`-WWOFootRaceBotsTime=S`, 900 by default) | `L_FootRaceTest` |
 | `-WWOTester -WWOAutoTestTester` | The firing tester (`-WWOTesterGun=<id>`, `-WWOTesterFrames=N`, `-WWOTesterHip`, `-WWOTesterStrafe`, `-WWOTesterNoShot`, `-WWOTesterNoMods`) | `L_TestRange` |
 | `-WWOWaveTest` | All 8 waves with god mode; logs AI state and flags anyone stuck (about 4.5 min) | `L_Arena` |
-| `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<text>`, `-WWORegressUpdate`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |
+| `-WWORegress` | The regression scenarios against `Tools/regress/golden.json` (`-WWORegressOnly=<a,b>`, `-WWORegressPerModeOnly`, `-WWORegressUpdate`, `-WWORegressUpdateNew`, `-WWORegressReverse`); run it through `Tools/regress.sh` | `L_TestRange` |
 | `-WWOTestScoreboard` | Match-end scoreboard (`-WWOKillTarget=N`) | PvP |
 
 ### Bot matches and stress
@@ -159,7 +221,7 @@ Timed functions are wrapped in `WWO_PROF` (`Player/WWOProf.h`) and show as `Perf
 ### Other
 
 `-WWOTitle` forces the launch screen. `-WWOGamerTag=<name>` sets the tag for one run; `-WWONoTestTag`
-leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`.
+leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`, `wwo.BossWindow [team]` (FootRace: drop a boss's shield for its next window).
 
 **Any `-WWO...` switch on the command line skips the launch screen**, and a switch containing
 `WWOAutoTest` marks the run as a test run (keybinds are not loaded or saved, the gamer tag is `tester`,
@@ -200,6 +262,10 @@ if a person would type it, in the tables above.
 - The game mode's stress and screenshot runs are `FWWOStressHarness` (`Game/WWOGameModeStress.*`), made
   only when the command line has a `WWOStress` switch; the wave test is `Game/WWOGameModeWaveTest.cpp`.
   Neither goes through `WWOTest::Exit`: they print no result line and exit 0.
+- What gameplay counts for a test (the host's tally of a joiner's shots, corrections, what a machine drew
+  for the host, hits marked) is `FWWOTestTally` (`Player/WWOTestTally.h`): a new test counter is a field
+  there, bumped with one `FWWOTestTally::Count(...)` line where it happens and read with
+  `FWWOTestTally::Get()`; gameplay never reads it. The writes are empty in a shipping build.
 - Tests run on real time (`FApp::GetDeltaTime`), because menus pause the game.
 - Test state that must survive a map load has to be file-scope static, not a driver member: the
   controller, and its driver with it, is recreated with the map.

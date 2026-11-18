@@ -18,6 +18,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Framework/Application/SlateApplication.h"
+#include "WWOIds.h"
 
 using namespace WWOCharacterMenuUI;
 
@@ -165,13 +166,13 @@ void UWWOCharacterMenu::BuildOverview()
 		const UWWOAbilityData* A = L->GetAbility(i);
 		if (!A) continue;
 		FString What;
-		if (A->Id == "static_charge") What = FString::Printf(TEXT("Chain lightning · %s dmg, %s jumps"), *Num(A->ChainDamage), *Num(A->ChainJumps));
-		else if (A->Id == "seedburst") What = FString::Printf(TEXT("Seed grenades · %s more blasts"), *Num(A->SubCount));
-		else if (A->Id == "spore_fog_damage") What = FString::Printf(TEXT("Fog damage · %s/s"), *Num(A->FogDps));
-		else if (A->Id == "spore_dash") What = FString::Printf(TEXT("Hiding fog · %s s"), *Num(A->DashFogTime));
-		else if (A->Id == "spore_patches") What = FString::Printf(TEXT("Fog patches · %s s each"), *Num(A->PatchTime));
-		else if (A->Id == "root_bombs") What = FString::Printf(TEXT("Root bombs · %s dmg, %s m"), *Num(A->BombDamage), *Num(A->BombRadius));
-		else if (A->Id == "shield_share") What = FString::Printf(TEXT("Shield teammates · +%s"), *Num(A->ShieldAmount));
+		if (A->Id == WWOIds::Ability::StaticCharge) What = FString::Printf(TEXT("Chain lightning · %s dmg, %s jumps"), *Num(A->ChainDamage), *Num(A->ChainJumps));
+		else if (A->Id == WWOIds::Ability::Seedburst) What = FString::Printf(TEXT("Seed grenades · %s more blasts"), *Num(A->SubCount));
+		else if (A->Id == WWOIds::Ability::SporeFogDamage) What = FString::Printf(TEXT("Fog damage · %s/s"), *Num(A->FogDps));
+		else if (A->Id == WWOIds::Ability::SporeDash) What = FString::Printf(TEXT("Hiding fog · %s s"), *Num(A->DashFogTime));
+		else if (A->Id == WWOIds::Ability::SporePatches) What = FString::Printf(TEXT("Fog patches · %s s each"), *Num(A->PatchTime));
+		else if (A->Id == WWOIds::Ability::RootBombs) What = FString::Printf(TEXT("Root bombs · %s dmg, %s m"), *Num(A->BombDamage), *Num(A->BombRadius));
+		else if (A->Id == WWOIds::Ability::ShieldShare) What = FString::Printf(TEXT("Shield teammates · +%s"), *Num(A->ShieldAmount));
 		if (!What.IsEmpty()) { Note(What, A->DisplayName); ++Effects; }
 	}
 	if (Flora && !Flora->UltName.IsEmpty()) { Note(TEXT("Ult · ") + Flora->UltName, Flora->DisplayName); ++Effects; }
@@ -195,14 +196,14 @@ void UWWOCharacterMenu::BuildOverview()
 		const UWWOAbilityData* A = L->GetAbility(i);
 		if (!A) continue;
 		auto Buff = [&](const FString& What) { Note(What, A->DisplayName); ++Buffs; };
-		if (A->Id == "overgrowth")
+		if (A->Id == WWOIds::Ability::Overgrowth)
 		{
 			if (!FMath::IsNearlyEqual(A->SpeedMult, 1.f)) Buff(Pct(A->SpeedMult - 1.f) + TEXT(" move speed"));
 			if (A->ExtraJumps > 0.f) Buff(FString::Printf(TEXT("+%s jump"), *Num(A->ExtraJumps)));
 		}
-		else if (A->Id == "thornfist") Buff(FString::Printf(TEXT("Melee damage x%s for %s s"), *Num(A->MeleeDamageMult), *Num(A->Duration)));
-		else if (A->Id == "melee_guard") Buff(Pct(-A->GuardReduction) + TEXT(" melee damage taken after a melee hit"));
-		else if (A->Id == "extra_grenade") Buff(FString::Printf(TEXT("+%s grenade charge"), *Num(A->ExtraCharges)));
+		else if (A->Id == WWOIds::Ability::Thornfist) Buff(FString::Printf(TEXT("Melee damage x%s for %s s"), *Num(A->MeleeDamageMult), *Num(A->Duration)));
+		else if (A->Id == WWOIds::Ability::MeleeGuard) Buff(Pct(-A->GuardReduction) + TEXT(" melee damage taken after a melee hit"));
+		else if (A->Id == WWOIds::Ability::ExtraGrenade) Buff(FString::Printf(TEXT("+%s grenade charge"), *Num(A->ExtraCharges)));
 	}
 	for (const UWWOTraitData* T : BuildTraits)
 	{
@@ -304,7 +305,7 @@ void UWWOCharacterMenu::BuildOverview()
 		{
 			const FWWOModConfig& Config = L->GetConfigs()[ConfigIndex];
 			const UWWOWeaponData* Gun = nullptr;
-			for (const UWWOWeaponData* W : L->Weapons) if (W->Id == Config.Weapon) Gun = W;
+			for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == Config.Weapon) Gun = W;
 			Name = (Gun ? Gun->DisplayName : Config.Weapon.ToString()) + TEXT("  ·  ") + Config.Name;
 		}
 		else if (bInHand && L->GetWeapon()) Name = L->GetWeapon()->DisplayName + TEXT("  ·  not saved");
@@ -529,7 +530,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	auto Rim = [](const FLinearColor& C, bool bOn) { return bOn ? WWO::Lightened(C, 0.3f) : C; };
 	if (Name == TEXT("flora"))
 	{
-		for (UWWOFloraData* F : L->Floras)
+		for (UWWOFloraData* F : L->Catalog.Floras)
 		{
 			if (F->bUnlocked) Option(Initials(F->DisplayName), FString(), F->DisplayName, F == L->GetFlora(), In(F->Color), Rim(F->Color, F == L->GetFlora()), [WL, F] { if (WL.IsValid()) WL->EquipFlora(F); });
 		}
@@ -576,7 +577,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		for (int32 i = 0; i < Configs.Num(); ++i)
 		{
 			const UWWOWeaponData* Gun = nullptr;
-			for (const UWWOWeaponData* W : L->Weapons) if (W->Id == Configs[i].Weapon) Gun = W;
+			for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == Configs[i].Weapon) Gun = W;
 			const FString GunName = Gun ? Gun->DisplayName : Configs[i].Weapon.ToString();
 			Option(GunName, Configs[i].Name, GunName + TEXT(" · ") + Configs[i].Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
 				L->GetSlotConfig(WeaponSlot) == i, WWOUI::CardColor, L->GetSlotConfig(WeaponSlot) == i ? FLinearColor::White : WWOUI::CardEdgeStrong, [WL, WeaponSlot, i] { if (WL.IsValid()) WL->SetSlotConfig(WeaponSlot, i); });

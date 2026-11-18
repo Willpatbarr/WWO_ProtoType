@@ -37,7 +37,7 @@ void UWWOCharacterMenu::BuildWeaponRows()
 	UVerticalBox* Guns = Tree->ConstructWidget<UVerticalBox>();
 	Guns->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Weapon"), 13.f, FLinearColor(1, 1, 1, 0.6f), 220))->SetPadding(FMargin(0, 0, 0, 12.f * K));
 	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
-	for (UWWOWeaponData* Option : L->Weapons)
+	for (UWWOWeaponData* Option : L->Catalog.Weapons)
 	{
 		if (!Option->bUnlocked) continue;
 		const bool bOn = Option == L->GetWeapon();
@@ -231,7 +231,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		UHorizontalBox* CRow = Tree->ConstructWidget<UHorizontalBox>();
 		const bool bActive = L->GetActiveConfig() == i;
 		const UWWOWeaponData* ConfigGun = nullptr;
-		for (const UWWOWeaponData* W : L->Weapons) if (W && W->Id == Configs[i].Weapon) ConfigGun = W;
+		for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W && W->Id == Configs[i].Weapon) ConfigGun = W;
 		const FString Name = Configs[i].Name + TEXT(" · ") + (ConfigGun ? ConfigGun->DisplayName : Configs[i].Weapon.ToString()) + (bActive ? TEXT("  ✓") : TEXT(""));
 		CRow->AddChildToHorizontalBox(Slot(Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
 			FVector2D(SideColumn - SaveOverWidth - DeleteWidth - ButtonGap * 2.f - 14.f, 58), FLinearColor(0.2f, 0.21f, 0.26f), 13.f,

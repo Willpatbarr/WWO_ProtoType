@@ -93,7 +93,7 @@ void UWWOUltComponent::Begin()
 	UWWOSound::PlayFor(P, "ult");
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	const UWWOFloraData* Flora = Loadout ? Loadout->GetFlora() : nullptr;
-	Kind = !Flora ? EKind::Blast : (Flora->Ult == EWWOUltKind::Veil ? EKind::Veil : (Flora->Ult == EWWOUltKind::Entrench ? EKind::Entrench : EKind::Blast));
+	Kind = Flora ? Flora->Ult : EWWOUltKind::Blast;
 	Color = Loadout && Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
 	P->bUlting = true;
 	P->Weapon->Interrupt(); // the gun isn't updated during an ult: nothing half-done waits for its end
@@ -116,7 +116,7 @@ void UWWOUltComponent::Begin()
 		P->Camera->Deactivate();
 		UltCamera->Activate();
 	}
-	if (Kind == EKind::Blast)
+	if (Kind == EWWOUltKind::Blast)
 	{
 		Blend = CameraBlend;
 		CastAt = FMath::Max(WindupTime - CastLead, Blend);
@@ -169,7 +169,9 @@ void UWWOUltComponent::Release()
 	// Online the host's copy does the world part (blast, fog, roots); a joiner's own copy only
 	// starts its veil or entrench (they change how it moves and what hits it).
 	const bool bHost = P->HasAuthority();
-	if (Kind == EKind::Blast)
+	switch (Kind)
+	{
+	case EWWOUltKind::Blast:
 	{
 		if (Orb)
 		{
@@ -188,17 +190,17 @@ void UWWOUltComponent::Release()
 		Spec.BlastRadius = BlastRadius;
 		Spec.Flavor = Loadout && Loadout->GetFlora() ? Loadout->GetFlora()->Id : NAME_None;
 		AWWOGrenade::ExplodeAt(GetWorld(), Spec, P->GetActorLocation() + FVector(0, 0, 20.f), P);
+		break;
 	}
-	else if (Kind == EKind::Veil)
-	{
+	case EWWOUltKind::Veil:
 		if (bHost) AWWOSporeFog::SpawnFog(GetWorld(), P->GetActorLocation(), VeilFogRadius, VeilFogTime, true, P);
 		P->VeilLeft = VeilTime;
-	}
-	else
-	{
+		break;
+	case EWWOUltKind::Entrench:
 		P->EntrenchLeft = EntrenchTime;
 		AWWOEntrenchRoots::Spawn(GetWorld(), P, EntrenchTime); // on this machine (looks only)
 		if (bHost && GetNetMode() == NM_ListenServer) P->MulticastEntrenchRoots(EntrenchTime); // and on the others
+		break;
 	}
 }
 
@@ -268,12 +270,12 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 		const float Grow = FMath::Clamp(Clock / FMath::Max(WindupTime - CastLead, 0.1f), 0.f, 1.f);
 		Orb->SetWorldScale3D(FVector(FMath::Max(OrbSize * WWO::M * Grow / 50.f, 0.01f)));
 	}
-	if (Kind == EKind::Blast && !bCharging && !bCast && Clock >= ChargeAt && ChargeAt < CastAt)
+	if (Kind == EWWOUltKind::Blast && !bCharging && !bCast && Clock >= ChargeAt && ChargeAt < CastAt)
 	{
 		bCharging = true;
 		P->Body->Play("Spell_Simple_Idle", 1.f, 0.1f);
 	}
-	if (Kind == EKind::Blast && !bCast && Clock >= CastAt)
+	if (Kind == EWWOUltKind::Blast && !bCast && Clock >= CastAt)
 	{
 		bCast = true;
 		P->Body->Play("Spell_Simple_Shoot", 1.f, 0.1f);
@@ -296,7 +298,7 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		bGlidingBack = true;
 		GlideFrom = UltCamera->GetComponentTransform();
-		P->Body->Play("Idle", 1.f, Kind == EKind::Blast ? 0.3f : 0.2f);
+		P->Body->Play("Idle", 1.f, Kind == EWWOUltKind::Blast ? 0.3f : 0.2f);
 	}
 	const float Back = (Clock - FinishAt) / FMath::Max(Blend, 0.01f);
 	const FTransform To = FirstPersonTransform();

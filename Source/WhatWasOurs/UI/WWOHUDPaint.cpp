@@ -16,6 +16,9 @@
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
 #include "Game/WWOGameMode.h"
+#include "World/WWOBreachLever.h"
+#include "World/WWOBossCore.h"
+#include "EngineUtils.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -129,6 +132,8 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	PaintDamageSpikes(F);
 	PaintOverlays(F);
 	PaintWaveLine(F);
+	PaintBreachEnergy(F);
+	PaintRaceTrack(F);
 	PaintFps(F);
 	return Result + 3;
 }
@@ -462,6 +467,7 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 	const FVector2D AimAt = F.AimAt;
 	// Your own kills, to the right of the reticle for 2.5 s: "Kill +1", "Precision kill +2" (the
 	// number is what it added to your team's score). The newest is level with the reticle, older ones above it.
+	// FootRace: your team opening its next door shows there too ("Next door opened!"), whoever pulled it.
 	if (const AWWOGameState* Mine = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
 		constexpr float Shown = 2.5f, Fade = 0.5f, Px = 22.f, LineTall = 30.f, Right = 150.f;
@@ -472,6 +478,15 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 			const AWWOGameState::FKillLine& Line = Mine->KillFeed[Index];
 			const float Age = float(KillNow - Line.At);
 			if (Age > Shown) break;
+			const bool bOurDoor = Line.How == AWWOGameState::KillEvent && Line.Victim.StartsWith(TEXT("opened Door"))
+				&& Line.KillerTeam == UWWOWorldSubsystem::TeamOf(Pl);
+			if (bOurDoor)
+			{
+				const float DoorAlpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
+				P.Text(TEXT("Next door opened!"), FVector2D(AimAt.X + Right, Y), Px, WWO::WithAlpha(FLinearColor(0.6f, 1.f, 0.65f), DoorAlpha), 0.f, 5.f, 0.75f * DoorAlpha, 0.5f);
+				Y -= LineTall;
+				continue;
+			}
 			if (!Line.bMine) continue;
 			const bool bPrecision = Line.How == AWWOGameState::KillPrecision;
 			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
@@ -505,6 +520,13 @@ void UWWOHUDWidget::PaintKillFeed(const FWWOHUDFrame& F) const
 			float X = 40.f;
 			P.Text(Line.Killer, FVector2D(X, Y), Px, TeamTint(Line.KillerTeam), 0.f, 4.f);
 			X += P.Measure(Line.Killer, FeedFont).X;
+			if (Line.How == AWWOGameState::KillEvent)
+			{
+				// Not a kill: "<who> <what happened>" (FootRace: breached, opened a door).
+				P.Text(TEXT(" ") + Line.Victim, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.85f * Alpha), 0.f, 4.f);
+				Y -= LineTall;
+				continue;
+			}
 			const FString Arrow = TEXT("  >  ");
 			P.Text(Arrow, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.75f * Alpha), 0.f, 4.f);
 			X += P.Measure(Arrow, FeedFont).X;
@@ -848,6 +870,145 @@ void UWWOHUDWidget::PaintWaveLine(const FWWOHUDFrame& F) const
 	if (const AWWOGameState* GS = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
 		if (!GS->StatusLine.IsEmpty()) P.Text(GS->StatusLine, FVector2D(Center.X, 24.f), 28.f, GS->StatusColor, 0.5f, 8.f, 0.85f);
+	}
+}
+
+void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
+{
+	// Two slim bars either side of the match line (the FOOTRACE title), your team's on the left:
+	// each team's pool, a tick where the hub opens (the threshold), its number at the bar's outer end, bright
+	// once it's enough to breach. A bar is full at twice the threshold. Each team's boss line sits lower,
+	// under the vitals' status chips.
+	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
+	if (!GS || GS->BreachEnergy.Num() < 2) return;
+	const FWWOPainter& P = F.P;
+	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
+	const float Threshold = FMath::Max(GS->BreachThreshold, 1.f);
+	const FVector2D BarSize(220.f, 7.f);
+	// Level with the match line (PaintWaveLine: 28 px text at 24), clear of it whatever it says.
+	const float LineWidth = GS->StatusLine.IsEmpty() ? 0.f : P.Measure(GS->StatusLine, P.Font(28.f, 8.f)).X;
+	const float Gap = LineWidth + 48.f, Top = 24.f + 17.f - BarSize.Y * 0.5f;
+	const float BossTop = 176.f;         // under the vitals' status chip row (SLOWED, POISONED...)
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float Energy = GS->BreachEnergy[Team];
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f); // AWWOBreachPortal::TeamColor, sRGB
+		const FVector2D Pos(F.Center.X + (Slot == 0 ? -Gap * 0.5f - BarSize.X : Gap * 0.5f), Top);
+		P.Box(Pos, BarSize, FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+		const float Fill = FMath::Clamp(Energy / (Threshold * 2.f), 0.f, 1.f);
+		P.Box(Pos, FVector2D(BarSize.X * Fill, BarSize.Y), Energy >= Threshold ? Color : WWO::Darkened(Color, 0.45f));
+		const float TickX = Pos.X + BarSize.X * 0.5f;
+		P.Box(FVector2D(TickX - 1.f, Pos.Y - 3.f), FVector2D(2.f, BarSize.Y + 6.f), FLinearColor(1, 1, 1, 0.9f));
+		P.Outline(Pos, BarSize, FLinearColor(1, 1, 1, 0.35f), 1.f);
+		// The next breach's pool, grey and thin under it, while a door opened mid-breach has frozen the pool.
+		const bool bFrozen = GS->BreachFrozen.IsValidIndex(Team) && GS->BreachFrozen[Team];
+		const float Next = GS->BreachNext.IsValidIndex(Team) ? GS->BreachNext[Team] : 0.f;
+		if (bFrozen || Next > 0.f)
+		{
+			const FVector2D NextPos(Pos.X, Pos.Y + BarSize.Y + 1.f);
+			P.Box(NextPos, FVector2D(BarSize.X, 3.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.6f));
+			P.Box(NextPos, FVector2D(BarSize.X * FMath::Clamp(Next / (Threshold * 2.f), 0.f, 1.f), 3.f), FLinearColor(0.62f, 0.64f, 0.68f, 0.9f));
+		}
+		// The number, at the bar's outer end (bright once it's enough to breach).
+		const FString Number = FString::Printf(TEXT("%.0f"), Energy);
+		const FLinearColor NumberColor = Energy >= Threshold ? Color : WWO::Darkened(Color, 0.35f);
+		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), 15.f, NumberColor, Slot == 0 ? 1.f : 0.f, 4.f, 0.8f, 0.5f);
+		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
+		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
+		if (BossLeft >= 0.f)
+		{
+			const float Window = GS->BossWindow.IsValidIndex(Team) ? GS->BossWindow[Team] : 0.f;
+			const FVector2D BossPos(F.Center.X + (Slot == 0 ? -20.f - BarSize.X : 20.f), BossTop); // fixed: the title's width moves the meters, not this
+			P.Box(BossPos, FVector2D(BarSize.X, 8.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+			P.Box(BossPos, FVector2D(BarSize.X * FMath::Clamp(BossLeft, 0.f, 1.f), 8.f), Window > 0.f ? FLinearColor(1.f, 0.3f, 0.25f) : FLinearColor(0.55f, 0.3f, 0.3f));
+			const uint8 Core = GS->CoreState.IsValidIndex(Team) ? GS->CoreState[Team] : 0;
+			const TCHAR* CoreText = Core == 1 ? TEXT("  CORE IN HUB") : Core == 2 ? TEXT("  CORE CARRIED") : Core == 3 ? TEXT("  CORE DROPPED") : TEXT("");
+			const FString BossLine = Window > 0.f ? FString::Printf(TEXT("BOSS %.0f%%  WINDOW %.0fs"), BossLeft * 100.f, FMath::CeilToFloat(Window))
+				: FString::Printf(TEXT("BOSS %.0f%%  SHIELDED%s"), BossLeft * 100.f, CoreText);
+			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), 15.f, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+		}
+	}
+	// Carrying a core: where to take it.
+	for (TActorIterator<AWWOBossCore> It(F.Pl->GetWorld()); It; ++It)
+	{
+		if (It->Carrier != F.Pl) continue;
+		const FString Line = It->Team == Mine ? TEXT("You have your core: take it through your hub doorway to drop your boss's shield")
+			: TEXT("You have their core: take it through your hub doorway to heal their boss");
+		P.Text(Line, F.Center + FVector2D(0, 160), 24.f, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f); // sRGB (the painter converts)
+	}
+	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
+	const AWWOBreachLever* Near = nullptr;
+	for (TActorIterator<AWWOBreachLever> It(F.Pl->GetWorld()); It; ++It)
+	{
+		if (It->Team == Mine && It->InReach(F.Pl->GetActorLocation())) Near = *It;
+	}
+	if (!Near) return;
+	const int32 Opened = GS->DoorsOpen.IsValidIndex(Mine) ? GS->DoorsOpen[Mine] : 0;
+	const AWWOPlayerController* Keys = Cast<AWWOPlayerController>(F.PC);
+	const FString Key = Keys ? Keys->BindHint("revive") : TEXT("Revive");
+	FString Line;
+	if (Near->bPulled) Line = FString::Printf(TEXT("Door %d is open"), (int32)Near->Door);
+	else if (Near->bLive) Line = FString::Printf(TEXT("Hold %s to open Door %d"), *Key, (int32)Near->Door);
+	else if (Near->Door > Opened + 1) Line = FString::Printf(TEXT("Door %d: open Door %d first"), (int32)Near->Door, Opened + 1);
+	else if (GS->BreachFrozen.IsValidIndex(Mine) && GS->BreachFrozen[Mine]) Line = TEXT("One door per breach: breach again for the next");
+	else Line = FString::Printf(TEXT("Door %d: breach from Room %d to unlock this lever"), (int32)Near->Door, (int32)Near->Door);
+	P.Text(Line, F.Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
+	if (Near->Progress > 0.f)
+	{
+		const FVector2D BarPos(F.Center.X - 110.f, F.Center.Y + 125.f);
+		P.Box(BarPos, FVector2D(220.f, 10.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+		P.Box(BarPos, FVector2D(220.f * FMath::Clamp(Near->Progress, 0.f, 1.f), 10.f), FLinearColor::White);
+	}
+}
+
+void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
+{
+	// Two tracks on the right edge, your team's on the left: three circles each, Door1 at the bottom (the
+	// race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
+	// team breaches and shrinks from both ends toward its middle as the breach's energy drains.
+	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
+	if (!GS || GS->DoorsOpen.Num() < 2) return;
+	const FWWOPainter& P = F.P;
+	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
+	constexpr float TrackTall = 420.f, Radius = 15.f, Apart = 66.f, BarTall = 150.f;
+	const float Top = F.Center.Y - TrackTall * 0.5f;
+	const float RightX = P.Size.X - 46.f;
+	const double Now = FPlatformTime::Seconds();
+	const float Dt = RaceBarAt > 0.0 ? FMath::Min(float(Now - RaceBarAt), 0.1f) : 0.f;
+	RaceBarAt = Now;
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float X = RightX - (1 - Slot) * Apart;
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f); // sRGB, as the breach bars
+		const FLinearColor Dim = FLinearColor(Color.R, Color.G, Color.B, 0.55f);
+		const int32 Opened = GS->DoorsOpen.IsValidIndex(Team) ? GS->DoorsOpen[Team] : 0;
+		// The track: line segments between the circles (and past the first and last), the circles on it.
+		float PrevY = Top;
+		for (int32 Slot3 = 1; Slot3 <= 3; ++Slot3) // top to bottom: Door3, Door2, Door1
+		{
+			const int32 Door = 4 - Slot3;
+			const float Y = Top + TrackTall * Slot3 / 4.f;
+			P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Y - Radius - PrevY), Dim);
+			if (Door <= Opened) P.Disc(FVector2D(X, Y), Radius, Color);
+			P.Ring(FVector2D(X, Y), Radius, Color, 2.f);
+			PrevY = Y + Radius;
+		}
+		P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Top + TrackTall - PrevY), Dim);
+		// The breach bar, on the inner side of its track.
+		const float Start = GS->BreachStart.IsValidIndex(Team) ? GS->BreachStart[Team] : 0.f;
+		const float Energy = GS->BreachEnergy.IsValidIndex(Team) ? GS->BreachEnergy[Team] : 0.f;
+		const float Want = Start > 0.f ? FMath::Clamp(Energy / Start, 0.f, 1.f) : 0.f;
+		float& Shown = RaceBarShown[Slot];
+		Shown = Want > Shown ? FMath::Min(Want, Shown + Dt / 0.35f) : Want; // fills in over a moment, drains as it goes
+		if (Shown > 0.f)
+		{
+			const float BarX = X + (Slot == 0 ? 1.f : -1.f) * Apart * 0.27f;
+			const float Half = BarTall * 0.5f * Shown;
+			P.Box(FVector2D(BarX - 2.f, F.Center.Y - BarTall * 0.5f), FVector2D(4.f, BarTall), FLinearColor(0.1f, 0.1f, 0.12f, 0.5f));
+			P.Box(FVector2D(BarX - 2.f, F.Center.Y - Half), FVector2D(4.f, Half * 2.f), Color);
+		}
 	}
 }
 

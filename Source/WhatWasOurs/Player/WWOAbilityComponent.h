@@ -1,6 +1,7 @@
 #pragma once
 
-// Runs the two equipped flora abilities (Godot: ability_manager.gd).
+// Runs the two equipped flora abilities (Godot: ability_manager.gd). What each one does is its entry in
+// WWOAbility::Table() (Player/WWOAbilities.h), what it remembers its FWWOAbilityState here.
 // VoltVine: Overgrowth (passive speed + extra jump), Thornfist (active melee boost),
 //   Melee Guard (triggered: landing a melee cuts incoming melee damage), Static Charge
 //   (charged by damage taken; arms, then the next melee hit chains lightning).
@@ -10,6 +11,8 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Player/WWOKitRefusal.h"
+#include "Player/WWOAbilities.h"
 #include "WWOAbilityComponent.generated.h"
 
 class UWWOAbilityData;
@@ -26,7 +29,7 @@ public:
 	bool ActivateAbility(UWWOAbilityData* Ability, float Ready = 1.f);
 	// Host: a joiner used the ability in this slot (its own machine already did; this runs the
 	// world side: fog, bombs, Thornfist's boost and an armed Static Charge for its punches).
-	bool HostUseAbility(int32 Slot); // false: refused (the joiner is told)
+	EWWOKitRefusal HostUseAbility(int32 Slot); // None: used; otherwise refused (the joiner is told)
 	void UndoUse(int32 Slot);
 	bool CanLaunchNow() const;       // host: Spore Dash is equipped and ready, or was just used        // a joiner's own, when the host refused it
 	float Charge(const UWWOAbilityData* Ability) const;
@@ -41,27 +44,22 @@ public:
 	UWWOAbilityData* ConsumeStaticCharge();
 	float IncomingMeleeMultiplier() const;
 	float ExtraCharges() const;
-	void FillCharges() { for (TPair<FName, float>& C : ChargeById) C.Value = 1.f; } // everything ready again (-WWOBotsBusy)
+	void FillCharges() { for (TPair<FName, FWWOAbilityState>& S : States) if (S.Value.Charge.IsSet()) S.Value.Charge = 1.f; } // everything ready again (-WWOBotsBusy)
 	UWWOAbilityData* ThornfistActive() const;
 	float MeleeMultiplier() const;
 
-	// Live Seedburst grenades and seeds (keeps the Seedburst HUD box lit).
-	int32 LiveSeeds = 0;
-	int32 LivePatches = 0;
+	// What an ability remembers, by id (made on first use).
+	FWWOAbilityState& State(FName Id) { return States.FindOrAdd(Id); }
+	const FWWOAbilityState* FindState(FName Id) const { return States.Find(Id); }
+	// Seedburst's grenades and seeds out, Spore Patches' patches up (keep their HUD box lit).
+	int32& LiveCount(FName Id) { return State(Id).Live; }
+	float GuardTimeLeft() const; // for the HUD's status chip
 
 private:
-	TMap<FName, float> ChargeById;     // activated abilities: 0..1 recharge
-	TMap<FName, float> ActiveLeft;     // seconds of effect left
-	TMap<FName, bool> Armed;           // charged abilities: armed and waiting for a melee hit
-	float GuardLeft = 0.f;
+	TMap<FName, FWWOAbilityState> States;
 	TWeakObjectPtr<const UWWOAbilityData> FistsLit; // the ability the fists are glowing for
-public:
-	float GuardTimeLeft() const { return GuardLeft; } // for the HUD's status chip
-private:
 
 	bool PlayerBusy() const;
-	void SporeDash(UWWOAbilityData* Ability);
-	void RootBombs(UWWOAbilityData* Ability);
 
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) read and reset private state between runs; no gameplay code uses this.
 	friend class FWWORegress;

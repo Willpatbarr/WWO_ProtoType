@@ -54,28 +54,32 @@ FWWOAssistPart UWWOAimAssistComponent::FindPart(float BaseAngleDeg, float CritSc
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	const FVector Origin = P->EyeLocation();
 	const FVector Forward = P->AimForward();
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// A part's cone: the base angle, scaled for the device and the range, narrower for a crit spot.
+	auto ConeOf = [&](const FWWOAimPart& Part, float Distance)
 	{
-		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		for (const FWWOAimPart& Part : Target->GetAimParts()) // head first, so heads win ties
-		{
-			const FVector To = Part.Position - Origin;
-			const float Distance = To.Size();
-			if (Distance < 1.f) continue;
-			float Cone = FMath::DegreesToRadians(BaseAngleDeg) * Scale * RangeFalloff(Distance / WWO::M);
-			if (Part.bCritical) Cone *= CritScale;
-			if (Cone <= 0.f) continue;
-			const float Angle = FMath::Max(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To / Distance), -1.f, 1.f)) - FMath::Atan(Part.Radius / Distance), 0.f);
-			if (Angle > Cone || (Best.IsValid() && Angle >= Best.Angle)) continue;
-			FHitResult Check;
-			if (!P->Weapon->CastRayTo(Part.Position, Check) || Check.GetActor() != Actor) continue; // must be in line of sight
-			Best.Target = Actor;
-			Best.Position = Part.Position;
-			Best.bCritical = Part.bCritical;
-			Best.Angle = Angle;
-			Best.Cone = Cone;
-		}
-	}
+		float Cone = FMath::DegreesToRadians(BaseAngleDeg) * Scale * RangeFalloff(Distance / WWO::M);
+		if (Part.bCritical) Cone *= CritScale;
+		return Cone;
+	};
+	// Scored by the angle off the reticle to the part's edge; head first, so heads win ties; must be in line of sight.
+	const FWWOAimPick Pick = UWWOWorldSubsystem::Get(this)->BestAimPart(this, [&](const AActor*, const FWWOAimPart& Part, float, float& Score)
+	{
+		const FVector To = Part.Position - Origin;
+		const float Distance = To.Size();
+		if (Distance < 1.f) return false;
+		const float Cone = ConeOf(Part, Distance);
+		if (Cone <= 0.f) return false;
+		const float Angle = FMath::Max(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To / Distance), -1.f, 1.f)) - FMath::Atan(Part.Radius / Distance), 0.f);
+		if (Angle > Cone) return false;
+		Score = Angle;
+		return true;
+	}, [P](const FVector& To, FHitResult& Hit) { return P->Weapon->CastRayTo(To, Hit); });
+	if (!Pick.IsValid()) return Best;
+	Best.Target = Pick.Actor;
+	Best.Position = Pick.Part.Position;
+	Best.bCritical = Pick.Part.bCritical;
+	Best.Angle = Pick.Score;
+	Best.Cone = ConeOf(Pick.Part, (Pick.Part.Position - Origin).Size());
 	return Best;
 }
 

@@ -1,72 +1,26 @@
 #pragma once
 
-// What the player has equipped, plus the stat modifier system (Godot: Loadout + Modifiers).
-// A GameInstance subsystem, so it lives across map changes. Saved with a SaveGame slot.
-//
-// Stats: final = (base + sum of Flat) * (1 + sum of PercentAdd) * (product of Multiply).
-// Frame parts give group points; each point moves every stat in its group by PointValue
-// (5% by default) in the good direction. Equipped traits add their own modifiers.
+// A player's loadout (Godot: Loadout + Modifiers). A GameInstance subsystem, so it lives across map changes.
+// A thin owner of four parts, each its own type:
+//   Catalog     FWWOLoadoutCatalog (WWOLoadoutCatalog.h): every option there is, loaded from data
+//   Equipped    FWWOEquipped (WWOLoadoutEquipped.h): what this player has on
+//   stat maths  WWOLoadoutStats (WWOLoadoutStats.h): what the equipped state does to a stat
+//   ModConfigs  FWWOModConfigs (WWOModConfigs.h): saved weapon configs and the two weapon slots
+// The subsystem saves and loads Loadout.sav (UWWOLoadoutSave, WWOLoadoutTypes.h), sends the loadout to the
+// host (FWWONetLoadout), keeps joiners' copies (NewCopy), and announces every change (OnChanged). Its
+// equip and stat functions are one-line forwards to the parts, so callers reach them as before.
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "GameFramework/SaveGame.h"
 #include "Data/WWOData.h"
+#include "Systems/WWOLoadoutTypes.h"
+#include "Systems/WWOLoadoutCatalog.h"
+#include "Systems/WWOLoadoutEquipped.h"
+#include "Systems/WWOLoadoutStats.h"
+#include "Systems/WWOModConfigs.h"
 #include "WWOLoadoutSubsystem.generated.h"
 
 DECLARE_MULTICAST_DELEGATE(FWWOOnLoadoutChanged);
-
-// A saved weapon config (draft): a frame and the mod in each of its slots.
-USTRUCT()
-struct FWWOModConfig
-{
-	GENERATED_BODY()
-
-	UPROPERTY() FString Name;
-	UPROPERTY() FName Weapon;
-	UPROPERTY() TMap<FName, FName> Mods; // slot -> mod id
-};
-
-// A player's loadout as ids, for the host (online: a joiner sends it, the host keeps a copy of the
-// loadout system for that player; see UWWOLoadoutSubsystem::Get). Maps are parallel arrays.
-USTRUCT()
-struct FWWONetLoadout
-{
-	GENERATED_BODY()
-
-	UPROPERTY() FName Flora;
-	UPROPERTY() FName Weapon;
-	UPROPERTY() FName Grenade;
-	UPROPERTY() TArray<FName> Abilities;
-	UPROPERTY() TArray<FName> Traits;
-	UPROPERTY() TArray<FName> FrameSlots;
-	UPROPERTY() TArray<FName> FrameParts;
-	UPROPERTY() TArray<FName> ModKeys; // "weapon:slot", the equipped weapon's
-	UPROPERTY() TArray<FName> ModIds;
-
-	bool operator==(const FWWONetLoadout& O) const
-	{
-		return Flora == O.Flora && Weapon == O.Weapon && Grenade == O.Grenade && Abilities == O.Abilities && Traits == O.Traits
-			&& FrameSlots == O.FrameSlots && FrameParts == O.FrameParts && ModKeys == O.ModKeys && ModIds == O.ModIds;
-	}
-	bool operator!=(const FWWONetLoadout& O) const { return !(*this == O); }
-};
-
-UCLASS()
-class WHATWASOURS_API UWWOLoadoutSave : public USaveGame
-{
-	GENERATED_BODY()
-
-public:
-	UPROPERTY() FName Flora;
-	UPROPERTY() FName Weapon;
-	UPROPERTY() FName Grenade;
-	UPROPERTY() TArray<FName> Abilities;
-	UPROPERTY() TArray<FName> Traits;
-	UPROPERTY() TMap<FName, FName> Frame;
-	UPROPERTY() TMap<FName, FName> WeaponMods; // slot -> mod id
-	UPROPERTY() TArray<FWWOModConfig> ModConfigs;
-	UPROPERTY() TArray<int32> WeaponSlots; // the saved config in each of the two weapon slots (-1 = none)
-};
 
 UCLASS()
 class WHATWASOURS_API UWWOLoadoutSubsystem : public UGameInstanceSubsystem
@@ -74,15 +28,16 @@ class WHATWASOURS_API UWWOLoadoutSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
-	static constexpr int32 TraitSlots = 4; // placeholder until decided
-	static constexpr int32 AbilitySlots = 2;
+	static constexpr int32 TraitSlots = FWWOEquipped::TraitSlots;
+	static constexpr int32 AbilitySlots = FWWOEquipped::AbilitySlots;
+	static constexpr int32 WeaponSlotCount = FWWOModConfigs::WeaponSlotCount;
 
 	// This machine's loadout; or, on the host, a joiner's copy when the context is that joiner's
 	// character or something it owns (its components, its grenades and what they leave behind).
 	static UWWOLoadoutSubsystem* Get(const UObject* WorldContext);
 
 	// Online (see FWWONetLoadout).
-	FWWONetLoadout ToNet() const;
+	FWWONetLoadout ToNet() const { return Equipped.ToNet(); }
 	static UWWOLoadoutSubsystem* NewCopy(const UWWOLoadoutSubsystem* Source); // all the data, nothing equipped, never saved
 	void ApplyNet(const FWWONetLoadout& Net);
 	bool IsCopy() const { return bCopy; }
@@ -93,38 +48,33 @@ public:
 
 	FWWOOnLoadoutChanged OnChanged;
 
-	// How much one group point changes each stat in its group (0.05 = 5%).
+	// How much one group point changes each stat in its group (0.05 = 5%). A Settings row binds it by name.
 	UPROPERTY(EditAnywhere, Category = "Frame parts") float PointValue = 0.05f;
 
-	// Every option, in picker order.
-	UPROPERTY() TArray<TObjectPtr<UWWOWeaponData>> Weapons;
-	UPROPERTY() TArray<TObjectPtr<UWWOGrenadeData>> Grenades;
-	UPROPERTY() TArray<TObjectPtr<UWWOAbilityData>> Abilities;
-	UPROPERTY() TArray<TObjectPtr<UWWOFramePartData>> FrameParts;
-	UPROPERTY() TArray<TObjectPtr<UWWOFloraData>> Floras;
-	UPROPERTY() TArray<TObjectPtr<UWWOTraitData>> Traits;
-	UPROPERTY() TArray<TObjectPtr<UWWOModData>> WeaponMods; // Config/WeaponMods.json
+	// Every option (Catalog.Weapons, Catalog.Floras, ...), the enemies' and allies' tuning.
+	UPROPERTY() FWWOLoadoutCatalog Catalog;
+	UWWOEnemyData* EnemyDataFor(FName Kind) const { return Catalog.EnemyDataFor(Kind); }
+	template <typename T>
+	T* EnemyDataAs(FName Kind) const { return Cast<T>(Catalog.EnemyDataFor(Kind)); }
 
-	// Shared enemy and ally tuning (one asset each).
-	UPROPERTY() TObjectPtr<UWWOSoldierData> SoldierData;
-	UPROPERTY() TObjectPtr<UWWOSwarmData> SwarmData;
-	UPROPERTY() TObjectPtr<UWWOTankData> TankData;
-	UPROPERTY() TObjectPtr<UWWOAllyData> AllyData;
+	// --- What is equipped (FWWOEquipped) ---
+	const FWWOEquipped& GetEquipped() const { return Equipped; }
+	UWWOWeaponData* GetWeapon() const { return Equipped.Weapon; }
+	UWWOGrenadeData* GetGrenade() const { return Equipped.Grenade; }
+	UWWOFloraData* GetFlora() const { return Equipped.Flora; }
+	UWWOAbilityData* GetAbility(int32 Slot) const { return Equipped.GetAbility(Slot); }
+	int32 AbilitySlotOf(const UWWOAbilityData* Choice) const { return Equipped.AbilitySlotOf(Choice); }
+	UWWOFramePartData* GetFramePart(FName Slot) const { return Equipped.GetFramePart(Slot); }
+	TArray<UWWOTraitData*> EquippedTraits() const { return Equipped.TraitList(); }
+	bool IsTraitEquipped(const UWWOTraitData* Choice) const { return Equipped.Traits.Contains(Choice); }
 
-	UWWOWeaponData* GetWeapon() const { return Weapon; }
-	UWWOGrenadeData* GetGrenade() const { return Grenade; }
-	UWWOFloraData* GetFlora() const { return Flora; }
-	UWWOAbilityData* GetAbility(int32 Slot) const { return EquippedAbilities.IsValidIndex(Slot) ? EquippedAbilities[Slot].Get() : nullptr; }
-	int32 AbilitySlotOf(const UWWOAbilityData* Choice) const;
-	UWWOFramePartData* GetFramePart(FName Slot) const;
-	TArray<UWWOTraitData*> EquippedTraits() const;
-	bool IsTraitEquipped(const UWWOTraitData* Choice) const { return EquippedTraitList.Contains(Choice); }
+	// Picker lists for the equipped flora (FWWOLoadoutCatalog).
+	TArray<UWWOGrenadeData*> GrenadesForFlora() const { return Catalog.GrenadesFor(Equipped.Flora); }
+	TArray<UWWOAbilityData*> AbilitiesForFlora() const { return Catalog.AbilitiesFor(Equipped.Flora); }
+	TArray<UWWOTraitData*> TraitsForFlora() const { return Catalog.TraitsFor(Equipped.Flora); }
+	TArray<UWWOFramePartData*> FramePartsFor(FName Slot) const { return Catalog.FramePartsFor(Slot); }
 
-	TArray<UWWOGrenadeData*> GrenadesForFlora() const;
-	TArray<UWWOAbilityData*> AbilitiesForFlora() const;
-	TArray<UWWOTraitData*> TraitsForFlora() const;
-	TArray<UWWOFramePartData*> FramePartsFor(FName Slot) const;
-
+	// Equipping: each change is announced (OnChanged) and saved later (FlushSave).
 	void EquipFlora(UWWOFloraData* Choice);
 	void EquipGrenade(UWWOGrenadeData* Choice);
 	void EquipWeapon(UWWOWeaponData* Choice);
@@ -134,83 +84,56 @@ public:
 	bool ToggleTrait(UWWOTraitData* Choice);
 
 	// --- Weapon mods (draft): every slot of a frame is open ---
-	static const TArray<FName>& ModSlots();
-	static FString ModSlotTitle(FName Slot);
-	bool HasMods(const UWWOWeaponData* W) const; // is this weapon a frame with mods?
-	TArray<UWWOModData*> ModsFor(FName Slot) const; // for the equipped weapon
-	UWWOModData* GetMod(FName Slot) const; // on the equipped weapon, or null
+	static const TArray<FName>& ModSlots() { return FWWOModConfigs::ModSlots(); }
+	static FString ModSlotTitle(FName Slot) { return FWWOModConfigs::ModSlotTitle(Slot); }
+	bool HasMods(const UWWOWeaponData* W) const { return Catalog.HasMods(W); } // is this weapon a frame with mods?
+	TArray<UWWOModData*> ModsFor(FName Slot) const { return Catalog.ModsFor(Equipped.Weapon, Slot); } // for the equipped weapon
+	UWWOModData* GetMod(FName Slot) const { return Equipped.GetMod(Slot); } // on the equipped weapon, or null
 	void EquipMod(FName Slot, UWWOModData* Mod); // null empties the slot
-	bool HasPerk(FName Perk) const; // a mod with this perk is on the equipped weapon
-	float ModPercent(FName Stat) const; // sum of the equipped weapon's mods for this stat
-	const TArray<FWWOModConfig>& GetConfigs() const { return Configs; }
+	bool HasPerk(FName Perk) const { return Equipped.HasPerk(Perk); } // a mod with this perk is on the equipped weapon
+
+	// --- Saved configs and the two weapon slots (FWWOModConfigs) ---
+	const TArray<FWWOModConfig>& GetConfigs() const { return ModConfigs.Configs; }
 	void SaveConfig(int32 Index); // INDEX_NONE adds a new one
 	void ApplyConfig(int32 Index);
 	int32 CycleConfig(); // applies the next saved config; returns its index or INDEX_NONE
-	int32 GetActiveConfig() const { return ActiveConfig; }
+	int32 GetActiveConfig() const { return ModConfigs.Active; }
 	void DeleteConfig(int32 Index);
-	static FString ConfigSummary(const FWWOModConfig& Config, const UWWOLoadoutSubsystem* L);
+	static FString ConfigSummary(const FWWOModConfig& Config, const UWWOLoadoutSubsystem* L) { return FWWOModConfigs::Summary(Config, L ? &L->Catalog : nullptr); }
 	// The two weapons you carry: each slot holds one saved config (any config in either slot, for
 	// now). The active slot's is the one in your hands; swapping weapons goes to the other slot.
-	static constexpr int32 WeaponSlotCount = 2;
-	int32 GetSlotConfig(int32 Slot) const { return SlotConfigs.IsValidIndex(Slot) && Configs.IsValidIndex(SlotConfigs[Slot]) ? SlotConfigs[Slot] : INDEX_NONE; }
-	int32 GetActiveSlot() const { return ActiveSlot; }
+	int32 GetSlotConfig(int32 Slot) const { return ModConfigs.GetSlotConfig(Slot); }
+	int32 GetActiveSlot() const { return ModConfigs.ActiveSlot; }
 	void SetSlotConfig(int32 Slot, int32 ConfigIndex);
 	bool SwapWeaponSlot(); // false when the other slot is empty
 
-	// Sum of Amount for equipped traits with this effect (0 if none).
-	float TraitBonus(FName Effect) const;
+	// --- Stat maths (WWOLoadoutStats) ---
+	float Apply(FName Stat, float Base) const { return WWOLoadoutStats::Apply(Equipped, PointValue, Stat, Base); }
+	float GroupPoints(FName Group) const { return WWOLoadoutStats::GroupPoints(Equipped, Group); }
+	TArray<FString> GroupSummary() const { return WWOLoadoutStats::GroupSummary(Equipped, PointValue); }
+	float ModPercent(FName Stat) const { return WWOLoadoutStats::ModPercent(Equipped, Stat); } // sum of the equipped weapon's mods for this stat
+	float TraitBonus(FName Effect) const { return WWOLoadoutStats::TraitBonus(Equipped, Effect); } // 0 if no equipped trait has it
 	static float Bonus(const UObject* WorldContext, FName Effect);
 
-	// --- Modifiers ---
-	float Apply(FName Stat, float Base) const;
-	float GroupPoints(FName Group) const;
-	TArray<FString> GroupSummary() const;
-
-	static const TArray<FName>& GroupOrder();
-	static const TArray<FName>& StatsInGroup(FName Group);
-	static FString GroupTitle(FName Group);
-	static FString StatName(FName Stat);
-	static FName GroupOf(FName Stat);
-	static const TArray<FName>& FrameSlots();
+	static const TArray<FName>& GroupOrder() { return WWOLoadoutStats::GroupOrder(); }
+	static const TArray<FName>& StatsInGroup(FName Group) { return WWOLoadoutStats::StatsInGroup(Group); }
+	static FString GroupTitle(FName Group) { return WWOLoadoutStats::GroupTitle(Group); }
+	static FString StatName(FName Stat) { return WWOLoadoutStats::StatName(Stat); }
+	static FName GroupOf(FName Stat) { return WWOLoadoutStats::GroupOf(Stat); }
+	static const TArray<FName>& FrameSlots() { return FWWOEquipped::FrameSlots(); }
 
 private:
-	UPROPERTY() TObjectPtr<UWWOWeaponData> Weapon;
-	UPROPERTY() TObjectPtr<UWWOGrenadeData> Grenade;
-	UPROPERTY() TObjectPtr<UWWOFloraData> Flora;
-	UPROPERTY() TArray<TObjectPtr<UWWOAbilityData>> EquippedAbilities;
-	UPROPERTY() TArray<TObjectPtr<UWWOTraitData>> EquippedTraitList;
-	UPROPERTY() TMap<FName, TObjectPtr<UWWOFramePartData>> EquippedFrame;
-	// Mods per frame (weapon id), each slot -> mod, so every frame keeps its own setup.
-	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> EquippedMods;
-	TArray<FWWOModConfig> Configs;
-	int32 ActiveConfig = INDEX_NONE; // the last one applied (this session)
-	TArray<int32> SlotConfigs = { INDEX_NONE, INDEX_NONE };
-	int32 ActiveSlot = 0;
+	UPROPERTY() FWWOEquipped Equipped;
+	FWWOModConfigs ModConfigs;
 
 	bool bCopy = false; // a joiner's loadout on the host
 	bool bSaveDue = false;
-	void LoadMods();
-	TMap<FName, FName> ModIds(FName WeaponId) const;
-	void SetModIds(FName WeaponId, const TMap<FName, FName>& Ids);
-
-	void LoadAllData();
-	void FitFlora();
-	void FillFloraSlots();
 	void Save() const;
+	UWWOLoadoutSave* MakeSave() const; // what Save writes (the regression scenarios hash it)
 	bool LoadSave();
 	void LoadDefaultLoadout();
 	void ApplySave(const UWWOLoadoutSave* Data);
 	void Changed();
-
-	template <typename T>
-	static T* FindById(const TArray<TObjectPtr<T>>& List, FName Id)
-	{
-		for (T* Item : List)
-		{
-			if (Item && Item->Id == Id) return Item;
-		}
-		return nullptr;
-	}
 
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) read and reset private state between runs; no gameplay code uses this.
 	friend class FWWORegress;

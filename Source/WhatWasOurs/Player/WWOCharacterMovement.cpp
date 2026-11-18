@@ -6,6 +6,7 @@
 #include "WWOTypes.h"
 #include "Player/WWOWeaponComponent.h"
 #include "WhatWasOurs.h"
+#include "Player/WWOTestTally.h"
 
 UWWOCharacterMovement::UWWOCharacterMovement()
 {
@@ -172,9 +173,6 @@ void UWWOCharacterMovement::MoveAutonomous(float ClientTimeStamp, float DeltaTim
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
 
-int32 UWWOCharacterMovement::NetCorrections = 0;
-float UWWOCharacterMovement::NetCorrectionErrorMax = 0.f;
-float UWWOCharacterMovement::NetCorrectionErrorSum = 0.f;
 bool UWWOCharacterMovement::bLogNetCorrections = false;
 
 void UWWOCharacterMovement::ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& Response)
@@ -182,7 +180,7 @@ void UWWOCharacterMovement::ClientHandleMoveResponse(const FCharacterMoveRespons
 	// A correction: put the movement rules back where the host had them before replaying.
 	if (Response.IsCorrection())
 	{
-		++NetCorrections;
+		FWWOTestTally::Count(&FWWOTestTally::Corrections);
 		// Compare with where this machine was after the same move (not now: newer moves have run since).
 		const FClientAdjustment& Adjust = Response.ClientAdjustment;
 		const FNetworkPredictionData_Client_Character* Data = GetPredictionData_Client_Character();
@@ -194,8 +192,7 @@ void UWWOCharacterMovement::ClientHandleMoveResponse(const FCharacterMoveRespons
 		if (Same && !Adjust.bBaseRelativePosition)
 		{
 			const float Error = FVector::Dist(Adjust.NewLoc, Same->SavedLocation);
-			NetCorrectionErrorMax = FMath::Max(NetCorrectionErrorMax, Error);
-			NetCorrectionErrorSum += Error;
+			FWWOTestTally::CorrectionError(Error);
 		}
 		if (bLogNetCorrections)
 		{

@@ -18,6 +18,7 @@
 #include "Game/WWOGameMode.h"
 #include "Game/WWOGameState.h"
 #include "Game/WWOPlayerState.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "Systems/WWOTargetable.h"
@@ -45,6 +46,7 @@
 #include "RHI.h"
 #include "UObject/UnrealType.h"
 #include "Algo/Reverse.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -78,6 +80,7 @@ struct FWWORegress::FLoadoutSnapshot
 	TArray<TObjectPtr<UWWOTraitData>> Traits;
 	TMap<FName, TObjectPtr<UWWOFramePartData>> Frame;
 	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> Mods;
+	TArray<FWWOModConfig> Configs;
 	int32 ActiveConfig = INDEX_NONE;
 	TArray<int32> SlotConfigs;
 	int32 ActiveSlot = 0;
@@ -91,10 +94,11 @@ FWWORegress::FWWORegress(AWWOPlayerController& Controller)
 	FApp::SetUseFixedTimeStep(true);
 	FApp::SetFixedDeltaTime(Dt);
 	bUpdate = WWOSwitches::Has(TEXT("WWORegressUpdate"));
+	bUpdateNew = WWOSwitches::Has(TEXT("WWORegressUpdateNew"));
 	bRender = !GUsingNullRHI;
 	IFileManager::Get().MakeDirectory(*ResultsDir(), true);
 	GLoadoutExisted = FFileHelper::LoadFileToArray(GLoadoutAtStart, *LoadoutFile(), FILEREAD_Silent);
-	UE_LOG(LogWWO, Display, TEXT("Regress: starting (%s mode, fixed step %.4f s%s)"), *Mode(), Dt, bUpdate ? TEXT(", updating golden") : TEXT(""));
+	UE_LOG(LogWWO, Display, TEXT("Regress: starting (%s mode, fixed step %.4f s%s)"), *Mode(), Dt, bUpdate ? TEXT(", updating golden") : bUpdateNew ? TEXT(", adding new golden entries") : TEXT(""));
 }
 
 void FWWORegress::AddReferencedObjects(FReferenceCollector& Collector)
@@ -189,9 +193,9 @@ void FWWORegress::Tick()
 	case EPhase::Gap:
 		if (PhaseTicks < GapTicks) return;
 		++Index;
-		while (Scenarios.IsValidIndex(Index) && !bRender && Scenarios[Index].Modes == EWWORegressModes::RenderOnly)
+		while (Scenarios.IsValidIndex(Index) && SkippedHere(Scenarios[Index]))
 		{
-			UE_LOG(LogWWO, Display, TEXT("Regress %s: skipped (render-only: %s)"), *Scenarios[Index].Name, *Scenarios[Index].ModeReason);
+			UE_LOG(LogWWO, Display, TEXT("Regress %s: skipped (%s: %s)"), *Scenarios[Index].Name, bRender ? TEXT("no-render only") : TEXT("render-only"), *Scenarios[Index].ModeReason);
 			++Skipped;
 			++Index;
 		}
@@ -222,7 +226,7 @@ void FWWORegress::Tick()
 		if (P && P->Weapon)
 		{
 			P->Weapon->ResetForRespawn();
-			P->Weapon->AimHeld = 0.f;
+			P->Weapon->PerkState.AimHeld = 0.f;
 		}
 		NotePlayerShot();
 		Confirms = ConfirmCrits = ConfirmKills = 0;
@@ -352,10 +356,10 @@ void FWWORegress::ResetPlayer()
 	G->ReadyLeft = 0.f;
 	G->FireBuffer = 0.f;
 	G->bReadyShotQueued = false;
-	G->BurstLeft = G->BurstSize = G->BurstHits = 0;
+	G->BurstLeft = G->BurstSize = G->PerkState.BurstHits = 0;
 	G->BurstCooldown = 0.f;
-	G->RefundRounds = 0;
-	G->bBurstBoosted = false;
+	G->PerkState.RefundRounds = 0;
+	G->PerkState.bBurstBoosted = false;
 	G->HostStaticHits = 0;
 	G->bLastShotPredictedKill = false;
 	G->KickAge = 1000.f;
@@ -366,11 +370,7 @@ void FWWORegress::ResetPlayer()
 	G->bMeleeConnected = false;
 	// Kit.
 	UWWOAbilityComponent* K = P->Abilities;
-	K->ChargeById.Reset();
-	K->ActiveLeft.Reset();
-	K->Armed.Reset();
-	K->GuardLeft = 0.f;
-	K->LiveSeeds = K->LivePatches = 0;
+	K->States.Reset();
 	P->Grenades->ReleaseLeft = -1.f;
 	P->Grenades->Charge = P->Grenades->MaxCharges();
 	P->Ult->Charge = 1.f;
@@ -414,16 +414,17 @@ void FWWORegress::SnapshotLoadout()
 	if (!L) return;
 	SavedLoadout = MakeShared<FLoadoutSnapshot>();
 	FLoadoutSnapshot& S = *SavedLoadout;
-	S.Weapon = L->Weapon;
-	S.Grenade = L->Grenade;
-	S.Flora = L->Flora;
-	S.Abilities = L->EquippedAbilities;
-	S.Traits = L->EquippedTraitList;
-	S.Frame = L->EquippedFrame;
-	S.Mods = L->EquippedMods;
-	S.ActiveConfig = L->ActiveConfig;
-	S.SlotConfigs = L->SlotConfigs;
-	S.ActiveSlot = L->ActiveSlot;
+	S.Weapon = L->Equipped.Weapon;
+	S.Grenade = L->Equipped.Grenade;
+	S.Flora = L->Equipped.Flora;
+	S.Abilities = L->Equipped.Abilities;
+	S.Traits = L->Equipped.Traits;
+	S.Frame = L->Equipped.Frame;
+	S.Mods = L->Equipped.Mods;
+	S.Configs = L->ModConfigs.Configs;
+	S.ActiveConfig = L->ModConfigs.Active;
+	S.SlotConfigs = L->ModConfigs.SlotConfigs;
+	S.ActiveSlot = L->ModConfigs.ActiveSlot;
 	S.bSaveDue = L->bSaveDue;
 }
 
@@ -432,16 +433,17 @@ void FWWORegress::RestoreLoadout()
 	UWWOLoadoutSubsystem* L = Loadout();
 	if (!L || !SavedLoadout.IsValid()) return;
 	const FLoadoutSnapshot& S = *SavedLoadout;
-	L->Weapon = S.Weapon;
-	L->Grenade = S.Grenade;
-	L->Flora = S.Flora;
-	L->EquippedAbilities = S.Abilities;
-	L->EquippedTraitList = S.Traits;
-	L->EquippedFrame = S.Frame;
-	L->EquippedMods = S.Mods;
-	L->ActiveConfig = S.ActiveConfig;
-	L->SlotConfigs = S.SlotConfigs;
-	L->ActiveSlot = S.ActiveSlot;
+	L->Equipped.Weapon = S.Weapon;
+	L->Equipped.Grenade = S.Grenade;
+	L->Equipped.Flora = S.Flora;
+	L->Equipped.Abilities = S.Abilities;
+	L->Equipped.Traits = S.Traits;
+	L->Equipped.Frame = S.Frame;
+	L->Equipped.Mods = S.Mods;
+	L->ModConfigs.Configs = S.Configs;
+	L->ModConfigs.Active = S.ActiveConfig;
+	L->ModConfigs.SlotConfigs = S.SlotConfigs;
+	L->ModConfigs.ActiveSlot = S.ActiveSlot;
 	L->OnChanged.Broadcast();
 	L->bSaveDue = S.bSaveDue; // nothing new to write: the run never saves
 }
@@ -452,36 +454,36 @@ void FWWORegress::BaselineLoadout()
 	// weapon with no mods, no grenade, no abilities, no traits, the Standard frame parts.
 	UWWOLoadoutSubsystem* L = Loadout();
 	if (!L) return;
-	L->Flora = L->Floras.Num() > 0 ? L->Floras[0] : nullptr;
-	L->Weapon = L->Weapons.Num() > 0 ? L->Weapons[0] : nullptr;
-	L->Grenade = nullptr;
-	L->EquippedAbilities.Init(nullptr, UWWOLoadoutSubsystem::AbilitySlots);
-	L->EquippedTraitList.Reset();
-	L->EquippedMods.Reset();
-	L->EquippedFrame.Reset();
+	L->Equipped.Flora = L->Catalog.Floras.Num() > 0 ? L->Catalog.Floras[0] : nullptr;
+	L->Equipped.Weapon = L->Catalog.Weapons.Num() > 0 ? L->Catalog.Weapons[0] : nullptr;
+	L->Equipped.Grenade = nullptr;
+	L->Equipped.Abilities.Init(nullptr, UWWOLoadoutSubsystem::AbilitySlots);
+	L->Equipped.Traits.Reset();
+	L->Equipped.Mods.Reset();
+	L->Equipped.Frame.Reset();
 	for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())
 	{
 		const TArray<UWWOFramePartData*> Options = L->FramePartsFor(Slot);
-		if (Options.Num() > 0) L->EquippedFrame.Add(Slot, Options[0]);
+		if (Options.Num() > 0) L->Equipped.Frame.Add(Slot, Options[0]);
 	}
-	L->ActiveConfig = INDEX_NONE;
+	L->ModConfigs.Active = INDEX_NONE;
 	L->bSaveDue = false;
 }
 
 void FWWORegress::EquipWeapon(FName Id)
 {
-	if (UWWOWeaponData* W = WeaponAsset(Id)) Loadout()->Weapon = W;
+	if (UWWOWeaponData* W = WeaponAsset(Id)) Loadout()->Equipped.Weapon = W;
 	else Record(TEXT("missing_weapon"), Id.ToString());
 }
 
 void FWWORegress::EquipMod(FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	for (UWWOModData* M : L->WeaponMods)
+	for (UWWOModData* M : L->Catalog.WeaponMods)
 	{
-		if (M && M->Id == Id && L->Weapon && M->Frame == L->Weapon->Id)
+		if (M && M->Id == Id && L->Equipped.Weapon && M->Frame == L->Equipped.Weapon->Id)
 		{
-			L->EquippedMods.FindOrAdd(L->Weapon->Id).Add(M->Slot, M);
+			L->Equipped.Mods.FindOrAdd(L->Equipped.Weapon->Id).Add(M->Slot, M);
 			return;
 		}
 	}
@@ -491,26 +493,26 @@ void FWWORegress::EquipMod(FName Id)
 void FWWORegress::EquipFlora(FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	for (UWWOFloraData* F : L->Floras) if (F && F->Id == Id) { L->Flora = F; return; }
+	for (UWWOFloraData* F : L->Catalog.Floras) if (F && F->Id == Id) { L->Equipped.Flora = F; return; }
 	Record(TEXT("missing_flora"), Id.ToString());
 }
 
 void FWWORegress::EquipGrenade(FName Id)
 {
-	if (UWWOGrenadeData* G = GrenadeAsset(Id)) Loadout()->Grenade = G;
+	if (UWWOGrenadeData* G = GrenadeAsset(Id)) Loadout()->Equipped.Grenade = G;
 	else Record(TEXT("missing_grenade"), Id.ToString());
 }
 
 void FWWORegress::EquipAbility(int32 Slot, FName Id)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	if (UWWOAbilityData* A = AbilityAsset(Id); A && L->EquippedAbilities.IsValidIndex(Slot)) L->EquippedAbilities[Slot] = A;
+	if (UWWOAbilityData* A = AbilityAsset(Id); A && L->Equipped.Abilities.IsValidIndex(Slot)) L->Equipped.Abilities[Slot] = A;
 	else Record(TEXT("missing_ability"), Id.ToString());
 }
 
-UWWOWeaponData* FWWORegress::WeaponAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Weapons, Id); }
-UWWOGrenadeData* FWWORegress::GrenadeAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Grenades, Id); }
-UWWOAbilityData* FWWORegress::AbilityAsset(FName Id) const { return UWWOLoadoutSubsystem::FindById(Loadout()->Abilities, Id); }
+UWWOWeaponData* FWWORegress::WeaponAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Weapons, Id); }
+UWWOGrenadeData* FWWORegress::GrenadeAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Grenades, Id); }
+UWWOAbilityData* FWWORegress::AbilityAsset(FName Id) const { return FWWOLoadoutCatalog::FindById(Loadout()->Catalog.Abilities, Id); }
 
 void FWWORegress::Tune(UObject* Object, FName Property, float Value)
 {
@@ -548,8 +550,9 @@ AWWOTarget* FWWORegress::SpawnDummy(const FVector& At, float Health)
 AWWOEnemy* FWWORegress::SpawnEnemy(FName Kind, const FVector& At, bool bInert)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	UClass* Class = Kind == "tank" ? AWWOTank::StaticClass() : (Kind == "soldier" ? AWWOSoldier::StaticClass() : AWWOSwarm::StaticClass());
-	UWWOEnemyData* Data = Kind == "tank" ? (UWWOEnemyData*)L->TankData : (Kind == "soldier" ? (UWWOEnemyData*)L->SoldierData : (UWWOEnemyData*)L->SwarmData);
+	const FWWOEnemyKind& Entry = WWOEnemyKinds::FindOrSwarm(Kind);
+	UClass* Class = Entry.Class;
+	UWWOEnemyData* Data = L->EnemyDataFor(Entry.Id);
 	if (Data && bInert && Data->AiEnabled >= 0.5f) Tune(Data, "AiEnabled", 0.f);
 	const float Half = Class->GetDefaultObject<AWWOEnemy>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	AWWOEnemy* E = World()->SpawnActor<AWWOEnemy>(Class, At + FVector(0, 0, Half), FacingFrom(At, HomeFeet), WWO::AlwaysSpawn());
@@ -562,7 +565,7 @@ AWWOEnemy* FWWORegress::SpawnEnemy(FName Kind, const FVector& At, bool bInert)
 AWWOAlly* FWWORegress::SpawnAlly(const FVector& At)
 {
 	UWWOLoadoutSubsystem* L = Loadout();
-	if (L->AllyData && L->AllyData->AiEnabled >= 0.5f) Tune(L->AllyData, "AiEnabled", 0.f);
+	if (L->Catalog.AllyData && L->Catalog.AllyData->AiEnabled >= 0.5f) Tune(L->Catalog.AllyData, "AiEnabled", 0.f);
 	const float Half = AWWOAlly::StaticClass()->GetDefaultObject<AWWOAlly>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	AWWOAlly* A = World()->SpawnActor<AWWOAlly>(AWWOAlly::StaticClass(), At + FVector(0, 0, Half), FacingFrom(At, HomeFeet), WWO::AlwaysSpawn());
 	if (!A) { Record(TEXT("spawn_failed"), TEXT("ally")); return nullptr; }
@@ -590,8 +593,8 @@ AWWOCharacter* FWWORegress::SpawnBot(int32 Team, const FVector& At, float FaceYa
 	{
 		const UWWOLoadoutSubsystem* L = Loadout();
 		FWWONetLoadout Kit;
-		Kit.Flora = L->Floras.Num() > 0 ? L->Floras[0]->Id : NAME_None;
-		Kit.Weapon = L->Weapons.Num() > 0 ? L->Weapons[0]->Id : NAME_None;
+		Kit.Flora = L->Catalog.Floras.Num() > 0 ? L->Catalog.Floras[0]->Id : NAME_None;
+		Kit.Weapon = L->Catalog.Weapons.Num() > 0 ? L->Catalog.Weapons[0]->Id : NAME_None;
 		for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())
 		{
 			const TArray<UWWOFramePartData*> Options = L->FramePartsFor(Slot);
@@ -670,19 +673,35 @@ float FWWORegress::HealthOf(const AActor* A)
 
 void FWWORegress::NotePlayerShot()
 {
-	ShotsMarkedSince = UWWOWorldSubsystem::HitsMarked;
+	ShotsMarkedSince = FWWOTestTally::Get().HitsMarked;
 	TextsAtStart = UWWOWorldSubsystem::Get(World())->FloatingTexts().Num();
 }
 
 FString FWWORegress::Quote(const FString& S)
 {
-	return TEXT("\"") + S.ReplaceCharWithEscapedChar() + TEXT("\"");
+	// JSON's own escapes only (FString::ReplaceCharWithEscapedChar also writes \', which JSON has not).
+	FString Out = TEXT("\"");
+	for (const TCHAR C : S)
+	{
+		switch (C)
+		{
+		case TEXT('"'): Out += TEXT("\\\""); break;
+		case TEXT('\\'): Out += TEXT("\\\\"); break;
+		case TEXT('\n'): Out += TEXT("\\n"); break;
+		case TEXT('\r'): Out += TEXT("\\r"); break;
+		case TEXT('\t'): Out += TEXT("\\t"); break;
+		case TEXT('\b'): Out += TEXT("\\b"); break;
+		case TEXT('\f'): Out += TEXT("\\f"); break;
+		default:
+			if (C < 0x20) Out += FString::Printf(TEXT("\\u%04x"), (uint32)C);
+			else Out += C;
+		}
+	}
+	return Out + TEXT("\"");
 }
 
-bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out)
+bool FWWORegress::ParseResults(const FString& Text, TMap<FString, TMap<FString, FString>>& Out)
 {
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *Path)) return false;
 	TSharedPtr<FJsonObject> Root;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()) return false;
 	for (const auto& Pair : Root->Values)
@@ -695,7 +714,30 @@ bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, F
 	return true;
 }
 
-bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results)
+bool FWWORegress::LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out)
+{
+	FString Text;
+	return FFileHelper::LoadFileToString(Text, *Path) && ParseResults(Text, Out);
+}
+
+bool FWWORegress::CheckResultsRoundTrip()
+{
+	// The results text must read back as it was written, whatever a value holds (a recorded reason
+	// with an apostrophe or a quote once made the golden unreadable).
+	const FString Value = TEXT("it's a \"quoted\" \\ value\twith\nlines");
+	TMap<FString, TArray<TPair<FString, FString>>> Results;
+	Results.Add(TEXT("check's \"name\""), { { TEXT("why"), Value } });
+	TMap<FString, TMap<FString, FString>> Back;
+	const bool bParsed = ParseResults(ResultsText(Results), Back);
+	const TMap<FString, FString>* Entry = Back.Find(TEXT("check's \"name\""));
+	const FString* Got = Entry ? Entry->Find(TEXT("why")) : nullptr;
+	const bool bOk = bParsed && Got && *Got == Value;
+	if (bOk) { UE_LOG(LogWWO, Display, TEXT("Regress: results text round-trip ok (apostrophe, quote, backslash, tab, newline)")); }
+	else { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF harness: results text round-trip FAIL (parsed %d, got %s)"), bParsed, Got ? **Got : TEXT("(none)")); }
+	return bOk;
+}
+
+FString FWWORegress::ResultsText(const TMap<FString, TArray<TPair<FString, FString>>>& Results)
 {
 	// Sorted scenarios, sorted keys, one per line: the same bytes for the same numbers.
 	TArray<FString> Names;
@@ -715,14 +757,18 @@ bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TP
 		Out += i + 1 < Names.Num() ? TEXT(",\n") : TEXT("\n");
 	}
 	Out += TEXT("}\n");
-	return FFileHelper::SaveStringToFile(Out, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	return Out;
+}
+
+bool FWWORegress::SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results)
+{
+	return FFileHelper::SaveStringToFile(ResultsText(Results), *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 }
 
 void FWWORegress::Finish()
 {
 	const double Seconds = FPlatformTime::Seconds() - StartedAt;
-	FString Only;
-	const bool bFiltered = WWOSwitches::Value(TEXT("WWORegressOnly="), Only);
+	const bool bFiltered = IsFilteredRun();
 	SaveResults(ResultsDir() / TEXT("results.json"), All);
 	SaveResults(ResultsDir() / FString::Printf(TEXT("results-%s.json"), *Mode()), All);
 
@@ -734,9 +780,17 @@ void FWWORegress::Finish()
 		return Key.Mid(At + 1) == Mode();
 	};
 	TMap<FString, TMap<FString, FString>> Golden;
+	const bool bGoldenExists = FPaths::FileExists(GoldenPath());
 	const bool bHaveGolden = LoadResults(GoldenPath(), Golden);
 	int32 Diffs = Problems;
-	if (bUpdate)
+	if (!CheckResultsRoundTrip()) ++Diffs;
+	if (bGoldenExists && !bHaveGolden)
+	{
+		// Never rewritten from here: an update would keep only this run's entries and drop the rest.
+		UE_LOG(LogWWO, Warning, TEXT("Regress DIFF golden: %s is not valid JSON, FAIL (left as it is%s)"), *GoldenPath(), bUpdate ? TEXT(", not updated") : TEXT(""));
+		++Diffs;
+	}
+	else if (bUpdate)
 	{
 		// This run's entries replace the golden ones; a full run also drops entries it no longer has
 		// (of its own mode). The other mode's entries stay.
@@ -745,9 +799,9 @@ void FWWORegress::Finish()
 		{
 			if (!bFiltered && IsMine(Pair.Key) && !All.Contains(Pair.Key))
 			{
-				// A render-only scenario a no-render run skipped keeps its golden entry.
+				// A scenario this mode skips (render-only, no-render only) keeps its golden entry.
 				bool bSkippedHere = false;
-				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Pair.Key && S.Modes == EWWORegressModes::RenderOnly && !bRender;
+				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Pair.Key && SkippedHere(S);
 				if (!bSkippedHere) continue;
 			}
 			TArray<TPair<FString, FString>>& Values = Merged.Add(Pair.Key);
@@ -760,9 +814,31 @@ void FWWORegress::Finish()
 	}
 	else
 	{
+		// -WWORegressUpdateNew: entries the golden doesn't have yet are added; every other entry is
+		// left as it is and compared as usual (Tools/regress.sh update-new).
+		TSet<FString> Added;
+		if (bUpdateNew && bHaveGolden)
+		{
+			TMap<FString, TArray<TPair<FString, FString>>> Merged;
+			for (const auto& Pair : Golden)
+			{
+				TArray<TPair<FString, FString>>& Values = Merged.Add(Pair.Key);
+				for (const auto& KV : Pair.Value) Values.Add({ KV.Key, KV.Value });
+			}
+			for (const FString& Key : Order)
+			{
+				if (Golden.Contains(Key)) continue;
+				Merged.Add(Key, All[Key]);
+				Added.Add(Key);
+				UE_LOG(LogWWO, Display, TEXT("Regress: golden gains %s"), *Key);
+			}
+			if (Added.Num() > 0) SaveResults(GoldenPath(), Merged);
+			UE_LOG(LogWWO, Display, TEXT("Regress: golden gains %d new entries, existing ones unchanged"), Added.Num());
+		}
 		if (!bHaveGolden) { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF golden: no golden file at %s"), *GoldenPath()); ++Diffs; }
 		for (const FString& Key : Order)
 		{
+			if (Added.Contains(Key)) continue;
 			const TArray<TPair<FString, FString>>& Now = All[Key];
 			const TMap<FString, FString>* Was = Golden.Find(Key);
 			if (!Was)
@@ -798,7 +874,7 @@ void FWWORegress::Finish()
 			{
 				if (!IsMine(Key) || All.Contains(Key)) continue;
 				bool bSkippedHere = false;
-				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Key && S.Modes == EWWORegressModes::RenderOnly && !bRender;
+				for (const FWWORegressScenario& S : Scenarios) bSkippedHere |= S.Name == Key && SkippedHere(S);
 				if (bSkippedHere) continue;
 				UE_LOG(LogWWO, Warning, TEXT("Regress DIFF %s: in golden, not run"), *Key);
 				++Diffs;
@@ -827,15 +903,33 @@ void FWWORegress::BuildScenarios()
 		AddGunScenarios(List, *L);
 		AddKitScenarios(List, *L);
 		AddCombatScenarios(List, *L);
+		AddAreaScenarios(List, *L);
+		AddLifeScenarios(List, *L);
+		AddMoveScenarios(List, *L);
+		AddWaveScenarios(List, *L);
+		AddLoadoutScenarios(List, *L);
+		AddMatchScenarios(List, *L);
 	}
+	// -WWORegressOnly=a,b: names containing any of the comma-separated texts. -WWORegressPerModeOnly:
+	// only the scenarios with one golden entry per mode (the drawn-only check, Tools/regress.sh).
 	FString Only;
-	const bool bFiltered = WWOSwitches::Value(TEXT("WWORegressOnly="), Only);
+	TArray<FString> Parts;
+	if (WWOSwitches::Value(TEXT("WWORegressOnly="), Only, false)) Only.ParseIntoArray(Parts, TEXT(","), true);
+	const bool bPerModeOnly = WWOSwitches::Has(TEXT("WWORegressPerModeOnly"));
 	TSet<FString> Names;
 	for (FWWORegressScenario& S : List)
 	{
 		if (Names.Contains(S.Name)) { UE_LOG(LogWWO, Warning, TEXT("Regress DIFF %s: two scenarios have this name"), *S.Name); ++Problems; continue; }
 		Names.Add(S.Name);
-		if (bFiltered && !S.Name.Contains(Only)) continue;
+		bool bWanted = Parts.Num() == 0;
+		for (const FString& Part : Parts) bWanted |= S.Name.Contains(Part);
+		if (!bWanted || (bPerModeOnly && S.Modes != EWWORegressModes::PerMode)) continue;
 		Scenarios.Add(MoveTemp(S));
 	}
+}
+
+bool FWWORegress::IsFilteredRun()
+{
+	FString Only;
+	return WWOSwitches::Value(TEXT("WWORegressOnly="), Only) || WWOSwitches::Has(TEXT("WWORegressPerModeOnly"));
 }

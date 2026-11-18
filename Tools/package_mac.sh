@@ -9,7 +9,7 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENGINE="/Volumes/UnrealSSD/Epic Games/UE_5.8/Engine"
 OUT="/Volumes/UnrealSSD/Builds/WhatWasOurs"
-pkill -f "WhatWasOurs.uproject.*-game" || true
+"$PROJECT_DIR/Tools/close_game.sh"
 # Config/ShippedSettings.json is in git (the tuning every build starts from). This Mac's saved
 # Settings values replace it when there are any; on a fresh clone the one in git ships as it is.
 if [ -f "$PROJECT_DIR/Saved/WWO/SavedSettings.json" ]; then

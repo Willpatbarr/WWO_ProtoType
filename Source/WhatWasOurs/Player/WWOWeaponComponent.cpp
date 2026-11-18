@@ -89,9 +89,9 @@ void UWWOWeaponComponent::RebindLoadout()
 					RefreshStats();
 					BuildModel(); // the mods' parts
 					Ammo = bWasFull ? MagazineSize() : FMath::Min(Ammo, MagazineSize());
-					HitStreak = StaticHits = 0;
+					PerkState.HitStreak = PerkState.StaticHits = 0;
 					BurstLeft = 0;
-					bFullBurst = bBurstBoosted = false;
+					PerkState.bFullBurst = PerkState.bBurstBoosted = false;
 					CancelReload();
 					SwapLength = FMath::Max(M("swap_time", SwapTime), 0.05f);
 					SwapLeft = SwapLength;
@@ -128,14 +128,14 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	StoreGunState(); // the gun you're putting away keeps its rounds
 	BaseWeapon = NewWeapon;
 	Weapon = DuplicateObject<UWWOWeaponData>(NewWeapon, this);
-	HitStreak = StaticHits = 0;
-	bOverpressure = true;
-	AimHeld = 0.f;
-	SinceShot = 100.f;
+	PerkState.HitStreak = PerkState.StaticHits = 0;
+	PerkState.bOverpressure = true;
+	PerkState.AimHeld = 0.f;
+	PerkState.SinceShot = 100.f;
 	bMeleeLanded = false;
-	RefundRounds = 0;
-	BurstLeft = BurstSize = BurstHits = 0;
-	bFullBurst = bBurstBoosted = false;
+	PerkState.RefundRounds = 0;
+	BurstLeft = BurstSize = PerkState.BurstHits = 0;
+	PerkState.bFullBurst = PerkState.bBurstBoosted = false;
 	ModSignature.Reset();
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
@@ -151,8 +151,8 @@ void UWWOWeaponComponent::Equip(UWWOWeaponData* NewWeapon)
 	if (const FGunState* Kept = GunStates.Find(NewWeapon->Id))
 	{
 		Ammo = FMath::Clamp(Kept->Ammo, 0, MagazineSize());
-		bOverpressure = Kept->bOverpressure;
-		SinceShot = GetWorld() ? float(GetWorld()->GetTimeSeconds() - Kept->LastShot) : 100.f;
+		PerkState.bOverpressure = Kept->bOverpressure;
+		PerkState.SinceShot = GetWorld() ? float(GetWorld()->GetTimeSeconds() - Kept->LastShot) : 100.f;
 	}
 	CancelReload();
 	AdsProgress = 0.f;
@@ -167,14 +167,14 @@ void UWWOWeaponComponent::StoreGunState()
 	if (!BaseWeapon || !GetWorld()) return;
 	FGunState& State = GunStates.FindOrAdd(BaseWeapon->Id);
 	State.Ammo = Ammo;
-	State.bOverpressure = bOverpressure;
-	State.LastShot = GetWorld()->GetTimeSeconds() - SinceShot;
+	State.bOverpressure = PerkState.bOverpressure;
+	State.LastShot = GetWorld()->GetTimeSeconds() - PerkState.SinceShot;
 }
 
 void UWWOWeaponComponent::Interrupt()
 {
 	BurstLeft = 0;
-	bBurstBoosted = false;
+	PerkState.bBurstBoosted = false;
 	bReadyShotQueued = false;
 	CancelReload();
 	bMeleeing = false;
@@ -187,12 +187,12 @@ void UWWOWeaponComponent::ResetForRespawn()
 {
 	Interrupt();
 	GunStates.Reset();
-	HitStreak = StaticHits = 0;
-	AdrenalLeft = HammerLeft = 0.f;
-	bFullBurst = false;
-	bOverpressure = true;
-	SinceShot = 100.f;
-	AimHeld = 0.f;
+	PerkState.HitStreak = PerkState.StaticHits = 0;
+	PerkState.AdrenalLeft = PerkState.HammerLeft = 0.f;
+	PerkState.bFullBurst = false;
+	PerkState.bOverpressure = true;
+	PerkState.SinceShot = 100.f;
+	PerkState.AimHeld = 0.f;
 	FireCooldown = 0.f;
 	if (Weapon) Ammo = MagazineSize();
 }
@@ -242,9 +242,7 @@ void UWWOWeaponComponent::CancelReload()
 void UWWOWeaponComponent::UpdateWeapon(float DeltaSeconds)
 {
 	if (!Weapon) return;
-	AdrenalLeft = FMath::Max(AdrenalLeft - DeltaSeconds, 0.f);
-	HammerLeft = FMath::Max(HammerLeft - DeltaSeconds, 0.f);
-	SinceShot += DeltaSeconds;
+	PerkState.Tick(DeltaSeconds); // Adrenal, Hammer, Cold Bore timers
 	RefreshStats();
 	if (!FMath::IsNearlyEqual(Weapon->SightHeight, BuiltSightHeight)) BuildModel(); // the slider moved
 	UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
@@ -280,13 +278,13 @@ void UWWOWeaponComponent::UpdateReload(float DeltaSeconds)
 	if (JustPressed((int32)EWWOAction::Reload) && !GetPlayer()->Health->FindReviveTarget()) StartReload();
 	if (bReloading && GetPlayer()->MoveState.bSprinting) CancelReload(); // sprinting cancels a reload, like Destiny
 	if (!bReloading) return;
-	const float Adrenal = AdrenalLeft > 0.f ? 1.4f : 1.f; // Adrenal: reloads 40% faster after a kill
+	const float Adrenal = PerkState.AdrenalLeft > 0.f ? WWOPerk::AdrenalReload : 1.f; // Adrenal: faster reloads after a kill
 	ReloadProgress += DeltaSeconds * Adrenal / FMath::Max(M("reload_time", Weapon->ReloadTime), 0.05f);
 	if (ReloadProgress >= ReloadSeated && Ammo < MagazineSize())
 	{
 		Ammo = MagazineSize(); // the new magazine is in
 		UWWOSound::PlayFor(GetOwner(), "reload_done");
-		bOverpressure = true;
+		PerkState.bOverpressure = true;
 	}
 	if (ReloadProgress >= 1.f) CancelReload();
 }
@@ -296,5 +294,5 @@ void UWWOWeaponComponent::UpdateAds(float DeltaSeconds)
 	const float Target = IsAiming() ? 1.f : 0.f;
 	AdsProgress = WWO::MoveToward(AdsProgress, Target, DeltaSeconds / FMath::Max(M("ads_time", Weapon->AdsTime), 0.01f));
 	AdsAmount = WWO::SmoothStep(0.f, 1.f, AdsProgress);
-	AimHeld = AdsProgress >= 1.f ? AimHeld + DeltaSeconds : 0.f; // Patience
+	PerkState.AimHeld = AdsProgress >= 1.f ? PerkState.AimHeld + DeltaSeconds : 0.f; // Patience, Held Breath
 }

@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Game/WWOGameState.h"
 #include "Enemies/WWOEnemy.h"
+#include "Systems/WWONav.h"
 #include "Characters/WWOBodyComponent.h"
 #include "Player/WWOCharacter.h"
 #include "FX/WWOFX.h"
@@ -39,7 +40,7 @@ AWWOAlly::AWWOAlly(const FObjectInitializer& ObjectInitializer)
 UWWOAllyData* AWWOAlly::D() const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	return L ? L->AllyData.Get() : nullptr;
+	return L ? L->Catalog.AllyData.Get() : nullptr;
 }
 
 void AWWOAlly::BeginPlay()
@@ -226,29 +227,27 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 		// Give you some room. Godot backs straight off even into a wall; here it stays put
 		// when a wall is right behind it.
 		const FVector Away = -To.GetSafeNormal();
+		// The enemies' wall probe (its capsule 15 cm shorter, from 10 cm up, swept 30 cm), as a sweep test.
 		const UCapsuleComponent* Capsule = GetCapsuleComponent();
-		FCollisionObjectQueryParams Objects;
-		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-		const FVector From = GetActorLocation() + FVector(0, 0, 10.f);
-		const bool bWall = GetWorld()->SweepTestByObjectType(From, From + Away * 30.f, FQuat::Identity, Objects,
-			FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
+		FWWOProbe Probe;
+		Probe.Radius = Capsule->GetScaledCapsuleRadius();
+		Probe.HalfHeight = Capsule->GetScaledCapsuleHalfHeight() - 15.f;
+		Probe.bAnyHit = true;
+		const bool bWall = WWONav::WallAhead(GetWorld(), Probe, GetActorLocation() + FVector(0, 0, 10.f), Away * 30.f,
 			FCollisionQueryParams(SCENE_QUERY_STAT(WWOAllyBack), false, this));
 		return bWall ? FVector::ZeroVector : Away * 0.5f;
 	}
 	if (Distance <= Data->FollowMax) return FVector::ZeroVector;
-	// Walk back toward you, around walls.
-	PathAge += DeltaSeconds;
-	if (PathAge > 0.4f) // on its age alone: a straight two-point path trims to one point at once
+	// Walk back toward you, around walls. It paths again every 0.4 s on its age alone (a straight
+	// two-point path trims to one point at once); a point nearer than 60 cm (flat) is reached. The clock
+	// only runs while it is walking back.
+	FWWOPathRules Rules;
+	Rules.RepathAfter = 0.4f;
+	Rules.Reach = 60.f;
+	Path.Update(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), GetActorLocation(), DeltaSeconds, Rules);
+	if (Path.Points.Num() >= 2)
 	{
-		bool bPartial = false;
-		Path = WWONav::FindPath(this, GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), P->GetActorLocation(), bPartial);
-		PathAge = 0.f;
-	}
-	while (Path.Num() > 1 && FVector2D(Path[0].X - GetActorLocation().X, Path[0].Y - GetActorLocation().Y).Size() < 60.f) Path.RemoveAt(0);
-	if (Path.Num() >= 2)
-	{
-		FVector Step = Path[0] - GetActorLocation();
+		FVector Step = Path.Points[0] - GetActorLocation();
 		Step.Z = 0.f;
 		if (Step.Size() > 1.f) return Step.GetSafeNormal();
 	}
@@ -258,9 +257,7 @@ FVector AWWOAlly::Follow(float DeltaSeconds)
 void AWWOAlly::Face(const FVector& Direction, float DeltaSeconds)
 {
 	if (Direction.Size2D() < 1.f) return;
-	const float Current = GetActorRotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Direction.Rotation().Yaw) * WWO::Damp(10.f, DeltaSeconds);
-	SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	SetActorRotation(FRotator(0.f, WWONav::TurnYaw(GetActorRotation().Yaw, Direction.Rotation().Yaw, 10.f, DeltaSeconds), 0.f)); // its own rate; a double target
 }
 
 AWWOEnemy* AWWOAlly::NearestVisibleEnemy() const

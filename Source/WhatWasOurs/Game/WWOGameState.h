@@ -23,6 +23,24 @@ public:
 	UPROPERTY(Replicated) TArray<int32> TeamScores;
 	UPROPERTY(Replicated) bool bMatchOver = false; // the PvP match ended: every machine shows the scoreboard (UWWOScoreboard)
 	UPROPERTY(Replicated) int8 MatchWinner = -1;   // the team that won it (-1: a draw)
+	// FootRace (Game/WWOFootRaceRules.h): each team's breach energy (empty in other modes), and what it
+	// takes to enter the hub (the host's setting, here so every HUD can mark it).
+	UPROPERTY(Replicated) TArray<float> BreachEnergy;
+	UPROPERTY(Replicated) float BreachThreshold = 0.f;
+	// While a team's breachers are still in the hub on the pool they opened a door with: that pool is
+	// frozen (BreachFrozen), and what the team earns goes to BreachNext, its next breach. DoorsOpen: each
+	// team's doors opened so far (0-3).
+	UPROPERTY(Replicated) TArray<float> BreachNext;
+	UPROPERTY(Replicated) TArray<bool> BreachFrozen;
+	UPROPERTY(Replicated) TArray<int32> DoorsOpen;
+	// Each team's pool when its current breach began (0: not breaching): the HUD's race track bar.
+	UPROPERTY(Replicated) TArray<float> BreachStart;
+	// Each team's boss: its health as a share of full (-1: not spawned yet), and the seconds left in its
+	// damage window (0: the shield is up).
+	UPROPERTY(Replicated) TArray<float> BossHealth;
+	UPROPERTY(Replicated) TArray<float> BossWindow;
+	// Each team's boss core: 0 none, 1 in the hub, 2 carried, 3 dropped.
+	UPROPERTY(Replicated) TArray<uint8> CoreState;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -40,6 +58,10 @@ public:
 	};
 	TArray<FKillLine> KillFeed;
 	static const FName KillPrecision;
+	// How for a line that isn't a kill: "<Killer> <Victim>", the Victim field holding what happened
+	// (FootRace: "breached", "opened Door 2"). Reported with no killer state and 0 points.
+	static const FName KillEvent;
+	void ReportEvent(const FString& Who, int32 Team, const FString& What) { ReportKill(nullptr, Who, Team, What, -1, KillEvent, 0); }
 	static constexpr int32 KillPoints = 1, PrecisionKillPoints = 2; // team score for a kill, and for a precision kill
 	void ReportKill(const class AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points);
 
@@ -47,7 +69,6 @@ public:
 	// machine already showed it (its predicted punch), so it isn't drawn twice there.
 	static void Bolt(UWorld* World, const FVector& From, const FVector& To, const FLinearColor& Color, float Lifetime,
 		AActor* FromActor = nullptr, AActor* ToActor = nullptr);
-	static int32 BlastsSeen; // blasts this machine drew for the host (-WWOAutoTestNet)
 	static void Blast(UWorld* World, const FWWOGrenadeLook& Look, const FVector& Center, float RadiusM, AActor* Ignore = nullptr);
 	static void Text(UWorld* World, const FString& Words, const FVector& At, const FLinearColor& Color); // "BLINDED", "SLOWED"
 	static void Sound(UWorld* World, FName Event, const FVector& At, float Volume = 1.f); // a Sounds.json event, heard on every machine
@@ -58,6 +79,9 @@ public:
 		int32 Arcs, float RadiusM, float Lifetime, AActor* Skip = nullptr);
 
 private:
+	// Each relay above draws (or plays) its thing here, then, on a listen-server host, sends it to the others
+	// through its multicast: this is the game state to send it through, or null when there is no one to tell.
+	static AWWOGameState* HostRelay(UWorld* World);
 	UFUNCTION(NetMulticast, Reliable) void MulticastKill(const class AWWOPlayerState* KillerState, const FString& Killer, int8 KillerTeam, const FString& Victim, int8 VictimTeam, FName How, uint8 Points);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBlast(const FWWOGrenadeLook& Look, FVector_NetQuantize Center, float RadiusM);
 	UFUNCTION(NetMulticast, Unreliable) void MulticastSound(FName Event, FVector_NetQuantize At, float Volume);

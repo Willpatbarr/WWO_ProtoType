@@ -17,6 +17,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -26,6 +28,7 @@ namespace
 // --- Spore pool -------------------------------------------------------------------------------
 
 AWWOSporePool::AWWOSporePool()
+	: Life(0.25f, 0.f, false) // grows in over 0.25 s, fades over the last 0.5 s of its duration (Tick), no tail
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -41,12 +44,10 @@ void AWWOSporePool::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME_CONDITION(AWWOSporePool, Flavor, COND_InitialOnly);
 }
 
-int32 AWWOSporePool::SeenRemote = 0;
-
 void AWWOSporePool::BeginPlay()
 {
 	Super::BeginPlay();
-	if (!HasAuthority()) ++SeenRemote;
+	if (!HasAuthority()) FWWOTestTally::Count(&FWWOTestTally::PoolsSeen);
 	const FVector At = GetActorLocation();
 	Disc = WWOFX::AddGroundDisc(this, GetRootComponent(), Color, 0.1f, 0.55f, 0.8f);
 	Disc->SetRelativeLocation(FVector(0, 0, 4.f));
@@ -92,29 +93,27 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 {
 	WWO_PROF("SporePool");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
-	if (Age >= Duration)
+	if (Life.Advance(DeltaSeconds, Duration) == EWWOLifeStep::Over)
 	{
-		if (HasAuthority()) Destroy(); // a joiner's copy goes when the host's does
-		else SetActorHiddenInGame(true);
+		if (!FWWOEffectLife::End(*this)) SetActorHiddenInGame(true); // a joiner's copy hides until the host's goes
 		return;
 	}
 	// Grows in quickly, shrinks and fades at the end.
-	const float Grow = WWO::BackOut(Age / 0.25f);
-	const float FadeOut = FMath::Clamp((Duration - Age) / 0.5f, 0.f, 1.f);
+	const float Grow = Life.GrowIn();
+	const float FadeOut = Life.LeftOf(Duration, 0.5f);
 	const float Scale = Radius * WWO::M / 50.f * FMath::Lerp(0.2f, 1.f, Grow) * FadeOut;
 	Disc->SetRelativeScale3D(FVector(Scale, Scale, 1.f));
 	if (Mat) Mat->SetScalarParameterValue("Alpha", FadeOut);
 	if (Haze)
 	{
 		// Breathes a little, and goes with the pool.
-		const float Breath = 1.f + 0.06f * FMath::Sin(Age * 2.3f);
+		const float Breath = 1.f + 0.06f * FMath::Sin(Life.Age * 2.3f);
 		Haze->SetRelativeScale3D(FVector(Scale * 0.95f * Breath, Scale * 0.95f * Breath, Scale * 0.22f));
 		if (UMaterialInstanceDynamic* HazeMat = WWOFX::MID(Haze)) HazeMat->SetScalarParameterValue("Alpha", 0.22f * FadeOut);
 	}
-	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Age * 5.f)));
+	if (Glow) Glow->SetIntensity(2200.f * FadeOut * (0.85f + 0.15f * FMath::Sin(Life.Age * 5.f)));
 	if (FadeOut < 1.f && Bubbles.IsValid()) Bubbles->bEmitting = false;
-	if (Flavor == "voltvine" && Age < Duration - 0.4f)
+	if (Flavor == WWOIds::Flora::VoltVine && Life.Age < Duration - 0.4f)
 	{
 		// The VoltVine pool crackles with little arcs along the surface.
 		NextArc -= DeltaSeconds;
@@ -134,21 +133,26 @@ void AWWOSporePool::Tick(float DeltaSeconds)
 	if (TickLeft > 0.f) return;
 	TickLeft += 0.5f; // not reset: a late frame doesn't cost damage
 	FWWODamageBy By(this);
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// Targets (and in PvP the thrower's foes) standing in it: feet within the radius on the ground, and
+	// less than 1.5 m above or below it.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = Radius * WWO::M;
+	Q.bFlat = true;
+	Q.MaxHeight = 150.f;
+	Q.Measure = EWWOAreaMeasure::Feet;
+	Q.For = this;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this](const FWWOAreaHit& Hit)
 	{
-		IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		const FVector Feet = Target->FeetLocation();
-		const FVector2D Flat(Feet.X - GetActorLocation().X, Feet.Y - GetActorLocation().Y);
-		if (Flat.Size() <= Radius * WWO::M && FMath::Abs(Feet.Z - GetActorLocation().Z) < 150.f)
-		{
-			Target->TakeHit(Dps * 0.5f, false, Feet + FVector(0, 0, 30.f), Color);
-		}
-	}
+		Hit.Target->TakeHit(Dps * 0.5f, false, Hit.Point + FVector(0, 0, 30.f), Color);
+		return true;
+	});
 }
 
 // --- Spore patch ------------------------------------------------------------------------------
 
 AWWOSporePatch::AWWOSporePatch()
+	: Life(0.25f, 0.3f, false) // grows in over 0.25 s, holds its duration, shrinks over 0.3 s after it
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -190,7 +194,7 @@ void AWWOSporePatch::BeginPlay()
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
 	if (P && P->IsLocallyControlled())
 	{
-		P->Abilities->LivePatches++; // keeps the Spore Patches HUD box lit
+		P->Abilities->LiveCount(WWOIds::Ability::SporePatches)++; // keeps the Spore Patches HUD box lit
 		bCounted = true;
 	}
 }
@@ -199,7 +203,11 @@ void AWWOSporePatch::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (bCounted)
 	{
-		if (AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner())) P->Abilities->LivePatches = FMath::Max(P->Abilities->LivePatches - 1, 0);
+		if (AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner()))
+		{
+			int32& Live = P->Abilities->LiveCount(WWOIds::Ability::SporePatches);
+			Live = FMath::Max(Live - 1, 0);
+		}
 	}
 	Super::EndPlay(Reason);
 }
@@ -208,11 +216,11 @@ void AWWOSporePatch::Tick(float DeltaSeconds)
 {
 	WWO_PROF("SporePatch");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
-	const float In = WWO::BackOut(Age / 0.25f);
-	const float Out = FMath::Clamp(1.f - (Age - Duration) / 0.3f, 0.01f, 1.f);
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
+	const float In = Life.GrowIn();
+	const float Out = FMath::Clamp(Life.TailLeft(Duration), 0.01f, 1.f);
 	SetActorScale3D(FVector(FMath::Max(In * Out, 0.01f)));
-	if (Age >= Duration + 0.3f && HasAuthority()) Destroy();
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this); // a joiner's copy stays, shrunk, until the host's goes
 }
 
 // --- Poison -----------------------------------------------------------------------------------
@@ -285,6 +293,7 @@ void UWWODamageOverTime::OnComponentDestroyed(bool bDestroyingHierarchy)
 // --- Bark wall --------------------------------------------------------------------------------
 
 AWWOBarkWall::AWWOBarkWall()
+	: Life(0.25f, 0.4f, true) // rises over 0.25 s, stands its duration, sinks over 0.4 s on its own clock
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Box = CreateDefaultSubobject<UBoxComponent>(TEXT("Collision"));
@@ -374,7 +383,7 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 {
 	WWO_PROF("BarkWall");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
 	// The slab is centered on the collision box: grow it up from the ground.
 	auto SetRise = [this](float R)
 	{
@@ -382,26 +391,26 @@ void AWWOBarkWall::Tick(float DeltaSeconds)
 		Visual->SetRelativeScale3D(FVector(1.f, 1.f, R));
 		Visual->SetRelativeLocation(FVector(0, 0, -(1.f - R) * Height * 0.5f * WWO::M));
 	};
-	if (!bSinking)
+	if (Step == EWWOLifeStep::Holding || Step == EWWOLifeStep::Leaving)
 	{
-		SetRise(WWO::BackOut(Age / 0.25f));
-		if (Age >= Duration)
+		SetRise(Life.GrowIn());
+		if (Step == EWWOLifeStep::Leaving)
 		{
-			bSinking = true;
-			Age = 0.f;
+			// No longer solid or cover from the tick it starts to sink.
 			Tags.Remove("Cover");
 			Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Dust(0.6f);
 		}
 		return;
 	}
-	SetRise(1.f - Age / 0.4f);
-	if (Age >= 0.4f && HasAuthority()) Destroy();
+	SetRise(Life.TailLeft(Duration));
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this); // a joiner's copy stays, sunk, until the host's goes
 }
 
 // --- Entrench roots ---------------------------------------------------------------------------
 
 AWWOEntrenchRoots::AWWOEntrenchRoots()
+	: Life(0.2f, 0.3f, true) // rise over 0.2 s, stand their duration, sink over 0.3 s on their own clock
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -453,22 +462,17 @@ void AWWOEntrenchRoots::Tick(float DeltaSeconds)
 {
 	WWO_PROF("EntrenchRoots");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
+	const EWWOLifeStep Step = Life.Advance(DeltaSeconds, Duration);
 	RingAge += DeltaSeconds;
 	if (RingMat) RingMat->SetScalarParameterValue("Alpha", 0.7f - 0.2f * FMath::Cos(RingAge * UE_PI / 0.8f)); // a slow pulse: 0.5 -> 0.9 -> 0.5 every 1.6 s
-	if (!bEnding)
+	if (Step == EWWOLifeStep::Holding || Step == EWWOLifeStep::Leaving)
 	{
-		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(WWO::BackOut(Age / 0.2f), 0.01f)));
-		if (Age >= Duration)
-		{
-			bEnding = true;
-			Age = 0.f;
-			BurstDirt();
-		}
+		SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(Life.GrowIn(), 0.01f)));
+		if (Step == EWWOLifeStep::Leaving) BurstDirt();
 		return;
 	}
-	SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(1.f - Age / 0.3f, 0.01f)));
-	if (Age >= 0.3f) Destroy();
+	SetActorRelativeScale3D(FVector(1.f, 1.f, FMath::Max(Life.TailLeft(Duration), 0.01f)));
+	if (Step == EWWOLifeStep::Over) FWWOEffectLife::End(*this, true); // looks only, on each machine: not replicated
 }
 
 // --- Chain lightning ------------------------------------------------------------------------
@@ -521,25 +525,24 @@ AWWOChainLightning* AWWOChainLightning::SpawnFrom(UWorld* World, AActor* First, 
 
 AActor* AWWOChainLightning::NextTarget() const
 {
-	// The nearest living target in range with a clear line from the last one.
+	// The nearest living target (and in PvP the player's foes) not hit yet, its body centre closer than the
+	// range, with a clear line from the last one.
 	const FVector Origin = Current.IsValid() ? AWWOLightningBolt::CenterOf(Current.Get()) : GetActorLocation();
-	AActor* Best = nullptr;
-	float BestDistance = Range * WWO::M;
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(Player.Get()))
-	{
-		if (Hit.Contains(Actor)) continue;
-		const FVector Point = AWWOLightningBolt::CenterOf(Actor);
-		const float Distance = FVector::Dist(Origin, Point);
-		if (Distance >= BestDistance) continue;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOChain), false);
-		if (Current.IsValid()) Params.AddIgnoredActor(Current.Get());
-		if (Player.IsValid()) Params.AddIgnoredActor(Player.Get());
-		FHitResult Block;
-		if (GetWorld()->LineTraceSingleByChannel(Block, Origin, Point, ECC_Visibility, Params) && Block.GetActor() != Actor) continue;
-		Best = Actor;
-		BestDistance = Distance;
-	}
-	return Best;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOChain), false);
+	if (Current.IsValid()) Params.AddIgnoredActor(Current.Get());
+	if (Player.IsValid()) Params.AddIgnoredActor(Player.Get());
+	FWWOAreaQuery Q;
+	Q.Center = Origin;
+	Q.Radius = Range * WWO::M;
+	Q.bInclusive = false;
+	Q.bFloatDistance = true;
+	Q.Measure = EWWOAreaMeasure::BodyCenter;
+	Q.For = Player.Get();
+	Q.SightParams = &Params;
+	Q.SightFrom = Origin;
+	FWWOAreaHit Next;
+	const bool bFound = UWWOWorldSubsystem::Get(this)->NearestTargetInRadius(Q, [this](const AActor* Actor) { return !Hit.Contains(Actor); }, Next);
+	return bFound ? Next.Actor : nullptr;
 }
 
 void AWWOChainLightning::Burst(AActor* Target, int32 Arcs, float Reach, float Time)

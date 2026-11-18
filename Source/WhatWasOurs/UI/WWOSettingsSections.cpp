@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 using namespace WWOSettingsUI;
 
@@ -86,7 +87,7 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	RegisterMovementAndViewSections(P); // Walk / Sprint, Camera, Audio, HUD, Jump, Crouch / Slide
 	RegisterCombatSections(P);          // Melee, Grenades, Player, Targets, Ult
 	RegisterEnemySections(P);           // Soldier, Swarm, Tank
-	RegisterMatchSections(P);           // Maps, Multiplayer, PvP, Bots, Waves, Allies
+	RegisterMatchSections(P);           // Maps, Multiplayer, PvP, FootRace, Bots, Waves, Allies
 	RegisterAimAssistSection(P);        // Aim Assist
 	// Specific sections: one per item.
 	RegisterWeaponSections(P);
@@ -273,7 +274,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 	const FWWOMenuButton ResetTargets = ResetTargetsButton(UWWOWorldSubsystem::Get(P));
-	UWWOSoldierData* SD = L->SoldierData;
+	UWWOSoldierData* SD = L->EnemyDataAs<UWWOSoldierData>(WWOIds::Enemy::Soldier);
 	AddGlobal(TEXT("Soldier"), {
 		Header(TEXT("Enemy: Soldier (shared by all soldiers)")),
 		Row(SD, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -296,7 +297,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 		Header(TEXT("Cover")),
 		Row(SD, "CoverHealth", TEXT("Seeks cover below health"), 0.f, 1.f, 0.05f, Percent()),
 	}, { ResetTargets });
-	UWWOSwarmData* SW = L->SwarmData;
+	UWWOSwarmData* SW = L->EnemyDataAs<UWWOSwarmData>(WWOIds::Enemy::Swarm);
 	AddGlobal(TEXT("Swarm"), {
 		Header(TEXT("Enemy: Swarm (shared by all swarm)")),
 		Row(SW, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -316,7 +317,7 @@ void UWWOSettingsMenu::RegisterEnemySections(AWWOCharacter* P)
 		Row(SW, "BiteDamage", TEXT("Bite damage"), 0.f, 100.f, 1.f),
 		Row(SW, "BiteInterval", TEXT("Time between bites (s)"), 0.1f, 4.f, 0.05f),
 	}, { ResetTargets });
-	UWWOTankData* TK = L->TankData;
+	UWWOTankData* TK = L->EnemyDataAs<UWWOTankData>(WWOIds::Enemy::Tank);
 	AddGlobal(TEXT("Tank"), {
 		Header(TEXT("Enemy: Tank")),
 		Row(TK, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -387,6 +388,26 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "TimeLimit", TEXT("Time limit (minutes)"), 0.f, 60.f, 1.f),
 		Row(Mode, "PvPRespawnTime", TEXT("Respawn delay (s)"), 0.5f, 15.f, 0.5f),
 	});
+	AddGlobal(TEXT("FootRace"), {
+		Header(TEXT("Breach energy (FootRace; the host's settings count)")),
+		Row(Mode, "BreachThreshold", TEXT("Energy needed to enter the hub"), 0.f, 500.f, 5.f),
+		Row(Mode, "EnergyPerEnemy", TEXT("Energy per AI enemy killed"), 0.f, 100.f, 1.f),
+		Row(Mode, "EnergyPerPlayerKill", TEXT("Energy per enemy player killed"), 0.f, 200.f, 1.f),
+		Row(Mode, "BreachDrain", TEXT("Drain per player in the hub (per second)"), 0.f, 50.f, 0.5f),
+		Row(Mode, "BreachDeathLoss", TEXT("Share of the pool lost when a breacher dies"), 0.f, 1.f, 0.05f),
+		Row(Mode, "LeverHoldTime", TEXT("Time to pull a door lever (s)"), 0.f, 5.f, 0.1f),
+		Header(TEXT("Boss")),
+		Row(Mode, "BossHealth", TEXT("Boss health (applies to the next boss)"), 100.f, 20000.f, 100.f),
+		Row(Mode, "BossWindow", TEXT("First damage window (s; each next is a third longer)"), 1.f, 60.f, 0.5f),
+		Row(Mode, "CoreDelay", TEXT("Next core after the shield is back (s)"), 0.f, 60.f, 0.5f),
+		Row(Mode, "CoreHeal", TEXT("Heal from a stolen core"), 0.f, 5000.f, 25.f),
+		Row(Mode, "CoreDropTime", TEXT("A dropped core goes home after (s)"), 1.f, 60.f, 1.f),
+		Row(Mode, "BossWave", TEXT("Enemies in the boss room with each core"), 0.f, 20.f, 1.f),
+		Header(TEXT("Lane rooms")),
+		Row(Mode, "RoomEnemies", TEXT("Enemies in a team's live room"), 0.f, 30.f, 1.f),
+		Row(Mode, "RoomSpawnStagger", TEXT("Time between spawns while a room fills (s)"), 0.f, 3.f, 0.05f),
+		Row(Mode, "RoomRefillTime", TEXT("Time between spawns once it has filled (s)"), 0.f, 20.f, 0.5f),
+	});
 	AddGlobal(TEXT("Bots"), {
 		Header(TEXT("Bot players in PvP (the host's settings count)")),
 		Row(Mode, "Bots", TEXT("Bots in the match (raising it adds them now)"), 0.f, 11.f, 1.f),
@@ -402,6 +423,7 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "BotKitUse", TEXT("Grenade, ability and ult use (0 = never)"), 0.f, 1.f, 0.05f),
 		Header(TEXT("Teamwork")),
 		Row(Mode, "BotStickToPlayer", TEXT("Share of your team's bots that escort you (the rest pair up)"), 0.f, 1.f, 0.05f),
+		Row(Mode, "BotBreachAt", TEXT("FootRace: breach meter full enough for bots to breach (the meter is twice the threshold)"), 0.5f, 1.f, 0.05f),
 		Row(Mode, "BotCalloutRange", TEXT("Callout range (m; teammates this near come to help; 0 = off)"), 0.f, 100.f, 5.f),
 	});
 	AddGlobal(TEXT("Waves"), {
@@ -421,7 +443,7 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 			} },
 		{ TEXT("Skip wave (kill all)"), [WeakMode] { if (WeakMode.IsValid()) WeakMode->SkipWave(); } },
 	});
-	UWWOAllyData* AL = L->AllyData;
+	UWWOAllyData* AL = L->Catalog.AllyData;
 	AddGlobal(TEXT("Allies"), {
 		Header(TEXT("AI teammates (for testing team abilities like Shield Share)")),
 		Row(AL, "AiEnabled", TEXT("AI on (0/1)"), 0.f, 1.f, 1.f),
@@ -458,7 +480,7 @@ void UWWOSettingsMenu::RegisterAimAssistSection(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterWeaponSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOWeaponData* W : L->Weapons)
+	for (UWWOWeaponData* W : L->Catalog.Weapons)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("weapon/") + W->Id.ToString();
@@ -545,7 +567,7 @@ void UWWOSettingsMenu::RegisterWeaponSections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterShellSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOFramePartData* Part : L->FrameParts)
+	for (UWWOFramePartData* Part : L->Catalog.FrameParts)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("frame/") + Part->Id.ToString();
@@ -566,39 +588,39 @@ void UWWOSettingsMenu::RegisterShellSections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterAbilitySections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOAbilityData* A : L->Abilities)
+	for (UWWOAbilityData* A : L->Catalog.Abilities)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("ability/") + A->Id.ToString();
 		S.Title = A->DisplayName;
 		S.Rows.Add(Header(KindName(A->Kind) + TEXT(" · ") + A->Description));
 		const FName Id = A->Id;
-		if (Id == "overgrowth") S.Rows.Append({ Row(A, "SpeedMult", TEXT("Speed multiplier"), 1.f, 2.f, 0.05f), Row(A, "ExtraJumps", TEXT("Extra jumps"), 0.f, 3.f, 1.f) });
-		if (Id == "thornfist") S.Rows.Append({
+		if (Id == WWOIds::Ability::Overgrowth) S.Rows.Append({ Row(A, "SpeedMult", TEXT("Speed multiplier"), 1.f, 2.f, 0.05f), Row(A, "ExtraJumps", TEXT("Extra jumps"), 0.f, 3.f, 1.f) });
+		if (Id == WWOIds::Ability::Thornfist) S.Rows.Append({
 			Row(A, "MeleeDamageMult", TEXT("Melee damage multiplier"), 1.f, 5.f, 0.05f), Row(A, "Duration", TEXT("Duration (s)"), 1.f, 30.f, 0.5f),
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Header(TEXT("Electric discharge (when a boosted melee lands)")),
 			Row(A, "DischargeArcs", TEXT("Lightning arcs"), 0.f, 16.f, 1.f), Row(A, "DischargeRadius", TEXT("Arc reach (m)"), 0.2f, 4.f, 0.05f),
 			Row(A, "DischargeTime", TEXT("Crackle time (s)"), 0.05f, 1.5f, 0.05f) });
-		if (Id == "static_charge") S.Rows.Append({
+		if (Id == WWOIds::Ability::StaticCharge) S.Rows.Append({
 			Row(A, "ChargeDamage", TEXT("Damage taken to fill it"), 10.f, 1000.f, 10.f), Row(A, "ChainDamage", TEXT("Damage to the enemy you punch"), 0.f, 1000.f, 5.f),
 			Row(A, "ChainJumps", TEXT("Jumps to more enemies"), 0.f, 20.f, 1.f), Row(A, "ChainRange", TEXT("Jump range (m)"), 1.f, 30.f, 0.5f),
 			Row(A, "ChainFalloff", TEXT("Each jump does (of the last)"), 0.3f, 1.f, 0.05f, Percent()), Row(A, "ChainDelay", TEXT("Time between jumps (s)"), 0.f, 0.4f, 0.01f) });
-		if (Id == "root_bombs") S.Rows.Append({
+		if (Id == WWOIds::Ability::RootBombs) S.Rows.Append({
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Row(A, "BombDamage", TEXT("Damage per bomb (center)"), 0.f, 1000.f, 5.f),
 			Row(A, "BombRadius", TEXT("Blast radius (m)"), 0.5f, 12.f, 0.25f), Row(A, "BombSpeed", TEXT("Throw speed (m/s)"), 5.f, 60.f, 1.f) });
-		if (Id == "shield_share") S.Rows.Add(Row(A, "ShieldAmount", TEXT("Shield given per explosion"), 0.f, 300.f, 5.f));
-		if (Id == "extra_grenade") S.Rows.Add(Row(A, "ExtraCharges", TEXT("Extra grenade charges"), 0.f, 3.f, 1.f));
-		if (Id == "melee_guard") S.Rows.Append({ Row(A, "GuardReduction", TEXT("Melee damage cut by"), 0.f, 1.f, 0.05f, Percent()),
+		if (Id == WWOIds::Ability::ShieldShare) S.Rows.Add(Row(A, "ShieldAmount", TEXT("Shield given per explosion"), 0.f, 300.f, 5.f));
+		if (Id == WWOIds::Ability::ExtraGrenade) S.Rows.Add(Row(A, "ExtraCharges", TEXT("Extra grenade charges"), 0.f, 3.f, 1.f));
+		if (Id == WWOIds::Ability::MeleeGuard) S.Rows.Append({ Row(A, "GuardReduction", TEXT("Melee damage cut by"), 0.f, 1.f, 0.05f, Percent()),
 			Row(A, "Duration", TEXT("Lasts after a melee hit (s)"), 0.5f, 20.f, 0.5f) });
-		if (Id == "spore_fog_damage") S.Rows.Add(Row(A, "FogDps", TEXT("Fog damage per second"), 0.f, 100.f, 1.f));
-		if (Id == "spore_dash") S.Rows.Append({
+		if (Id == WWOIds::Ability::SporeFogDamage) S.Rows.Add(Row(A, "FogDps", TEXT("Fog damage per second"), 0.f, 100.f, 1.f));
+		if (Id == WWOIds::Ability::SporeDash) S.Rows.Append({
 			Row(A, "Cooldown", TEXT("Recharge time (s)"), 1.f, 120.f, 1.f), Row(A, "DashSpeed", TEXT("Dash speed backwards (m/s)"), 2.f, 40.f, 0.5f),
 			Row(A, "DashUp", TEXT("Dash lift (m/s)"), 0.f, 15.f, 0.25f), Row(A, "DashFogRadius", TEXT("Fog radius (m)"), 0.5f, 12.f, 0.25f),
 			Row(A, "DashFogTime", TEXT("Fog time (s)"), 0.5f, 30.f, 0.5f) });
-		if (Id == "spore_patches") S.Rows.Append({
+		if (Id == WWOIds::Ability::SporePatches) S.Rows.Append({
 			Row(A, "PatchMax", TEXT("Patches per grenade"), 1.f, 10.f, 1.f), Row(A, "PatchRadius", TEXT("Fog radius per patch (m)"), 0.5f, 8.f, 0.25f),
 			Row(A, "PatchTime", TEXT("Patch time (s)"), 0.5f, 30.f, 0.5f) });
-		if (Id == "seedburst") S.Rows.Append({
+		if (Id == WWOIds::Ability::Seedburst) S.Rows.Append({
 			Row(A, "SubCount", TEXT("Seed count"), 1.f, 8.f, 1.f), Row(A, "SubScale", TEXT("Seed size (blast and damage)"), 0.1f, 1.f, 0.05f),
 			Row(A, "SubSpread", TEXT("Seed spread (m/s)"), 1.f, 15.f, 0.5f), Row(A, "SubFuse", TEXT("Seed fuse (s)"), 0.1f, 3.f, 0.05f) });
 		Sections.Add(MoveTemp(S));
@@ -608,7 +630,7 @@ void UWWOSettingsMenu::RegisterAbilitySections(AWWOCharacter* P)
 void UWWOSettingsMenu::RegisterTraitSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
-	for (UWWOTraitData* T : L->Traits)
+	for (UWWOTraitData* T : L->Catalog.Traits)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("trait/") + T->Id.ToString();
@@ -637,7 +659,7 @@ void UWWOSettingsMenu::RegisterGrenadeSections(AWWOCharacter* P)
 {
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
 	UWWOGrenadeComponent* Th = P->Grenades;
-	for (UWWOGrenadeData* Gr : L->Grenades)
+	for (UWWOGrenadeData* Gr : L->Catalog.Grenades)
 	{
 		FWWOSettingSection S;
 		S.Key = TEXT("grenade/") + Gr->Id.ToString();

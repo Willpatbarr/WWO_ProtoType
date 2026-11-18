@@ -8,7 +8,6 @@
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
 #include "Engine/World.h"
-#include "Weapons/WWOPerks.h"
 #include "Systems/WWOSound.h"
 #include "Player/WWOAimAssistComponent.h"
 #include "FX/WWOFX.h"
@@ -23,7 +22,6 @@ using namespace WWOWeapon; // the helpers these files share (WWOWeaponPrivate.h)
 namespace
 {
 	constexpr float MuzzleFlashTime = 0.05f;
-	using namespace WWOPerk; // the perks' numbers (Weapons/WWOPerks.h, shared with the host's checks)
 	const FLinearColor ShotColor(1.f, 0.8f, 0.45f); // trails and the flash's light
 }
 
@@ -138,25 +136,29 @@ void UWWOWeaponComponent::FireRound()
 {
 	Shoot();
 	Ammo -= 1;
-	if (RefundRounds > 0) Ammo = FMath::Min(Ammo + RefundRounds, MagazineSize()); // Marksman: a crit's round comes back
-	RefundRounds = 0;
+	if (PerkState.RefundRounds > 0) Ammo = FMath::Min(Ammo + PerkState.RefundRounds, MagazineSize()); // Marksman: a crit's round comes back
+	PerkState.RefundRounds = 0;
 }
 
 void UWWOWeaponComponent::BeginBurst(int32 Rounds)
 {
 	BurstSize = Rounds;
-	BurstHits = 0;
-	bBurstBoosted = bFullBurst; // Full Burst: earned by the last burst, spent on this one
-	bFullBurst = false;
+	PerkState.BurstHits = 0;
+	PerkState.bBurstBoosted = PerkState.bFullBurst; // Full Burst: earned by the last burst, spent on this one
+	PerkState.bFullBurst = false;
 }
 
 void UWWOWeaponComponent::EndBurst()
 {
-	// Full Burst: every round of a finished burst hit.
-	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
-	bFullBurst = BurstLeft == 0 && BurstSize > 1 && BurstHits >= BurstSize && L && L->HasPerk("full_burst");
+	// The perks that care whether every round of a finished burst hit (Full Burst).
+	const bool bEveryRoundHit = BurstLeft == 0 && BurstSize > 1 && PerkState.BurstHits >= BurstSize;
+	PerkState.bFullBurst = false;
+	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
+	{
+		for (const FWWOPerk* Perk : WWOPerk::Equipped(*L)) if (Perk->OnBurstEnd) Perk->OnBurstEnd(PerkState, bEveryRoundHit);
+	}
 	BurstLeft = 0;
-	bBurstBoosted = false;
+	PerkState.bBurstBoosted = false;
 }
 
 void UWWOWeaponComponent::Shoot()
@@ -171,21 +173,23 @@ void UWWOWeaponComponent::Shoot()
 	struct FTotal { float Damage = 0.f; bool bCritical = false; FVector Point; };
 	TMap<AActor*, FTotal> Totals; // pellets add up into one hit per target
 	TArray<FVector_NetQuantize> Ends; // every pellet's impact, for the other players' screens
-	// Perks that power up just this shot.
+	// Perks that power up just this shot, and the ones that depend on what each pellet hits.
 	float ShotScale = 1.f, CritBonus = 0.f;
-	bool bLongShot = false, bPointBlank = false, bExecutioner = false; // perks that depend on what each pellet hits
+	FWWOPerkList TargetPerks;
 	if (const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this))
 	{
-		if (L->HasPerk("overpressure") && bOverpressure) ShotScale *= Overpressure;
-		if (L->HasPerk("final_round") && Ammo == 1) ShotScale *= FinalRound; // Ammo drops after the shot
-		if (L->HasPerk("patience") && AimHeld >= PatienceTime) CritBonus = PatienceCrit;
-		if (L->HasPerk("cold_bore") && SinceShot >= ColdBoreTime) ShotScale *= ColdBore;
-		if (L->HasPerk("full_burst") && bBurstBoosted) ShotScale *= FullBurst;
-		bLongShot = L->HasPerk("longshot");
-		bPointBlank = L->HasPerk("point_blank");
-		bExecutioner = L->HasPerk("executioner");
+		const FWWOPerkView View = PerkView();
+		for (const FWWOPerk* Perk : WWOPerk::Equipped(*L))
+		{
+			if (Perk->ShotOn && Perk->ShotOn(View))
+			{
+				ShotScale *= Perk->ShotScale;
+				CritBonus += Perk->ShotCrit;
+			}
+			if (Perk->TargetOn) TargetPerks.Add(Perk);
+		}
 	}
-	SinceShot = 0.f;
+	PerkState.SinceShot = 0.f;
 	for (int32 i = 0; i < PelletCount; ++i)
 	{
 		const FVector Dir = PelletCount > 1 ? WWO::RandomInCone(Aim, FMath::DegreesToRadians(Weapon->PelletSpread)) : Aim;
@@ -216,9 +220,7 @@ void UWWOWeaponComponent::Shoot()
 		// Long Shot: far targets; Point Blank: close ones; Finisher: ones under half their health and shield.
 		float TargetScale = 1.f;
 		const float HitDist = FVector::Dist(P->EyeLocation(), Hit.ImpactPoint) / WWO::M;
-		if (bLongShot && HitDist >= LongShotRange) TargetScale *= LongShot;
-		if (bPointBlank && HitDist <= PointBlankRange) TargetScale *= PointBlank;
-		if (bExecutioner && Target->GetHealth() + Target->GetShield() < 0.5f * (Target->GetMaxHealth() + Target->GetMaxShield())) TargetScale *= Finisher;
+		for (const FWWOPerk* Perk : TargetPerks) if (Perk->TargetOn(HitDist, *Target)) TargetScale *= Perk->TargetScale;
 		Entry.Damage += Weapon->Damage * ShotScale * TargetScale * (bCritical ? Weapon->CritMultiplier + CritBonus : 1.f);
 		Entry.bCritical |= bCritical;
 	}

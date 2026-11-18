@@ -84,9 +84,12 @@ IWWOTargetable::TakeHit            (one wrapper, Systems/WWOTargetable.cpp; skip
   player (or their kit) in co-op. `PlayerOf(Actor)` walks Owner and
   Instigator to find the player behind a grenade, pool or fog.
 - **Targets** come from `UWWOWorldSubsystem::LivingTargets` (PvE enemies, dummies, and in PvP the other
-  team).
-- Enemy-to-player damage does not use `TakeHit`: enemies call `Health->DamageCameFrom` and
-  `Health->TakeDamage` directly, and `AWWOAlly::TakeAllyDamage` for teammates.
+  team). Area effects ask `ForEachTargetInRadius` / `NearestTargetInRadius` with an `FWWOAreaQuery` (where to
+  measure, who, line of sight); melee and aim assist pick a part with `BestAimPart`.
+- Enemy-to-friendly damage does not use `TakeHit`: every enemy attack (bite, leap, bolt, splash, slam)
+  calls `AWWOEnemy::HurtFriendly(Victim, Amount, CameFrom, bMelee)`: a player's `DamageCameFrom` then
+  `TakeDamage`, a teammate's `AWWOAlly::TakeAllyDamage`. No `FWWODamageBy` scope, no push; it returns the
+  player hurt (the slam slows them).
 
 ## A shot
 
@@ -103,17 +106,44 @@ follow the same shape: predict locally, the host confirms, `ClientKitRefused` un
 
 **Weapon stats**: the component's `Weapon` is a copy of the data asset. `RefreshStats` re-copies it every
 frame (`WWOWeaponPerks.cpp`) and applies mod percentages and active perks, so never store state on it. Timing stats (reload,
-aim-in, swap, ready) go through `M()` instead. Perk numbers live in `Weapons/WWOPerks.h`.
+aim-in, swap, ready) go through `M()` instead. The mods' scaling is `WWOPerk::ComputeGunStats`, which the
+host's `GunLimits` calls too, so the gun and the host's check work from the same stats.
+
+**Perks** are a table (`Weapons/WWOPerks.h` / `.cpp`): one `FWWOPerk` per perk id, holding its stat
+changes, shot and per-target conditions and multipliers, HUD text, handlers (shot, kill, finished
+burst) and the host's allowance (per-shot best, per-hit checks, crit, rate, burst, the arcs it runs for
+a joiner). The gun keeps the perks' state in one `FWWOPerkState` (`UWWOWeaponComponent::PerkState`), and
+its conditions read an `FWWOPerkView` of the frame. `WWOPerk::Equipped(Loadout)` gives the equipped
+weapon's entries; the host's `FWWOGunLimits::Perks` the entries of the mods a shot names. Every user
+walks the table in its order (the HUD line's).
 
 ## Kit: grenades, abilities, ults, flora effects
 
+- **Ids** the code tests for are named once in `WWOIds.h` (`WWOIds::Flora`, `Ability`, `Perk`, `Grenade`:
+  `FName` constants). The data, the wire and the tests name them as strings.
 - The grenade, ability and ult components fill an `FWWOGrenadeSpec` and call `AWWOGrenade::Throw` or
   `ExplodeAt`. The grenade runs on the host. `Explode` loops the living targets (nearest aim part, line
-  of sight, falloff), then the kind's own effect (wall, blind / slow, pool).
-- Flora effects (`Flora/`) are actors with static `Spawn` / `Raise` factories. They age in `Tick`; the
-  host deals damage every 0.5 s inside an `FWWODamageBy` scope.
+  of sight, falloff), then the kind's own burst. What each `EWWOGrenadeKind` does is one
+  `FWWOGrenadeKindRules` entry in `AWWOGrenade::KindRules` (impact fuse allowed, brighter flash, life
+  without a fuse, handlers per tick, on a touch, on the burst); a grenade with no asset (seeds, the ult,
+  Root Bombs) has no kind.
+- **Abilities** are a table (`Player/WWOAbilities.h` / `.cpp`): one `FWWOAbility` per ability id (what it
+  does when used, its own timer, when it is lit, the fists' glow, its effects on its owner, what it does
+  on a melee hit landed or damage taken). `UWWOAbilityComponent` runs the recharge and arming by kind and
+  keeps each ability's `FWWOAbilityState` (charge, effect time, armed, guard time, live seeds or patches)
+  in one map by id. The ult goes by the flora's `EWWOUltKind` (`UWWOUltComponent::Kind`).
+- **A joiner's kit**: the host's checks (`HostThrow`, `HostUseAbility`) return an `EWWOKitRefusal`
+  (`ServerActivateUlt` logs one); `ClientKitRefused(What)` names the kit with an `EWWOKit` (a `uint8` on the wire);
+  `WWOKit::RefusalText` (`Player/WWOKitRefusal.h`) is the one place a reason becomes words (the host's log).
+- Flora effects (`Flora/`) are actors with static `Spawn` / `Raise` factories. The lingering ones (spore
+  pool, spore fog, spore patch, bark wall, Entrench roots) each keep an `FWWOEffectLife`
+  (`Flora/WWOEffectLife.h`): the age, the step through hold, tail and over (`Advance` with the effect's own
+  replicated `Duration`), the grow-in and fade fractions, and `End` (the host destroys; a joiner's copy
+  waits for the host's to go, the not-replicated roots destroy themselves). Each effect keeps its own
+  numbers and per-tick work. The host deals damage every 0.5 s inside an `FWWODamageBy` scope.
 - Effects everyone must see go through the `AWWOGameState` statics (`Blast`, `Bolt`, `Text`, `Sound`,
-  `Poison`, `Tracer`, `Shockwave`, `Discharge`): do it here, and multicast if this is a listen server.
+  `Poison`, `Tracer`, `Shockwave`, `Discharge`): do it here, then `HostRelay(World)` gives the game state to
+  multicast through when this is a listen server (null otherwise).
 - `FX/WWOFX` is hand-built: shape and material helpers, `AWWOFXActor` (a list of tweens),
   `AWWOParticles` (CPU instanced particles), lightning. No Niagara.
 - `UWWOSound` plays `Config/Sounds.json` events on this machine only (`Play`, `PlayFlat`, `PlayFor`).
@@ -121,23 +151,94 @@ aim-in, swap, ready) go through `M()` instead. Perk numbers live in `Weapons/WWO
 
 ## Loadout and data
 
-- **`UWWOLoadoutSubsystem`** (GameInstance subsystem) owns the catalogs, what is equipped, the stat
-  maths, weapon-mod configs and the save (slot `Loadout`, written when the menu closes).
-- **Stats**: `M(Stat, Base)` on the character, `Apply(Stat, Base)` in the subsystem:
+- **`UWWOLoadoutSubsystem`** (GameInstance subsystem, `Systems/WWOLoadoutSubsystem.*`) is a thin owner of
+  four parts and does the saving (slot `Loadout`, written when the menu closes, a map changes or the game
+  exits: `FlushSave`), the sending (`ToNet` / `ApplyNet`), joiners' copies (`NewCopy`) and the change
+  notice (`OnChanged`, once per change). Its equip, stat and config functions are one-line forwards:
+  - `FWWOLoadoutCatalog Catalog` (`WWOLoadoutCatalog.*`): every option, loaded once (`Load`: the data
+    assets and `Config/WeaponMods.json`), the picker lists, `FindById`, the enemies' data by kind
+    (`EnemyData`) and the allies'.
+  - `FWWOEquipped Equipped` (`WWOLoadoutEquipped.*`): flora, weapon, grenade, abilities, traits, frame
+    parts and each frame's mods; the equip rules; to and from the save and the wire.
+  - `WWOLoadoutStats` (`WWOLoadoutStats.*`): the stat maths and its tables, pure functions of an `FWWOEquipped`.
+  - `FWWOModConfigs ModConfigs` (`WWOModConfigs.*`): saved weapon configs and the two weapon slots.
+  - The saved and sent shapes, `UWWOLoadoutSave`, `FWWOModConfig`, `FWWONetLoadout`, are in
+    `WWOLoadoutTypes.h` (file and wire format).
+- **Stats**: `M(Stat, Base)` on the character, `Apply(Stat, Base)` in the subsystem (`WWOLoadoutStats::Apply`):
   `(base + flat) x (1 + percent) x multiplier`, from frame parts, traits and weapon mods.
 - **Other players' kit**: `UWWOLoadoutSubsystem::Get(Context)` returns your own loadout for you, and a
   per-character copy (`NetLoadout`, built from the ids in `FWWONetLoadout`) for anyone else. That is why
   spawned kit must carry its Owner.
 - **Data assets** (`Data/WWOData.h`): `UPrimaryDataAsset` subclasses for weapons, grenades, abilities,
   frame parts, floras, traits, enemies and allies, loaded by type through the Asset Manager, sorted by
-  `Order`, found by `FName Id` (`FindById`). Weapon mods are not assets: they come from
+  `Order`, found by `FName Id` (`FWWOLoadoutCatalog::FindById`). Weapon mods are not assets: they come from
   `Config/WeaponMods.json`.
 
 ## Game rules
 
-- **`AWWOGameMode`** (`Game/WWOGameMode.cpp`) runs PvE waves (the `Waves()` table), PvP team deathmatch
-  (chosen by `?pvp` on the map URL), the bot population (`UpdateBots`) and the firing tester (`?tester`).
-  It also carries the stress and screenshot test hooks (`LogStress`).
+- **`AWWOGameMode`** (`Game/WWOGameMode.*`) is a shell: logins (gamer tag, the full-game check), spawning
+  (the ring of spots around the one Player Start), map changes (`LoadMap`, `Restart`), the status line every
+  tick, the restart timer, and the tunables of every mode (Settings binds its sliders to these properties
+  by name). It owns **one rules object** (`TUniquePtr<FWWOMatchRules> Rules`), chosen in `InitGame` from the
+  map URL, and the **bot roster**. The rules run on the host only and write the replicated match state on
+  the game state and player states; nothing about replication is theirs.
+  - `FWWOMatchRules` (`Game/WWOMatchRules.h`): the interface (`Begin`; `Update`, each tick where the mode's
+    bookkeeping always ran; `Advance`, last in the tick; `OnPlayerJoined`, `OnPlayerLeaving` / `OnPlayerLeft`;
+    `IsOver`; `StatusText`), the match's phase `State` (`EWWOWaveState`, read as `MatchState()`), and typed
+    views (`AsWaves`, `AsDeathmatch`, `AsTester`; the game mode's `Waves()`, `Deathmatch()`, `Tester()`).
+  - `FWWOWaveRules` (`Game/WWOWaveRules.*`): PvE waves, the default (the `Waves()` table, the countdown,
+    spawning one by one, a cleared wave, won, everyone down lost, `SkipWave` / `JumpToWave`).
+  - `FWWOTeamDeathmatch` (`Game/WWOTeamDeathmatch.*`, `?pvp`): teams (`BalanceTeam`, `SwitchTeam`), the
+    death and the kill (`OnDeath` then `OnKill`: credit, score, the kill feed, the kill limit), the time
+    limit, and `SpawnSpot` (the game mode's `PvPSpawnFor`, which the health component asks whenever the game
+    state says PvP).
+  - `FWWOTesterRules` (`Game/WWOTesterRules.*`, `?tester` / `-WWOTester`): clears the level, puts one dummy
+    ahead of where the player started (its `Home` and `Target` are what `UWWOFiringTester` reads).
+  - `FWWOFootRaceRules` (`Game/WWOFootRaceRules.*`, `?footrace`, or any map named FootRace such as
+    `L_FootRaceTest`): two teams race through their own lane of PvE rooms; a hub between the lanes is the PvP.
+    So far: teams, each team's spawn room (`SpawnSpot`, the game mode's `PvPSpawnFor`: the game state says
+    PvP), and the breach portals (`World/WWOBreachPortal.*`, spawned on the level's `PortalAnchor` and
+    `HubPortal` markers): a room's doorway takes its team to the team's hub doorway, the hub doorway back to
+    the room doorway they came through. The map's markers are listed in `Tools/footrace_layout.py`.
+    Breach energy: one pool per team (`AWWOGameState::BreachEnergy`, the game mode's FootRace tunables),
+    earned by kills (an enemy's `LastHitBy`, a player's `LastAttacker`), needed to enter the hub
+    (`BreachThreshold`), drained per breacher per second; out of energy sends the team's breachers back,
+    a breacher's death costs a share. The HUD draws both pools under the match line (`PaintBreachEnergy`).
+    Lane rooms (`RoomArea` markers, their scale the size in m): a team's furthest room (the furthest any
+    of its players has stood in; Room1 from the start) fills to `RoomEnemies` and refills after deaths;
+    rooms behind keep their enemies without refilling. Each enemy guards its lane (`AWWOEnemy::Lane`) and
+    only targets that team's players.
+    Doors and levers (`World/WWOBreachDoor.*`, `WWOBreachLever.*` on `DoorSlot` / `LeverSlot`): a lever is
+    live when its door is the team's next and the team's current breach went in by the room that door
+    leads out of; a breacher holds the Revive key at it (`AWWOCharacter::bHoldingUse`) for `LeverHoldTime`.
+    A door opened mid-breach freezes that pool (`BreachFrozen`); earnings go to `BreachNext` (hub kills
+    split) until nobody is in the hub, then the next pool takes over. Leaving the hub lands in the furthest
+    room opened.
+    The boss (`AWWOBoss`, a bigger Tank, on `BossSpawn`): up and shielded when Door3 opens; `OpenBossWindow`
+    (for now the console's `wwo.BossWindow`) drops the shield for `BossWindow` s, a third longer each
+    window; killing it ends the match (`EndMatch`, `IsOver`) with that team the winner.
+    Boss cores (`World/WWOBossCore.*`, on `CoreSpawn`): `CoreDelay` after a boss is shielded a core for its
+    team appears in the hub with a wave of `BossWave` in its boss room; carried out through the team's hub
+    doorway (`LeaveHub`) it opens the next window; a carrier's death drops it (anyone can take it then);
+    the other team delivering it heals the boss `CoreHeal`; a dropped core goes home after `CoreDropTime`.
+    Bots (`FWWOBotRoster`, as in team deathmatch; `-WWOBots=N`): with no enemy player to fight, a bot plays
+    the race (`AWWOBotController::FootRaceTick`, state `Objective`): it shoots its lane's enemies (`SenseMobs`,
+    and its boss in a window), breaches when the team has the energy and a lever or core to go for (two at
+    most), fetches a core, pulls the live lever, leaves, and carries a core out. Its aim and fire are the
+    player fight's (`AimAt`, `Shoot`).
+    The kill feed shows player kills and, as event lines (`AWWOGameState::ReportEvent`, `KillEvent`), each
+    breach and door; AI kills stay out. `Begin` loads every enemy's model, clips and the effect materials
+    (`UWWOBodyComponent::Preload`, `PreloadAnims`; kept in `Preloaded`) and sets up one of each enemy out of
+    sight for half a second, so the first Tank (Room3) or boss doesn't stall the match.
+    The HUD's race track (`PaintRaceTrack`, right edge): each team's three doors as circles (Door1 at the
+    bottom, filled when open), your team's track on the left, and between them each breaching team's bar,
+    its share of the pool the breach began on (`AWWOGameState::BreachStart`), shrinking toward its middle.
+  - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
+    wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
+    following the Bots settings.
+  The rules and roster are plain C++ objects holding actors by weak pointer; a rules object removes its own
+  death bindings when it is destroyed. The stress and screenshot harness (`FWWOStressHarness`,
+  `Game/WWOGameModeStress.*`) and the wave test (`Game/WWOGameModeWaveTest.cpp`) are test code beside them.
 - **`AWWOGameState`** replicates the status line, `bPvP`, `TeamScores`, `bMatchOver`, `MatchWinner`, and
   keeps the kill feed. **`AWWOPlayerState`** replicates `Team`, `Kills`, `PrecisionKills`, `Deaths`.
 - **`UWWONetSubsystem`** (`Net/`): hosting, joining, the LAN game list, travel, the gamer tag, and
@@ -166,6 +267,21 @@ in `NETWORKING_HANDOFF.md`.
 / `AnimateRemote` / `Absorb` / `OnHit` / `OnDeath` / `OnReset` / `AfterMove`. `WWOEnemyTypes` has the
 Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield, slam, lob).
 `AWWOAlly` is the AI teammate.
+
+**The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
+class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
+`FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). `SpawnDeferred` places one at a spawn
+marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. The waves (`Waves()`) and spawn point tags name
+kinds by id; `FWWOWaveRules::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
+catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
+
+**Moving** (`Systems/WWONav.*`), shared by the enemies, the ally and the bots: `WWONav::FindPath` (a
+navmesh path, start and end snapped onto it), `FWWOPathFollower` (the path being walked: `Update` ages it,
+paths again when its `FWWOPathRules` say so, drops reached points), `WWONav::WallAhead` / `LedgeAhead` (one
+trace each, shaped by an `FWWOProbe`: capsule or line, level geometry or a channel) and `WWONav::TurnYaw`
+(an eased yaw step). What each mover does with the answers stays in its own class (`AWWOEnemy::PathDirection`,
+`AWWOAlly::Follow`, `AWWOBotController::PathDirection` / `SideIsClear`); the bot's `TurnView` (yaw and pitch
+as one rate-limited angle) is its own. The navmesh is built at run time (`RuntimeGeneration=Dynamic`).
 
 ## Bodies
 

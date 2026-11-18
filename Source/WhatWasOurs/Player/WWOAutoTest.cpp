@@ -76,6 +76,8 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 		|| WWOSwitches::Has(TEXT("WWOAutoTestTitleJoinFail"));
 	M.bAutoTestPvP = WWOSwitches::Has(TEXT("WWOAutoTestPvP"));
 	M.bAutoTestTester = WWOSwitches::Has(TEXT("WWOAutoTestTester"));
+	M.bAutoTestFootRaceBots = WWOSwitches::Has(TEXT("WWOAutoTestFootRaceBots"));
+	M.bAutoTestFootRace = !M.bAutoTestFootRaceBots && WWOSwitches::Has(TEXT("WWOAutoTestFootRace"));
 	M.bAutoTestGunsOnly = WWOSwitches::Has(TEXT("WWOAutoTestGuns"));
 	M.bAutoTestHiddenOnly = WWOSwitches::Has(TEXT("WWOAutoTestHidden"));
 	M.bAutoTestModsOnly = M.bAutoTestGunsOnly || M.bAutoTestHiddenOnly || WWOSwitches::Has(TEXT("WWOAutoTestMods"))
@@ -88,7 +90,7 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 
 bool FWWOAutoTestModes::Any() const
 {
-	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestTester || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
+	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestTester || bAutoTestFootRace || bAutoTestFootRaceBots || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
 }
 
 TSharedPtr<FWWOAutoTest> FWWOAutoTest::MakeIfAsked(AWWOPlayerController& Controller)
@@ -134,6 +136,8 @@ void FWWOAutoTest::Tick(float DeltaTime)
 	else if (bAutoTestTitle) { if (PC->IsLocalController()) UpdateAutoTitleTest(DeltaTime); }
 	else if (bAutoTestTabs) { if (PC->IsLocalController()) UpdateAutoTabsTest(DeltaTime); }
 	else if (bAutoTestTester) { if (PC->IsLocalController()) UpdateAutoTesterTest(DeltaTime); }
+	else if (bAutoTestFootRace) { if (PC->IsLocalController()) UpdateAutoFootRaceTest(DeltaTime); }
+	else if (bAutoTestFootRaceBots) { if (PC->IsLocalController()) UpdateAutoFootRaceBotsTest(DeltaTime); }
 	else if (bAutoTestPvP) UpdateAutoPvPTest(DeltaTime);
 	else if (bJoinerStress) LogJoinerStress(DeltaTime);
 	else if (bAutoTestNet) UpdateAutoNetTest(DeltaTime);
@@ -500,8 +504,8 @@ bool FWWOAutoTest::UpdateAutoGrenadeTest(AWWOCharacter* P, float DeltaTime)
 		}
 		AutoGrenadeBefore = Loadout->GetGrenade();
 		AutoGrenades.Reset();
-		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind != EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
-		for (UWWOGrenadeData* G : Loadout->Grenades) if (G && G->Kind == EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		for (UWWOGrenadeData* G : Loadout->Catalog.Grenades) if (G && G->Kind != EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
+		for (UWWOGrenadeData* G : Loadout->Catalog.Grenades) if (G && G->Kind == EWWOGrenadeKind::Wall) AutoGrenades.Add(G);
 		UE_LOG(LogWWO, Display, TEXT("AutoTest grenade: %d grenades at %s; throw distance %.1f m, fuse %.2f s, release %.2f s, recharge %.1f s"),
 			AutoGrenades.Num(), AutoTarget.IsValid() ? *AutoTarget->GetName() : TEXT("no target"), P->Grenades->EffectiveThrowDistance(),
 			P->Grenades->DetonationTime, P->Weapon->ThrowRelease, P->Grenades->EffectiveRechargeTime());

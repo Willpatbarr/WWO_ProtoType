@@ -35,6 +35,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -55,6 +56,9 @@ namespace
 	constexpr float MeleeFrom = 25.5f;                // the joiner walks up to the nearest dummy and punches it
 	const float MeleePunches[] = { 28.f, 29.f, 30.f };
 	constexpr float MeleeForge = 28.5f, MeleeReport = 31.1f; // forged between the first punches, while the dummy still stands
+	// The joiner's clock starts when it sees the host, up to a second after the host's (the gap shrinks
+	// over the run, to 0.1 to 0.7 s by the shooting): the host counts what the joiner sent this much later.
+	constexpr float JoinerLag = 0.7f;
 	// Which round this process is in: 0 = the moves, 1 = after the host's restart. The controller
 	// (and its test state) is new after a map change; this isn't.
 	int32 GAutoNetRound = 0;
@@ -229,20 +233,20 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 				UWWOLoadoutSubsystem::Get(PC) ? UWWOLoadoutSubsystem::Get(PC)->ModPercent("damage") != 0.f : -1);
 		}
 	}
-	if (Crossed(ShootTo + 0.6f))
+	if (Crossed(ShootTo + 0.6f + (bHost ? JoinerLag : 0.f)))
 	{
 		const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetShootTarget.Get());
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host fired %d times at %s; joiner shots taken %d, hits applied %d, rejected %d"), AutoNetShotPulls,
-				*GetNameSafe(Dummy), AWWOCharacter::NetShotsTaken, AWWOCharacter::NetHitsApplied, AWWOCharacter::NetHitsRejected);
+				*GetNameSafe(Dummy), FWWOTestTally::Get().ShotsTaken, FWWOTestTally::Get().HitsApplied, FWWOTestTally::Get().HitsRejected);
 			// The forged 99999 hit and the made-up mod are two shots the host must have turned down.
-			if (AWWOCharacter::NetHitsRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host rejected %d forged shots, not both"), AWWOCharacter::NetHitsRejected);
+			if (FWWOTestTally::Get().HitsRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host rejected %d forged shots, not both"), FWWOTestTally::Get().HitsRejected);
 		}
 		else
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner fired %d times at %s: its health %.0f -> %.0f (host's), dead %d; saw %d host shots"), AutoNetShotPulls,
-				*GetNameSafe(Dummy), AutoNetShootHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, AWWOCharacter::NetShotsSeen);
+				*GetNameSafe(Dummy), AutoNetShootHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, FWWOTestTally::Get().ShotsSeen);
 		}
 	}
 
@@ -285,7 +289,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 	{
 		const AWWOCharacter* Joiner = bHost ? Other : P;
 		if (Joiner) UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s sees the joiner's Thornfist on %d (abilities the host ran for joiners %d)"),
-			bHost ? TEXT("host") : TEXT("joiner"), Joiner->Abilities->ThornfistActive() != nullptr, AWWOCharacter::NetAbilitiesUsed);
+			bHost ? TEXT("host") : TEXT("joiner"), Joiner->Abilities->ThornfistActive() != nullptr, FWWOTestTally::Get().AbilitiesUsed);
 	}
 	// Ult (end of the run): the joiner casts its ult; the host runs the blast and everyone sees it.
 	if (!bHost && Crossed(46.7f)) PC->JustPressed[(int32)EWWOAction::Ult] = true;
@@ -293,7 +297,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 	{
 		const AWWOCharacter* Joiner = bHost ? Other : P;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: %s: joiner ults the host cast %d, blasts seen from the host %d, joiner still ulting %d"),
-			bHost ? TEXT("host") : TEXT("joiner"), AWWOCharacter::NetUltsCast, AWWOGameState::BlastsSeen, Joiner ? Joiner->bUlting : -1);
+			bHost ? TEXT("host") : TEXT("joiner"), FWWOTestTally::Get().UltsCast, FWWOTestTally::Get().BlastsSeen, Joiner ? Joiner->bUlting : -1);
 	}
 	if (Crossed(11.5f))
 	{
@@ -303,14 +307,14 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host threw %d joiner grenades, refused %d; %d pools now (owner %s)"),
-				UWWOGrenadeComponent::NetThrows, UWWOGrenadeComponent::NetThrowsRejected, Pools, *PoolOwner);
-			if (UWWOGrenadeComponent::NetThrowsRejected < 1) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host threw the grenade the joiner didn't have"));
+				FWWOTestTally::Get().Throws, FWWOTestTally::Get().ThrowsRejected, Pools, *PoolOwner);
+			if (FWWOTestTally::Get().ThrowsRejected < 1) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host threw the grenade the joiner didn't have"));
 		}
 		else
 		{
 			const AWWOTarget* Thrown = Cast<AWWOTarget>(AutoNetGrenadeTarget.Get());
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner saw %d grenades and %d pools from the host (%d pools now); %s health %.0f -> %.0f"),
-				AWWOGrenade::SeenRemote, AWWOSporePool::SeenRemote, Pools, *GetNameSafe(Thrown), AutoNetGrenadeHealth, Thrown ? Thrown->GetHealth() : 0.f);
+				FWWOTestTally::Get().GrenadesSeen, FWWOTestTally::Get().PoolsSeen, Pools, *GetNameSafe(Thrown), AutoNetGrenadeHealth, Thrown ? Thrown->GetHealth() : 0.f);
 		}
 	}
 
@@ -361,22 +365,22 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 			}
 		}
 	}
-	if (Crossed(MeleeReport))
+	if (Crossed(MeleeReport + (bHost ? JoinerLag : 0.f)))
 	{
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host saw %d joiner swings; melee hits applied %d, rejected %d; kills credited to the joiner %d"),
-				AWWOCharacter::NetMeleeSwings, AWWOCharacter::NetMeleeApplied, AWWOCharacter::NetMeleeRejected, AWWOCharacter::NetKillsCredited);
+				FWWOTestTally::Get().MeleeSwings, FWWOTestTally::Get().MeleeApplied, FWWOTestTally::Get().MeleeRejected, FWWOTestTally::Get().KillsCredited);
 			// Of the three punches sent at once (one forged), at most one may land.
 			// (No punches arrived at all: the joiner found no dummy left to punch, so the step didn't run.)
-			if (AWWOCharacter::NetMeleeApplied + AWWOCharacter::NetMeleeRejected == 0) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: melee step skipped (no punches arrived)")); }
-			else if (AWWOCharacter::NetMeleeRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host took more than one of three punches sent at once (rejected %d)"), AWWOCharacter::NetMeleeRejected);
+			if (FWWOTestTally::Get().MeleeApplied + FWWOTestTally::Get().MeleeRejected == 0) { UE_LOG(LogWWO, Display, TEXT("AutoTest net: melee step skipped (no punches arrived)")); }
+			else if (FWWOTestTally::Get().MeleeRejected < 2) UE_LOG(LogWWO, Warning, TEXT("AutoTest net: FAIL the host took more than one of three punches sent at once (rejected %d)"), FWWOTestTally::Get().MeleeRejected);
 		}
 		else
 		{
 			const AWWOTarget* Dummy = Cast<AWWOTarget>(AutoNetMeleeTarget.Get());
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner punched %s: its health %.0f -> %.0f (host's), dead %d; kills the host confirmed %d"),
-				*GetNameSafe(Dummy), AutoNetMeleeHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, AWWOCharacter::NetKillsCredited);
+				*GetNameSafe(Dummy), AutoNetMeleeHealth, Dummy ? Dummy->GetHealth() : 0.f, Dummy ? Dummy->IsDead() : 0, FWWOTestTally::Get().KillsCredited);
 		}
 	}
 
@@ -458,7 +462,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 			Other->Health->Kill();
 			P->Health->Kill();
 			const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
-			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host downed both players (%d players): round lost %d"), Players.Num(), GM && GM->State == EWWOWaveState::Lost);
+			UE_LOG(LogWWO, Display, TEXT("AutoTest net: host downed both players (%d players): round lost %d"), Players.Num(), GM && GM->MatchState() == EWWOWaveState::Lost);
 			return;
 		}
 		if (Crossed(RestartAt + 8.f))
@@ -508,9 +512,9 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 	auto EndStep = [this, P]()
 	{
 		if (AutoNetStep < 0) return;
-		const int32 N = UWWOCharacterMovement::NetCorrections;
+		const int32 N = FWWOTestTally::Get().Corrections;
 		UE_LOG(LogWWO, Display, TEXT("AutoTest net: step %s corrections %d (error max %.1f cm, avg %.1f cm)"), NetSteps[AutoNetStep].Name, N,
-			UWWOCharacterMovement::NetCorrectionErrorMax, N > 0 ? UWWOCharacterMovement::NetCorrectionErrorSum / N : 0.f);
+			FWWOTestTally::Get().CorrectionErrorMax, N > 0 ? FWWOTestTally::Get().CorrectionErrorSum / N : 0.f);
 		AutoNetTotalCorrections += N;
 	};
 
@@ -518,7 +522,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 	{
 		EndStep();
 		++AutoNetStep;
-		UWWOCharacterMovement::ResetNetCorrections();
+		FWWOTestTally::ResetCorrections();
 		const FString Step = NetSteps[AutoNetStep].Name;
 		if (Step == TEXT("idle"))
 		{
@@ -567,7 +571,7 @@ void FWWOAutoTest::UpdateAutoNetTest(float DeltaTime)
 		{
 			PC->MoveValue = FVector2D::ZeroVector;
 			UE_LOG(LogWWO, Display, TEXT("AutoTest net: joiner done, %d corrections in all, saw mantle %d, saw %d enemy shots from the host"),
-				AutoNetTotalCorrections, bAutoNetSawMantle, AWWOEnemyProjectile::SeenRemote);
+				AutoNetTotalCorrections, bAutoNetSawMantle, FWWOTestTally::Get().EnemyShotsSeen);
 		}
 	}
 	const FString Step = AutoNetStep >= 0 ? NetSteps[AutoNetStep].Name : TEXT("");

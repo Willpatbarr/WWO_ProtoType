@@ -14,6 +14,7 @@
 #include "Camera/CameraComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 // The HUD's state: binding to the player, easing its animated values each frame, the radar's
 // maths. The painting is in WWOHUDPaint.cpp.
@@ -46,7 +47,7 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	HitTime -= GetWorld() ? GetWorld()->GetDeltaSeconds() : InDeltaTime; // game time, like Godot's _process (slows in a hit-stop)
 	DamageFlash = WWO::MoveToward(DamageFlash, 0.f, 1.2f * InDeltaTime);
 	{
-		const UWWOAbilityData* Static = P ? P->Abilities->Equipped("static_charge") : nullptr;
+		const UWWOAbilityData* Static = P ? P->Abilities->Equipped(WWOIds::Ability::StaticCharge) : nullptr;
 		const bool bCharged = Static && P->Abilities->IsEffectActive(Static) && !P->Health->bDead;
 		StaticShown = WWO::MoveToward(StaticShown, bCharged ? 1.f : 0.f, (bCharged ? 2.5f : 5.f) * InDeltaTime); // in over 0.4 s, gone in 0.2
 	}

@@ -10,23 +10,16 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Systems/WWOTargetable.h"
+#include "Systems/WWONav.h"
 #include "WWOEnemy.generated.h"
 
 class UBoxComponent;
+class AWWOCharacter;
 class UCapsuleComponent;
 class UWWOBodyComponent;
 class UWWOEnemyData;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FWWOOnEnemyDied, class AWWOEnemy*);
-
-namespace WWONav
-{
-	// A navmesh path like Godot's map_get_path: a start or end that's off the navmesh (pressed
-	// against a crate, a teammate standing in a corner) snaps to the closest navmesh point first,
-	// and an unreachable end gives the path to the closest reachable spot (bOutPartial).
-	// Empty when there's no navmesh here.
-	WHATWASOURS_API TArray<FVector> FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial);
-}
 
 // Enemy movement: the velocity eases toward what the AI wants at a set acceleration (and
 // knockback / leaps are left alone while bSteering is off).
@@ -74,6 +67,8 @@ public:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UWWOBodyComponent> Body;
 
 	FWWOOnEnemyDied OnDied;
+	TWeakObjectPtr<class AWWOCharacter> LastHitBy; // host: the player whose hit landed last (FootRace's kill credit)
+	int8 Lane = -1; // FootRace: the team whose lane it guards; it only goes after that team's players (-1: anyone)
 	bool bAlerted = false;
 	bool bRespawns = true; // wave enemies don't
 	float SlowLeft = 0.f, SlowAmount = 0.f, BlindLeft = 0.f;
@@ -83,6 +78,13 @@ public:
 	AActor* GetTargetActor() const { return TargetActor.Get(); }
 	FVector GetWish() const;
 	FString PathDebug() const;
+
+	// An enemy's attack lands on a friendly (Victim: a player or an AI teammate; anything else is left
+	// alone). A player's hit mark points back at CameFrom, then the damage (shield first; bMelee for
+	// Melee Guard); an AI teammate takes it on its shield, then its health. Every bite, leap, bolt,
+	// splash and slam goes through here: no attacker scope (FWWODamageBy), no push. Returns the player
+	// hurt, if it was one (the slam slows them).
+	static AWWOCharacter* HurtFriendly(AActor* Victim, float Amount, const FVector& CameFrom, bool bMelee = false);
 
 	void ApplyBlind(float Seconds);
 	void ApplySlow(float Amount, float Seconds);
@@ -132,10 +134,7 @@ private:
 	float RetargetLeft = 0.f;
 	float CorpseLeft = -1.f;
 	float RespawnLeft = -1.f;
-	TArray<FVector> Path;
-	float PathAge = 99.f;
-	FVector PathGoal = FVector(1e9f);
-	bool bPathPartial = false;
+	FWWOPathFollower Path = FWWOPathFollower(FVector(1e9f));
 	float SidestepSide = 1.f;
 
 	float StuckFor = 0.f, UnstickLeft = 0.f, UnstickSide = 1.f;
@@ -146,4 +145,6 @@ private:
 	void Die();
 	void SetCollision(bool bOn);
 	bool TargetIsInvisible() const;
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
 };

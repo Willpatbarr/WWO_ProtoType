@@ -13,6 +13,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "WWOIds.h"
 
 namespace
 {
@@ -21,6 +22,7 @@ namespace
 }
 
 AWWOSporeFog::AWWOSporeFog()
+	: Life(Fade, 0.f, false) // fades in over 0.6 s and out over the last 0.6 s of its duration (Strength), no tail
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -105,7 +107,7 @@ void AWWOSporeFog::EndPlay(const EEndPlayReason::Type Reason)
 
 float AWWOSporeFog::Strength() const
 {
-	return FMath::Clamp(FMath::Min(Age / Fade, (Duration - Age) / Fade), 0.f, 1.f);
+	return FMath::Min(Life.FadeIn(Fade), Life.LeftOf(Duration, Fade));
 }
 
 bool AWWOSporeFog::Contains(const UWorld* World, const FVector& Point)
@@ -136,20 +138,19 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 {
 	WWO_PROF("SporeFog");
 	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
-	if (Age >= Duration)
+	if (Life.Advance(DeltaSeconds, Duration) == EWWOLifeStep::Over)
 	{
-		if (HasAuthority()) Destroy(); // a joiner's copy goes when the host's does
+		FWWOEffectLife::End(*this); // a joiner's copy stays as it is until the host's goes
 		return;
 	}
 	if (Material) Material->SetScalarParameterValue("Alpha", Opacity * 2.2f * Strength()); // the soft edges thin it out
-	if (Duration - Age < Fade * 2.f && Motes.IsValid()) Motes->bEmitting = false;
-	if (Duration - Age < Fade * 2.f && Smoke.IsValid()) Smoke->bEmitting = false;
+	if (Duration - Life.Age < Fade * 2.f && Motes.IsValid()) Motes->bEmitting = false;
+	if (Duration - Life.Age < Fade * 2.f && Smoke.IsValid()) Smoke->bEmitting = false;
 	if (Edge) if (UMaterialInstanceDynamic* EdgeMat = WWOFX::MID(Edge)) EdgeMat->SetScalarParameterValue("Alpha", 0.75f * Strength());
 	for (int32 i = 0; i < Puffs.Num(); ++i) // a slow churn, each puff gently swelling and shrinking
 	{
 		Puffs[i]->AddRelativeRotation(FRotator(0.f, FMath::RadiansToDegrees(DeltaSeconds * (0.2f + 0.1f * i)), 0.f));
-		Puffs[i]->SetRelativeScale3D(Sizes[i] * (1.f + 0.05f * FMath::Sin(Age * 1.3f + i * 1.7f)));
+		Puffs[i]->SetRelativeScale3D(Sizes[i] * (1.f + 0.05f * FMath::Sin(Life.Age * 1.3f + i * 1.7f)));
 	}
 	// Spore Fog Damage: hurts the rank and file (Swarm and Soldiers) inside it.
 	if (!HasAuthority()) return; // the damage is the host's
@@ -161,22 +162,23 @@ void AWWOSporeFog::Tick(float DeltaSeconds)
 	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
 	const AWWOCharacter* Player = UWWOWorldSubsystem::PlayerOf(this);
 	if (!Player && !GetOwner()) Player = WS->GetPlayer();
-	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped("spore_fog_damage") : nullptr;
+	const UWWOAbilityData* Ability = Player ? Player->Abilities->Equipped(WWOIds::Ability::SporeFogDamage) : nullptr;
 	if (!Ability || Strength() < 0.3f) return;
 	const float Hit = Ability->FogDps * (1.f + UWWOLoadoutSubsystem::Bonus(Player, "poison_damage")) * FogTick; // Stronger Poison
 	const FLinearColor Tint = WWO::Lightened(Color(), 0.3f);
 	FWWODamageBy By(Player); // theirs: the kill credit, and the numbers on their screen only
-	for (AWWOEnemy* Enemy : WS->LivingEnemies())
+	// Enemies of the rank and file (not dummies, not the Tank) and, in PvP, the other team's players and
+	// bots (it used to hurt the waves' enemies only): their chest within the radius.
+	FWWOAreaQuery Q;
+	Q.Center = GetActorLocation();
+	Q.Radius = Radius * WWO::M;
+	Q.Targets = EWWOAreaTargets::Enemies;
+	Q.Measure = EWWOAreaMeasure::Chest;
+	Q.For = Player;
+	WS->ForEachTargetInRadius(Q, [Hit, Tint](const FWWOAreaHit& In)
 	{
-		if (!Enemy->IsRankAndFile()) continue;
-		const FVector Chest = Enemy->FeetLocation() + FVector(0, 0, 80.f);
-		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Enemy->TakeHit(Hit, false, Chest, Tint);
-	}
-	// PvP: the other team's players and bots in it too (it used to hurt the waves' enemies only).
-	for (AWWOCharacter* Other : WS->GetPlayers())
-	{
-		if (!Other || Other->Health->bDead || !UWWOWorldSubsystem::CanHurt(Player, Other)) continue;
-		const FVector Chest = Other->FeetLocation() + FVector(0, 0, 80.f);
-		if (FVector::Dist(Chest, GetActorLocation()) <= Radius * WWO::M) Other->TakeHit(Hit, false, Chest, Tint);
-	}
+		const AWWOEnemy* Enemy = Cast<AWWOEnemy>(In.Actor);
+		if (!Enemy || Enemy->IsRankAndFile()) In.Target->TakeHit(Hit, false, In.Point, Tint);
+		return true;
+	});
 }

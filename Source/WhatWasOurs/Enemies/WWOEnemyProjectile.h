@@ -35,13 +35,14 @@ public:
 	UPROPERTY(Replicated) float SplashRadius = 0.f; // meters
 	UPROPERTY(Replicated) FLinearColor Color = FLinearColor(1.f, 0.35f, 0.1f);
 	UPROPERTY(Replicated) float Size = 0.09f;       // meters
-	static int32 PlayerHits;  // direct hits on the player, for the wave test log
-	static int32 SeenRemote;  // joiner: host shots that arrived here (for -WWOAutoTestNet)
 
 private:
 	bool bStopped = false; // a joiner's copy that hit something: waits for the host's to go
 	void Splash(const FVector& Point);
 	void SplashLooks(const FVector& Point);
 	void LandSparks(const FVector& Point);
+	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
+	friend class FWWORegress;
+
 	void Build();
 };

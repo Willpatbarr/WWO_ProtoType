@@ -4,7 +4,6 @@
 #include "Enemies/WWOEnemy.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
-#include "Allies/WWOAlly.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
@@ -14,9 +13,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/WWOTestTally.h"
 
-int32 AWWOEnemyProjectile::PlayerHits = 0;
-int32 AWWOEnemyProjectile::SeenRemote = 0;
 
 AWWOEnemyProjectile::AWWOEnemyProjectile()
 {
@@ -44,7 +42,7 @@ void AWWOEnemyProjectile::BeginPlay()
 	Super::BeginPlay();
 	if (HasAuthority()) return;
 	// A joiner's copy: the replicated values are in by now (they arrive with the spawn).
-	++SeenRemote;
+	FWWOTestTally::Count(&FWWOTestTally::EnemyShotsSeen);
 	Life += 1.f; // the host's copy decides when it ends; this one only outlives it a little
 	Build();
 }
@@ -155,15 +153,10 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 	{
 		Splash(Hit.ImpactPoint);
 	}
-	else if (AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()))
+	else
 	{
-		if (!P->Health->bDead) ++PlayerHits;
-		P->Health->DamageCameFrom(Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // back along its flight
-		P->Health->TakeDamage(Damage);
-	}
-	else if (AWWOAlly* A = Cast<AWWOAlly>(Hit.GetActor()))
-	{
-		A->TakeAllyDamage(Damage);
+		if (const AWWOCharacter* P = Cast<AWWOCharacter>(Hit.GetActor()); P && !P->Health->bDead) FWWOTestTally::Count(&FWWOTestTally::EnemyHitsOnPlayer);
+		AWWOEnemy::HurtFriendly(Hit.GetActor(), Damage, Hit.ImpactPoint - Velocity.GetSafeNormal() * 1000.f); // the mark: back along its flight
 	}
 	AWWOFXActor::Pop(GetWorld(), Hit.ImpactPoint, Color, Size * 2.5f, 0.2f);
 	if (SplashRadius <= 0.f) LandSparks(Hit.ImpactPoint);
@@ -172,22 +165,22 @@ void AWWOEnemyProjectile::Tick(float DeltaSeconds)
 
 void AWWOEnemyProjectile::Splash(const FVector& Point)
 {
-	UWWOWorldSubsystem* WS = UWWOWorldSubsystem::Get(this);
+	// Every player (dead or not), then living AI teammates, by their centre: within the radius + 0.5 m (the
+	// body, not just its centre).
 	const float R = SplashRadius * WWO::M;
-	for (AWWOCharacter* P : WS->GetPlayers())
+	FWWOAreaQuery Q;
+	Q.Center = Point;
+	Q.Radius = R + 50.f;
+	Q.bFloatDistance = true;
+	Q.Measure = EWWOAreaMeasure::Centre;
+	Q.Targets = EWWOAreaTargets::None;
+	Q.Players = EWWOAreaPlayers::All;
+	Q.bTeammates = true;
+	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [this, &Point, R](const FWWOAreaHit& Hit)
 	{
-		const float D = FVector::Dist(Point, P->GetActorLocation());
-		if (D <= R + 50.f) // +0.5 m: the player's body, not just its center
-		{
-			P->Health->DamageCameFrom(Point);
-			P->Health->TakeDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
-		}
-	}
-	for (AWWOAlly* Mate : WS->LivingTeammates())
-	{
-		const float D = FVector::Dist(Point, Mate->GetActorLocation());
-		if (D <= R + 50.f) Mate->TakeAllyDamage(Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(D / R, 0.f, 1.f)));
-	}
+		AWWOEnemy::HurtFriendly(Hit.Actor, Damage * FMath::Lerp(1.f, 0.5f, FMath::Clamp(Hit.Distance / R, 0.f, 1.f)), Point);
+		return true;
+	});
 	SplashLooks(Point);
 }
 

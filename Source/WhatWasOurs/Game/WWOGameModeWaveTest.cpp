@@ -4,11 +4,12 @@
 // target. Ends with a "WaveTest done" summary line and quits.
 
 #include "Game/WWOGameMode.h"
+#include "Game/WWOWaveRules.h"
 #include "Player/WWOTestRun.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
-#include "Enemies/WWOEnemyTypes.h"
+#include "Enemies/WWOEnemyKinds.h"
 #include "Enemies/WWOEnemyProjectile.h"
 #include "Allies/WWOAlly.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -24,6 +25,7 @@
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Components/PrimitiveComponent.h"
+#include "Player/WWOTestTally.h"
 
 void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 {
@@ -32,7 +34,16 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (!P) return;
 	P->Health->GodMode = 1.f;
 	if (WaveTestHome.IsZero()) WaveTestHome = P->GetActorLocation();
-	if ((!bWaveTestNavChecked || (Wave == 3 && WaveTestFight > 20.f && WaveTestFight - DeltaSeconds <= 20.f)) && State == EWWOWaveState::Spawning && WaveTestFight > 5.f)
+	FWWOWaveRules* W = Waves();
+	if (!W)
+	{
+		// Not a waves match: nothing to fight, as between waves.
+		WaveTestFight = 0.f;
+		WaveTestTracks.Reset();
+		return;
+	}
+	const int32 Wave = W->Wave;
+	if ((!bWaveTestNavChecked || (Wave == 3 && WaveTestFight > 20.f && WaveTestFight - DeltaSeconds <= 20.f)) && W->State == EWWOWaveState::Spawning && WaveTestFight > 5.f)
 	{
 		// Can every spawn point reach you on the navmesh?
 		bWaveTestNavChecked = true;
@@ -100,17 +111,17 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 			}
 		}
 	}
-	if (State == EWWOWaveState::Won)
+	if (W->State == EWWOWaveState::Won)
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest done: cleared %d waves; %d stuck, %d blocked by others, %d holding range, %d not facing, %d overlaps; %d enemy shots hit the player"),
-			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, AWWOEnemyProjectile::PlayerHits);
+			Wave, WaveTestStuck, WaveTestBlocked, WaveTestHolding, WaveTestTurned, WaveTestOverlaps, FWWOTestTally::Get().EnemyHitsOnPlayer);
 		WWOTest::Shot(TEXT("wave_won"));
 		bWaveTest = false;
 		FTimerHandle Quit;
 		GetWorldTimerManager().SetTimer(Quit, []() { FPlatformMisc::RequestExit(false); }, 1.f, false);
 		return;
 	}
-	if (State != EWWOWaveState::Spawning)
+	if (W->State != EWWOWaveState::Spawning)
 	{
 		WaveTestFight = 0.f;
 		WaveTestTracks.Reset();
@@ -136,9 +147,9 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	{
 		WWOTest::Shot(FString::Printf(TEXT("wave_%d"), Wave));
 	}
-	if (Queue.Num() == 0 && WaveTestFight >= FightTime)
+	if (W->Queue.Num() == 0 && WaveTestFight >= FightTime)
 	{
-		UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d fought %.0f s, skipping the %d left"), Wave, WaveTestFight, Alive.Num());
+		UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d fought %.0f s, skipping the %d left"), Wave, WaveTestFight, W->Alive.Num());
 		SkipWave();
 		return;
 	}
@@ -218,14 +229,15 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 			UE_LOG(LogWWO, Warning, TEXT("WaveTest STUCK IN THE AIR: %s (%s) at %s for %.1f s"), *C->GetName(), *What, *Pos.ToCompactString(), T.Air);
 		}
 		if (T.Air == 0.f) T.bAirLogged = false;
-		// Facing: the Tank turns slowly on purpose and plants itself to slam, so give it more slack.
+		// Facing: each kind has its own slack (WaveTestFacing: the Tank turns slowly on purpose and plants itself to slam).
 		const AActor* Target = E ? E->GetTargetActor() : nullptr;
 		if (Target && !What.StartsWith(TEXT("leap")) && !What.StartsWith(TEXT("slam")))
 		{
-			const bool bTank = Cast<AWWOTank>(E) != nullptr;
+			const FWWOEnemyKind* Kind = WWOEnemyKinds::Of(E);
+			const float Slack = Kind ? Kind->WaveTestFacing : 30.f;
 			const FVector To = (Target->GetActorLocation() - Pos).GetSafeNormal2D();
 			const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(To, C->GetActorForwardVector().GetSafeNormal2D()), -1.f, 1.f)));
-			T.Off = Off > (bTank ? 60.f : 30.f) ? T.Off + Step : 0.f;
+			T.Off = Off > Slack ? T.Off + Step : 0.f;
 			if (T.Off >= 1.5f && !T.bTurnLogged)
 			{
 				T.bTurnLogged = true;
@@ -255,7 +267,7 @@ void AWWOGameMode::UpdateWaveTest(float DeltaSeconds)
 	if (WaveTestLog > 0.f) return;
 	WaveTestLog = 3.f;
 	UE_LOG(LogWWO, Display, TEXT("WaveTest: wave %d at %.0f s, %d alive, %d queued; player %s health %.0f; enemy shots hit the player %d times"), Wave, WaveTestFight,
-		Alive.Num(), Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, AWWOEnemyProjectile::PlayerHits);
+		W->Alive.Num(), W->Queue.Num(), *P->GetActorLocation().ToCompactString(), P->Health->Health, FWWOTestTally::Get().EnemyHitsOnPlayer);
 	for (AWWOAlly* A : WS->AllTeammates())
 	{
 		UE_LOG(LogWWO, Display, TEXT("WaveTest   %s %s at %s speed %.1f"), *A->GetName(), *A->StatusText(), *A->GetActorLocation().ToCompactString(),

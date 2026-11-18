@@ -70,29 +70,20 @@ AActor* UWWOWeaponComponent::FindLungeTarget() const
 	const AWWOCharacter* P = GetPlayer();
 	const FVector Origin = P->EyeLocation();
 	const FVector Forward = P->AimForward();
-	AActor* Best = nullptr;
-	float BestScore = TNumericLimits<float>::Max();
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// Scored by angle + 2 x distance (m, to the part's surface); a part no nearer than the best score is passed over.
+	const FWWOAimPick Best = UWWOWorldSubsystem::Get(this)->BestAimPart(this, [&](const AActor*, const FWWOAimPart& Part, float BestScore, float& Score)
 	{
-		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		for (const FWWOAimPart& Part : Target->GetAimParts())
-		{
-			const FVector To = Part.Position - Origin;
-			const float Distance = (To.Size() - Part.Radius) / WWO::M;
-			if (Distance >= BestScore) continue;
-			const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To.GetSafeNormal()), -1.f, 1.f)));
-			const bool bInCone = Distance <= LungeRange && Angle <= LungeAngle;
-			const bool bWillHit = Distance <= MeleeReach && Angle <= MeleeAngle;
-			if (!(bInCone || bWillHit)) continue;
-			const float Score = Angle + Distance * 2.f;
-			if (Score >= BestScore) continue;
-			FHitResult Check;
-			if (!CastRayTo(Part.Position, Check) || Check.GetActor() != Actor) continue;
-			Best = Actor;
-			BestScore = Score;
-		}
-	}
-	return Best;
+		const FVector To = Part.Position - Origin;
+		const float Distance = (To.Size() - Part.Radius) / WWO::M;
+		if (Distance >= BestScore) return false;
+		const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To.GetSafeNormal()), -1.f, 1.f)));
+		const bool bInCone = Distance <= LungeRange && Angle <= LungeAngle;
+		const bool bWillHit = Distance <= MeleeReach && Angle <= MeleeAngle;
+		if (!(bInCone || bWillHit)) return false;
+		Score = Angle + Distance * 2.f;
+		return true;
+	}, [this](const FVector& To, FHitResult& Hit) { return CastRayTo(To, Hit); });
+	return Best.Actor;
 }
 
 void UWWOWeaponComponent::MeleeStrike()
@@ -101,28 +92,21 @@ void UWWOWeaponComponent::MeleeStrike()
 	AWWOCharacter* P = GetPlayer();
 	const FVector Origin = P->EyeLocation();
 	const FVector Forward = P->AimForward();
-	AActor* Best = nullptr;
-	FVector BestPoint = FVector::ZeroVector;
-	float BestDistance = TNumericLimits<float>::Max();
 	const IWWOTargetable* Locked = Cast<IWWOTargetable>(MeleeTarget.Get());
-	for (AActor* Actor : UWWOWorldSubsystem::Get(this)->LivingTargets(this))
+	// Scored by distance (m, to the part's surface).
+	const FWWOAimPick Pick = UWWOWorldSubsystem::Get(this)->BestAimPart(this, [&](const AActor* Actor, const FWWOAimPart& Part, float BestDistance, float& Score)
 	{
-		const IWWOTargetable* Target = Cast<IWWOTargetable>(Actor);
-		for (const FWWOAimPart& Part : Target->GetAimParts())
-		{
-			const FVector To = Part.Position - Origin;
-			const float Distance = (To.Size() - Part.Radius) / WWO::M;
-			if (Distance > MeleeReach || Distance >= BestDistance) continue;
-			if (Locked && !Locked->IsDead() && Actor != MeleeTarget.Get()) continue; // the swing lands on the enemy you lunged at
-			const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To.GetSafeNormal()), -1.f, 1.f)));
-			if (Angle > MeleeAngle) continue;
-			FHitResult Check;
-			if (!CastRayTo(Part.Position, Check) || Check.GetActor() != Actor) continue;
-			Best = Actor;
-			BestPoint = Check.ImpactPoint;
-			BestDistance = Distance;
-		}
-	}
+		const FVector To = Part.Position - Origin;
+		const float Distance = (To.Size() - Part.Radius) / WWO::M;
+		if (Distance > MeleeReach || Distance >= BestDistance) return false;
+		if (Locked && !Locked->IsDead() && Actor != MeleeTarget.Get()) return false; // the swing lands on the enemy you lunged at
+		const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Forward, To.GetSafeNormal()), -1.f, 1.f)));
+		if (Angle > MeleeAngle) return false;
+		Score = Distance;
+		return true;
+	}, [this](const FVector& To, FHitResult& Hit) { return CastRayTo(To, Hit); });
+	AActor* Best = Pick.Actor;
+	FVector BestPoint = Pick.IsValid() ? FVector(Pick.Hit.ImpactPoint) : FVector::ZeroVector;
 	if (!Best && Locked && !Locked->IsDead())
 	{
 		// The lunge got you there: hit it even if it shifted a little off center.

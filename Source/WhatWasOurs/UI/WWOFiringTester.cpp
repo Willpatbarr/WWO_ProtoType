@@ -6,6 +6,7 @@
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOTesterRules.h"
 #include "World/WWOTarget.h"
 #include "Net/WWONetSubsystem.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -154,13 +155,14 @@ void UWWOFiringTester::StopScript()
 void UWWOFiringTester::ResetPlayer()
 {
 	const AWWOGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWWOGameMode>() : nullptr;
+	const FWWOTesterRules* Rules = GM ? GM->Tester() : nullptr;
 	AWWOPlayerController* PC = Cast<AWWOPlayerController>(GetOwningPlayer());
 	AWWOCharacter* P = PC ? PC->GetWWOCharacter() : nullptr;
-	if (!GM || !P || !GM->bTesterHomeSet) return;
-	P->TeleportTo(GM->TesterHome.GetLocation(), GM->TesterHome.Rotator());
+	if (!Rules || !P || !Rules->bHomeSet) return;
+	P->TeleportTo(Rules->Home.GetLocation(), Rules->Home.Rotator());
 	// Level, at the dummy.
-	float Yaw = GM->TesterHome.Rotator().Yaw;
-	if (const AActor* Target = GM->TesterTarget.Get()) Yaw = (Target->GetActorLocation() - P->GetActorLocation()).Rotation().Yaw;
+	float Yaw = Rules->Home.Rotator().Yaw;
+	if (const AActor* Target = Rules->Target.Get()) Yaw = (Target->GetActorLocation() - P->GetActorLocation()).Rotation().Yaw;
 	P->SetViewRotation(0.f, Yaw);
 	StrafeClock = 0.f;
 }

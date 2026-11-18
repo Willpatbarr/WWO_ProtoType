@@ -12,9 +12,9 @@
 #include "WWOTypes.h"
 #include "Camera/CameraComponent.h"
 #include "WhatWasOurs.h"
+#include "WWOIds.h"
+#include "Player/WWOTestTally.h"
 
-int32 UWWOGrenadeComponent::NetThrows = 0;
-int32 UWWOGrenadeComponent::NetThrowsRejected = 0;
 
 UWWOGrenadeComponent::UWWOGrenadeComponent()
 {
@@ -101,23 +101,23 @@ void UWWOGrenadeComponent::Release()
 	else ThrowFrom(Hand, Dir);
 }
 
-bool UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
+EWWOKitRefusal UWWOGrenadeComponent::HostThrow(const FVector& Hand, const FVector& Dir)
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	FString Why;
-	if (P->Health->bDead) Why = TEXT("dead");
-	else if (Charge < 0.95f) Why = FString::Printf(TEXT("no grenade ready (charge %.2f)"), Charge); // a little slack for timing
-	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = TEXT("thrown from somewhere else");
-	if (!Why.IsEmpty())
+	EWWOKitRefusal Why = EWWOKitRefusal::None;
+	if (P->Health->bDead) Why = EWWOKitRefusal::Dead;
+	else if (Charge < 0.95f) Why = EWWOKitRefusal::NotReady; // a little slack for timing
+	else if (FVector::Dist(Hand, P->EyeLocation()) > 200.f) Why = EWWOKitRefusal::ThrownElsewhere;
+	if (Why != EWWOKitRefusal::None)
 	{
-		++NetThrowsRejected;
-		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *Why);
-		return false;
+		FWWOTestTally::Count(&FWWOTestTally::ThrowsRejected);
+		UE_LOG(LogWWO, Display, TEXT("NetThrow rejected from %s: %s"), *P->GetName(), *WWOKit::RefusalText(EWWOKit::Grenade, Why, Charge));
+		return Why;
 	}
-	++NetThrows;
+	FWWOTestTally::Count(&FWWOTestTally::Throws);
 	Charge = FMath::Max(Charge - 1.f, 0.f);
 	ThrowFrom(Hand, Dir.GetSafeNormal());
-	return true;
+	return EWWOKitRefusal::None;
 }
 
 void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
@@ -137,9 +137,9 @@ void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 	Spec.BlastRadius = Data->BlastRadius * (1.f + Loadout->TraitBonus("blast_bigger")); // Bigger Explosions
 	Spec.Fuse = EffectiveFuse();
 	Spec.Data = Data;
-	Spec.Seedburst = P->Abilities->Equipped("seedburst");
-	Spec.SporePatches = P->Abilities->Equipped("spore_patches");
-	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && Data->Kind != EWWOGrenadeKind::Spike && Data->Kind != EWWOGrenadeKind::Tripmine;
+	Spec.Seedburst = P->Abilities->Equipped(WWOIds::Ability::Seedburst);
+	Spec.SporePatches = P->Abilities->Equipped(WWOIds::Ability::SporePatches);
+	Spec.bExplodeOnImpact = Loadout->TraitBonus("impact_fuse") > 0.f && AWWOGrenade::KindRules(Data->Kind).bImpactFuse;
 	Spec.ThrownFrom = P->GetActorLocation();
 	AWWOGrenade::Throw(GetWorld(), Spec, Hand, Dir * Speed * WWO::M, P);
 }

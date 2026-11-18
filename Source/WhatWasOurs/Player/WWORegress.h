@@ -37,6 +37,7 @@ enum class EWWORegressModes : uint8
 	Same,       // one set of numbers for both modes (the default; a disagreement between modes fails)
 	PerMode,    // the numbers legitimately differ with rendering: golden keeps one set per mode
 	RenderOnly, // needs the game to draw: skipped (and reported skipped) without rendering
+	NoRenderOnly, // repeatable only without drawing (its numbers come from FMath's generator, which drawing also draws on): skipped in the window
 };
 
 struct FWWORegressScenario
@@ -122,19 +123,28 @@ public:
 private:
 	TArray<FWWORegressScenario> Scenarios;
 	void BuildScenarios();
+	static bool IsFilteredRun(); // -WWORegressOnly= or -WWORegressPerModeOnly
 	// The scenario families, one file each (members, so their scenarios may read the private state
 	// the gameplay classes open to this class).
 	static void AddGunScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);    // WWORegressGuns.cpp: weapons, perks, mod stats
 	static void AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);    // WWORegressKit.cpp: grenades, abilities, ults, flora effects
 	static void AddCombatScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L); // WWORegressCombat.cpp: melee, damage pipeline, enemies
+	static void AddAreaScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressArea.cpp: the edges of area effects and aim cones
+	static void AddLifeScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressLife.cpp: lingering effects' lives, tick by tick
+	static void AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressMove.cpp: AI walking, turning and probing
+	static void AddWaveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressWaves.cpp: wave spawns and queues
+	static void AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L); // WWORegressLoadout.cpp: catalog, equipping, stat maths, configs, saved and sent payloads
+	static void AddMatchScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L);   // WWORegressMatch.cpp: match flow (waves, team deathmatch, tester, bot roster)
 	enum class EPhase : uint8 { Boot, Setup, Settle, Run, Teardown, Gap, Done };
 	EPhase Phase = EPhase::Boot;
 	int32 PhaseTicks = 0;
 	int32 Index = -1;
 	int32 StepTick = 0;
 	bool bUpdate = false;
+	bool bUpdateNew = false; // -WWORegressUpdateNew: add missing golden entries, touch no others
 	bool bRender = true;
 	FString Mode() const { return bRender ? TEXT("render") : TEXT("norender"); }
+	bool SkippedHere(const FWWORegressScenario& S) const { return (S.Modes == EWWORegressModes::RenderOnly && !bRender) || (S.Modes == EWWORegressModes::NoRenderOnly && bRender); }
 	double StartedAt = 0.0;
 	int32 Skipped = 0;
 	int32 Problems = 0; // scenario list errors (two with one name)
@@ -167,6 +177,9 @@ private:
 	FString GoldenKey(const FWWORegressScenario& S) const;
 	static uint32 SeedFor(const FString& Name);
 	static FString Quote(const FString& S);
+	static bool ParseResults(const FString& Text, TMap<FString, TMap<FString, FString>>& Out);
 	static bool LoadResults(const FString& Path, TMap<FString, TMap<FString, FString>>& Out);
+	static FString ResultsText(const TMap<FString, TArray<TPair<FString, FString>>>& Results);
+	static bool CheckResultsRoundTrip();
 	static bool SaveResults(const FString& Path, const TMap<FString, TArray<TPair<FString, FString>>>& Results);
 };

@@ -23,7 +23,8 @@ This file is the only doc loaded into every session. Keep it short: put detail i
 `UE` is the engine folder (on Will's Mac: `/Volumes/UnrealSSD/Epic Games/UE_5.8`), `PROJ` the full path
 to `WhatWasOurs.uproject`.
 
-- Close a running game first, always: `pkill -f "WhatWasOurs.uproject.*-game"`
+- Close a running game first, always: `Tools/close_game.sh` (never `pkill -f` on the project name: that
+  also kills any shell whose command line holds the text, your own included)
 - Build: `"$UE/Engine/Build/BatchFiles/Mac/Build.sh" WhatWasOursEditor Mac Development -project="$PROJ"`
 - Run a map: `"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PROJ" /Game/WWO/Maps/L_Arena -game -windowed -ResX=1600 -ResY=900`
 - Scripted test run: add `-WWOAutoTest` (or a narrower switch, see `docs/TESTING.md`) and `-abslog=<file>`.
@@ -36,10 +37,10 @@ to `WhatWasOurs.uproject`.
 | Folder | Holds |
 |---|---|
 | `Player/` | Character, movement, weapon/health/ability/ult/grenade/aim-assist components, player and bot controllers, the autotest driver (`WWOAutoTest*.cpp`, `WWOTestRun`) |
-| `Game/` | Game mode (waves, PvP, bots), game state (replicated match state, effect relay), player state |
+| `Game/` | Game mode (a shell owning one rules object: waves, team deathmatch or tester; and the bot roster), game state (replicated match state, effect relay), player state |
 | `Systems/` | Loadout subsystem (catalog, equipped kit, stat maths), world subsystem (targets, teams, damage credit), sound |
 | `Weapons/`, `Flora/`, `FX/` | Grenades and perk numbers; flora effect actors; hand-built effects (no Niagara) |
-| `Enemies/`, `Allies/` | PvE AI (Soldier, Swarm, Tank), AI teammates |
+| `Enemies/`, `Allies/` | PvE AI (Soldier, Swarm, Tank) and the enemy registry (`WWOEnemyKinds`), AI teammates |
 | `Characters/` | Body component, native anim instances, procedural flora grafts |
 | `UI/` | HUD (immediate-mode paint), settings, character, launch, scoreboard, firing tester |
 | `Net/` | Sessions, travel, the map table |
@@ -82,7 +83,7 @@ build scripts: `Tools/`.
 ## Working agreements
 
 - Look for an existing helper before writing one: `WWOTypes.h` (`WWO::` maths and colour),
-  `UWWOWorldSubsystem` (targets, teams, `CanHurt`, `PlayerOf`), `UWWOLoadoutSubsystem` (`FindById`, `M()`),
+  `UWWOWorldSubsystem` (targets, teams, `CanHurt`, `PlayerOf`), `UWWOLoadoutSubsystem` (its `Catalog`, `FWWOLoadoutCatalog::FindById`, `M()`),
   `WWOFX` (shapes, lights, materials), `WWOConfig` (JSON config files), `WWOSwitches` (command-line
   switches), `WWOUI` (menu palette, text, buttons, rules: every menu builds with it, in its own tree). `docs/CONVENTIONS.md` lists them.
 - A feature that changes how a system works updates that system's section in `docs/`, in place. Dated
@@ -90,3 +91,6 @@ build scripts: `Tools/`.
 - Verify with a build and the narrowest autotest that covers the change; say what you ran.
 - Before a refactor that touches gameplay logic, run `Tools/regress.sh`; it must pass unchanged before and
   after (`docs/TESTING.md`, "Regression scenarios"). Update its golden file only for an intended change.
+  The default check is `Tools/regress.sh norender` (about 20 s); add `drawn-only` for a change to the view,
+  reticle and target marks, the real grenade throw, HUD or menus; `update-new <prefix>` for new scenarios;
+  the full `both` (about 14 min) only when the owner asks.

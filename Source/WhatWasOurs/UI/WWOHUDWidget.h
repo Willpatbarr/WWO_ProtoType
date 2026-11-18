@@ -93,5 +93,9 @@ private:
 	void PaintDamageSpikes(const FWWOHUDFrame& F) const;  // where damage came from
 	void PaintOverlays(const FWWOHUDFrame& F) const;      // blind, damage flash, down / dead screens, revive prompt
 	void PaintWaveLine(const FWWOHUDFrame& F) const;      // the match line (top center)
+	void PaintBreachEnergy(const FWWOHUDFrame& F) const;  // FootRace: both teams' breach energy (under the match line)
+	void PaintRaceTrack(const FWWOHUDFrame& F) const;     // FootRace: both teams' doors and breaches (right edge)
+	mutable float RaceBarShown[2] = { 0.f, 0.f };        // the breach bars' fill-in (0-1), eased on screen
+	mutable double RaceBarAt = 0.0;
 	void PaintFps(const FWWOHUDFrame& F) const;           // frame rate (top left, under the radar)
 };

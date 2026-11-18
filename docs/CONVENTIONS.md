@@ -42,6 +42,10 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 - Wrap host-side damage in an `FWWODamageBy` scope.
 - Spawned kit sets `Params.Owner` (or Instigator) to the character that made it.
 - Ask `UWWOWorldSubsystem::CanHurt` before hurting a player; don't re-derive team rules.
+- An area effect ("everyone within R of this point") is a `FWWOAreaQuery` passed to
+  `UWWOWorldSubsystem::ForEachTargetInRadius` (or `NearestTargetInRadius`), never a hand loop over
+  `LivingTargets` / `GetPlayers`: say where it measures, `<` or `<=`, who it includes and whether it needs a
+  line of sight. "The best part inside my aim cone" is `BestAimPart` with your own score.
 - Effects everyone should see: the `AWWOGameState` statics. Sounds only this machine should hear:
   `UWWOSound`.
 
@@ -60,6 +64,11 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
   Add new ones at the end (tests read the array by index).
 - The joiner's `MoveIn` is quantised (`Quantize`) so both machines simulate the same numbers.
 - Movement ticks before the character; `PreparedFrame` guards against preparing twice in a frame.
+- AI moves with the shared pieces in `Systems/WWONav.h`, never a hand copy: a path through an
+  `FWWOPathFollower` with the mover's own `FWWOPathRules`, wall and ledge checks through `WWONav::WallAhead` /
+  `LedgeAhead` with its own `FWWOProbe`, an eased turn through `WWONav::TurnYaw`. Each mover's numbers are
+  behaviour (the scenarios notice a reach of 60 instead of 90, or a float yaw instead of a double): pass
+  them, don't share them. An enemy's attack on a friendly goes through `AWWOEnemy::HurtFriendly`.
 
 ## Time
 
@@ -98,15 +107,22 @@ Look here before writing a new one.
 | A command-line switch, "is this a test run" | `WWOSwitches::Has`, `Value`, and the named predicates (`HasAutoTestText`, `IsStress`, ...). Each predicate's comment says exactly what it matches (`WWOSwitches.h`) |
 | This machine's player; every player and bot | `UWWOWorldSubsystem::GetPlayer()`, `GetPlayers()` |
 | Living targets for an attacker | `UWWOWorldSubsystem::LivingTargets` |
+| Everyone within a radius (measure point, `<` / `<=`, who, line of sight); the nearest such; the best aim part in a cone | `ForEachTargetInRadius`, `NearestTargetInRadius` with an `FWWOAreaQuery`; `BestAimPart` (`Systems/WWOWorldSubsystem.h`) |
 | Team rules, the player behind an actor | `UWWOWorldSubsystem::CanHurt`, `TeamOf`, `IsPvP`, `PlayerOf` |
-| A data asset by id | `UWWOLoadoutSubsystem::FindById` |
+| A data asset by id | `FWWOLoadoutCatalog::FindById(L->Catalog.Weapons, Id)` (`Systems/WWOLoadoutCatalog.h`) |
+| The match's rules from game code (host only): its phase, the waves, team deathmatch, the tester | `AWWOGameMode::MatchState()`, `Waves()`, `Deathmatch()`, `Tester()` (`Game/WWOGameMode.h`; the rules in `Game/WWOMatchRules.h`) |
+| An enemy kind's class, data or spawn rules | `WWOEnemyKinds::Find(Id)` / `Of(Enemy)` (`Enemies/WWOEnemyKinds.h`); its data asset `L->EnemyDataAs<T>(Id)` |
 | A modified stat | `Character->M("stat_name", Base)` |
 | Another character's loadout | `UWWOLoadoutSubsystem::Get(Context)` |
+| An effect's age, grow-in, fade, tail and end (the host destroys) | `FWWOEffectLife` (`Flora/WWOEffectLife.h`) |
+| Show an effect on every machine (from the host) | the `AWWOGameState` statics; a new one ends with `HostRelay(World)` and its multicast |
 | Basic shapes, materials, lights, ground lookup for effects | `WWOFX::Sphere` / `Cube` / `AddShape` / `AddSoftSphere` / `AddGroundDisc` / `GroundBelow`, `WWOFX::AddPointLight` (any actor), `AWWOFXActor::AddLight` (`FX/WWOFX.*`) |
-| A navmesh path | `WWONav::FindPath` (`Enemies/WWOEnemy.*`) |
+| A navmesh path; following it; a wall or ledge probe; an eased yaw turn (AI) | `WWONav::FindPath`, `FWWOPathFollower` + `FWWOPathRules`, `WWONav::WallAhead` / `LedgeAhead` + `FWWOProbe`, `WWONav::TurnYaw` (`Systems/WWONav.h`) |
+| An enemy's attack hurting the player or an AI teammate | `AWWOEnemy::HurtFriendly` (`Enemies/WWOEnemy.h`) |
 | A timed section in the perf log | `WWO_PROF` (`Player/WWOProf.h`) |
 | A regression scenario (exact numbers, compared with a golden file) | `FWWORegressScenario` and `FWWORegress`'s helpers (`Player/WWORegress.h`); `Tools/regress.sh` |
 | In a scripted test: a timed step, an ok / FAIL line, a screenshot, the way out, keeping the saved loadout | `WWOTest::Crossed`, `Check`, `Shot` / `ShotPath`, `Exit`, `GuardLoadout` / `RestoreLoadout` (`Player/WWOTestRun.h`) |
+| A counter gameplay bumps for a test to read ("how many shots did the host refuse"), a test probe or hook on a gameplay object | a field in `FWWOTestTally`, written with one `FWWOTestTally::Count(&FWWOTestTally::X)` line, read with `FWWOTestTally::Get().X` (`Player/WWOTestTally.h`; empty in a shipping build). Never a new static on the gameplay class |
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
 | In a menu: a label, spaced capitals, a thin line, a size box, a fill share, the accent colour, the palette | `WWOUI::Text`, `Spaced`, `Rule` / `RuleDown`, `Sized` / `Wide`, `Fill`, `Accent(this)`; `WWOUI::PageColor`, `CardColor`, `CardEdge`, `Dim`, ... (`UI/WWOUI.h`). Each takes the menu's own `WidgetTree` |
 | Immediate-mode drawing in the HUD's 1600 x 900 layout (box, outline, line, triangle, vignette, circle, dot, text, measure, material); the layout's scale | `FWWOPainter` (`UI/WWOPainter.h`), `WWOHUD::Scale` (`UI/WWOHUDLayout.h`) |

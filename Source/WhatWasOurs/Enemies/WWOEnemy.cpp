@@ -18,31 +18,24 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "NavigationSystem.h"
-#include "NavigationPath.h"
 #include "Engine/World.h"
 
 namespace
 {
 	constexpr float CorpseTime = 3.f; // seconds the body stays before disappearing
 	constexpr float EnemyGravity = 20.f; // m/s^2, as in Godot
-}
 
-TArray<FVector> WWONav::FindPath(AActor* Querier, const FVector& Start, const FVector& End, bool& bOutPartial)
-{
-	bOutPartial = false;
-	UWorld* World = Querier ? Querier->GetWorld() : nullptr;
-	const UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
-	if (!Nav) return {};
-	auto Snap = [Nav](const FVector& Point)
+	// Paths again every 0.3 s or when the goal has moved 1.5 m; a path point within 60 cm (flat, 60
+	// itself included) is reached.
+	const FWWOPathRules EnemyPath = []
 	{
-		FNavLocation Out;
-		if (Nav->ProjectPointToNavigation(Point, Out)) return Point;
-		return Nav->ProjectPointToNavigation(Point, Out, FVector(400.f, 400.f, 250.f)) ? Out.Location : Point;
-	};
-	const UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, Snap(Start), Snap(End), Querier);
-	if (!NavPath || !NavPath->IsValid()) return {};
-	bOutPartial = NavPath->IsPartial();
-	return NavPath->PathPoints;
+		FWWOPathRules R;
+		R.RepathAfter = 0.3f;
+		R.RepathMoved = 150.f;
+		R.Reach = 60.f;
+		R.bReachInclusive = true;
+		return R;
+	}();
 }
 
 UWWOEnemyMovement::UWWOEnemyMovement()
@@ -175,6 +168,7 @@ bool AWWOEnemy::ApplyHit(float Damage, bool bCritical, const FVector& Point, FLi
 		return false;
 	}
 	bAlerted = true; // getting shot from out of sight range still wakes it up
+	if (AWWOCharacter* By = UWWOWorldSubsystem::PlayerOf(UWWOWorldSubsystem::CurrentAttacker.Get())) LastHitBy = By;
 	Flash = 1.f;
 	const float Through = Absorb(Damage, bCritical, Point); // shields take their share first
 	if (Through > 0.f)
@@ -376,7 +370,8 @@ FVector AWWOEnemy::Unstick(const FVector& Wish, float DeltaSeconds)
 
 void AWWOEnemy::Retarget(float DeltaSeconds)
 {
-	// Enemies go after whoever's closest: a player (any of them, online) or an AI teammate.
+	// Enemies go after whoever's closest: a player (any of them, online) or an AI teammate. A FootRace
+	// lane's enemies (Lane set) only go after that lane's team: a hijacker from the other team is left alone.
 	RetargetLeft -= DeltaSeconds;
 	const AWWOAlly* CurrentAlly = Cast<AWWOAlly>(TargetActor.Get());
 	const AWWOCharacter* CurrentPlayer = Cast<AWWOCharacter>(TargetActor.Get());
@@ -389,6 +384,7 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 	for (AWWOCharacter* Player : WS->GetPlayers())
 	{
 		if (Player->IsInvisible() || Player->Health->bDead) continue; // veiled: teammates are fair game, you aren't
+		if (Lane >= 0 && UWWOWorldSubsystem::TeamOf(Player) != Lane) continue;
 		const float D = FVector::Dist(GetActorLocation(), Player->GetActorLocation());
 		if (D < BestDistance)
 		{
@@ -396,7 +392,7 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 			BestDistance = D;
 		}
 	}
-	if (!Best) Best = WS->GetPlayer(); // everyone down or veiled: keep facing someone
+	if (!Best && Lane < 0) Best = WS->GetPlayer(); // everyone down or veiled: keep facing someone
 	for (AWWOAlly* Mate : WS->LivingTeammates())
 	{
 		const float D = FVector::Dist(GetActorLocation(), Mate->GetActorLocation());
@@ -409,14 +405,21 @@ void AWWOEnemy::Retarget(float DeltaSeconds)
 	TargetActor = Best;
 }
 
+AWWOCharacter* AWWOEnemy::HurtFriendly(AActor* Victim, float Amount, const FVector& CameFrom, bool bMelee)
+{
+	if (AWWOCharacter* P = Cast<AWWOCharacter>(Victim))
+	{
+		P->Health->DamageCameFrom(CameFrom);
+		P->Health->TakeDamage(Amount, bMelee);
+		return P;
+	}
+	if (AWWOAlly* A = Cast<AWWOAlly>(Victim)) A->TakeAllyDamage(Amount, bMelee);
+	return nullptr;
+}
+
 void AWWOEnemy::DamageTarget(float Amount, bool bMelee)
 {
-	if (AWWOCharacter* P = Cast<AWWOCharacter>(TargetActor.Get()))
-	{
-		P->Health->DamageCameFrom(GetActorLocation());
-		P->Health->TakeDamage(Amount, bMelee);
-	}
-	else if (AWWOAlly* A = Cast<AWWOAlly>(TargetActor.Get())) A->TakeAllyDamage(Amount, bMelee);
+	HurtFriendly(TargetActor.Get(), Amount, GetActorLocation(), bMelee);
 }
 
 FVector AWWOEnemy::FlatToTarget() const
@@ -453,40 +456,27 @@ void AWWOEnemy::TurnToward(const FVector& Direction, float DeltaSeconds, float S
 {
 	if (Direction.Size2D() < 1.f) return;
 	const float Rate = Speed < 0.f ? (Data() ? Data()->TurnSpeed : 8.f) : Speed;
-	const float Current = GetActorRotation().Yaw;
-	const float Target = Direction.Rotation().Yaw;
-	const float Yaw = Current + FMath::FindDeltaAngleDegrees(Current, Target) * WWO::Damp(Rate, DeltaSeconds);
-	SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	const float Target = Direction.Rotation().Yaw; // a float target: float maths
+	SetActorRotation(FRotator(0.f, WWONav::TurnYaw(GetActorRotation().Yaw, Target, Rate, DeltaSeconds), 0.f));
 }
 
 FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 {
 	// Which way to walk to reach Goal, around walls, using the level's navmesh. With no
 	// navmesh it's a straight line.
-	PathAge += DeltaSeconds;
 	FVector Straight = Goal - GetActorLocation();
 	Straight.Z = 0.f;
-	if (PathAge > 0.3f || FVector::Dist(Goal, PathGoal) > 150.f)
-	{
-		Path = WWONav::FindPath(this, FeetLocation(), Goal, bPathPartial);
-		PathAge = 0.f;
-		PathGoal = Goal;
-	}
-	while (Path.Num() > 1)
-	{
-		const FVector ToNext = Path[0] - GetActorLocation();
-		if (FVector2D(ToNext.X, ToNext.Y).Size() > 60.f) break;
-		Path.RemoveAt(0); // reached that point
-	}
-	if (Path.Num() < 2)
+	Path.Update(this, FeetLocation(), Goal, GetActorLocation(), DeltaSeconds, EnemyPath);
+	const TArray<FVector>& Points = Path.Points;
+	if (Points.Num() < 2)
 	{
 		// Godot heads straight for the goal from here. When the goal can't be reached on the
 		// navmesh (you're up on a platform it has no way onto) and a wall or rail is right in
 		// front, it would just press into it, so it stands at the closest spot instead.
-		if (bPathPartial && WallAhead(Straight)) return FVector::ZeroVector;
+		if (Path.bPartial && WallAhead(Straight)) return FVector::ZeroVector;
 		return Straight.GetSafeNormal();
 	}
-	FVector Step = Path[0] - GetActorLocation();
+	FVector Step = Points[0] - GetActorLocation();
 	Step.Z = 0.f;
 	Step = Step.Size() > 1.f ? Step.GetSafeNormal() : Straight.GetSafeNormal();
 	// Something that isn't in the navmesh (a training target, a bark wall) can sit right on the
@@ -505,30 +495,26 @@ FVector AWWOEnemy::PathDirection(const FVector& Goal, float DeltaSeconds)
 
 FString AWWOEnemy::PathDebug() const
 {
-	FString Out = FString::Printf(TEXT("path %d points%s"), Path.Num(), bPathPartial ? TEXT(" (partial)") : TEXT(""));
-	for (const FVector& Point : Path) Out += TEXT(" ") + Point.ToCompactString();
+	FString Out = FString::Printf(TEXT("path %d points%s"), Path.Points.Num(), Path.bPartial ? TEXT(" (partial)") : TEXT(""));
+	for (const FVector& Point : Path.Points) Out += TEXT(" ") + Point.ToCompactString();
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	if (Path.Num() == 0 && Nav)
+	if (Path.Points.Num() == 0 && Nav)
 	{
 		// Why there's no path.
 		FNavLocation Near;
 		Out += FString::Printf(TEXT(" (start %s, goal %s %s)"), Nav->ProjectPointToNavigation(FeetLocation(), Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"),
-			*PathGoal.ToCompactString(), Nav->ProjectPointToNavigation(PathGoal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
+			*Path.Goal.ToCompactString(), Nav->ProjectPointToNavigation(Path.Goal, Near) ? TEXT("on navmesh") : TEXT("OFF navmesh"));
 	}
 	return Out;
 }
 
 bool AWWOEnemy::LedgeAhead(const FVector& Direction) const
 {
-	// A step that way, is there floor within a short drop? (Level geometry only.)
+	// A step that way (its radius + 70 cm), is there floor within a short drop (150 cm below its feet)?
+	// Level geometry only.
 	const FVector Step = GetActorLocation() + Direction.GetSafeNormal2D() * (GetCapsuleComponent()->GetScaledCapsuleRadius() + 70.f);
 	const float Feet = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-	FHitResult Hit;
-	return !GetWorld()->LineTraceSingleByObjectType(Hit, Step, Step - FVector(0, 0, Feet + 150.f), Objects,
-		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyLedge), false, this));
+	return WWONav::LedgeAhead(GetWorld(), FWWOProbe(), Step, Feet + 150.f, FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyLedge), false, this));
 }
 
 float AWWOEnemy::HeightToTarget() const
@@ -541,18 +527,14 @@ float AWWOEnemy::HeightToTarget() const
 
 bool AWWOEnemy::WallAhead(const FVector& Direction, FVector* OutNormal) const
 {
-	// Level geometry (not people) within a step of its capsule along Direction?
+	// Level geometry (not people) within a step of its capsule along Direction: its capsule 15 cm
+	// shorter, from 10 cm up (clear of the floor), swept 30 cm; the first hit (for its normal).
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
-	const FVector From = GetActorLocation() + FVector(0, 0, 10.f); // clear of the floor
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-	FHitResult Hit;
-	const bool bHit = GetWorld()->SweepSingleByObjectType(Hit, From, From + Direction.GetSafeNormal2D() * 30.f, FQuat::Identity, Objects,
-		FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight() - 15.f),
-		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyWall), false, this));
-	if (bHit && OutNormal) *OutNormal = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
-	return bHit;
+	FWWOProbe Probe;
+	Probe.Radius = Capsule->GetScaledCapsuleRadius();
+	Probe.HalfHeight = Capsule->GetScaledCapsuleHalfHeight() - 15.f;
+	return WWONav::WallAhead(GetWorld(), Probe, GetActorLocation() + FVector(0, 0, 10.f), Direction.GetSafeNormal2D() * 30.f,
+		FCollisionQueryParams(SCENE_QUERY_STAT(WWOEnemyWall), false, this), OutNormal);
 }
 
 void AWWOEnemy::PinCrit(FName Bone, const FVector& WorldPoint, const FVector& HalfExtentCm)

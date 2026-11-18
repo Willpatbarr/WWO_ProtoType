@@ -1,4 +1,5 @@
 #include "Characters/WWOBodyComponent.h"
+#include "SkinnedAssetCompiler.h"
 #include "Net/UnrealNetwork.h"
 #include "WhatWasOurs.h"
 #include "FX/WWOFX.h"
@@ -39,6 +40,33 @@ namespace
 		const TSharedPtr<FJsonObject>* Model = nullptr;
 		if (Json->TryGetObjectField(TEXT("models"), Models) && (*Models)->TryGetObjectField(Key.ToString(), Model)) return *Model;
 		return nullptr;
+	}
+}
+
+void UWWOBodyComponent::Preload(FName Key, TArray<UObject*>& Out)
+{
+	const TSharedPtr<FJsonObject> Config = ModelConfig(Key);
+	FString MeshPath;
+	if (!Config.IsValid() || !Config->TryGetStringField(TEXT("mesh"), MeshPath)) return;
+	USkeletalMesh* Asset = LoadObject<USkeletalMesh>(nullptr, *MeshPath);
+	if (!Asset) return;
+	Out.Add(Asset);
+	FString RK = Key.ToString();
+	Config->TryGetStringField(TEXT("retargeter"), RK);
+	if (UIKRetargeter* R = LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *RK, *RK))) Out.Add(R);
+	FSkinnedAssetCompilingManager::Get().FinishCompilation({ Asset });
+}
+
+void UWWOBodyComponent::PreloadAnims(TConstArrayView<FName> Names, TArray<UObject*>& Out)
+{
+	for (const FName& Anim : Names)
+	{
+		// FindAnim's lookup: the baked replacement first, else the Godot bake.
+		const FString Name = Anim.ToString();
+		const FString BodyPath = FString::Printf(TEXT("/Game/WWO/Anims/Body/A_%s"), *Name);
+		UAnimSequence* Seq = FPackageName::DoesPackageExist(BodyPath) ? LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%s.A_%s"), *BodyPath, *Name)) : nullptr;
+		if (!Seq) Seq = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/WWO/Anims/UAL/A_%s.A_%s"), *Name, *Name));
+		if (Seq) Out.Add(Seq);
 	}
 }
 

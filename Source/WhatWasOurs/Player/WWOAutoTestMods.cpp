@@ -29,7 +29,7 @@ namespace
 {
 	UWWOModData* ModById(UWWOLoadoutSubsystem* L, FName Id)
 	{
-		for (UWWOModData* M : L->WeaponMods)
+		for (UWWOModData* M : L->Catalog.WeaponMods)
 		{
 			if (M->Id == Id) return M;
 		}
@@ -55,7 +55,7 @@ bool FWWOAutoTest::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	const bool bCannon = Gun->GetBaseWeaponData() && Gun->GetBaseWeaponData()->Id == "handcannon";
 	auto EquipWeaponId = [L](FName Id)
 	{
-		for (UWWOWeaponData* W : L->Weapons)
+		for (UWWOWeaponData* W : L->Catalog.Weapons)
 		{
 			if (W->Id == Id) L->EquipWeapon(W);
 		}
@@ -80,7 +80,7 @@ bool FWWOAutoTest::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 	{
 		// The real save is already copied aside (WWOTest::GuardLoadout). Start from a bare rifle.
 		P->Health->GodMode = 1.f;
-		Check(L->WeaponMods.Num() == 60, FString::Printf(TEXT("%d mods loaded"), L->WeaponMods.Num()));
+		Check(L->Catalog.WeaponMods.Num() == 60, FString::Printf(TEXT("%d mods loaded"), L->Catalog.WeaponMods.Num()));
 		EquipWeaponId("rifle");
 		for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots()) L->EquipMod(Slot, nullptr);
 		AutoGunIdx = AutoGunStage = 0;
@@ -323,7 +323,7 @@ bool FWWOAutoTest::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		// Every frame's two mod sets, from the mod data: the mod without a perk and the one with, per slot.
 		FName PlainSet[6], PerkSet[6];
 		bool bModded = false;
-		for (const UWWOModData* Mod : L->WeaponMods)
+		for (const UWWOModData* Mod : L->Catalog.WeaponMods)
 		{
 			const int32 SlotIndex = Mod && Mod->Frame == Id ? UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(Mod->Slot) : INDEX_NONE;
 			if (SlotIndex < 0 || SlotIndex >= 6) continue;
@@ -430,7 +430,7 @@ bool FWWOAutoTest::UpdateAutoModTest(AWWOCharacter* P, float DeltaTime)
 		const FName Id = Frames[AutoGunIdx];
 		FName PlainSet[6];
 		int32 PlainCount = 0, PerkCount = 0;
-		for (const UWWOModData* Mod : L->WeaponMods)
+		for (const UWWOModData* Mod : L->Catalog.WeaponMods)
 		{
 			if (!Mod || Mod->Frame != Id) continue;
 			if (Mod->Perk.IsNone() && PlainCount < 6) PlainSet[PlainCount++] = Mod->Id;

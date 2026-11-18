@@ -21,6 +21,7 @@
 #include "World/WWOTarget.h"
 #include "Data/WWOData.h"
 #include "EngineUtils.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -196,7 +197,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// The grenade comes out of the thrower's own code (UWWOGrenadeComponent::ThrowFrom builds the spec
 	// from the loadout) 30 cm above the point, straight down and slow (the throw distance tuned to
 	// 5 cm for the scenario), so it settles on the point and goes off as it would anywhere.
-	for (const UWWOGrenadeData* G : L.Grenades)
+	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
 	{
 		if (!G) continue;
 		const FName Id = G->Id, Flora = G->Flora;
@@ -251,7 +252,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				RecordSums(R, *St);
 				R.Record(TEXT("grenades_seen"), St->SeenGrenades);
 				R.Record(TEXT("player_hp"), FWWORegress::HealthOf(P));
-				R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+				R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 				return true;
 			};
 			Out.Add(S);
@@ -303,7 +304,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// Each one equipped alone (with its own flora), set off by its button where it has one; a second
 	// walked forward; then a grenade set off 4 m ahead (Seedburst, Spore Patches, Shield Share act on
 	// it); what it did by 8 s.
-	for (const UWWOAbilityData* A : L.Abilities)
+	for (const UWWOAbilityData* A : L.Catalog.Abilities)
 	{
 		if (!A) continue;
 		const FName Id = A->Id, Flora = A->Flora;
@@ -346,7 +347,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			{
 				R.Record(TEXT("charge_used"), Ab ? K->Charge(Ab) : -1.f);
 				R.RecordBool(TEXT("effect_on"), Ab && K->IsEffectActive(Ab));
-				R.Record(TEXT("effect_left"), K->ActiveLeft.FindRef(Id));
+				R.Record(TEXT("effect_left"), K->FindState(Id) ? K->FindState(Id)->ActiveLeft : 0.f);
 				R.Record(TEXT("melee_mult"), K->MeleeMultiplier());
 			}
 			if (Tick == 60)
@@ -359,7 +360,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 			}
 			FollowVictims(*St);
 			if (Tick > 60) TrackGrenades(R, *St, Tick);
-			if (Tick == 62) R.Record(TEXT("live_seeds"), K->LiveSeeds);
+			if (Tick == 62) R.Record(TEXT("live_seeds"), K->LiveCount("seedburst"));
 			if (St->BoomTick >= 0 && Tick == St->BoomTick + 2)
 			{
 				// Right after the (last) blast: patches sprouted, an ally's shield refilled.
@@ -385,7 +386,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 
 	// --- (e) Each flora's ult: on inert enemies at 5 and 10 m and a dummy at 15 m; and in PvP on an
 	// other-team and a same-team player at 5 m ---
-	for (const UWWOFloraData* F : L.Floras)
+	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		const FName Flora = F->Id;
@@ -448,7 +449,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 					RecordSums(R, *St);
 					R.RecordBool(TEXT("active_6s"), P->Ult->bActive);
 					R.Record(TEXT("charge_6s"), P->Ult->Charge);
-					R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+					R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 					return true;
 				}
 				return false;
@@ -460,7 +461,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// --- (f) Flora effects, made by their own factories, owned by the player, 10 m ahead ---
 	struct FEffect { FString Name; TFunction<void(FWWORegress&, const FVector&)> Make; float Seconds; };
 	TArray<FEffect> Effects;
-	for (const UWWOFloraData* F : L.Floras)
+	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
 		if (!F) continue;
 		const FName Flavor = F->Id;
@@ -537,7 +538,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 				{
 					RecordVictims(R, *St, true);
 					RecordSums(R, *St);
-					R.Record(TEXT("hits_marked"), UWWOWorldSubsystem::HitsMarked - R.ShotsMarkedSince);
+					R.Record(TEXT("hits_marked"), FWWOTestTally::Get().HitsMarked - R.ShotsMarkedSince);
 					if (bWall)
 					{
 						R.Record(TEXT("walls"), WallLine(R));
@@ -547,6 +548,385 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 						const bool bHit = Near && R.Player()->Weapon->CastRayTo(Near->GetActorLocation(), Hit);
 						R.Record(TEXT("blocked_by"), !bHit ? FString(TEXT("nothing")) : (Hit.GetActor() == Near ? FString(TEXT("victim")) : (Cast<AWWOBarkWall>(Hit.GetActor()) ? FString(TEXT("wall")) : FString(TEXT("other")))));
 					}
+					return true;
+				}
+				return false;
+			};
+			Out.Add(S);
+		}
+	}
+
+	// --- (g) Kit paths the families above don't reach ---
+	// The host's side of a joiner's kit (HostThrow, HostUseAbility, ServerActivateUlt, CanLaunchNow) and
+	// the refusal coming back (ClientKitRefused), called directly; Melee Guard on a melee hit taken;
+	// Static Charge filled by damage taken; Seedburst and Spore Patches lit; the fists' glow; Spore
+	// Dash's fog across a line of sight; the Impact Grenades trait on every grenade; a Snare Mine and a
+	// Poison Spike nobody comes near.
+	{
+		FWWORegressScenario S;
+		S.Name = TEXT("kit.host.grenade");
+		S.MaxTicks = Ticks(2.f);
+		S.Setup = [](FWWORegress& R)
+		{
+			R.EquipFlora("voltvine");
+			R.EquipGrenade("volt_grenade");
+		};
+		S.Step = [](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOGrenadeComponent* G = P->Grenades;
+			if (Tick != 0) return Tick >= 1;
+			const int32 Throws = FWWOTestTally::Get().Throws, Rejected = FWWOTestTally::Get().ThrowsRejected;
+			const FVector Dir = P->AimForward();
+			const FVector Hand = P->EyeLocation() + Dir * 50.f;
+			R.Record(TEXT("charge_start"), G->Charge);
+			R.RecordBool(TEXT("throw_ready"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None);
+			R.Record(TEXT("charge_after"), G->Charge);
+			R.RecordBool(TEXT("throw_again"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None); // not ready
+			R.Record(TEXT("charge_again"), G->Charge);
+			G->Charge = 1.f;
+			R.RecordBool(TEXT("throw_far"), G->HostThrow(Hand + FVector(0, 0, 500.f), Dir) == EWWOKitRefusal::None); // from somewhere else
+			P->Health->bDead = true;
+			R.RecordBool(TEXT("throw_dead"), G->HostThrow(Hand, Dir) == EWWOKitRefusal::None);
+			P->Health->bDead = false;
+			R.Record(TEXT("charge_end"), G->Charge);
+			R.Record(TEXT("net_throws"), FWWOTestTally::Get().Throws - Throws);
+			R.Record(TEXT("net_rejected"), FWWOTestTally::Get().ThrowsRejected - Rejected);
+			G->Charge = 0.25f;
+			P->ClientKitRefused_Implementation((uint8)EWWOKit::Grenade, 0); // the charge comes back
+			R.Record(TEXT("charge_refused"), G->Charge);
+			G->Charge = 1.f;
+			P->ClientKitRefused_Implementation((uint8)EWWOKit::Grenade, 0); // never above the most
+			R.Record(TEXT("charge_refused_full"), G->Charge);
+			return false;
+		};
+		Out.Add(S);
+	}
+	for (const UWWOAbilityData* A : L.Catalog.Abilities)
+	{
+		if (!A) continue;
+		const FName Id = A->Id, Flora = A->Flora;
+		const bool bCharged = A->Kind == EWWOAbilityKind::Charged;
+		FWWORegressScenario S;
+		S.Name = FString::Printf(TEXT("kit.host.ability.%s"), *Id.ToString());
+		S.MaxTicks = Ticks(4.f);
+		S.Setup = [Id, Flora](FWWORegress& R)
+		{
+			if (!Flora.IsNone() && Flora != "none") R.EquipFlora(Flora);
+			R.EquipAbility(0, Id);
+			R.EquipGrenade("volt_grenade");
+		};
+		S.Step = [Id, bCharged](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOAbilityComponent* K = P->Abilities;
+			UWWOAbilityData* Ab = K->Equipped(Id);
+			if (!Ab) { R.Record(TEXT("equipped"), 0); return true; }
+			if (Tick == 0)
+			{
+				R.RecordBool(TEXT("use_empty_slot"), K->HostUseAbility(1) == EWWOKitRefusal::None);
+				P->Health->bDead = true;
+				R.RecordBool(TEXT("use_dead"), K->HostUseAbility(0) == EWWOKitRefusal::None);
+				P->Health->bDead = false;
+				R.RecordBool(TEXT("can_launch_ready"), K->CanLaunchNow());
+				R.RecordBool(TEXT("use"), K->HostUseAbility(0) == EWWOKitRefusal::None);
+				if (bCharged)
+				{
+					K->OnDamageTaken(Ab->ChargeDamage); // full: now it can be armed
+					R.RecordBool(TEXT("use_filled"), K->HostUseAbility(0) == EWWOKitRefusal::None);
+				}
+				R.Record(TEXT("charge_used"), K->Charge(Ab));
+				R.RecordBool(TEXT("can_launch_used"), K->CanLaunchNow());
+			}
+			if (Tick == 2)
+			{
+				R.RecordBool(TEXT("effect_on"), K->IsEffectActive(Ab));
+				R.Record(TEXT("effect_left"), K->FindState(Id) ? K->FindState(Id)->ActiveLeft : 0.f);
+				R.Record(TEXT("fists"), P->NetFists.ToString());
+				R.Record(TEXT("melee_mult"), K->MeleeMultiplier());
+			}
+			if (Tick == 3)
+			{
+				R.RecordBool(TEXT("use_again"), K->HostUseAbility(0) == EWWOKitRefusal::None);
+				P->ClientKitRefused_Implementation((uint8)EWWOKit::Ability, 0); // the host said no: undone, the charge back
+				R.Record(TEXT("charge_refused"), K->Charge(Ab));
+				R.RecordBool(TEXT("effect_refused"), K->IsEffectActive(Ab));
+			}
+			if (Tick == 5) R.Record(TEXT("fists_refused"), P->NetFists.ToString());
+			if (Tick == 30) R.RecordBool(TEXT("can_launch_0_5s"), K->CanLaunchNow());
+			if (Tick == Ticks(2.5f))
+			{
+				R.RecordBool(TEXT("can_launch_2_5s"), K->CanLaunchNow());
+				R.Record(TEXT("charge_2_5s"), K->Charge(Ab));
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	for (const UWWOFloraData* F : L.Catalog.Floras)
+	{
+		if (!F) continue;
+		const FName Flora = F->Id;
+		FWWORegressScenario S;
+		S.Name = FString::Printf(TEXT("kit.host.ult.%s"), *Flora.ToString());
+		S.MaxTicks = Ticks(3.f);
+		S.Setup = [Flora](FWWORegress& R) { R.EquipFlora(Flora); };
+		S.Step = [](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOUltComponent* U = P->Ult;
+			if (Tick == 0)
+			{
+				U->Charge = 0.5f;
+				P->ServerActivateUlt_Implementation(); // not ready: refused (here the refusal runs on this copy)
+				R.RecordBool(TEXT("half_active"), U->bActive);
+				R.Record(TEXT("half_charge"), U->Charge);
+				U->Charge = 0.96f;
+				P->ServerActivateUlt_Implementation(); // within the slack: cast
+				R.RecordBool(TEXT("cast_active"), U->bActive);
+				R.Record(TEXT("cast_charge"), U->Charge);
+			}
+			if (Tick == 2)
+			{
+				P->ServerActivateUlt_Implementation(); // already under way: refused, so it stops
+				R.RecordBool(TEXT("again_active"), U->bActive);
+				R.Record(TEXT("again_charge"), U->Charge);
+				R.RecordBool(TEXT("again_ulting"), P->bUlting);
+				R.Record(TEXT("again_veil_left"), P->VeilLeft);
+				R.Record(TEXT("again_entrench_left"), P->EntrenchLeft);
+			}
+			if (Tick == 60)
+			{
+				R.RecordBool(TEXT("active_1s"), U->bActive);
+				R.Record(TEXT("charge_1s"), U->Charge);
+				R.Record(TEXT("veil_left_1s"), P->VeilLeft);
+				R.Record(TEXT("entrench_left_1s"), P->EntrenchLeft);
+				R.Record(TEXT("fogs"), CountOf<AWWOSporeFog>(R.World()));
+				R.Record(TEXT("roots"), CountOf<AWWOEntrenchRoots>(R.World()));
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	{
+		FWWORegressScenario S;
+		S.Name = TEXT("kit.melee_guard.hit_taken");
+		S.MaxTicks = Ticks(3.f);
+		S.Setup = [](FWWORegress& R)
+		{
+			R.EquipFlora("voltvine");
+			R.EquipAbility(0, "melee_guard");
+			R.Tune(R.Player()->Health, "RechargeDelay", 100.f);
+		};
+		S.Step = [](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOAbilityComponent* K = P->Abilities;
+			UWWOAbilityData* Ab = K->Equipped("melee_guard");
+			if (Tick == 0)
+			{
+				float Before = FWWORegress::HealthOf(P);
+				P->Health->TakeDamage(40.f, true);
+				R.Record(TEXT("melee_unguarded"), Before - FWWORegress::HealthOf(P));
+				R.RecordBool(TEXT("lit_before"), Ab && K->IsEffectActive(Ab));
+				K->OnMeleeLanded();
+				R.RecordBool(TEXT("lit_after_landed"), Ab && K->IsEffectActive(Ab));
+				R.Record(TEXT("guard_left"), K->GuardTimeLeft());
+				R.Record(TEXT("incoming_mult"), K->IncomingMeleeMultiplier());
+				Before = FWWORegress::HealthOf(P);
+				P->Health->TakeDamage(40.f, true);
+				R.Record(TEXT("melee_guarded"), Before - FWWORegress::HealthOf(P));
+				Before = FWWORegress::HealthOf(P);
+				P->Health->TakeDamage(40.f, false);
+				R.Record(TEXT("ranged_guarded"), Before - FWWORegress::HealthOf(P));
+			}
+			if (Tick == Ticks(2.5f))
+			{
+				R.Record(TEXT("guard_left_2_5s"), K->GuardTimeLeft());
+				R.RecordBool(TEXT("lit_2_5s"), Ab && K->IsEffectActive(Ab));
+				R.Record(TEXT("incoming_mult_2_5s"), K->IncomingMeleeMultiplier());
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	{
+		FWWORegressScenario S;
+		S.Name = TEXT("kit.static_charge.filled_by_damage");
+		S.MaxTicks = Ticks(2.f);
+		S.Setup = [](FWWORegress& R)
+		{
+			R.EquipFlora("voltvine");
+			R.EquipAbility(0, "static_charge");
+			R.Tune(R.Player()->Health, "RechargeDelay", 100.f);
+		};
+		S.Step = [](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOAbilityComponent* K = P->Abilities;
+			UWWOAbilityData* Ab = K->Equipped("static_charge");
+			if (!Ab) { R.Record(TEXT("equipped"), 0); return true; }
+			if (Tick == 0)
+			{
+				R.Record(TEXT("charge_start"), K->Charge(Ab));
+				P->Health->TakeDamage(30.f, false);
+				R.Record(TEXT("charge_30"), K->Charge(Ab));
+				K->OnDamageTaken(Ab->ChargeDamage);
+				R.Record(TEXT("charge_full"), K->Charge(Ab));
+				R.RecordBool(TEXT("armed_same_tick"), K->IsEffectActive(Ab));
+			}
+			if (Tick == 2)
+			{
+				R.RecordBool(TEXT("armed"), K->IsEffectActive(Ab)); // armed itself on the next update
+				R.Record(TEXT("fists"), P->NetFists.ToString());
+				K->OnDamageTaken(50.f); // armed: no more filling
+				R.Record(TEXT("charge_armed_hit"), K->Charge(Ab));
+				R.RecordBool(TEXT("consumed"), K->ConsumeStaticCharge() != nullptr);
+				R.RecordBool(TEXT("armed_after"), K->IsEffectActive(Ab));
+				R.Record(TEXT("charge_after"), K->Charge(Ab));
+				R.RecordBool(TEXT("consumed_again"), K->ConsumeStaticCharge() != nullptr);
+			}
+			if (Tick == 4)
+			{
+				R.Record(TEXT("fists_after"), P->NetFists.ToString());
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	for (const FName Id : { FName("seedburst"), FName("spore_patches") })
+	{
+		FWWORegressScenario S;
+		S.Name = FString::Printf(TEXT("kit.lit.%s"), *Id.ToString());
+		S.MaxTicks = Ticks(10.f);
+		struct FLit { int32 First = -1, Last = -1, Most = 0; };
+		TSharedRef<FLit> St = MakeShared<FLit>();
+		S.Setup = [St, Id](FWWORegress& R)
+		{
+			*St = FLit();
+			if (Id == "spore_patches") R.EquipFlora("veilspore");
+			R.EquipAbility(0, Id);
+			R.EquipGrenade("volt_grenade");
+			R.Tune(R.Player()->Grenades, "ThrowDistance", 0.05f);
+		};
+		S.Step = [St, Id](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			UWWOAbilityComponent* K = P->Abilities;
+			UWWOAbilityData* Ab = K->Equipped(Id);
+			if (!Ab) { R.Record(TEXT("equipped"), 0); return true; }
+			if (Tick == 0)
+			{
+				R.RecordBool(TEXT("lit_before"), K->IsEffectActive(Ab));
+				P->Grenades->ThrowFrom(R.Ahead(4.f) + FVector(0, 0, 30.f), FVector(0, 0, -1.f));
+			}
+			if (K->IsEffectActive(Ab))
+			{
+				if (St->First < 0) St->First = Tick;
+				St->Last = Tick;
+			}
+			St->Most = FMath::Max(St->Most, K->LiveCount(Id));
+			if (Tick == Ticks(9.f))
+			{
+				R.Record(TEXT("lit_first"), St->First);
+				R.Record(TEXT("lit_last"), St->Last);
+				R.Record(TEXT("most_live"), St->Most);
+				R.Record(TEXT("live_end"), K->LiveCount(Id));
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	{
+		FWWORegressScenario S;
+		S.Name = TEXT("kit.spore_dash.sight");
+		S.MaxTicks = Ticks(6.f);
+		S.Setup = [](FWWORegress& R)
+		{
+			R.EquipFlora("veilspore");
+			R.EquipAbility(0, "spore_dash");
+		};
+		S.Step = [](FWWORegress& R, int32 Tick)
+		{
+			// A sight line 1 m up, 4 m to either side of where the player stood, and one 12 m ahead of it.
+			const FVector Side = FRotationMatrix(FRotator(0.f, R.HomeYaw(), 0.f)).GetUnitAxis(EAxis::Y);
+			const FVector Up(0, 0, 100.f);
+			auto Lines = [&R, &Side, &Up](const TCHAR* When)
+			{
+				R.RecordBool(FString(TEXT("blocks_across_")) + When, AWWOSporeFog::Blocks(R.World(), R.Home() + Up + Side * 400.f, R.Home() + Up - Side * 400.f));
+				R.RecordBool(FString(TEXT("blocks_ahead_")) + When, AWWOSporeFog::Blocks(R.World(), R.Ahead(12.f, 4.f) + Up, R.Ahead(12.f, -4.f) + Up));
+				R.RecordBool(FString(TEXT("contains_")) + When, AWWOSporeFog::Contains(R.World(), R.Home() + Up));
+			};
+			if (Tick == 0)
+			{
+				Lines(TEXT("before"));
+				R.Press(EWWOAction::Ability1);
+			}
+			if (Tick == 15) Lines(TEXT("0_25s"));
+			if (Tick == 60)
+			{
+				Lines(TEXT("1s"));
+				int32 Thick = 0, All = 0;
+				for (TActorIterator<AWWOSporeFog> It(R.World()); It; ++It) { ++All; Thick += It->bBlocksSight ? 1 : 0; }
+				R.Record(TEXT("fogs"), All);
+				R.Record(TEXT("fogs_thick"), Thick);
+			}
+			if (Tick == Ticks(5.f))
+			{
+				Lines(TEXT("5s"));
+				return true;
+			}
+			return false;
+		};
+		Out.Add(S);
+	}
+	const UWWOTraitData* Impact = nullptr;
+	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && T->Effect == "impact_fuse") { Impact = T; break; }
+	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
+	{
+		if (!G) continue;
+		const FName Id = G->Id, Flora = G->Flora;
+		const bool bFizzles = G->Kind == EWWOGrenadeKind::Spike || G->Kind == EWWOGrenadeKind::Tripmine;
+		for (const bool bImpact : { true, false })
+		{
+			if (!bImpact && !bFizzles) continue; // nobody near: only the two that wait for a target
+			FWWORegressScenario S;
+			S.Name = FString::Printf(TEXT("kit.%s.%s"), bImpact ? TEXT("impact") : TEXT("fizzle"), *Id.ToString());
+			S.MaxTicks = Ticks(32.f);
+			TSharedRef<FKitState> St = MakeShared<FKitState>();
+			TWeakObjectPtr<const UWWOTraitData> Trait = bImpact ? Impact : nullptr;
+			S.Setup = [St, Id, Flora, Trait, bImpact](FWWORegress& R)
+			{
+				*St = FKitState();
+				R.EquipFlora(Flora);
+				R.EquipGrenade(Id);
+				if (bImpact)
+				{
+					if (Trait.IsValid()) R.Loadout()->Equipped.Traits.Add(const_cast<UWWOTraitData*>(Trait.Get()));
+					else R.Record(TEXT("missing_trait"), TEXT("impact_fuse"));
+				}
+				R.Tune(R.Player()->Grenades, "ThrowDistance", 0.05f);
+			};
+			S.Step = [St](FWWORegress& R, int32 Tick)
+			{
+				if (Tick == 0) R.Player()->Grenades->ThrowFrom(R.Ahead(10.f) + FVector(0, 0, 30.f), FVector(0, 0, -1.f));
+				if (Tick == 1)
+				{
+					for (TActorIterator<AWWOGrenade> It(R.World()); It; ++It) R.RecordBool(TEXT("on_impact"), It->Spec.bExplodeOnImpact);
+				}
+				TrackGrenades(R, *St, Tick);
+				if (St->BoomTick >= 0 || Tick >= Ticks(30.f))
+				{
+					R.Record(TEXT("boom_tick"), St->BoomTick);
+					R.RecordVec(TEXT("boom_at"), St->LastGrenadeAt);
+					R.Record(TEXT("grenades_seen"), St->SeenGrenades);
+					R.Record(TEXT("pools"), CountOf<AWWOSporePool>(R.World()));
+					R.Record(TEXT("walls"), WallLine(R));
 					return true;
 				}
 				return false;

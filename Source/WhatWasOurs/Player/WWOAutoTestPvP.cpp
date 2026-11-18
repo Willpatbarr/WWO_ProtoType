@@ -24,6 +24,7 @@
 #include "WWOTypes.h"
 #include "WhatWasOurs.h"
 #include "Engine/World.h"
+#include "Player/WWOTestTally.h"
 
 namespace
 {
@@ -124,7 +125,7 @@ void FWWOAutoTest::UpdateAutoPvPTest(float DeltaTime)
 		GM->SetTeam(const_cast<AWWOPlayerState*>(OtherPS), MyPS ? MyPS->Team : 0);
 		const FVector Ahead = Other->GetActorLocation() + Other->GetActorForwardVector() * 4.f * WWO::M;
 		P->TeleportTo(Ahead, P->GetActorRotation());
-		AutoPvPRejected = AWWOCharacter::NetHitsRejected;
+		AutoPvPRejected = FWWOTestTally::Get().HitsRejected;
 	}
 	if (bHost && Crossed(9.6f)) AutoPvPHostHealth = P->Health->Health + P->Health->Shield;
 	if (!bHost && T >= 9.8f && T < 12.f) ShootAt(9.8f);
@@ -134,7 +135,7 @@ void FWWOAutoTest::UpdateAutoPvPTest(float DeltaTime)
 		if (bHost)
 		{
 			UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: friendly fire: same team %d, host health %.0f -> %.0f, teammate hits refused %d"),
-				MyPS && OtherPS && MyPS->Team == OtherPS->Team, AutoPvPHostHealth, P->Health->Health + P->Health->Shield, AWWOCharacter::NetHitsRejected - AutoPvPRejected);
+				MyPS && OtherPS && MyPS->Team == OtherPS->Team, AutoPvPHostHealth, P->Health->Health + P->Health->Shield, FWWOTestTally::Get().HitsRejected - AutoPvPRejected);
 			const bool bSameTeam = MyPS && OtherPS && MyPS->Team == OtherPS->Team;
 			if (!bSameTeam || P->Health->Health + P->Health->Shield < AutoPvPHostHealth - 0.5f) UE_LOG(LogWWO, Warning, TEXT("AutoTest pvp: FAIL a teammate's shots hurt the host"));
 		}
@@ -146,13 +147,13 @@ void FWWOAutoTest::UpdateAutoPvPTest(float DeltaTime)
 	if (bHost && Crossed(13.f) && GM) GM->SetTeam(const_cast<AWWOPlayerState*>(OtherPS), MyPS ? 1 - MyPS->Team : 1);
 
 	// The host kills the joiner (credited to the host) until the kill target ends the match.
-	if (bHost && GM && T >= 13.5f && GM->State == EWWOWaveState::Match && !Other->Health->bDead)
+	if (bHost && GM && T >= 13.5f && GM->MatchState() == EWWOWaveState::Match && !Other->Health->bDead)
 	{
 		FWWODamageBy By(P);
 		Other->TakeHit(99999.f, false, Other->GetActorLocation());
 		UE_LOG(LogWWO, Display, TEXT("AutoTest pvp: host killed the joiner at %.1f s: %s"), T, *Score());
 	}
-	if (bHost && GM && GM->State == EWWOWaveState::MatchOver && GPvPRound == 0)
+	if (bHost && GM && GM->MatchState() == EWWOWaveState::MatchOver && GPvPRound == 0)
 	{
 		GPvPRound = 1;
 		GPvPRound1 = PC;
@@ -177,7 +178,7 @@ void FWWOAutoTest::LogJoinerStress(float DeltaTime)
 	if (StressClock < StressNext) return;
 	StressNext += 5.f;
 	const UNetConnection* Conn = PC->GetNetConnection();
-	const int32 Now = UWWOCharacterMovement::NetCorrections;
+	const int32 Now = FWWOTestTally::Get().Corrections;
 	const AWWOGameState* GS = PC->GetWorld()->GetGameState<AWWOGameState>();
 	UE_LOG(LogWWO, Display, TEXT("Stress joiner: t=%.0f %d players, frame avg %.1f ms worst %.1f ms, in %.1f KB/s out %.1f KB/s, lost %d, corrections %d, %s"),
 		StressClock, UWWOWorldSubsystem::Get(PC)->GetPlayers().Num(), 5000.f / FMath::Max(StressFrames, 1.f), StressWorst * 1000.f,

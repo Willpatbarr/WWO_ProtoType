@@ -13,6 +13,7 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOGrenadeComponent.h"
 #include "Player/WWOUltComponent.h"
+#include "Player/WWOTestTally.h"
 
 using namespace WWOCharacter; // the constants these files share (WWOCharacterPrivate.h)
 
@@ -24,36 +25,55 @@ void AWWOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOCharacter, NetFists);
 }
 
-int32 AWWOCharacter::NetAbilitiesUsed = 0;
-int32 AWWOCharacter::NetUltsCast = 0;
 
 void AWWOCharacter::ServerUseAbility_Implementation(int32 Slot, FVector_NetQuantizeNormal Aim)
 {
-	++NetAbilitiesUsed;
+	FWWOTestTally::Count(&FWWOTestTally::AbilitiesUsed);
 	NetAim = FVector(Aim).GetSafeNormal(UE_SMALL_NUMBER, GetActorForwardVector()); // this copy's camera has no pitch
-	if (!Abilities->HostUseAbility(Slot)) ClientKitRefused(1, Slot);
+	if (Abilities->HostUseAbility(Slot) != EWWOKitRefusal::None) ClientKitRefused((uint8)EWWOKit::Ability, Slot);
 }
 
 void AWWOCharacter::ClientKitRefused_Implementation(uint8 What, int32 Slot)
 {
-	UE_LOG(LogWWO, Display, TEXT("Net: the host refused %s"), What == 0 ? TEXT("the grenade") : (What == 1 ? TEXT("the ability") : TEXT("the ult")));
-	if (What == 0) Grenades->Charge = FMath::Min(Grenades->Charge + 1.f, Grenades->MaxCharges());
-	else if (What == 1) Abilities->UndoUse(Slot);
-	else Ult->Abort(true);
+	const EWWOKit Kit = (EWWOKit)What; // a uint8 on the wire
+	UE_LOG(LogWWO, Display, TEXT("Net: the host refused %s"), WWOKit::Name(Kit));
+	switch (Kit)
+	{
+	case EWWOKit::Grenade: Grenades->Charge = FMath::Min(Grenades->Charge + 1.f, Grenades->MaxCharges()); break;
+	case EWWOKit::Ability: Abilities->UndoUse(Slot); break;
+	default: Ult->Abort(true); break;
+	}
 }
 
 void AWWOCharacter::ServerActivateUlt_Implementation()
 {
 	if (Ult->Charge >= 0.95f) Ult->Fill(); // a little slack: the two charges run a frame or two apart
 	const bool bCast = Ult->ActivateUlt();
-	if (!bCast) ClientKitRefused(2, 0);
-	NetUltsCast += bCast ? 1 : 0;
-	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), bCast ? TEXT("cast") : TEXT("refused"));
+	if (!bCast) ClientKitRefused((uint8)EWWOKit::Ult, 0);
+	FWWOTestTally::Count(&FWWOTestTally::UltsCast, bCast ? 1 : 0);
+	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), *WWOKit::RefusalText(EWWOKit::Ult, bCast ? EWWOKitRefusal::None : EWWOKitRefusal::NotReady));
 }
 
 void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
 {
 	Health->bWantsRevive = bHolding;
+}
+
+void AWWOCharacter::ServerSetUse_Implementation(bool bHolding)
+{
+	bHoldingUse = bHolding;
+}
+
+void AWWOCharacter::UpdateUseInput()
+{
+	// The Revive key, held, whatever is near: what it does is up to whoever reads bHoldingUse (host).
+	const bool bHolding = !Health->bDead && Pressed(EWWOAction::Revive);
+	if (HasAuthority()) bHoldingUse = bHolding;
+	else if (bHolding != bSentUse)
+	{
+		bSentUse = bHolding;
+		ServerSetUse(bHolding);
+	}
 }
 
 void AWWOCharacter::UpdateReviveInput()
