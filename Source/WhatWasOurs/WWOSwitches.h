@@ -8,6 +8,7 @@
 //   -WWOAutoTest                the full scripted play-through
 //   -WWOAutoTestMenus           menus by injected controller and keyboard input
 //   -WWOAutoTestBody            body states, third person, first-person hands
+//   -WWOBodyFlora=<id>          with -WWOAutoTestBody: wear that flora (its grafts) for the third-person shots
 //   -WWOAutoTestGrafts          six loadouts in the character preview
 //   -WWOAutoTestMaps            fixed camera views of the level
 //   -WWOAutoTestMods            weapon mods and perks against the mod data

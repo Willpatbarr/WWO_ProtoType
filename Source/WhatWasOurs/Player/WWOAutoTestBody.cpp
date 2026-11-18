@@ -26,6 +26,9 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/WWOTestTally.h"
+#include "Systems/WWOLoadoutSubsystem.h"
+#include "Data/WWOData.h"
+#include "WWOSwitches.h"
 
 namespace
 {
@@ -197,6 +200,17 @@ bool FWWOAutoTest::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 		P->Weapon->SetVisibility(false, true);
 		P->Weapon->bForceWorldGun = true; // the gun other players see in your hands
 		P->SetViewRotation(0.f, 90.f); // facing +Y, down the empty half of the floor
+		// -WWOBodyFlora=<id>: that flora (and its grafts) for these shots; the loadout guard puts yours back.
+		FString FloraId;
+		UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(PC);
+		if (Loadout && WWOSwitches::Value(TEXT("WWOBodyFlora="), FloraId))
+		{
+			for (UWWOFloraData* F : Loadout->Catalog.Floras)
+			{
+				if (F && F->Id == FName(*FloraId)) Loadout->EquipFlora(F);
+			}
+			UE_LOG(LogWWO, Display, TEXT("AutoTest body: wearing %s"), Loadout->GetFlora() ? *Loadout->GetFlora()->Id.ToString() : TEXT("none"));
+		}
 	}
 	// Standing with the gun up, from the front-left and from the side, then crouching.
 	if (Crossed(PlayerAt + 0.3f)) LookAtPlayer(1.f);

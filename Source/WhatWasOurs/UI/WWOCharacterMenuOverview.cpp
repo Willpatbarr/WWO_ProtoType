@@ -310,13 +310,19 @@ void UWWOCharacterMenu::BuildOverview()
 	for (int32 i = 0; i < 2; ++i)
 	{
 		const UWWOAbilityData* A = L->GetAbility(i);
-		Tile(Kit, A ? A->DisplayName : FString(), A ? WWO::Darkened(A->Color, 0.6f) : WWOUI::CardColor, A ? A->Color : WWOUI::CardEdgeStrong, FString::Printf(TEXT("ability%d"), i));
+		UTexture2D* Badge = A ? WWOUI::SymbolTexture("Ability", A->Id) : nullptr;
+		Tile(Kit, A ? A->DisplayName : FString(), A ? (Badge ? WWOUI::BadgeEdge(A->Color) : WWO::Darkened(A->Color, 0.6f)) : WWOUI::CardColor,
+			A ? A->Color : WWOUI::CardEdgeStrong, FString::Printf(TEXT("ability%d"), i), Badge);
 	}
 	UHorizontalBox* TraitRow = Tree->ConstructWidget<UHorizontalBox>();
 	const TArray<UWWOTraitData*> Traits = L->EquippedTraits();
 	for (int32 i = 0; i < FMath::Max(Traits.Num(), 4); ++i)
 	{
-		Tile(TraitRow, Traits.IsValidIndex(i) ? Traits[i]->DisplayName : FString(), TraitFill, TraitEdge, FString::Printf(TEXT("trait%d"), i));
+		// A trait's badge is on its flora's colour.
+		UTexture2D* Badge = Traits.IsValidIndex(i) ? WWOUI::SymbolTexture("Trait", Traits[i]->Id) : nullptr;
+		const UWWOFloraData* TraitFlora = L->GetFlora();
+		Tile(TraitRow, Traits.IsValidIndex(i) ? Traits[i]->DisplayName : FString(), Badge && TraitFlora ? WWOUI::BadgeEdge(TraitFlora->Color) : TraitFill,
+			TraitEdge, FString::Printf(TEXT("trait%d"), i), Badge);
 	}
 	Small->AddChildToVerticalBox(Kit)->SetSize(WWOUI::Fill(1.15f));
 	UVerticalBoxSlot* TraitSlot = Small->AddChildToVerticalBox(TraitRow);
@@ -602,8 +608,9 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		for (UWWOAbilityData* A : L->AbilitiesForFlora())
 		{
 			// One already in the other slot swaps places with this one.
-			if (A->bUnlocked) Option(Initials(A->DisplayName), FString(), A->DisplayName, L->AbilitySlotOf(A) == AbilitySlot, In(A->Color), Rim(A->Color, L->AbilitySlotOf(A) == AbilitySlot),
-				[WL, A, AbilitySlot] { if (WL.IsValid()) WL->EquipAbility(AbilitySlot, A); });
+			UTexture2D* Badge = WWOUI::SymbolTexture("Ability", A->Id);
+			if (A->bUnlocked) Option(Initials(A->DisplayName), FString(), A->DisplayName, L->AbilitySlotOf(A) == AbilitySlot, Badge ? WWOUI::BadgeEdge(A->Color) : In(A->Color),
+				Rim(A->Color, L->AbilitySlotOf(A) == AbilitySlot), [WL, A, AbilitySlot] { if (WL.IsValid()) WL->EquipAbility(AbilitySlot, A); }, Badge);
 		}
 	}
 	else if (Name.StartsWith(TEXT("trait")))
@@ -616,12 +623,15 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 			if (!T->bUnlocked) continue;
 			const bool bOn = L->IsTraitEquipped(T);
 			// An equipped one comes off; any other takes this slot's place.
-			Option(Initials(T->DisplayName), FString(), T->DisplayName, bOn, bOn ? TraitFill : TraitOffFill, bOn ? TraitEdge : TraitOffEdge, [WL, T, InSlot, bOn]
+			UTexture2D* Badge = WWOUI::SymbolTexture("Trait", T->Id);
+			const UWWOFloraData* TraitFlora = L->GetFlora();
+			const FLinearColor Fill = Badge && TraitFlora ? WWOUI::BadgeEdge(TraitFlora->Color) : (bOn ? TraitFill : TraitOffFill);
+			Option(Initials(T->DisplayName), FString(), T->DisplayName, bOn, Fill, bOn ? TraitEdge : TraitOffEdge, [WL, T, InSlot, bOn]
 			{
 				if (!WL.IsValid()) return;
 				if (!bOn && InSlot) WL->ToggleTrait(InSlot);
 				WL->ToggleTrait(T);
-			});
+			}, Badge);
 		}
 	}
 	else if (Name.StartsWith(TEXT("weapon")))

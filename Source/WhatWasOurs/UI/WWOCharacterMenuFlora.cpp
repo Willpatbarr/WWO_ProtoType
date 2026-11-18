@@ -42,6 +42,30 @@ void UWWOCharacterMenu::BuildFloraRows()
 		W->SetInnerSlotPadding(FVector2D(10.f * K, 10.f * K));
 		return W;
 	};
+	// A widget with an item's badge (UI/WWOUI.h) centred above it, as in the pickers.
+	auto Badged = [Tree](UWidget* W, FName Kind, FName Id, float Size) -> UWidget*
+	{
+		UWidget* Badge = WWOUI::MakeSymbol(Tree, Kind, Id, FVector2D(Size, Size) * K);
+		if (!Badge) return W;
+		UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>();
+		UVerticalBoxSlot* BadgeSlot = Column->AddChildToVerticalBox(Badge);
+		BadgeSlot->SetHorizontalAlignment(HAlign_Center);
+		BadgeSlot->SetPadding(FMargin(0, 0, 0, 4.f * K));
+		Column->AddChildToVerticalBox(W);
+		return Column;
+	};
+	// A widget with a badge at its left (the trait cards).
+	auto BadgedLeft = [Tree](UWidget* W, FName Kind, FName Id, float Size) -> UWidget*
+	{
+		UWidget* Badge = WWOUI::MakeSymbol(Tree, Kind, Id, FVector2D(Size, Size) * K);
+		if (!Badge) return W;
+		UHorizontalBox* Pair = Tree->ConstructWidget<UHorizontalBox>();
+		UHorizontalBoxSlot* BadgeSlot = Pair->AddChildToHorizontalBox(Badge);
+		BadgeSlot->SetVerticalAlignment(VAlign_Center);
+		BadgeSlot->SetPadding(FMargin(0, 0, 4.f * K, 0));
+		Pair->AddChildToHorizontalBox(W);
+		return Pair;
+	};
 	auto Hint = [this](const FString& Text)
 	{
 		AddContent(WWOUI::Text(WidgetTree, Text, 18.f, FLinearColor(1, 1, 1, 0.6f), true));
@@ -96,10 +120,9 @@ void UWWOCharacterMenu::BuildFloraRows()
 		UHorizontalBox* R = Row();
 		if (const UWWOGrenadeData* G = L->GetGrenade())
 		{
-			// The grenade's badge beside it, as the flora's is.
-			if (UWidget* Badge = WWOUI::MakeSymbol(WidgetTree, "Grenade", G->Id, FVector2D(110.f, 110.f) * K)) AddToRow(R, Badge);
-			AddToRow(R, Slot(TEXT("Grenade\n") + G->DisplayName, FVector2D(220, 110), WWO::Darkened(G->Color, 0.6f), 20.f,
-				[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("grenade")); }, &G->Color, 3.f));
+			// Each with its badge at its left.
+			AddToRow(R, BadgedLeft(Slot(TEXT("Grenade\n") + G->DisplayName, FVector2D(196, 110), WWO::Darkened(G->Color, 0.6f), 20.f,
+				[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("grenade")); }, &G->Color, 3.f), "Grenade", G->Id, 58.f));
 		}
 		for (int32 SlotIndex = 0; SlotIndex < UWWOLoadoutSubsystem::AbilitySlots; ++SlotIndex)
 		{
@@ -107,12 +130,12 @@ void UWWOCharacterMenu::BuildFloraRows()
 			const FString Title = FString::Printf(TEXT("Ability %d"), SlotIndex + 1);
 			if (!A)
 			{
-				AddToRow(R, Slot(Title, FVector2D(220, 110), FLinearColor(0.24f, 0.25f, 0.3f), 20.f, [] {})); // an empty slot does nothing
+				AddToRow(R, Slot(Title, FVector2D(258, 110), FLinearColor(0.24f, 0.25f, 0.3f), 20.f, [] {})); // an empty slot does nothing
 				continue;
 			}
 			const FString Name = FString::Printf(TEXT("ability%d"), SlotIndex);
-			AddToRow(R, Slot(Title + TEXT("\n") + A->DisplayName, FVector2D(220, 110), WWO::Darkened(A->Color, 0.6f), 20.f,
-				[WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }, &A->Color, 3.f));
+			AddToRow(R, BadgedLeft(Slot(Title + TEXT("\n") + A->DisplayName, FVector2D(196, 110), WWO::Darkened(A->Color, 0.6f), 20.f,
+				[WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }, &A->Color, 3.f), "Ability", A->Id, 58.f));
 		}
 		AddContent(R);
 	}
@@ -146,16 +169,16 @@ void UWWOCharacterMenu::BuildFloraRows()
 		const int32 SlotIndex = FCString::Atoi(*Picker.Mid(7));
 		AddRowLabel(FString::Printf(TEXT("Choose ability %d"), SlotIndex + 1));
 		UHorizontalBox* R = Row();
-		TArray<FString> Lines;
+		TArray<FString> Lines; // the one in this slot (each choice's own is its tooltip)
+		if (const UWWOAbilityData* Current = L->GetAbility(SlotIndex)) Lines.Add(FString::Printf(TEXT("%s: %s"), *Current->DisplayName, *Current->Description));
 		for (UWWOAbilityData* Option : L->AbilitiesForFlora())
 		{
-			Lines.Add(FString::Printf(TEXT("%s: %s"), *Option->DisplayName, *Option->Description));
 			if (!Option->bUnlocked) continue;
 			const int32 In = L->AbilitySlotOf(Option);
 			const FString Tag = In == SlotIndex ? TEXT("  ✓") : (In != INDEX_NONE ? FString::Printf(TEXT("  (slot %d)"), In + 1) : FString());
 			const FLinearColor Edge = In == SlotIndex ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
-			AddToRow(R, Slot(Option->DisplayName + Tag + TEXT("\n") + KindText(Option->Kind), FVector2D(200, 90), WWO::Darkened(Option->Color, 0.5f), 20.f,
-				Pick([WL, Option, SlotIndex] { if (WL.IsValid()) WL->EquipAbility(SlotIndex, Option); }), &Edge, In == SlotIndex ? 5.f : 2.f, Option->Description));
+			AddToRow(R, Badged(Slot(Option->DisplayName + Tag + TEXT("\n") + KindText(Option->Kind), FVector2D(200, 90), WWO::Darkened(Option->Color, 0.5f), 20.f,
+				Pick([WL, Option, SlotIndex] { if (WL.IsValid()) WL->EquipAbility(SlotIndex, Option); }), &Edge, In == SlotIndex ? 5.f : 2.f, Option->Description), "Ability", Option->Id, 52.f));
 		}
 		AddContent(R);
 		Hint(FString::Join(Lines, TEXT("\n")));
@@ -168,8 +191,9 @@ void UWWOCharacterMenu::BuildFloraRows()
 	for (int32 i = 0; i < UWWOLoadoutSubsystem::TraitSlots; ++i)
 	{
 		const bool bHas = i < Equipped.Num();
-		Slots->AddChild(Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(170, 90), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : WWOUI::ButtonColor, 16.f,
-			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("traits")); }, bHas ? &TraitEdge : nullptr, 2.f, bHas ? Equipped[i]->Description : FString()));
+		UWidget* TraitSlot = Slot(bHas ? Equipped[i]->DisplayName : TEXT("Empty"), FVector2D(bHas ? 120.f : 170.f, 80), bHas ? FLinearColor(0.16f, 0.22f, 0.34f) : WWOUI::ButtonColor, 16.f,
+			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("traits")); }, bHas ? &TraitEdge : nullptr, 2.f, bHas ? Equipped[i]->Description : FString(), bHas);
+		Slots->AddChild(bHas ? BadgedLeft(TraitSlot, "Trait", Equipped[i]->Id, 46.f) : TraitSlot);
 	}
 	AddContent(Slots);
 	if (Picker == TEXT("traits"))
@@ -182,10 +206,11 @@ void UWWOCharacterMenu::BuildFloraRows()
 		{
 			if (!Option->bUnlocked) continue;
 			const bool bOn = L->IsTraitEquipped(Option);
-			UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Option->Description, FVector2D(250, 110),
+			UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Option->Description, FVector2D(196, 96),
 				bOn ? FLinearColor(0.16f, 0.22f, 0.34f) : FLinearColor(0.2f, 0.21f, 0.26f), 14.f,
 				[WeakThis, WL, Option] { if (WL.IsValid()) WL->ToggleTrait(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); },
 				bOn ? &TraitEdge : &OffEdge, bOn ? 4.f : 1.f, FString(), true);
+			B = BadgedLeft(B, "Trait", Option->Id, 54.f);
 			if (bFull && !bOn) B->SetRenderOpacity(0.5f); // every slot is taken
 			R->AddChild(B);
 		}

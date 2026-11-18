@@ -403,7 +403,8 @@ void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerN
 
 float UWWOCharacterMenu::ScrollOverflow() const
 {
-	return ExpandedScroll ? ExpandedScroll->GetScrollOffsetOfEnd() : 0.f;
+	// The Loadout tab (nothing expanded) has no scrolling list: the last tab's scroll box is stale.
+	return ExpandedScroll && !Expanded.IsEmpty() ? ExpandedScroll->GetScrollOffsetOfEnd() : 0.f;
 }
 
 void UWWOCharacterMenu::AutoTestScroll(float Offset)

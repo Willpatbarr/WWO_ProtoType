@@ -711,15 +711,25 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				continue;
 			}
 			const FVector2D Box(64, 64);
+			UTexture2D* Badge = WWOUI::SymbolTexture("Ability", A->Id); // its symbol (UI/WWOUI.h), when it has one
 			switch (A->Kind)
 			{
 			case EWWOAbilityKind::Passive: // always on: halfway between ready and empty
+				if (Badge)
+				{
+					P.Image(Badge, Pos, Box);
+					FWWOPainter Over = P;
+					++Over.Layer;
+					Over.Outline(Pos, Box, FLinearColor(0.75f, 0.75f, 0.75f, 0.75f), 2.f);
+					break;
+				}
 				P.Box(Pos, Box, FMath::Lerp(A->Color, FLinearColor(0.25f, 0.25f, 0.27f), 0.5f));
 				P.Outline(Pos, Box, FLinearColor(0.75f, 0.75f, 0.75f, 0.75f), 2.f);
 				break;
 			case EWWOAbilityKind::Active:
 			case EWWOAbilityKind::Charged:
-				ChargeBox(P, Pos, Box, A->Color, Pl->Abilities->Charge(A));
+				if (Badge) SymbolChargeBox(P, Pos, Box, Badge, Pl->Abilities->Charge(A));
+				else ChargeBox(P, Pos, Box, A->Color, Pl->Abilities->Charge(A));
 				if (Pl->Abilities->IsEffectActive(A))
 				{
 					const float Pulse = 0.6f + 0.4f * FMath::Sin(Now * 12.0);
@@ -727,7 +737,17 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				}
 				break;
 			case EWWOAbilityKind::Triggered:
-				if (Pl->Abilities->IsEffectActive(A))
+				if (Badge)
+				{
+					// Its badge, bright and white edged while it's working, dimmed while it waits.
+					const bool bOn = Pl->Abilities->IsEffectActive(A);
+					P.Image(Badge, Pos, Box);
+					FWWOPainter Over = P;
+					++Over.Layer;
+					if (!bOn) Over.Box(Pos, Box, FLinearColor(0.04f, 0.04f, 0.05f, 0.55f));
+					Over.Outline(Pos, Box, bOn ? FLinearColor(1, 1, 1, 0.85f) : WWO::WithAlpha(A->Color, 0.45f), bOn ? 3.f : 2.f);
+				}
+				else if (Pl->Abilities->IsEffectActive(A))
 				{
 					P.Box(Pos, Box, A->Color);
 					P.Outline(Pos, Box, FLinearColor(1, 1, 1, 0.85f), 3.f);

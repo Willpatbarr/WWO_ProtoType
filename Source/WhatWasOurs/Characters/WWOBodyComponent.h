@@ -188,6 +188,12 @@ private:
 	void AttachBall(FName GodotBone, const FVector& At, float RadiusM, const FLinearColor& Color);
 	void AttachModel(FName GodotBone, const TCHAR* Mesh, const FVector& At, float AngleRad, float Scale, const FWWOGraftFrame& F);
 	void VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& PodColor);
+	// A flora on a model that has its own grafts (the robot frame: SK_VV_* for VoltVine, SK_VS_* for
+	// VeilSpore in its Grafts folder, built round its body, Tools/import_robot_grafts.py): those,
+	// playing the model's pose. False when the model has none for this flora (the procedural grafts
+	// are used instead).
+	bool ModelGrafts(FName FloraId, const FWWOGraftFrame& F);
+	USkeletalMeshComponent* AddModelGraft(const FString& Name);
 	void SporeGrafts(const FWWOGraftFrame& F);
 	void BarkGrafts(const FWWOGraftFrame& F);
 };

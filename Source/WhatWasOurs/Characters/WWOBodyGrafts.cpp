@@ -13,6 +13,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "WWOIds.h"
 
@@ -134,7 +135,7 @@ void UWWOBodyComponent::RebuildGrafts()
 	const FVector Hips = GodotBonePoint("pelvis");
 	if (FloraId == WWOIds::Flora::VoltVine)
 	{
-		VoltGrafts(F, GrenadeColor);
+		if (!ModelGrafts(FloraId, F)) VoltGrafts(F, GrenadeColor);
 	}
 	else if (Grenade && FloraId != WWOIds::Flora::VeilSpore && FloraId != WWOIds::Flora::IronBark)
 	{
@@ -147,8 +148,8 @@ void UWWOBodyComponent::RebuildGrafts()
 			AttachBall("pelvis", Hips - F.Right * 0.165f * F.U + F.Forward * (0.07f - 0.07f * i) * F.U, SeedRadius, GrenadeColor);
 		}
 	}
-	if (FloraId == WWOIds::Flora::VeilSpore) SporeGrafts(F);
-	if (FloraId == WWOIds::Flora::IronBark) BarkGrafts(F);
+	if (FloraId == WWOIds::Flora::VeilSpore && !ModelGrafts(FloraId, F)) SporeGrafts(F);
+	if (FloraId == WWOIds::Flora::IronBark && !ModelGrafts(FloraId, F)) BarkGrafts(F);
 }
 
 void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& PodColor)
@@ -266,6 +267,77 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 			AttachBuilt(Sided(TEXT("hand"), S), B);
 		}
 	}
+}
+
+USkeletalMeshComponent* UWWOBodyComponent::AddModelGraft(const FString& Name)
+{
+	// A graft skinned to the model's own skeleton, posed by the model (its leader).
+	if (!Model || !Model->GetSkeletalMeshAsset()) return nullptr;
+	const FString Path = FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Grafts/%s.%s"), *Name, *Name);
+	USkeletalMesh* Asset = LoadObject<USkeletalMesh>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!Asset || Asset->GetSkeleton() != Model->GetSkeletalMeshAsset()->GetSkeleton()) return nullptr;
+	USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(GetOwner());
+	C->SetSkeletalMeshAsset(Asset);
+	C->SetupAttachment(Model);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->LightingChannels = Model->LightingChannels; // lit like the body (the menu preview has its own lights)
+	C->SetLeaderPoseComponent(Model);
+	C->RegisterComponent();
+	GetOwner()->AddInstanceComponent(C);
+	ApplyShadowOnly(C); // your own: hidden from you, casting your shadow, as the model is
+	C->bCastHiddenShadow = bShadowOnly;
+	Grafts.Add(C);
+	return C;
+}
+
+bool UWWOBodyComponent::ModelGrafts(FName FloraId, const FWWOGraftFrame& F)
+{
+	// One graft per ability (SK_<prefix>_<AbilityId in title case>, where the flora has one for it)
+	// and the grenade's:
+	// - VoltVine: the vine belt at the waist, leaning, with the grenade as 1-3 bulbs on the right hip
+	//   (Volt Grenade, Shock Pool, Snare Mine); Overgrowth on the shins, Thornfist the forearms,
+	//   Static Charge the upper arms and shoulders, Melee Guard the hands.
+	// - VeilSpore: the grenade's mushrooms on the right hip (SK_VS_Grenade_<GrenadeId>); Spore Fog
+	//   Damage a cap over the head and a cluster on the right shoulder, Spore Dash shelves down the
+	//   left leg, Spore Patches mushroom patches round the body; mycelium over each.
+	// - IronBark: bark plates split by glowing orange cracks: Extra Grenade the chest (a chevron), a
+	//   collar and pauldrons; Shield Share shells over the forearms; Root Bombs cuisses and greaves;
+	//   the grenade's seed pods hanging from the belt (SK_IB_Grenade_<GrenadeId>).
+	if (!Model || !bModelGrafts) return false;
+	const TCHAR* Prefix = FloraId == WWOIds::Flora::VoltVine ? TEXT("SK_VV_")
+		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SK_VS_")
+		: FloraId == WWOIds::Flora::IronBark ? TEXT("SK_IB_") : nullptr;
+	if (!Prefix) return false;
+	auto Title = [](FName Id)
+	{
+		TArray<FString> Parts;
+		Id.ToString().ParseIntoArray(Parts, TEXT("_"));
+		FString Out;
+		for (const FString& Part : Parts) Out += Part.Left(1).ToUpper() + Part.Mid(1);
+		return Out;
+	};
+	// Does this model have this flora's grafts at all? (The first piece every loadout has decides.)
+	const FString Probe = FString(Prefix) + (FloraId == WWOIds::Flora::VoltVine ? TEXT("Belt")
+		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SporeFogDamage") : TEXT("ExtraGrenade"));
+	if (!LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Grafts/%s.%s"), *Probe, *Probe), nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		return false;
+	}
+	if (!F.Grenade.IsNone())
+	{
+		if (FloraId == WWOIds::Flora::VoltVine)
+		{
+			AddModelGraft(TEXT("SK_VV_Belt"));
+			const int32 Count = F.Grenade == WWOIds::Grenade::ShockPool ? 2 : (F.Grenade == WWOIds::Grenade::SnareMine ? 3 : 1);
+			AddModelGraft(FString::Printf(TEXT("SK_VV_HipBulbs%d"), Count));
+		}
+		else
+		{
+			AddModelGraft(FString(Prefix) + TEXT("Grenade_") + Title(F.Grenade));
+		}
+	}
+	for (const FName& Id : F.Ids) AddModelGraft(FString(Prefix) + Title(Id));
+	return true;
 }
 
 void UWWOBodyComponent::SporeGrafts(const FWWOGraftFrame& F)

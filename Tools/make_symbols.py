@@ -1,6 +1,8 @@
 """Makes the UI symbols (Tools/art/ui/) from Will's drawings (white line art on black):
   floras    Tools/art/flora_src/<flora id>.webp      (voltvine, veilspore, ironbark)
   grenades  Tools/art/grenade_src/<grenade id>.png   (volt_grenade, spore_pool, wall_grenade, ...)
+  abilities Tools/art/ability_src/<ability id>.png   (placeholders: Tools/make_placeholder_icons.py)
+  traits    Tools/art/trait_src/<trait id>.png       (placeholders too; a trait's colour is its flora's)
 
 For each one two 512 x 512 PNGs, <kind>_<id>_symbol.png and <kind>_<id>_badge.png:
   symbol  the drawing alone, white on clear (the black taken out: alpha from brightness), cropped square
@@ -24,12 +26,15 @@ EDGE_SHADE = 0.20       # the badge's edge: its colour this bright (sRGB)
 MIDDLE_SHADE = 0.36     # and its middle
 BADGE_ART = 1.0         # how much of the badge the symbol spans (the symbol's own crop leaves a 3% margin)
 # (kind, its source folder, its source extension, its list in wwo_data.json)
-KINDS = (("flora", "flora_src", ".webp", "flora"), ("grenade", "grenade_src", ".png", "grenades"))
+KINDS = (("flora", "flora_src", ".webp", "flora"), ("grenade", "grenade_src", ".png", "grenades"),
+         ("ability", "ability_src", ".png", "abilities"), ("trait", "trait_src", ".png", "traits"))
 
 
 def colors(table):
+    # Each item's colour; an item without one (the traits) takes its flora's.
     data = json.load(open(os.path.join(HERE, "wwo_data.json")))
-    return {item["id"]: item["color"][:3] for item in data[table]}
+    flora = {f["id"]: f["color"][:3] for f in data["flora"]}
+    return {item["id"]: (item.get("color") or flora.get(item.get("flora"), [0.5, 0.5, 0.6]))[:3] for item in data[table]}
 
 
 def symbol(path):
