@@ -18,8 +18,8 @@ namespace WWOSettingsUI
 	{
 		WWOUI::FButtonLook Look = WWOUI::FilledLook(Fill, Padding);
 		Look.Normal = WWOUI::RoundBrush(Fill, WWOUI::Corner, Edge, EdgeWidth);
-		Look.Hovered = WWOUI::RoundBrush(WWOUI::CardHovered, WWOUI::Corner, WWOUI::HoverEdge, 1.5f);
-		Look.Pressed = WWOUI::RoundBrush(WWOUI::CardPressed, WWOUI::Corner, FLinearColor::White, 1.5f);
+		Look.Hovered = WWOUI::RoundBrush(WWOUI::CardHovered, WWOUI::Corner, WWOUI::HoverEdge, WWOUI::BoxEdge);
+		Look.Pressed = WWOUI::RoundBrush(WWOUI::CardPressed, WWOUI::Corner, FLinearColor::White, WWOUI::BoxEdge);
 		return Look;
 	}
 

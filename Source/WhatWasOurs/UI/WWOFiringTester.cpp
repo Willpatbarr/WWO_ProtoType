@@ -292,20 +292,20 @@ void UWWOFiringTester::Build()
 	Pane->SetPadding(FMargin(22.f * K, 16.f * K, 14.f * K, 16.f * K));
 	UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>();
 	Pane->SetContent(Column);
-	Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, TEXT("FIRING TESTER"), 26.f));
+	Column->AddChildToVerticalBox(WWOUI::Text(WidgetTree, TEXT("FIRING TESTER"), WWOUI::Type::Heading));
 	auto Picker = [&](const TCHAR* What, TObjectPtr<UTextBlock>& Label, TFunction<void(int32)> Step)
 	{
 		UHorizontalBox* Line = Tree->ConstructWidget<UHorizontalBox>();
-		Line->AddChildToHorizontalBox(MakeButton(TEXT("<"), [Step] { Step(-1); }, 20.f, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
+		Line->AddChildToHorizontalBox(MakeButton(TEXT("<"), [Step] { Step(-1); }, WWOUI::Type::Title, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
 		UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-		Words->AddChildToVerticalBox(WWOUI::Text(WidgetTree, What, 13.f, WWOUI::Dim));
-		Label = WWOUI::Text(WidgetTree, TEXT("-"), 20.f);
+		Words->AddChildToVerticalBox(WWOUI::Text(WidgetTree, What, WWOUI::Type::Small, WWOUI::Dim));
+		Label = WWOUI::Text(WidgetTree, TEXT("-"), WWOUI::Type::Title);
 		Words->AddChildToVerticalBox(Label);
 		UHorizontalBoxSlot* WordsSlot = Line->AddChildToHorizontalBox(Words);
 		WordsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		WordsSlot->SetPadding(FMargin(12.f * K, 0.f));
 		WordsSlot->SetVerticalAlignment(VAlign_Center);
-		Line->AddChildToHorizontalBox(MakeButton(TEXT(">"), [Step] { Step(1); }, 20.f, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
+		Line->AddChildToHorizontalBox(MakeButton(TEXT(">"), [Step] { Step(1); }, WWOUI::Type::Title, WWOUI::ButtonColor, FMargin(12.f, 4.f)));
 		Column->AddChildToVerticalBox(Line)->SetPadding(FMargin(0.f, 10.f * K, 8.f * K, 0.f));
 	};
 	Picker(TEXT("WEAPON"), WeaponLabel, [Weak](int32 Step) { if (Weak.IsValid()) Weak->StepWeapon(Step); });
@@ -317,7 +317,7 @@ void UWWOFiringTester::Build()
 	UHorizontalBox* Foot = Tree->ConstructWidget<UHorizontalBox>();
 	auto FootButton = [&](const TCHAR* Text, TFunction<void()> Fn)
 	{
-		UHorizontalBoxSlot* Slot = Foot->AddChildToHorizontalBox(MakeButton(Text, MoveTemp(Fn), 15.f, WWOUI::ButtonColor, FMargin(8.f, 8.f)));
+		UHorizontalBoxSlot* Slot = Foot->AddChildToHorizontalBox(MakeButton(Text, MoveTemp(Fn), WWOUI::Type::Body, WWOUI::ButtonColor, FMargin(8.f, 8.f)));
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Slot->SetPadding(FMargin(0.f, 0.f, 6.f * K, 0.f));
 	};
@@ -336,7 +336,7 @@ void UWWOFiringTester::Build()
 	UHorizontalBox* Buttons = Tree->ConstructWidget<UHorizontalBox>();
 	auto Action = [&](const TCHAR* Text, TFunction<void()> Fn, const FLinearColor& Color, TObjectPtr<UTextBlock>* LabelOut = nullptr)
 	{
-		UButton* B = MakeButton(Text, MoveTemp(Fn), 19.f, Color, FMargin(10.f, 16.f));
+		UButton* B = MakeButton(Text, MoveTemp(Fn), WWOUI::Type::Title, Color, FMargin(10.f, 16.f));
 		if (LabelOut) *LabelOut = Cast<UTextBlock>(B->GetChildAt(0));
 		UHorizontalBoxSlot* Slot = Buttons->AddChildToHorizontalBox(B);
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -349,7 +349,7 @@ void UWWOFiringTester::Build()
 	Action(TEXT("STRAFE"), [Weak] { if (Weak.IsValid()) Weak->SetStrafe(!Weak->IsStrafing()); }, WWOUI::ButtonColor, &StrafeLabel);
 	Action(TEXT("RESET"), [Weak] { if (Weak.IsValid()) { Weak->StopScript(); Weak->ResetPlayer(); } }, WWOUI::ButtonColor);
 	StripColumn->AddChildToVerticalBox(Buttons);
-	HintLabel = WWOUI::Text(WidgetTree, TEXT("Take control to play it yourself, or use the buttons to watch one action"), 15.f, WWOUI::Dim);
+	HintLabel = WWOUI::Text(WidgetTree, TEXT("Take control to play it yourself, or use the buttons to watch one action"), WWOUI::Type::Body, WWOUI::Dim);
 	StripColumn->AddChildToVerticalBox(HintLabel)->SetPadding(FMargin(0.f, 12.f * K, 0.f, 0.f));
 	Place(Canvas, Strip, PaneW, WinY + WinH, 1.f, 1.f);
 }
@@ -371,7 +371,7 @@ void UWWOFiringTester::BuildRows()
 		{
 			UWidget* Row = S->MakeRowFor(GunKey, Id);
 			if (!Row) continue;
-			if (!bHeader) { Add(WWOUI::Text(WidgetTree, FString(Group.Title).ToUpper(), 14.f, WWOUI::Dim), 16.f); bHeader = true; }
+			if (!bHeader) { Add(WWOUI::Text(WidgetTree, FString(Group.Title).ToUpper(), WWOUI::Type::Body, WWOUI::Dim), 16.f); bHeader = true; }
 			Add(Row, 8.f);
 		}
 	}
@@ -380,7 +380,7 @@ void UWWOFiringTester::BuildRows()
 	{
 		UWidget* Row = S->MakeRowFor(TEXT("global/Camera"), Id);
 		if (!Row) continue;
-		if (!bHeader) { Add(WWOUI::Text(WidgetTree, TEXT("EVERY GUN"), 14.f, WWOUI::Dim), 16.f); bHeader = true; }
+		if (!bHeader) { Add(WWOUI::Text(WidgetTree, TEXT("EVERY GUN"), WWOUI::Type::Body, WWOUI::Dim), 16.f); bHeader = true; }
 		Add(Row, 8.f);
 	}
 }

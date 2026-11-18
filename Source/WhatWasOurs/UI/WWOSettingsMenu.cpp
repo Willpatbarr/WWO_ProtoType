@@ -224,7 +224,7 @@ UHorizontalBox* UWWOSettingsMenu::BuildFrame()
 	}
 	// Search: type part of a setting's name to list every match from every tab.
 	SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-	WWOUI::StyleTextBox(SearchBox, 15.f, FMargin(12.f, 6.f), Accent);
+	WWOUI::StyleTextBox(SearchBox, WWOUI::Type::Body, FMargin(12.f, 6.f), Accent);
 	SearchBox->SetHintText(FText::FromString(TEXT("SEARCH SETTINGS")));
 	SearchBox->OnTextChanged.AddDynamic(this, &UWWOSettingsMenu::OnSearchChanged);
 	SearchBox->OnTextCommitted.AddDynamic(this, &UWWOSettingsMenu::OnSearchCommitted);
@@ -355,7 +355,7 @@ void UWWOSettingsMenu::BuildSidebar(UHorizontalBox* Body)
 			MarkBox->SetWidthOverride(3.f * K);
 			MarkBox->AddChild(Mark);
 			Row->AddChildToHorizontalBox(MarkBox)->SetPadding(FMargin(0, 3.f * K));
-			UTextBlock* Label = WWOUI::Spaced(WidgetTree, Pages[p].Title, 15.f, FLinearColor::White, 170);
+			UTextBlock* Label = WWOUI::Spaced(WidgetTree, Pages[p].Title, WWOUI::Type::Body, FLinearColor::White, 170);
 			UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
 			LabelSlot->SetPadding(FMargin(16.f * K, 9.f * K, 8.f * K, 9.f * K));
 			LabelSlot->SetVerticalAlignment(VAlign_Center);
@@ -378,13 +378,13 @@ void UWWOSettingsMenu::BuildSidebar(UHorizontalBox* Body)
 			if (UWidget* Bar = TopTabWidgets[Tab * 2 + 1]) Bar->SetVisibility(bShown && !bFirstShown ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 			bFirstShown &= !bShown;
 		}
-		UTextBlock* Note = WWOUI::Spaced(WidgetTree, TEXT("You're in someone else's game: these are your own settings. The game's tuning is the host's."), 10.f, FLinearColor(1, 1, 1, 0.5f), 90);
+		UTextBlock* Note = WWOUI::Spaced(WidgetTree, TEXT("You're in someone else's game: these are your own settings. The game's tuning is the host's."), WWOUI::Type::Micro, FLinearColor(1, 1, 1, 0.5f), 90);
 		Note->SetAutoWrapText(true);
 		Side->AddChildToVerticalBox(Note)->SetPadding(FMargin(2.f * K, 0, 0, 6.f * K));
 	}
 	auto SideButton = [&](const FString& Text, TFunction<void()> Fn) -> UButton*
 	{
-		UButton* B = WWOUI::TextButton(WidgetTree, Text, 15.f, KeyLook(WWOUI::CardColor, WWOUI::CardEdge, 1.5f, FMargin(10.f, 8.f)));
+		UButton* B = WWOUI::TextButton(WidgetTree, Text, WWOUI::Type::Body, KeyLook(WWOUI::CardColor, WWOUI::CardEdge, WWOUI::BoxEdge, FMargin(10.f, 8.f)));
 		KeepHandler(WWOUI::OnClick(B, this, MoveTemp(Fn)));
 		Side->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 		return B;
@@ -427,7 +427,7 @@ void UWWOSettingsMenu::BuildSidebar(UHorizontalBox* Body)
 	{
 		if (AWWOPlayerController* PC = Cast<AWWOPlayerController>(WeakPC.Get())) PC->ToggleSettingsMenu();
 	});
-	Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Q / E or bumpers: tabs   ·   Esc: back"), 10.f, WWOUI::Faint, 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
+	Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Q / E or bumpers: tabs   ·   Esc: back"), WWOUI::Type::Micro, WWOUI::Faint, 100))->SetPadding(FMargin(2.f * K, 12.f * K, 0, 0));
 	USizeBox* SideBox = WidgetTree->ConstructWidget<USizeBox>();
 	SideBox->SetWidthOverride(270.f * K);
 	SideBox->AddChild(Side);
@@ -438,7 +438,7 @@ void UWWOSettingsMenu::BuildPageArea(UHorizontalBox* Body)
 {
 	// Right: the open page, one wide column.
 	UVerticalBox* Main = WidgetTree->ConstructWidget<UVerticalBox>();
-	PageTitle = WWOUI::Spaced(WidgetTree, TEXT(""), 20.f, FLinearColor::White, 300);
+	PageTitle = WWOUI::Spaced(WidgetTree, TEXT(""), WWOUI::Type::Title, FLinearColor::White, 300);
 	Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
 	Panel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, WWOUI::Corner, WWOUI::PanelEdge, 1.f));
@@ -518,7 +518,7 @@ void UWWOSettingsMenu::OnSearchChanged(const FText& Text)
 			if (!bNamed)
 			{
 				bNamed = true;
-				UTextBlock* Where = WWOUI::Spaced(WidgetTree, S.Title, 13.f, FLinearColor(1, 1, 1, 0.55f), 220);
+				UTextBlock* Where = WWOUI::Spaced(WidgetTree, S.Title, WWOUI::Type::Small, FLinearColor(1, 1, 1, 0.55f), 220);
 				if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(Where))) Slot->SetPadding(FMargin(12.f * K, (Found == 0 ? 12.f : 26.f) * K, 12.f * K, 0));
 			}
 			if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeRow(S.Key, i)))) Slot->SetPadding(FMargin(12.f * K, 8.f * K, 12.f * K, 0));
@@ -527,7 +527,7 @@ void UWWOSettingsMenu::OnSearchChanged(const FText& Text)
 	}
 	if (Found == 0)
 	{
-		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeText(TEXT("No setting has that in its name."), 20.f, FLinearColor(1, 1, 1, 0.6f))))) Slot->SetPadding(FMargin(12.f * K));
+		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(SearchResults->AddChild(MakeText(TEXT("No setting has that in its name."), WWOUI::Type::Title, FLinearColor(1, 1, 1, 0.6f))))) Slot->SetPadding(FMargin(12.f * K));
 	}
 	SearchResults->ScrollToStart();
 	GlobalSwitcher->SetActiveWidgetIndex(SearchPage);

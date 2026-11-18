@@ -116,7 +116,7 @@ public:
 
 	// Text and a filled text button built in this menu's tree (WWOUI::Text / TextButton). The other
 	// menus use WWOUI directly; these stay for the many calls in this file.
-	UButton* MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx = 22.f, const FLinearColor& Color = WWOUI::ButtonColor,
+	UButton* MakeButton(UObject* Outer, const FString& Text, TFunction<void()> Fn, float FontPx = WWOUI::Type::Title, const FLinearColor& Color = WWOUI::ButtonColor,
 		bool bLeftAlign = false, FMargin Padding = FMargin(10.f, 4.f), bool bWrap = false);
 	UTextBlock* MakeText(const FString& Text, float FontPx, const FLinearColor& Color = FLinearColor::White, bool bWrap = false);
 private:

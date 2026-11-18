@@ -36,7 +36,7 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	const FWWOSettingRow& Row = Find(Key)->Rows[RowIndex];
 	UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LabelSlot = Line->AddChildToHorizontalBox(MakeText(Row.Label, 22.f));
+	UHorizontalBoxSlot* LabelSlot = Line->AddChildToHorizontalBox(MakeText(Row.Label, WWOUI::Type::Title));
 	LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	LabelSlot->SetVerticalAlignment(VAlign_Center);
 	Root->AddChildToVerticalBox(Line);
@@ -92,7 +92,7 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 
 	USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
 	ValueBox->SetMinDesiredWidth((Row.Show ? 170.f : 80.f) * K);
-	UTextBlock* Value = MakeText(ValueText(Row, Row.Get()), 22.f);
+	UTextBlock* Value = MakeText(ValueText(Row, Row.Get()), WWOUI::Type::Title);
 	Value->SetJustification(ETextJustify::Right);
 	ValueBox->AddChild(Value);
 	UHorizontalBoxSlot* ValueSlot = Line->AddChildToHorizontalBox(ValueBox);
@@ -171,7 +171,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 		const bool bHasRows = Kept.IsValidIndex(k + 1) && S->Rows[Kept[k + 1]].Header.IsEmpty();
 		if (R.LiveHeader)
 		{
-			UTextBlock* Text = MakeText(R.LiveHeader(), 20.f, FLinearColor(1, 1, 1, 0.9f), true);
+			UTextBlock* Text = MakeText(R.LiveHeader(), WWOUI::Type::Title, FLinearColor(1, 1, 1, 0.9f), true);
 			LiveTexts.Add({ Text, R.LiveHeader });
 			Add(Text, Count == 0, false);
 			Group = nullptr;
@@ -179,7 +179,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 		}
 		if (!bHasRows)
 		{
-			Add(MakeText(R.Header, 18.f, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);
+			Add(MakeText(R.Header, WWOUI::Type::Title, FLinearColor(1, 1, 1, 0.55f), true), Count == 0, false);
 			Group = nullptr;
 			continue;
 		}
@@ -204,7 +204,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 			{
 				Label->SetText(FText::FromString((bNow ? TEXT("-  ") : TEXT("+  ")) + Title));
 			}
-		}, 18.f, FLinearColor(0.15f, 0.16f, 0.19f));
+		}, WWOUI::Type::Title, FLinearColor(0.15f, 0.16f, 0.19f));
 		*Self = Toggle;
 		Add(Toggle, Count == 0, true);
 		Add(Group, false, false);
@@ -212,7 +212,7 @@ void UWWOSettingsMenu::BuildRows(UPanelWidget* Container, const FString& Key)
 	for (const FWWOMenuButton& Button : S->Buttons)
 	{
 		if (bRestricted && !Button.bPref) continue;
-		Add(MakeButton(this, Button.Text, Button.Fn, 22.f), Count++ == 0, true);
+		Add(MakeButton(this, Button.Text, Button.Fn, WWOUI::Type::Title), Count++ == 0, true);
 	}
 	if (UScrollBoxSlot* Last = Container->GetChildrenCount() > 0 ? Cast<UScrollBoxSlot>(Container->GetChildAt(Container->GetChildrenCount() - 1)->Slot) : nullptr)
 	{
@@ -251,8 +251,8 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 	UVerticalBox* Detail = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
 	TWeakObjectPtr<UWWOSettingsMenu> WeakThis = this;
-	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("‹ Back"), [WeakThis, Index] { if (WeakThis.IsValid()) WeakThis->ShowList(Index); }, 22.f));
-	B.Title = MakeText(TEXT(""), 26.f);
+	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("‹ Back"), [WeakThis, Index] { if (WeakThis.IsValid()) WeakThis->ShowList(Index); }, WWOUI::Type::Title));
+	B.Title = MakeText(TEXT(""), WWOUI::Type::Title);
 	UHorizontalBoxSlot* TitleSlot = Bar->AddChildToHorizontalBox(B.Title);
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetPadding(FMargin(12.f * K, 0.f));
@@ -260,7 +260,7 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 	Bar->AddChildToHorizontalBox(MakeButton(this, TEXT("Reset item"), [WeakThis, Index]
 	{
 		if (WeakThis.IsValid()) WeakThis->ResetSection(WeakThis->Browsers[Index].OpenKey);
-	}, 22.f));
+	}, WWOUI::Type::Title));
 	Detail->AddChildToVerticalBox(Bar);
 	B.Rows = WWOUI::ScrollBox(WidgetTree);
 	Detail->AddChildToVerticalBox(B.Rows)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -280,7 +280,7 @@ void UWWOSettingsMenu::ShowList(int32 BrowserIndex)
 		const FString Key = Item.Key;
 		// Godot: left-aligned, at least 72 px tall, 20 px side padding, 10 px apart, 12 px page margin.
 		UButton* Button = MakeButton(this, Text, [WeakThis, BrowserIndex, Key] { if (WeakThis.IsValid()) WeakThis->OpenItem(BrowserIndex, Key); },
-			22.f, FLinearColor(0.18f, 0.19f, 0.23f), true, FMargin(20.f, 5.f));
+			WWOUI::Type::Title, FLinearColor(0.18f, 0.19f, 0.23f), true, FMargin(20.f, 5.f));
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetMinDesiredHeight(72.f * K);
 		Box->AddChild(Button);
@@ -334,20 +334,20 @@ void UWWOSettingsMenu::BuildBinds()
 		}
 		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(BindsList->AddChild(Row))) Slot->SetPadding(FMargin(12.f * K, Top * K, 16.f * K, 0));
 	};
-	Line(WWOUI::Spaced(WidgetTree, TEXT("Action"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), WWOUI::Spaced(WidgetTree, TEXT("Keyboard / mouse"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220),
-		WWOUI::Spaced(WidgetTree, TEXT("Controller"), 12.f, FLinearColor(1, 1, 1, 0.55f), 220), 12.f);
+	Line(WWOUI::Spaced(WidgetTree, TEXT("Action"), WWOUI::Type::Caption, FLinearColor(1, 1, 1, 0.55f), 220), WWOUI::Spaced(WidgetTree, TEXT("Keyboard / mouse"), WWOUI::Type::Caption, FLinearColor(1, 1, 1, 0.55f), 220),
+		WWOUI::Spaced(WidgetTree, TEXT("Controller"), WWOUI::Type::Caption, FLinearColor(1, 1, 1, 0.55f), 220), 12.f);
 	for (const FWWOBindRow& R : AWWOPlayerController::BindRows())
 	{
 		auto Key = [&](bool bPad) -> UWidget*
 		{
 			const bool bHas = (bPad ? R.PadKey : R.KbmKey).IsValid();
-			if (!bHas) return MakeText(bPad && R.MoveDir >= 0 ? TEXT("Left stick") : TEXT("—"), 18.f, FLinearColor(1, 1, 1, 0.4f));
+			if (!bHas) return MakeText(bPad && R.MoveDir >= 0 ? TEXT("Left stick") : TEXT("—"), WWOUI::Type::Body, FLinearColor(1, 1, 1, 0.4f));
 			const bool bWaiting = PC->IsCapturing(R.Id, bPad);
 			const FName Id = R.Id;
 			const bool bChanged = PC->GetBind(R.Id, bPad) != (bPad ? R.PadKey : R.KbmKey);
 			const FLinearColor Edge = bWaiting ? Accent : (bChanged ? FLinearColor(1.f, 0.82f, 0.2f, 0.9f) : WWOUI::CardEdge); // yours, not the default: gold
 			UButton* B = WWOUI::TextButton(WidgetTree, bWaiting ? FString(TEXT("Press a key  ·  Esc cancels")) : AWWOPlayerController::KeyName(PC->GetBind(R.Id, bPad)),
-				18.f, KeyLook(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : WWOUI::CardColor, Edge, bWaiting ? 2.f : 1.5f, FMargin(10.f, 7.f)));
+				WWOUI::Type::Body, KeyLook(bWaiting ? WWO::WithAlpha(Accent, 0.18f) : WWOUI::CardColor, Edge, bWaiting ? WWOUI::BoxEdgeOn : WWOUI::BoxEdge, FMargin(10.f, 7.f)));
 			KeepHandler(WWOUI::OnClick(B, this, [WeakThis, WeakPC, Id, bPad]
 			{
 				if (!WeakThis.IsValid() || !WeakPC.IsValid()) return;
@@ -356,9 +356,9 @@ void UWWOSettingsMenu::BuildBinds()
 			}));
 			return B;
 		};
-		Line(MakeText(R.Label, 20.f), Key(false), Key(true), 8.f);
+		Line(MakeText(R.Label, WWOUI::Type::Body), Key(false), Key(true), 8.f);
 	}
 	UTextBlock* Note = MakeText(TEXT("Click a key, then press the new one (Esc leaves it). A key already on another line swaps with it. Gold = changed from the default. ")
-		TEXT("The menu's own keys stay as they are: Tab / Esc / Options open and close, Q / E and the bumpers change tabs, Circle goes back."), 15.f, FLinearColor(1, 1, 1, 0.5f), true);
+		TEXT("The menu's own keys stay as they are: Tab / Esc / Options open and close, Q / E and the bumpers change tabs, Circle goes back."), WWOUI::Type::Body, FLinearColor(1, 1, 1, 0.5f), true);
 	if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(BindsList->AddChild(Note))) Slot->SetPadding(FMargin(12.f * K, 22.f * K, 16.f * K, 16.f * K));
 }

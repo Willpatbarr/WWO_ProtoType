@@ -13,6 +13,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/WWOUI.h"
 #include "WWOLaunchMenu.generated.h"
 
 class UTextBlock;
@@ -72,7 +73,7 @@ private:
 	UWidget* BuildTitle();
 	UWidget* BuildSetup();
 	// A bordered box to click: a title and a line under it; bOn draws it as the picked one.
-	UButton* Choice(const FString& Title, const FString& Sub, bool bOn, TFunction<void()> Fn, float TitlePx = 19.f, const FString& Tag = FString());
+	UButton* Choice(const FString& Title, const FString& Sub, bool bOn, TFunction<void()> Fn, float TitlePx = WWOUI::Type::Title, const FString& Tag = FString());
 	UButton* Boxed(UWidget* Inside, const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding, TFunction<void()> Fn);
 	UWidget* StepLabel(int32 Number, const FString& Text) const;
 	FString StatusLine() const;
