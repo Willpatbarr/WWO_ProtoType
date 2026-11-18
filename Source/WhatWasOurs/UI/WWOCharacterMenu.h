@@ -11,8 +11,9 @@
 // The editors:
 // - Flora (layout "B"): rows for Flora, Abilities (grenade + two abilities) and Traits.
 //   Clicking a slot opens a picker row; picking an ability in the other slot swaps them.
-// - Weapons: one screen, no scrolling: the weapons, the frame's stat bars and perks, its mod
-//   slots, and the saved configs (the hovered slot's mods take their place).
+// - Weapons: one screen, no scrolling: the weapons with a render of the selected gun under them
+//   (AWWOGunPreviewActor), the frame's stat bars and perks, its mod slots, and the saved configs
+//   (the hovered slot's mods take their place).
 // - Frame Parts: one screen too: a row per slot and the net effect.
 // Right: the character, rendered by a scene capture of a mannequin that follows the loadout,
 // framed like Godot's preview camera (45 degree vertical FOV, 4.4 m away, 1.1 m above the feet).
@@ -30,6 +31,7 @@ class UWidgetSwitcher;
 class UTextBlock;
 class UButton;
 class UImage;
+namespace WWOCharacterMenuUI { struct FItemCard; }
 
 // The "hover opens it, leaving closes it a moment later" timer both of the menu's hover popups use
 // (the Loadout tab's row of choices, the Weapon tab's mod list). The caller decides when one opens;
@@ -89,6 +91,8 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> ModRowsStart; // the mod slots label (autotest scrolls to it)
 	UPROPERTY() TObjectPtr<UWidget> Preview; // the character beside the editors
 	UPROPERTY() TObjectPtr<AWWOPreviewActor> PreviewActor;
+	UPROPERTY() TObjectPtr<class AWWOGunPreviewActor> GunPreview; // the selected gun on the Weapon tab
+	FString GunKey; // the weapon and mods it was last built with
 
 	void Build();
 	// The full-window layout: a header with the four tabs over a switcher. Loadout is the overview
@@ -146,6 +150,10 @@ private:
 	void AddContent(UWidget* Widget);
 	UWidget* Slot(const FString& Text, FVector2D Size, const FLinearColor& Color, float FontPx, TFunction<void()> Fn,
 		const FLinearColor* Border = nullptr, float BorderWidth = 2.f, const FString& Tooltip = FString(), bool bWrap = false);
+	// The editors' card (WWOCharacterMenuPrivate.h, FItemCard) and a row of them on a grid of Columns
+	// equal columns, added to the page; Fn is the click.
+	UWidget* ItemCard(const WWOCharacterMenuUI::FItemCard& Spec, TFunction<void()> Fn);
+	void AddCardGrid(const TArray<UWidget*>& Cards, int32 Columns);
 	void BuildFloraRows();
 	void BuildWeaponRows();
 	void BuildModRows(UHorizontalBox* Columns);
@@ -153,8 +161,8 @@ private:
 	static constexpr float ModSlotHeight = 82.f; // Godot pixels per slot, padding included
 	// The Weapon tab's four columns (Godot pixels; with their gaps they fit the 1464 the panel has
 	// at 16:9): weapons, stat bars and perks, mod slots, configs or the open slot's mods.
-	static constexpr float WeaponColumn = 290.f;
-	static constexpr float StatsColumn = 430.f;
+	static constexpr float WeaponColumn = 340.f;
+	static constexpr float StatsColumn = 380.f;
 	static constexpr float SlotColumn = 196.f;
 	static constexpr float SideColumn = 440.f;
 	static constexpr float ConfigListHeight = 540.f; // the config list scrolls inside this, the page never

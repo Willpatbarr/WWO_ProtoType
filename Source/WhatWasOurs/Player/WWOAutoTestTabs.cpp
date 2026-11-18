@@ -1,7 +1,8 @@
 // -WWOAutoTestTabs: the character menu's Weapon and Shell tabs each fit on one screen.
 // With the fullest case set up (every perk mod on the rifle, four more saved configs), it opens
 // the Weapon tab, the Weapon tab with a slot's mods showing, and the Shell tab, and checks that
-// none of them has anything to scroll to. Shots 80_tab_weapon, 81_tab_weapon_mods, 82_tab_shell, 82_tab_flora, 82_tab_loadout;
+// none of them has anything to scroll to. Shots 80_tab_weapon, 81_tab_weapon_mods, 82_tab_shell, 82_tab_flora, 82_tab_loadout,
+// and last the Weapon tab with each weapon (80_tab_weapon_<id>: the gun's render);
 // lines `AutoTest tabs: ... ok|FAIL`. The saved loadout file is put back at the end (WWOTest's guard).
 // Run it at a few window sizes (-ResX / -ResY): the menus scale with the window.
 
@@ -190,14 +191,35 @@ void FWWOAutoTest::UpdateAutoTabsTest(float DeltaTime)
 		if (AWWOCharacter* P = PC->GetWWOCharacter()) P->Grenades->Charge = 0.4f;
 		if (TabsClock > 0.5f) { Shot(TEXT("82_hud_grenade_charging")); Next(); }
 		break;
-	case 43:
-		if (TabsClock < 1.f) break;
+	default:
+	{
+		// The Weapon tab with each weapon in turn: its render beside the list (80_tab_weapon_<id>).
+		const int32 Index = (TabsStage - 43) / 2;
+		if (L->Catalog.Weapons.IsValidIndex(Index))
+		{
+			if ((TabsStage - 43) % 2 == 0)
+			{
+				if (TabsClock < 0.6f) break;
+				if (!PC->CharacterMenu->IsOpen()) PC->ToggleCharacterMenu();
+				L->EquipWeapon(L->Catalog.Weapons[Index]);
+				PC->CharacterMenu->AutoTestShow(TEXT("Weapons"), FString());
+			}
+			else
+			{
+				if (TabsClock < 1.2f) break;
+				Fits(*FString::Printf(TEXT("the Weapon tab with the %s"), *L->Catalog.Weapons[Index]->Id.ToString()),
+					*FString::Printf(TEXT("80_tab_weapon_%s"), *L->Catalog.Weapons[Index]->Id.ToString()));
+			}
+			Next();
+			break;
+		}
+		if (TabsStage < 0 || TabsClock < 1.f) break;
 		// Put the real save back (it's reloaded on the next launch; and again when the run closes).
 		WWOTest::RestoreLoadout();
 		UE_LOG(LogWWO, Display, TEXT("AutoTest tabs: done (saved loadout restored)"));
 		WWOTest::Exit();
-		Next();
+		TabsStage = -1;
 		break;
-	default: break;
+	}
 	}
 }

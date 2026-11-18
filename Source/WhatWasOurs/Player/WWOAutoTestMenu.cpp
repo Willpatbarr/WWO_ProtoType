@@ -58,17 +58,23 @@ namespace
 		return W->GetCachedGeometry().GetLocalSize().X > 1.f;
 	}
 
+	// The first text in W or under it, depth first (a card's name comes before its detail, after its badge).
+	const UTextBlock* FirstText(const UWidget* W)
+	{
+		if (const UTextBlock* T = Cast<UTextBlock>(W)) return T;
+		const UPanelWidget* Panel = Cast<UPanelWidget>(W);
+		for (int32 i = 0; Panel && i < Panel->GetChildrenCount(); ++i)
+		{
+			if (const UTextBlock* T = FirstText(Panel->GetChildAt(i))) return T;
+		}
+		return nullptr;
+	}
+
 	FString ButtonText(const UButton* B)
 	{
 		// Its label: the text it holds, or the first text inside what it holds (the character menu's
-		// tabs and cards wrap theirs in boxes).
-		const UWidget* W = B->GetChildAt(0);
-		while (W && !W->IsA<UTextBlock>())
-		{
-			const UPanelWidget* Panel = Cast<UPanelWidget>(W);
-			W = Panel && Panel->GetChildrenCount() > 0 ? Panel->GetChildAt(0) : nullptr;
-		}
-		const UTextBlock* T = Cast<UTextBlock>(W);
+		// tabs and cards wrap theirs in boxes, next to a badge).
+		const UTextBlock* T = FirstText(B->GetChildAt(0));
 		return T ? T->GetText().ToString() : FString();
 	}
 
@@ -362,7 +368,7 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	}
 	case 39: if (ClickButton(Character, TEXT("FLORA"))) Next(); break; // the tab
 	case 40: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
-	case 41: if (ClickButton(Character, TEXT("Grenade\n"))) Next(); break;
+	case 41: if (ClickButton(Character, Grenade)) Next(); break; // its card on the Flora tab (the name over "Grenade")
 	case 42: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_FaceButton_Bottom); Next(); } break;
 	case 43:
 		if (AutoMenuClock > 0.3f)

@@ -18,6 +18,12 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/Image.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/ScaleBox.h"
+#include "UI/WWOGunPreviewActor.h"
+#include "Engine/TextureRenderTarget2D.h"
 
 using namespace WWOCharacterMenuUI;
 
@@ -34,20 +40,59 @@ void UWWOCharacterMenu::BuildWeaponRows()
 	UHorizontalBox* Columns = Tree->ConstructWidget<UHorizontalBox>();
 	ModRowsStart = Columns;
 
+	// The weapons as cards, and under them the selected gun itself (AWWOGunPreviewActor's render).
 	UVerticalBox* Guns = Tree->ConstructWidget<UVerticalBox>();
-	Guns->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Weapon"), 13.f, FLinearColor(1, 1, 1, 0.6f), 220))->SetPadding(FMargin(0, 0, 0, 12.f * K));
-	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
+	Guns->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, TEXT("Weapon"), WWOUI::Type::Caption, WWOUI::TextSecondary, 220))->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	for (UWWOWeaponData* Option : L->Catalog.Weapons)
 	{
 		if (!Option->bUnlocked) continue;
-		const bool bOn = Option == L->GetWeapon();
 		const FString Fire = Option->BurstCount() > 1 ? FString::Printf(TEXT("%d-round burst"), Option->BurstCount()) : FString(Option->IsSemiAuto() ? TEXT("semi") : TEXT("auto"));
 		const FString Dmg = Option->Pellets > 1.f ? FString::Printf(TEXT("%d×%d dmg"), FMath::RoundToInt(Option->Pellets), FMath::RoundToInt(Option->Damage))
 			: FString::Printf(TEXT("%d dmg"), FMath::RoundToInt(Option->Damage));
-		const FString Stats = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->RoundsPerMinute()), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
-		UWidget* B = Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Stats, FVector2D(WeaponColumn, 62), bOn ? FLinearColor(0.24f, 0.25f, 0.3f) : FLinearColor(0.2f, 0.21f, 0.26f), 15.f,
-			[WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 3.f);
-		Guns->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 0, 0, 8.f * K));
+		FItemCard C;
+		C.Title = Option->DisplayName;
+		C.Sub = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->RoundsPerMinute()), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
+		C.bOn = Option == L->GetWeapon();
+		C.MinHeight = 54.f;
+		Guns->AddChildToVerticalBox(ItemCard(C, [WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }))
+			->SetPadding(FMargin(0, 0, 0, 8.f * K));
+	}
+	if (GunPreview && GunPreview->Target)
+	{
+		// The gun on a well in the page's shade, which is also the render's backdrop: no seam round it.
+		UImage* Image = Tree->ConstructWidget<UImage>();
+		FSlateBrush Brush;
+		Brush.SetResourceObject(GunPreview->Target);
+		Brush.ImageSize = AWWOGunPreviewActor::Size * K;
+		Image->SetBrush(Brush);
+		UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+		Fit->SetStretch(EStretch::ScaleToFit);
+		Fit->AddChild(Image);
+		UOverlay* Stage = Tree->ConstructWidget<UOverlay>();
+		UOverlaySlot* FitSlot = Stage->AddChildToOverlay(Fit);
+		FitSlot->SetHorizontalAlignment(HAlign_Fill);
+		FitSlot->SetVerticalAlignment(VAlign_Fill);
+		UTextBlock* Name = WWOUI::Spaced(WidgetTree, L->GetWeapon()->DisplayName, WWOUI::Type::Caption, WWOUI::TextSecondary, 220);
+		UOverlaySlot* NameSlot = Stage->AddChildToOverlay(Name);
+		NameSlot->SetHorizontalAlignment(HAlign_Left);
+		NameSlot->SetVerticalAlignment(VAlign_Bottom);
+		NameSlot->SetPadding(FMargin(12.f * K, 0, 0, 10.f * K));
+		UBorder* Well = Tree->ConstructWidget<UBorder>();
+		Well->SetBrush(WWOUI::RoundBrush(WWOUI::PageColor, WWOUI::Corner, WWOUI::PanelEdge, WWOUI::BoxEdge));
+		Well->SetPadding(FMargin(WWOUI::BoxEdge * K));
+		Well->SetContent(Stage);
+		USizeBox* WellBox = Tree->ConstructWidget<USizeBox>();
+		WellBox->SetHeightOverride((AWWOGunPreviewActor::Size.Y + 2.f * WWOUI::BoxEdge) * K);
+		WellBox->AddChild(Well);
+		Guns->AddChildToVerticalBox(WellBox)->SetPadding(FMargin(0, 8.f * K, 0, 0));
+		// Rebuilt only when the gun or its mods change (this page is rebuilt on every hover of a slot).
+		FString Key = L->GetWeapon()->Id.ToString();
+		for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots()) if (const UWWOModData* Mod = L->GetMod(ModSlot)) Key += TEXT("|") + Mod->Id.ToString();
+		if (Key != GunKey)
+		{
+			GunKey = Key;
+			GunPreview->ShowGun(L->GetWeapon(), L);
+		}
 	}
 	USizeBox* GunsBox = Tree->ConstructWidget<USizeBox>();
 	GunsBox->SetWidthOverride(WeaponColumn * K);
@@ -133,8 +178,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	UWidgetTree* Tree = WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
-	const FLinearColor LabelColor(1, 1, 1, 0.6f);
+	const FLinearColor LabelColor = WWOUI::TextSecondary;
 	auto Column = [&](float Width, float Gap) -> UVerticalBox*
 	{
 		UVerticalBox* Box = Tree->ConstructWidget<UVerticalBox>();
@@ -147,7 +191,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	auto Label = [&](UVerticalBox* To, const FString& Text)
 	{
 		const float Above = To->GetChildrenCount() > 0 ? 18.f * K : 0.f; // read before the label is added
-		To->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Text, 13.f, LabelColor, 220))->SetPadding(FMargin(0, Above, 0, 12.f * K));
+		To->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Text, WWOUI::Type::Caption, LabelColor, 220))->SetPadding(FMargin(0, Above, 0, 8.f * K));
 	};
 
 	// Stat bars, and what the equipped mods' perks do.
@@ -167,7 +211,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		const UWWOModData* Mod = L->GetMod(ModSlot);
 		if (Mod && !Mod->PerkText.IsEmpty()) Perks.Add(Mod->PerkText);
 	}
-	UTextBlock* PerkText = WWOUI::Text(WidgetTree, Perks.Num() > 0 ? FString::Join(Perks, TEXT("\n")) : TEXT("No perks equipped"), 14.f, FLinearColor(0.6f, 0.85f, 1.f), true);
+	UTextBlock* PerkText = WWOUI::Text(WidgetTree, Perks.Num() > 0 ? FString::Join(Perks, TEXT("\n")) : TEXT("No perks equipped"), WWOUI::Type::Small, FLinearColor(0.6f, 0.85f, 1.f), true);
 	PerkText->SetWrapTextAt(StatsColumn * K);
 	Stats->AddChildToVerticalBox(PerkText);
 
@@ -177,11 +221,14 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots())
 	{
 		const UWWOModData* Mod = L->GetMod(ModSlot);
-		const FLinearColor Edge = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
-		const bool bOpenSlot = OpenSlot == ModSlot;
-		UWidget* W = Slot(UWWOLoadoutSubsystem::ModSlotTitle(ModSlot) + TEXT("\n") + (Mod ? Mod->DisplayName : FString(TEXT("Empty"))),
-			FVector2D(SlotColumn, ModSlotHeight - 8.f), Mod ? WWO::Darkened(Edge, 0.65f) : WWOUI::ButtonColor, 16.f,
-			[WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); }, bOpenSlot ? &OnEdge : &Edge, bOpenSlot ? 5.f : 2.f);
+		FItemCard C;
+		C.Color = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0, 0, 0, 0);
+		C.Title = Mod ? Mod->DisplayName : FString(TEXT("Empty"));
+		C.Sub = UWWOLoadoutSubsystem::ModSlotTitle(ModSlot);
+		C.bOn = OpenSlot == ModSlot;
+		C.bMark = false;
+		C.MinHeight = ModSlotHeight - 8.f;
+		UWidget* W = ItemCard(C, [WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); });
 		if (USizeBox* Box = Cast<USizeBox>(W)) SlotButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), ModSlot });
 		Slots->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
@@ -193,7 +240,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		const int32 SlotIndex = UWWOLoadoutSubsystem::ModSlots().IndexOfByKey(OpenSlot);
 		Label(Side, UWWOLoadoutSubsystem::ModSlotTitle(OpenSlot) + TEXT(" mods"));
 		UBorder* Panel = Tree->ConstructWidget<UBorder>();
-		Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.12f, 0.13f, 0.16f), 8.f, FLinearColor(0.55f, 0.58f, 0.66f), 2.f));
+		Panel->SetBrush(WWOUI::RoundBrush(WWOUI::PageColor, WWOUI::Corner, WWOUI::PanelEdge, WWOUI::BoxEdge));
 		Panel->SetPadding(FMargin(12.f * K, 12.f * K, 12.f * K, 4.f * K));
 		UVerticalBox* List = Tree->ConstructWidget<UVerticalBox>();
 		const UWWOModData* Current = L->GetMod(OpenSlot);
@@ -202,13 +249,13 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		Options.Insert(nullptr, 0); // Empty
 		for (UWWOModData* Mod : Options)
 		{
-			const bool bOn = Mod == Current;
-			const FLinearColor Base = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0.4f, 0.42f, 0.5f);
-			const FString Title = (Mod ? Mod->DisplayName : FString(TEXT("Empty"))) + (bOn ? TEXT("   ✓ equipped") : TEXT(""));
-			const FString Body = Mod ? Mod->Summary() : FString(TEXT("No changes"));
-			UWidget* W = Slot(Title + TEXT("\n") + Body, FVector2D(SideColumn - 28.f, 84), Mod ? WWO::Darkened(Base, 0.7f) : WWOUI::ButtonColor, 15.f,
-				[WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); },
-				bOn ? &OnEdge : &Base, bOn ? 5.f : 2.f, FString(), true);
+			FItemCard C;
+			C.Color = Mod ? RarityColor(Mod->Rarity) : FLinearColor(0, 0, 0, 0);
+			C.Title = Mod ? Mod->DisplayName : FString(TEXT("Empty"));
+			C.Sub = Mod ? Mod->Summary() : FString(TEXT("No changes"));
+			C.bOn = Mod == Current;
+			C.MinHeight = 64.f;
+			UWidget* W = ItemCard(C, [WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); });
 			if (USizeBox* Box = Cast<USizeBox>(W)) PopupButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), Mod });
 			List->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 		}
@@ -221,9 +268,9 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	// Saved configs: save the current mods as a new one; click one to apply it, or save over or
 	// delete it. The list alone scrolls if there are more than fit (about eight).
 	Label(Side, TEXT("Configs"));
-	Side->AddChildToVerticalBox(Slot(TEXT("Save current as new config"), FVector2D(SideColumn, 44), FLinearColor(0.2f, 0.3f, 0.24f), 16.f,
+	Side->AddChildToVerticalBox(Slot(TEXT("Save current as new config"), FVector2D(SideColumn, 44), FLinearColor(0.2f, 0.3f, 0.24f), WWOUI::Type::Body,
 		[WeakThis, WL] { if (WL.IsValid()) WL->SaveConfig(INDEX_NONE); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
-	UScrollBox* ConfigList = Tree->ConstructWidget<UScrollBox>();
+	UScrollBox* ConfigList = WWOUI::ScrollBox(Tree);
 	const TArray<FWWOModConfig>& Configs = L->GetConfigs();
 	constexpr float SaveOverWidth = 92.f, DeleteWidth = 72.f, ButtonGap = 6.f;
 	for (int32 i = 0; i < Configs.Num(); ++i)
@@ -232,14 +279,17 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		const bool bActive = L->GetActiveConfig() == i;
 		const UWWOWeaponData* ConfigGun = nullptr;
 		for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W && W->Id == Configs[i].Weapon) ConfigGun = W;
-		const FString Name = Configs[i].Name + TEXT(" · ") + (ConfigGun ? ConfigGun->DisplayName : Configs[i].Weapon.ToString()) + (bActive ? TEXT("  ✓") : TEXT(""));
-		CRow->AddChildToHorizontalBox(Slot(Name + TEXT("\n") + UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L),
-			FVector2D(SideColumn - SaveOverWidth - DeleteWidth - ButtonGap * 2.f - 14.f, 58), FLinearColor(0.2f, 0.21f, 0.26f), 13.f,
-			[WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); },
-			bActive ? &OnEdge : nullptr, 2.f, TEXT("Apply"), true));
-		CRow->AddChildToHorizontalBox(Slot(TEXT("Save over"), FVector2D(SaveOverWidth, 58), FLinearColor(0.3f, 0.27f, 0.18f), 13.f,
+		FItemCard C;
+		C.Title = Configs[i].Name + TEXT(" \u00B7 ") + (ConfigGun ? ConfigGun->DisplayName : Configs[i].Weapon.ToString());
+		C.Sub = UWWOLoadoutSubsystem::ConfigSummary(Configs[i], L);
+		C.bOn = bActive;
+		C.MinHeight = 58.f;
+		C.Tip = TEXT("Apply");
+		UHorizontalBoxSlot* ConfigSlot = CRow->AddChildToHorizontalBox(ItemCard(C, [WeakThis, WL, i] { if (WL.IsValid()) WL->ApplyConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
+		ConfigSlot->SetSize(WWOUI::Fill(1.f));
+		CRow->AddChildToHorizontalBox(Slot(TEXT("Save over"), FVector2D(SaveOverWidth, 58), FLinearColor(0.3f, 0.27f, 0.18f), WWOUI::Type::Small,
 			[WeakThis, WL, i] { if (WL.IsValid()) WL->SaveConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }))->SetPadding(FMargin(ButtonGap * K, 0, 0, 0));
-		CRow->AddChildToHorizontalBox(Slot(TEXT("Delete"), FVector2D(DeleteWidth, 58), FLinearColor(0.32f, 0.17f, 0.17f), 13.f,
+		CRow->AddChildToHorizontalBox(Slot(TEXT("Delete"), FVector2D(DeleteWidth, 58), FLinearColor(0.32f, 0.17f, 0.17f), WWOUI::Type::Small,
 			[WeakThis, WL, i] { if (WL.IsValid()) WL->DeleteConfig(i); if (WeakThis.IsValid()) WeakThis->Refresh(); }))->SetPadding(FMargin(ButtonGap * K, 0, 0, 0));
 		if (UScrollBoxSlot* RowSlot = Cast<UScrollBoxSlot>(ConfigList->AddChild(CRow))) RowSlot->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
@@ -248,7 +298,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	ListBox->AddChild(ConfigList);
 	Side->AddChildToVerticalBox(ListBox)->SetPadding(FMargin(0, 10.f * K, 0, 0));
 	Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, FString::Printf(TEXT("In game: %s swaps to your other weapon slot's config"),
-		Cast<AWWOPlayerController>(GetOwningPlayer()) ? *Cast<AWWOPlayerController>(GetOwningPlayer())->BindHint("next_config") : TEXT("the swap key")), 10.f, FLinearColor(1, 1, 1, 0.4f), 80, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+		Cast<AWWOPlayerController>(GetOwningPlayer()) ? *Cast<AWWOPlayerController>(GetOwningPlayer())->BindHint("next_config") : TEXT("the swap key")), WWOUI::Type::Caption, WWOUI::TextFaint, 80, true))->SetPadding(FMargin(0, 8.f * K, 0, 0));
 }
 
 void UWWOCharacterMenu::OpenModSlot(FName ModSlot)

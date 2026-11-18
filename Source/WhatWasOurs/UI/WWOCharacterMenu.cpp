@@ -19,8 +19,12 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WidgetSwitcher.h"
+#include "Components/UniformGridPanel.h"
+#include "Components/UniformGridSlot.h"
+#include "Components/Spacer.h"
 #include "Components/ScaleBox.h"
 #include "UI/WWOMenuCursor.h"
+#include "UI/WWOGunPreviewActor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -34,6 +38,7 @@ namespace
 	const TCHAR* const TabNames[] = { TEXT("LOADOUT"), TEXT("FLORA"), TEXT("WEAPON"), TEXT("SHELL") }; // the shell is the frame parts
 	const TCHAR* const TabTiles[] = { TEXT(""), TEXT("Flora"), TEXT("Weapons"), TEXT("Frame Parts") };
 	const FVector PreviewSpot(0.f, 0.f, -50000.f); // far below the level
+	const FVector GunSpot(0.f, 6000.f, -50000.f);  // the gun's, beside it
 }
 
 // --- Menu ------------------------------------------------------------------------------------
@@ -56,8 +61,8 @@ int32 UWWOCharacterMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 void UWWOCharacterMenu::AddRowLabel(const FString& Text)
 {
 	// A section's name: small spaced capitals, like the Loadout tab's labels.
-	UTextBlock* Label = WWOUI::Spaced(WidgetTree, Text, 13.f, FLinearColor(1, 1, 1, 0.6f), 220);
-	Content->AddChildToVerticalBox(Label)->SetPadding(FMargin(0, Content->GetChildrenCount() > 0 ? 22.f * K : 0.f, 0, 2.f * K));
+	UTextBlock* Label = WWOUI::Spaced(WidgetTree, Text, WWOUI::Type::Caption, WWOUI::TextSecondary, 220);
+	Content->AddChildToVerticalBox(Label)->SetPadding(FMargin(0, Content->GetChildrenCount() > 0 ? 24.f * K : 0.f, 0, 0));
 }
 
 void UWWOCharacterMenu::AddContent(UWidget* Widget)
@@ -73,12 +78,12 @@ UWidget* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLin
 	const FLinearColor Edge = Border ? *Border : WWO::Lightened(Color, 0.35f);
 	const float Width = Border ? BorderWidth : 2.f;
 	WWOUI::FButtonLook Look = WWOUI::FilledLook(Color, FMargin(Width + 4.f, Width));
-	Look.Normal = WWOUI::RoundBrush(Color, 5.f, Edge, Width); // the menu's 5 px corners
-	Look.Hovered = WWOUI::RoundBrush(WWO::Lightened(Color, 0.12f), 5.f, FLinearColor::White, Width);
-	Look.Pressed = WWOUI::RoundBrush(WWO::Lightened(Color, 0.2f), 5.f, FLinearColor::White, Width);
+	Look.Normal = WWOUI::RoundBrush(Color, WWOUI::Corner, Edge, Width); // the menu's 5 px corners
+	Look.Hovered = WWOUI::RoundBrush(WWO::Lightened(Color, 0.12f), WWOUI::Corner, FLinearColor::White, Width);
+	Look.Pressed = WWOUI::RoundBrush(WWO::Lightened(Color, 0.2f), WWOUI::Corner, FLinearColor::White, Width);
 	UButton* B = WWOUI::TextButton(WidgetTree, Text, FontPx, Look);
 	WWOUI::KeepPruned(SlotHandlers, SlotPruneAt, WWOUI::OnClick(B, this, MoveTemp(Fn)));
-	if (!Tooltip.IsEmpty()) B->SetToolTipText(FText::FromString(Tooltip));
+	WWOUI::SetTip(WidgetTree, B, Tooltip);
 	USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 	Box->SetMinDesiredWidth(Size.X * K);
 	Box->SetMinDesiredHeight(Size.Y * K);
@@ -90,6 +95,96 @@ UWidget* UWWOCharacterMenu::Slot(const FString& Text, FVector2D Size, const FLin
 	}
 	Box->AddChild(B);
 	return Box;
+}
+
+UWidget* UWWOCharacterMenu::ItemCard(const FItemCard& Spec, TFunction<void()> Fn)
+{
+	UWidgetTree* Tree = WidgetTree;
+	const bool bNeutral = Spec.Color.A <= 0.f;
+	UTexture2D* Badge = Spec.Kind.IsNone() ? nullptr : WWOUI::SymbolTexture(Spec.Kind, Spec.Id);
+	// Every coloured card is the same depth of its colour: the shade at its badge's edge.
+	const FLinearColor Fill = bNeutral ? WWOUI::CardColor : WWOUI::BadgeEdge(Spec.Color);
+	const FLinearColor Edge = bNeutral ? (Spec.bOn ? OnEdge : FLinearColor(1, 1, 1, 0.2f))
+		: (Spec.bOn ? WWO::Lightened(Spec.Color, 0.35f) : WWO::WithAlpha(WWO::Lightened(Spec.Color, 0.1f), 0.7f));
+	const float EdgeWidth = Spec.bOn ? WWOUI::BoxEdgeOn : WWOUI::BoxEdge;
+	WWOUI::FButtonLook Look;
+	Look.Normal = WWOUI::RoundBrush(Fill, WWOUI::Corner, Edge, EdgeWidth);
+	// Hovered and pressed the edge goes white; a badge card keeps its fill, so the badge stays seamless.
+	Look.Hovered = WWOUI::RoundBrush(Badge ? Fill : WWO::Lightened(Fill, 0.06f), WWOUI::Corner, WWOUI::HoverEdge, EdgeWidth);
+	Look.Pressed = WWOUI::RoundBrush(Badge ? Fill : WWO::Lightened(Fill, 0.12f), WWOUI::Corner, FLinearColor::White, EdgeWidth);
+	Look.Padding = FMargin(Badge ? 8.f : 14.f, 8.f, 12.f, 8.f);
+	Look.HAlign = HAlign_Fill;
+	Look.VAlign = VAlign_Center;
+
+	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
+	if (Badge)
+	{
+		UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, FVector2D(Spec.Badge, Spec.Badge) * K));
+		BadgeSlot->SetVerticalAlignment(VAlign_Center);
+		BadgeSlot->SetPadding(FMargin(0, 0, 10.f * K, 0));
+	}
+	UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
+	const ETextJustify::Type Justify = Spec.bCenter && !Badge ? ETextJustify::Center : ETextJustify::Left;
+	UTextBlock* Title = WWOUI::Text(Tree, Spec.Title, WWOUI::Type::Body, WWOUI::TextPrimary, true);
+	WWOUI::SetWeight(Title, WWOUI::EWeight::Medium);
+	Title->SetJustification(Justify);
+	Words->AddChildToVerticalBox(Title);
+	if (!Spec.Sub.IsEmpty())
+	{
+		UTextBlock* Sub = WWOUI::Text(Tree, Spec.Sub, WWOUI::Type::Small, WWOUI::TextSecondary, true);
+		Sub->SetJustification(Justify);
+		Words->AddChildToVerticalBox(Sub)->SetPadding(FMargin(0, 2.f * K, 0, 0));
+	}
+	UHorizontalBoxSlot* WordsSlot = Row->AddChildToHorizontalBox(Words);
+	WordsSlot->SetSize(WWOUI::Fill(1.f));
+	WordsSlot->SetVerticalAlignment(VAlign_Center);
+
+	UWidget* Inside = Row;
+	if (Spec.bOn && Spec.bMark)
+	{
+		// The chosen one's mark: a dot in its edge colour in the top right corner.
+		UBorder* Dot = Tree->ConstructWidget<UBorder>();
+		Dot->SetBrush(WWOUI::RoundBrush(Edge, 4.f));
+		USizeBox* DotBox = Tree->ConstructWidget<USizeBox>();
+		DotBox->SetWidthOverride(8.f * K);
+		DotBox->SetHeightOverride(8.f * K);
+		DotBox->AddChild(Dot);
+		UOverlay* Both = Tree->ConstructWidget<UOverlay>();
+		UOverlaySlot* RowSlot = Both->AddChildToOverlay(Row);
+		RowSlot->SetHorizontalAlignment(HAlign_Fill);
+		RowSlot->SetVerticalAlignment(VAlign_Center);
+		UOverlaySlot* DotSlot = Both->AddChildToOverlay(DotBox);
+		DotSlot->SetHorizontalAlignment(HAlign_Right);
+		DotSlot->SetVerticalAlignment(VAlign_Top);
+		DotSlot->SetPadding(FMargin(0, -2.f * K, -5.f * K, 0));
+		Inside = Both;
+	}
+	UButton* B = WWOUI::Button(Tree, Inside, Look);
+	WWOUI::KeepPruned(SlotHandlers, SlotPruneAt, WWOUI::OnClick(B, this, MoveTemp(Fn)));
+	WWOUI::SetTip(Tree, B, Spec.Tip);
+	USizeBox* Box = Tree->ConstructWidget<USizeBox>();
+	Box->SetMinDesiredHeight(Spec.MinHeight * K);
+	Box->AddChild(B);
+	return Box;
+}
+
+void UWWOCharacterMenu::AddCardGrid(const TArray<UWidget*>& Cards, int32 Columns)
+{
+	// Equal columns across the page, CardGap apart, the outer cards' edges on the page's edges (the
+	// grid's own padding is pulled back out); every card in a row as tall as the tallest.
+	UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
+	Grid->SetSlotPadding(FMargin(CardGap * 0.5f * K));
+	for (int32 i = 0; i < Cards.Num(); ++i)
+	{
+		if (!Cards[i]) continue;
+		UUniformGridSlot* Cell = Grid->AddChildToUniformGrid(Cards[i], i / Columns, i % Columns);
+		Cell->SetHorizontalAlignment(HAlign_Fill);
+		Cell->SetVerticalAlignment(VAlign_Fill);
+	}
+	// Columns with no card still take their share, so a short row's cards are as wide as a full row's.
+	for (int32 Col = Cards.Num(); Col < Columns; ++Col) Grid->AddChildToUniformGrid(WidgetTree->ConstructWidget<USpacer>(), 0, Col);
+	const float Half = CardGap * 0.5f * K;
+	Content->AddChildToVerticalBox(Grid)->SetPadding(FMargin(-Half, 8.f * K - Half, -Half, -Half));
 }
 
 void UWWOCharacterMenu::Build()
@@ -129,12 +224,13 @@ void UWWOCharacterMenu::Open()
 			TabLabels.Add(Tabs.Labels[i]);
 			TabLines.Add(Tabs.Lines[i]);
 		}
-		UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Q / E  TABS   ·   A / D  OR DRAG  TURN   ·   ESC  BACK"), 11.f, WWOUI::Faint, 120);
+		UTextBlock* Keys = WWOUI::Spaced(WidgetTree, TEXT("Q / E  TABS   ·   A / D  OR DRAG  TURN   ·   ESC  BACK"), WWOUI::Type::Caption, WWOUI::Faint, 120);
 		Keys->SetJustification(ETextJustify::Right);
 		WWOUI::AddPageHeader(Tree, Column, WWOUI::HeaderName(Tree, TEXT("WHAT WAS OURS"), true), Tabs.Box, Keys);
 
 		// The character, shown on every tab (one render target, two places it can sit).
 		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
+		GunPreview = GetWorld()->SpawnActor<AWWOGunPreviewActor>(GunSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 		auto MakePreview = [this, Tree]() -> UWidget*
 		{
 			UImage* Image = Tree->ConstructWidget<UImage>();
@@ -162,9 +258,9 @@ void UWWOCharacterMenu::Open()
 		// The editors: the open tab's rows beside the character.
 		UHorizontalBox* Editor = Tree->ConstructWidget<UHorizontalBox>();
 		UBorder* ExpandedPanel = Tree->ConstructWidget<UBorder>();
-		ExpandedPanel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, 6.f, WWOUI::PanelEdge, 1.f));
+		ExpandedPanel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, WWOUI::Corner, WWOUI::PanelEdge, 1.f));
 		ExpandedPanel->SetPadding(FMargin(28.f * K));
-		ExpandedScroll = Tree->ConstructWidget<UScrollBox>();
+		ExpandedScroll = WWOUI::ScrollBox(Tree);
 		Content = Tree->ConstructWidget<UVerticalBox>();
 		ExpandedScroll->AddChild(Content);
 		ExpandedPanel->SetContent(ExpandedScroll);
@@ -186,6 +282,7 @@ void UWWOCharacterMenu::Open()
 	bOpen = true;
 	Expanded.Reset();
 	Picker.Reset();
+	if (GunPreview) GunPreview->SetLive(false); // opens on the Loadout tab
 	TileSwitcher->SetActiveWidgetIndex(0);
 	UpdateTabs();
 	SetVisibility(ESlateVisibility::Visible);
@@ -208,6 +305,7 @@ void UWWOCharacterMenu::SetPreviewLive(bool bLive)
 	PreviewActor->Capture->bCaptureEveryFrame = bLive;
 	PreviewActor->Capture->SetVisibility(bLive);
 	PreviewActor->SetActorTickEnabled(bLive);
+	if (GunPreview) GunPreview->SetLive(bLive && Expanded == TEXT("Weapons"));
 }
 
 void UWWOCharacterMenu::Back()
@@ -239,6 +337,7 @@ void UWWOCharacterMenu::Expand(const FString& Tile)
 	OpenSlot = NAME_None;
 	Expanded = Tile;
 	Picker.Reset();
+	if (GunPreview) GunPreview->SetLive(Tile == TEXT("Weapons"));
 	Rebuild();
 	ExpandedScroll->ScrollToStart();
 	TileSwitcher->SetActiveWidgetIndex(1);
@@ -250,6 +349,7 @@ void UWWOCharacterMenu::Collapse()
 	OpenSlot = NAME_None;
 	Expanded.Reset();
 	Picker.Reset();
+	if (GunPreview) GunPreview->SetLive(false);
 	BuildOverview(); // what was changed in an editor shows on the cards
 	TileSwitcher->SetActiveWidgetIndex(0);
 	UpdateTabs();
@@ -285,7 +385,7 @@ UWidget* UWWOCharacterMenu::Card(UWidget* Inside, TFunction<void()> Fn, const FL
 	if (!Fn)
 	{
 		UBorder* Box = Tree->ConstructWidget<UBorder>();
-		Box->SetBrush(WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth));
+		Box->SetBrush(WWOUI::RoundBrush(Fill, WWOUI::Corner, Edge, EdgeWidth));
 		Box->SetPadding(Padding * K);
 		Box->SetContent(Inside);
 		return Box;

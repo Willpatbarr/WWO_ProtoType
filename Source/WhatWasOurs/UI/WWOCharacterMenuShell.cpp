@@ -7,38 +7,37 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 
 using namespace WWOCharacterMenuUI;
 
 void UWWOCharacterMenu::BuildFrameRows()
 {
-	// The whole Shell tab on one screen, no scrolling: a row per slot, its name at the left and its
-	// parts sharing the rest of the width, then the net effect.
+	// The whole Shell tab on one screen, no scrolling: a row of cards per slot, then the net effect.
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L) return;
-	UWidgetTree* Tree = WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	const FLinearColor OnEdge(0.9f, 0.9f, 0.95f);
+	// Each slot's parts as a row of cards on the editors' grid (ItemCard, AddCardGrid), under its name.
 	for (const FName& FrameSlot : UWWOLoadoutSubsystem::FrameSlots())
 	{
-		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
-		USizeBox* Name = Tree->ConstructWidget<USizeBox>();
-		Name->SetWidthOverride(74.f * K);
-		Name->AddChild(WWOUI::Spaced(WidgetTree, FrameSlot.ToString(), 13.f, FLinearColor(1, 1, 1, 0.6f), 220));
-		Row->AddChildToHorizontalBox(Name)->SetVerticalAlignment(VAlign_Center);
+		AddRowLabel(FrameSlot.ToString());
+		TArray<UWidget*> Cards;
 		for (UWWOFramePartData* Part : L->FramePartsFor(FrameSlot))
 		{
 			if (!Part->bUnlocked) continue;
-			const bool bOn = Part == L->GetFramePart(FrameSlot);
-			UHorizontalBoxSlot* PartSlot = Row->AddChildToHorizontalBox(Slot(Part->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\n") + Part->Summary(), FVector2D(140, 104), WWOUI::CardColor, 15.f,
-				[WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }, bOn ? &OnEdge : nullptr, 4.f));
-			PartSlot->SetSize(WWOUI::Fill(1.f));
-			PartSlot->SetPadding(FMargin(10.f * K, 0, 0, 0));
+			FItemCard C;
+			C.Title = Part->DisplayName;
+			C.Sub = Part->Summary().Replace(TEXT("\n"), TEXT(" · "));
+			C.bOn = Part == L->GetFramePart(FrameSlot);
+			C.MinHeight = 64.f;
+			Cards.Add(ItemCard(C, [WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
 		}
-		AddContent(Row);
+		AddCardGrid(Cards, 4);
 	}
 	AddRowLabel(TEXT("Net effect"));
 	const TArray<FString> Lines = L->GroupSummary();
-	AddContent(WWOUI::Text(WidgetTree, Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), 16.f));
+	UTextBlock* Net = WWOUI::Text(WidgetTree, Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), WWOUI::Type::Body, WWOUI::TextPrimary);
+	Content->AddChildToVerticalBox(Net)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 }
