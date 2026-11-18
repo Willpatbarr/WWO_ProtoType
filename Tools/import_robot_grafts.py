@@ -51,7 +51,10 @@ FLAT_VV = {
     "VV_Fluid": ((0.04, 0.15, 0.5), (0.06, 0.28, 1.0), 3.0, 0.2),
 }
 # Glow (EmissiveStrength) of each flora's atlas.
-ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 3.0, "voltvine_crystal": 3.0}
+ATLAS_GLOW = {"ironbark": 3.0, "veilspore": 2.2, "voltvine_crystal": 3.0}
+# Base colour tint of VeilSpore's atlas: its caps and net a little darker and less pastel, as on the
+# sheet (the atlas's lavender glow over the caps reads washed out at full strength in the game's light).
+VS_TINT = (0.78, 0.72, 0.8)
 FLORAS = {
     "voltvine": dict(src="~/Documents/WWO_Flora/grafts", prefix="SK_VV_", root="/Game/WWO/Flora/VoltVine"),
     "veilspore": dict(src="~/Documents/WWO_Flora/grafts_veilspore", prefix="SK_VS_", root="/Game/WWO/Flora/VeilSpore"),
@@ -219,7 +222,7 @@ def tex_params(textures, key):
 def veilspore_materials(root, textures, flat):
     flora = for_skeletal(MATS + "/M_WWO_Flora")
     return {"VS_Fungus": instance(root, "VS_Fungus", flora, tex_params(textures, "veilspore_atlas"),
-                                  {"EmissiveStrength": ATLAS_GLOW["veilspore"]})}
+                                  {"EmissiveStrength": ATLAS_GLOW["veilspore"]}, {"Tint": VS_TINT})}
 
 
 def ironbark_materials(root, textures, flat):
