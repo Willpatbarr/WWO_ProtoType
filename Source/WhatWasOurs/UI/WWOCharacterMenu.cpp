@@ -302,9 +302,7 @@ void UWWOCharacterMenu::SetPreviewLive(bool bLive)
 {
 	// A scene capture left on renders the preview every frame of play, menu or no menu.
 	if (!PreviewActor || !PreviewActor->Capture) return;
-	PreviewActor->Capture->bCaptureEveryFrame = bLive;
-	PreviewActor->Capture->SetVisibility(bLive);
-	PreviewActor->SetActorTickEnabled(bLive);
+	PreviewActor->SetLive(bLive); // its lights too
 	if (GunPreview) GunPreview->SetLive(bLive && Expanded == TEXT("Weapons"));
 }
 

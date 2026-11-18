@@ -91,7 +91,7 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 		if (Crossed(At + 0.8f)) { Turn(0.f); Shot(*FString::Printf(TEXT("34_grafts_%d_%s_front"), k, GraftLoadouts[k].Name)); }
 		if (Crossed(At + 1.4f)) { Turn(200.f); Shot(*FString::Printf(TEXT("34_grafts_%d_%s_back"), k, GraftLoadouts[k].Name)); }
 	}
-	// Up close: the preview's own camera moved in (its world has no fog or sky, like Godot's).
+	// Up close: the preview's own camera moved in to the upper body.
 	const float CloseAt = 0.5f + NumGraftLoadouts * MenuEvery;
 	auto Zoom = [&](bool bIn)
 	{
@@ -100,12 +100,12 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 		if (bIn)
 		{
 			AutoGraftCaptureFov = Preview->Capture->FOVAngle;
-			Preview->Capture->SetRelativeLocation(FVector(300.f, 0.f, 105.f));
-			Preview->Capture->FOVAngle = 34.f;
+			Preview->Capture->SetRelativeLocation(FVector(200.f, 0.f, 128.f)); // head to hips, for the surfaces up close
+			Preview->Capture->FOVAngle = 24.f;
 		}
 		else
 		{
-			Preview->Capture->SetRelativeLocation(FVector(440.f, 0.f, 110.f));
+			Preview->Capture->SetRelativeLocation(FVector(275.f, 0.f, 98.f)); // the menu's framing (AWWOPreviewActor)
 			Preview->Capture->FOVAngle = AutoGraftCaptureFov;
 		}
 	};

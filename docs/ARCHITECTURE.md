@@ -289,7 +289,10 @@ as one rate-limited angle) is its own. The navmesh is built at run time (`Runtim
 name, `/Game/WWO/Anims/Body/A_<name>` first, then `/Game/WWO/Anims/UAL/A_<name>`. A character model from
 `Config/CharacterModels.json` is a second skeletal mesh retargeted off the hidden mannequin
 (`UWWOModelAnimInstance`, `RTG_Manny_<key>`), so clips, hitboxes and grafts work the same for every
-model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cpp`).
+model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cpp`). The three floras share the robot
+frame (`SK_RobotFrame`, `Tools/import_robot_frame.py`), surfaced by `M_WWO_Robot` and its role instances (armour, trim,
+joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importing the frame); its skinned grafts come from
+`Tools/import_robot_grafts.py`.
 
 ## UI
 
@@ -327,7 +330,11 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
   and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. The editors' cards are one builder, `ItemCard` (an item's
   badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. Both hover popups close through one
   `FWWOHoverPopup` timer. The character is `AWWOPreviewActor` (`UI/WWOPreviewActor.*`), a mannequin with
-  its own scene capture far below the level. The Weapon tab's gun is `AWWOGunPreviewActor` (`UI/WWOGunPreviewActor.*`):
+  its own scene capture far below the level: a small studio (key with soft shadows, fill, two rims, top and bounce
+  lights, all directional on lighting channel 2 and switched on only while the menu is open; no sky light or level
+  reflections), fixed exposure near the arenas' (`CharacterExposure`) so flora glow keeps its colour, soft bloom, temporal
+  AA on a supersampled target, a backdrop (`M_WWO_PreviewBackdrop`) whose edges match the page with a soft pool of light
+  behind the figure, and a contact shadow under the feet (`M_WWO_PreviewShadow`; both from `Tools/create_preview_materials.py`). The Weapon tab's gun is `AWWOGunPreviewActor` (`UI/WWOGunPreviewActor.*`):
   `WWOWeapon::BuildShowcase` builds the same model as the first-person gun (mesh, kept and extra parts, the mods' parts),
   lit by its own key, rim and fill lights on lighting channel 1, captured only while that tab is open.
   Shared helpers: `WWOCharacterMenuPrivate.h`.
