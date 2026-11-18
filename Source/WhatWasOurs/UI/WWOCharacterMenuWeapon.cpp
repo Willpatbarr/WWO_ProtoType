@@ -174,6 +174,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	SlotButtons.Reset();
 	PopupButtons.Reset();
 	PopupPanel = nullptr;
+	ConfigListBox = nullptr;
 	if (!L || !L->HasMods(L->GetWeapon())) return;
 	UWidgetTree* Tree = WidgetTree;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
@@ -296,6 +297,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 	USizeBox* ListBox = Tree->ConstructWidget<USizeBox>();
 	ListBox->SetMaxDesiredHeight(ConfigListHeight * K);
 	ListBox->AddChild(ConfigList);
+	ConfigListBox = ListBox;
 	Side->AddChildToVerticalBox(ListBox)->SetPadding(FMargin(0, 10.f * K, 0, 0));
 	Side->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, FString::Printf(TEXT("In game: %s swaps to your other weapon slot's config"),
 		Cast<AWWOPlayerController>(GetOwningPlayer()) ? *Cast<AWWOPlayerController>(GetOwningPlayer())->BindHint("next_config") : TEXT("the swap key")), WWOUI::Type::Caption, WWOUI::TextFaint, 80, true))->SetPadding(FMargin(0, 8.f * K, 0, 0));

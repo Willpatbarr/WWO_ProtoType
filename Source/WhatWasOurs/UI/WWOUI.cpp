@@ -25,6 +25,9 @@
 #include "Styling/CoreStyle.h"
 #include "Fonts/CompositeFont.h"
 #include "Misc/Paths.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Fonts/FontMeasure.h"
+#include "Rendering/SlateRenderer.h"
 
 namespace WWOUI
 {
@@ -125,6 +128,17 @@ namespace WWOUI
 		FSlateFontInfo F = FontAt(Old.Size, Weight);
 		F.LetterSpacing = Old.LetterSpacing;
 		T->SetFont(F);
+	}
+
+	void Ellipsis(UTextBlock* T, float Width)
+	{
+		if (!T) return;
+		// Ellipsis needs the text clipped to its own box, and a side to cut from (not a centred line).
+		T->SetClipping(EWidgetClipping::ClipToBounds);
+		T->SetTextOverflowPolicy(ETextOverflowPolicy::Ellipsis);
+		if (!FSlateApplication::IsInitialized() || !FSlateApplication::Get().GetRenderer()) return;
+		const float Wide = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(T->GetText(), T->GetFont()).X;
+		if (Wide > Width) T->SetJustification(ETextJustify::Left);
 	}
 
 	void SetTip(UWidgetTree* Tree, UWidget* Widget, const FString& Tip)

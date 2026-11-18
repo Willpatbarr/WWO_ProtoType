@@ -79,6 +79,14 @@ public:
 	void AutoTestScroll(float Offset);
 	float ScrollOverflow() const; // how far the open tab's page could scroll (0: it all fits), for the autotest
 	AWWOPreviewActor* GetPreviewActor() const { return PreviewActor; } // for the autotest
+	// For the hover test (Player/WWOAutoTestHover.cpp), in Slate's absolute (desktop) space:
+	TArray<FString> AutoTestHoverTiles() const;                          // the Loadout tab's hover tiles, by name
+	bool AutoTestTileRect(const FString& Name, FSlateRect& Out) const;   // one of them
+	const FString& AutoTestHoverRow() const { return HoverPicker; }      // the open row of choices ("" if none)
+	bool AutoTestHoverRects(FSlateRect& OutPanel, TArray<FSlateRect>& OutChoices) const; // the open row and each choice in it
+	bool AutoTestHoverScrolls() const { return HoverScroll != nullptr; } // the row was too many to fit and scrolls
+	bool AutoTestModRects(FSlateRect& OutPanel, TArray<FSlateRect>& OutSlots) const;     // the Weapon tab's open slot mods and the slots
+	bool AutoTestConfigListRect(FSlateRect& Out) const;                  // the Weapon tab's config list
 
 private:
 	bool bOpen = false;
@@ -120,6 +128,8 @@ private:
 	FString HoverPicker;
 	FWWOHoverPopup HoverClose{ 0.25f }; // the row closes this long after the cursor leaves it and its tile
 	UPROPERTY() TObjectPtr<UWidget> HoverPopup;
+	UPROPERTY() TObjectPtr<UScrollBox> HoverScroll; // the open row's scroll box, when it has more rows than fit
+	UPROPERTY() TObjectPtr<UWidget> ConfigListBox; // the Weapon tab's config list (for the hover test)
 	void UpdateHoverPicker(float DeltaTime);
 	void OpenHoverPicker(const FString& Name, UWidget* Tile);
 	void CloseHoverPicker();

@@ -25,6 +25,10 @@ using namespace WWOCharacterMenuUI;
 
 namespace
 {
+	// The Loadout tab's hover row of choices (Godot pixels): a square choice's side (and every choice's
+	// height), a weapon config's or shell part's width, the gap between choices.
+	constexpr float ChoiceSide = 56.f, WideChoice = 150.f, ChoiceGap = 8.f;
+
 	// Up to two initials, standing in for an icon until there is art.
 	FString Initials(const FString& Name)
 	{
@@ -369,8 +373,12 @@ void UWWOCharacterMenu::BuildOverview()
 		Row->AddChildToHorizontalBox(Marked(bInHand ? Accent : FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 6.f * K));
 		UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
 		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, FString::Printf(TEXT("Weapon %d%s"), WeaponSlot + 1, bInHand ? TEXT("  ·  in hand") : TEXT("")), WWOUI::Type::Micro, Dim, 240));
-		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Name, WWOUI::Type::Body, FLinearColor::White, 180))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+		// A long config name ends in "..." at the bar's edge (hovering the bar lists the configs with their whole names in tips).
+		UTextBlock* NameText = WWOUI::Spaced(WidgetTree, Name, WWOUI::Type::Body, FLinearColor::White, 180);
+		WWOUI::Ellipsis(NameText, 10000.f); // left-aligned: cut at the bar's edge, whatever its width
+		Words->AddChildToVerticalBox(NameText)->SetPadding(FMargin(0, 6.f * K, 0, 0));
 		UHorizontalBoxSlot* WordsSlot = Row->AddChildToHorizontalBox(Words);
+		WordsSlot->SetSize(WWOUI::Fill(1.f));
 		WordsSlot->SetPadding(FMargin(18.f * K, 0, 0, 0));
 		WordsSlot->SetVerticalAlignment(VAlign_Center);
 		UWidget* Bar = Card(Row, Open(TEXT("Weapons")), WWOUI::CardColor, WWOUI::CardEdgeStrong, WWOUI::BoxEdge, BarPad);
@@ -489,6 +497,7 @@ void UWWOCharacterMenu::CloseHoverPicker()
 	HoverNames.Reset();
 	if (HoverPopup) HoverPopup->RemoveFromParent();
 	HoverPopup = nullptr;
+	HoverScroll = nullptr;
 }
 
 void UWWOCharacterMenu::UpdateHoverPicker(float DeltaTime)
@@ -552,45 +561,46 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
 	const FLinearColor Accent = WWOUI::Accent(this);
-	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
+	// The choices, laid out in rows below (as many rows as it takes to keep the row on screen).
+	TArray<UWidget*> Items;
 	// One choice: a square of initials (wider, with a second line, for a weapon config).
 	// Symbol: the item's badge filling the square in place of the initials.
 	auto Option = [&](const FString& Label, const FString& Under, const FString& Tip, bool bOn, const FLinearColor& Fill, const FLinearColor& Edge, TFunction<void()> Pick,
 		UTexture2D* Symbol = nullptr) -> UWidget*
 	{
-		if (Symbol)
+		UWidget* Inside = nullptr;
+		if (Symbol) Inside = WWOUI::FillWithSymbol(WidgetTree, Symbol);
+		else
 		{
-			UWidget* Box = Card(WWOUI::FillWithSymbol(WidgetTree, Symbol), [WeakThis, Pick] { Pick(); if (WeakThis.IsValid()) WeakThis->BuildOverview(); },
-				Fill, Edge, bOn ? 4.f : 2.f, FMargin(bOn ? 4.f : 2.f));
-			WWOUI::SetTip(WidgetTree, Box, Tip);
-			HoverNames.Add({ Box, Tip });
-			USizeBox* Size = Tree->ConstructWidget<USizeBox>();
-			Size->SetWidthOverride(56.f * K);
-			Size->SetHeightOverride(56.f * K);
-			Size->AddChild(Box);
-			Row->AddChildToHorizontalBox(Size)->SetPadding(FMargin(Row->GetChildrenCount() > 1 ? 8.f * K : 0.f, 0, 0, 0));
-			return Box;
+			UVerticalBox* In = Tree->ConstructWidget<UVerticalBox>();
+			// A name too long for the box ends in "..." (the tip has it whole) instead of running into the next one.
+			UTextBlock* Text = WWOUI::Spaced(WidgetTree, Label, Under.IsEmpty() ? WWOUI::Type::Title : WWOUI::Type::Small, bOn ? FLinearColor::White : FLinearColor(1, 1, 1, 0.85f), 40);
+			Text->SetJustification(ETextJustify::Center);
+			const float Inset = 4.f * K; // a cut-off name keeps clear of the card's edge
+			const float TextWidth = ((Under.IsEmpty() ? ChoiceSide : WideChoice) - 12.f) * K - 2.f * Inset; // inside the card's edge and padding
+			WWOUI::Ellipsis(Text, TextWidth);
+			UVerticalBoxSlot* TextSlot = In->AddChildToVerticalBox(Text);
+			TextSlot->SetSize(WWOUI::Fill(1.f));
+			TextSlot->SetVerticalAlignment(VAlign_Center);
+			TextSlot->SetPadding(FMargin(Inset, 0));
+			if (!Under.IsEmpty())
+			{
+				UTextBlock* Second = WWOUI::Spaced(WidgetTree, Under, WWOUI::Type::Micro, FLinearColor(1, 1, 1, 0.6f), 60);
+				Second->SetJustification(ETextJustify::Center);
+				WWOUI::Ellipsis(Second, TextWidth);
+				In->AddChildToVerticalBox(Second)->SetPadding(FMargin(Inset, 0));
+			}
+			Inside = In;
 		}
-		UVerticalBox* In = Tree->ConstructWidget<UVerticalBox>();
-		UTextBlock* Text = WWOUI::Spaced(WidgetTree, Label, Under.IsEmpty() ? WWOUI::Type::Title : WWOUI::Type::Small, bOn ? FLinearColor::White : FLinearColor(1, 1, 1, 0.85f), 40);
-		Text->SetJustification(ETextJustify::Center);
-		UVerticalBoxSlot* TextSlot = In->AddChildToVerticalBox(Text);
-		TextSlot->SetSize(WWOUI::Fill(1.f));
-		TextSlot->SetVerticalAlignment(VAlign_Center);
-		if (!Under.IsEmpty())
-		{
-			UTextBlock* Second = WWOUI::Spaced(WidgetTree, Under, WWOUI::Type::Micro, FLinearColor(1, 1, 1, 0.6f), 60);
-			Second->SetJustification(ETextJustify::Center);
-			In->AddChildToVerticalBox(Second);
-		}
-		UWidget* Box = Card(In, [WeakThis, Pick] { Pick(); if (WeakThis.IsValid()) WeakThis->BuildOverview(); }, Fill, Edge, bOn ? 4.f : 2.f, FMargin(4.f));
+		UWidget* Box = Card(Inside, [WeakThis, Pick] { Pick(); if (WeakThis.IsValid()) WeakThis->BuildOverview(); }, Fill, Edge, bOn ? 4.f : 2.f,
+			FMargin(Symbol ? (bOn ? 4.f : 2.f) : 4.f));
 		WWOUI::SetTip(WidgetTree, Box, Tip);
 		HoverNames.Add({ Box, Tip }); // its notes in the Build section light up while it's hovered
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
-		Size->SetWidthOverride((Under.IsEmpty() ? 56.f : 150.f) * K); // wide enough for a two-stat line
-		Size->SetHeightOverride(56.f * K);
+		Size->SetWidthOverride((Symbol || Under.IsEmpty() ? ChoiceSide : WideChoice) * K); // wide enough for a two-stat line
+		Size->SetHeightOverride(ChoiceSide * K);
 		Size->AddChild(Box);
-		Row->AddChildToHorizontalBox(Size)->SetPadding(FMargin(Row->GetChildrenCount() > 1 ? 8.f * K : 0.f, 0, 0, 0));
+		Items.Add(Size);
 		return Box;
 	};
 	// An item's own color darkened inside an edge of it, lighter and thicker for the equipped one.
@@ -660,9 +670,11 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		}
 		if (Configs.Num() == 0)
 		{
-			UHorizontalBoxSlot* None = Row->AddChildToHorizontalBox(WWOUI::Spaced(WidgetTree, TEXT("No saved configs yet · save one on the Weapon tab"), WWOUI::Type::Caption, FLinearColor(1, 1, 1, 0.7f), 100));
-			None->SetVerticalAlignment(VAlign_Center);
+			UBorder* None = Tree->ConstructWidget<UBorder>();
+			None->SetBrush(WWOUI::RoundBrush(FLinearColor(0, 0, 0, 0), 0.f));
 			None->SetPadding(FMargin(8.f * K, 14.f * K));
+			None->SetContent(WWOUI::Spaced(WidgetTree, TEXT("No saved configs yet · save one on the Weapon tab"), WWOUI::Type::Caption, FLinearColor(1, 1, 1, 0.7f), 100));
+			Items.Add(None);
 		}
 	}
 	else if (Name.StartsWith(TEXT("part_")))
@@ -678,37 +690,81 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 			HoverParts.Add({ Box, Part });
 		}
 	}
-	if (Row->GetChildrenCount() == 0) return;
-	UBorder* Panel = Tree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.07f, 0.075f, 0.09f, 0.98f), WWOUI::Corner, WWO::WithAlpha(Accent, 0.9f), 1.5f));
-	Panel->SetPadding(FMargin(10.f * K));
-	Panel->SetContent(Row);
-	// Just under the tile, its left edge on the tile's (pulled in from the window's right edge when
-	// the row would run past it; the last layout pass's width is not known yet, so by a count).
+	if (Items.Num() == 0) return;
+	// The rows. One row, starting under the tile, as long as that fits; else it wraps into as few rows as
+	// keep it inside the window (wider rows only as far as the height needs), and only if even rows as
+	// wide as the window are too tall for the room above or below the tile does it scroll (the mouse
+	// wheel, or the right stick through the menu cursor).
 	const FGeometry& RootGeo = Root->GetCachedGeometry();
 	const FGeometry& TileGeo = Tile->GetCachedGeometry();
-	const FVector2D At = RootGeo.AbsoluteToLocal(TileGeo.GetAbsolutePositionAtCoordinates(FVector2D(0.f, 1.f)));
-	float Width = 20.f * K;
+	const FVector2D RootSize = RootGeo.GetLocalSize();
+	const FVector2D TileTop = RootGeo.AbsoluteToLocal(TileGeo.GetAbsolutePositionAtCoordinates(FVector2D(0.f, 0.f)));
+	const FVector2D TileFoot = RootGeo.AbsoluteToLocal(TileGeo.GetAbsolutePositionAtCoordinates(FVector2D(0.f, 1.f)));
+	const bool bMessage = Items.Num() == 1 && !Cast<USizeBox>(Items[0]);
 	const bool bWide = Name.StartsWith(TEXT("weapon")) || Name.StartsWith(TEXT("part_"));
-	for (int32 i = 0; i < Row->GetChildrenCount(); ++i) Width += (bWide ? 158.f : 64.f) * K;
-	if (Name.StartsWith(TEXT("weapon")) && L->GetConfigs().Num() == 0) Width = 520.f * K;
-	const float Left = FMath::Clamp((float)At.X, 8.f, FMath::Max((float)RootGeo.GetLocalSize().X - Width - 8.f, 8.f));
-	UOverlaySlot* PopupSlot = Root->AddChildToOverlay(Panel);
-	PopupSlot->SetHorizontalAlignment(HAlign_Left);
-	// Under the tile, or over it when the tile is low in the window (the bottom row of the shell).
-	const float RootHeight = (float)RootGeo.GetLocalSize().Y;
-	if (At.Y > RootHeight * 0.8f)
+	const float Gap = ChoiceGap * K, Pad = 10.f * K, Margin = 8.f, Off = 4.f; // Margin: from the window's edges; Off: from the tile
+	const float ItemW = (bMessage ? 500.f : bWide ? WideChoice : ChoiceSide) * K, ItemH = (bMessage ? 44.f : ChoiceSide) * K;
+	const float RoomBelow = RootSize.Y - TileFoot.Y - Off - Margin, RoomAbove = TileTop.Y - Off - Margin;
+	const int32 FitAcross = FMath::Max(1, FMath::FloorToInt((RootSize.X - 2.f * Margin - 2.f * Pad + Gap) / (ItemW + Gap)));
+	auto Tall = [&](int32 Across) { const int32 Rows = FMath::DivideAndRoundUp(Items.Num(), Across); return Rows * ItemH + (Rows - 1) * Gap + 2.f * Pad; };
+	// Rows of up to PreferAcross (a weapon config's row would otherwise sprawl over the character), wider if that's too tall.
+	const int32 PreferAcross = FMath::Min(Items.Num(), FMath::Min(bWide ? 5 : 10, FitAcross));
+	int32 Across = PreferAcross;
+	while (Across < FitAcross && Tall(Across) > FMath::Max(RoomBelow, RoomAbove)) ++Across;
+	Across = FMath::Min(Across, Items.Num());
+	const float Height = Tall(Across);
+	// Under the tile, or over it when the tile is low in the window (the bottom row of the shell) or the
+	// rows only fit there; with neither, the side with more room, scrolling.
+	const bool bLow = TileFoot.Y > RootSize.Y * 0.8f;
+	bool bAbove = bLow ? (Height <= RoomAbove || RoomAbove >= RoomBelow) : (Height > RoomBelow && RoomAbove > RoomBelow);
+	const float Room = bAbove ? RoomAbove : RoomBelow;
+	const bool bScroll = Height > Room + 0.5f;
+	UVerticalBox* Rows = Tree->ConstructWidget<UVerticalBox>();
+	for (int32 i = 0; i < Items.Num(); i += Across)
 	{
-		const FVector2D Top = RootGeo.AbsoluteToLocal(TileGeo.GetAbsolutePositionAtCoordinates(FVector2D(0.f, 0.f)));
+		UHorizontalBox* Line = Tree->ConstructWidget<UHorizontalBox>();
+		for (int32 j = i; j < FMath::Min(i + Across, Items.Num()); ++j) Line->AddChildToHorizontalBox(Items[j])->SetPadding(FMargin(j > i ? Gap : 0.f, 0, 0, 0));
+		Rows->AddChildToVerticalBox(Line)->SetPadding(FMargin(0, i > 0 ? Gap : 0.f, 0, 0));
+	}
+	UWidget* Inside = Rows;
+	const float ScrollGutter = bScroll ? 12.f * K : 0.f; // the scroll bar's thumb, clear of the choices
+	if (bScroll)
+	{
+		HoverScroll = WWOUI::ScrollBox(Tree);
+		HoverScroll->SetConsumeMouseWheel(EConsumeMouseWheel::Always);
+		HoverScroll->AddChild(Rows);
+		if (UScrollBoxSlot* RowsSlot = Cast<UScrollBoxSlot>(Rows->Slot)) RowsSlot->SetPadding(FMargin(0, 0, ScrollGutter - 4.f * K, 0));
+		Inside = HoverScroll;
+	}
+	UBorder* Panel = Tree->ConstructWidget<UBorder>();
+	Panel->SetBrush(WWOUI::RoundBrush(FLinearColor(0.07f, 0.075f, 0.09f, 0.98f), WWOUI::Corner, WWO::WithAlpha(Accent, 0.9f), 1.5f));
+	Panel->SetPadding(FMargin(Pad));
+	Panel->SetContent(Inside);
+	// Exactly the rows' size (so the window-edge clamp below is exact), and no taller than the room.
+	// (The "no configs" line sizes itself; its width here is only for the clamp.)
+	const float Width = bMessage ? 520.f * K : Across * ItemW + (Across - 1) * Gap + 2.f * Pad + ScrollGutter;
+	USizeBox* PanelBox = Tree->ConstructWidget<USizeBox>();
+	if (!bMessage)
+	{
+		PanelBox->SetWidthOverride(Width);
+		PanelBox->SetHeightOverride(FMath::Min(Height, FMath::Max(Room, ItemH + 2.f * Pad)));
+	}
+	PanelBox->AddChild(Panel);
+	// Its left edge on the tile's, pulled in from the window's right edge when the rows would run past it.
+	const float Left = FMath::Clamp((float)TileFoot.X, Margin, FMath::Max((float)RootSize.X - Width - Margin, Margin));
+	UOverlaySlot* PopupSlot = Root->AddChildToOverlay(PanelBox);
+	PopupSlot->SetHorizontalAlignment(HAlign_Left);
+	if (bAbove)
+	{
 		PopupSlot->SetVerticalAlignment(VAlign_Bottom);
-		PopupSlot->SetPadding(FMargin(Left, 0, 0, RootHeight - (float)Top.Y + 4.f));
+		PopupSlot->SetPadding(FMargin(Left, 0, 0, RootSize.Y - (float)TileTop.Y + Off));
 	}
 	else
 	{
 		PopupSlot->SetVerticalAlignment(VAlign_Top);
-		PopupSlot->SetPadding(FMargin(Left, At.Y + 4.f, 0, 0));
+		PopupSlot->SetPadding(FMargin(Left, TileFoot.Y + Off, 0, 0));
 	}
-	HoverPopup = Panel;
+	HoverPopup = PanelBox;
 	HoverPicker = Name;
 	HoverClose.Reset();
 }

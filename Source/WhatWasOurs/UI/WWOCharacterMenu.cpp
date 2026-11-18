@@ -515,6 +515,57 @@ void UWWOCharacterMenu::AutoTestShow(const FString& Tile, const FString& PickerN
 	Refresh();
 }
 
+namespace
+{
+	// A widget's rectangle in absolute (desktop) space, as last laid out.
+	FSlateRect AbsoluteRect(const UWidget* W)
+	{
+		const FGeometry& G = W->GetCachedGeometry();
+		return FSlateRect::FromPointAndExtent(G.GetAbsolutePosition(), G.GetAbsoluteSize());
+	}
+}
+
+TArray<FString> UWWOCharacterMenu::AutoTestHoverTiles() const
+{
+	TArray<FString> Names;
+	for (const TPair<TWeakObjectPtr<UWidget>, FString>& Tile : HoverTiles) if (Tile.Key.IsValid()) Names.Add(Tile.Value);
+	return Names;
+}
+
+bool UWWOCharacterMenu::AutoTestTileRect(const FString& Name, FSlateRect& Out) const
+{
+	for (const TPair<TWeakObjectPtr<UWidget>, FString>& Tile : HoverTiles)
+	{
+		if (Tile.Value == Name && Tile.Key.IsValid()) { Out = AbsoluteRect(Tile.Key.Get()); return true; }
+	}
+	return false;
+}
+
+bool UWWOCharacterMenu::AutoTestHoverRects(FSlateRect& OutPanel, TArray<FSlateRect>& OutChoices) const
+{
+	OutChoices.Reset();
+	if (!HoverPopup) return false;
+	OutPanel = AbsoluteRect(HoverPopup);
+	for (const TPair<TWeakObjectPtr<UWidget>, FString>& Choice : HoverNames) if (Choice.Key.IsValid()) OutChoices.Add(AbsoluteRect(Choice.Key.Get()));
+	return true;
+}
+
+bool UWWOCharacterMenu::AutoTestModRects(FSlateRect& OutPanel, TArray<FSlateRect>& OutSlots) const
+{
+	OutSlots.Reset();
+	for (const auto& Pair : SlotButtons) if (Pair.Key.IsValid()) OutSlots.Add(AbsoluteRect(Pair.Key.Get()));
+	if (!PopupPanel) return false;
+	OutPanel = AbsoluteRect(PopupPanel);
+	return true;
+}
+
+bool UWWOCharacterMenu::AutoTestConfigListRect(FSlateRect& Out) const
+{
+	if (!ConfigListBox) return false;
+	Out = AbsoluteRect(ConfigListBox);
+	return true;
+}
+
 float UWWOCharacterMenu::ScrollOverflow() const
 {
 	// The Loadout tab (nothing expanded) has no scrolling list: the last tab's scroll box is stale.

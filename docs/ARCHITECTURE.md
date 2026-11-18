@@ -329,7 +329,11 @@ joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importin
   `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, the gun's render, mod slots, configs, the mod hover
   and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. The editors' cards are one builder, `ItemCard` (an item's
   badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. Both hover popups close through one
-  `FWWOHoverPopup` timer. The character is `AWWOPreviewActor` (`UI/WWOPreviewActor.*`), a mannequin with
+  `FWWOHoverPopup` timer. The Loadout tab's hover row (`OpenHoverPicker`) stays inside the window whatever the number of
+  choices: one row while it fits, else it wraps into rows (weapon configs prefer five across, wider only as the height
+  needs), goes over the tile when there is more room above, and scrolls (wheel, right stick) only when rows as wide as
+  the window are still too tall; names too long for a choice end in "..." (the tip has them whole).
+  `-WWOAutoTestHover` checks it with up to 150 configs held in memory only. The character is `AWWOPreviewActor` (`UI/WWOPreviewActor.*`), a mannequin with
   its own scene capture far below the level: a small studio (key with soft shadows, fill, two rims, top and bounce
   lights, all directional on lighting channel 2 and switched on only while the menu is open; no sky light or level
   reflections), fixed exposure near the arenas' (`CharacterExposure`) so flora glow keeps its colour, soft bloom, temporal
