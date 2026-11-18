@@ -144,6 +144,8 @@ void AWWOBotController::GiveKit(AWWOCharacter* Me)
 		for (const UWWOFloraData* F : Base->Catalog.Floras) if (F && F->bUnlocked) Floras.Add(F->Id);
 		if (Floras.Num() == 0) return;
 		Kit.Flora = Floras[FMath::RandRange(0, Floras.Num() - 1)];
+		// -WWOBotFlora=<id>: every bot is that flora (performance tests comparing the floras' models).
+		if (FString Forced; WWOSwitches::Value(TEXT("WWOBotFlora="), Forced) && Floras.Contains(FName(*Forced))) Kit.Flora = FName(*Forced);
 		for (const UWWOGrenadeData* G : Base->Catalog.Grenades) if (G && G->bUnlocked && G->Flora == Kit.Flora) Nades.Add(G->Id);
 		for (const UWWOAbilityData* A : Base->Catalog.Abilities) if (A && A->bUnlocked && A->Flora == Kit.Flora) Powers.Add(A->Id);
 		for (const UWWOWeaponData* W : Base->Catalog.Weapons) if (W && W->bUnlocked) Weapons.Add(W->Id);

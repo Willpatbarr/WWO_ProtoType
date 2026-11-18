@@ -53,6 +53,7 @@
 //
 // Bot matches and stress (Game/WWOGameMode.cpp, Player/WWOBotController.cpp)
 //   -WWOBots=<n>                number of bots (PvP, 0 to 11)
+//   -WWOBotFlora=<id>           every bot is that flora (voltvine, ironbark, veilspore)
 //   -WWOStress                  timed bot match: logs load, ignores mouse and sticks and saved keybinds
 //   -WWOStressTime=<s>          quit after that long
 //   -WWOStressShots             the host's view of other players, saved every 4 s
