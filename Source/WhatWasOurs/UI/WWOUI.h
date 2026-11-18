@@ -107,6 +107,8 @@ namespace WWOUI
 	// Poppins at Points (Slate points, already scaled), in Weight. No outline: text that sits over the
 	// world gets a soft shadow or a backing panel from whoever draws it (FWWOPainter::Text).
 	FSlateFontInfo FontAt(float Points, EWeight Weight = EWeight::Regular);
+	// The HUD's font: words always Poppins Light, digits Barlow in Weight (FWWOPainter::Font uses it).
+	FSlateFontInfo HudFontAt(float Points, EWeight Weight = EWeight::Regular);
 	// Poppins at Px Godot pixels in the menus' scale (K).
 	FSlateFontInfo Font(float Px, EWeight Weight = EWeight::Regular);
 	// Sets a text block's weight, keeping its size and letter spacing.

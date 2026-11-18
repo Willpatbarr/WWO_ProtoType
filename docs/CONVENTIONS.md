@@ -11,6 +11,7 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 - Colours are written as sRGB. Convert with `WWO::Lin` where the value meets a material or Slate.
 - Menu sizes are Godot pixels x `WWOUI::K` (1.2); menu fonts are pixels x 0.75 x `K` (`WWOUI::Font`).
 - Digits (0-9) in any UI text come from Barlow Semi Condensed in the same weight, automatically: `WWOUI::FontAt` adds it to each Poppins face as a sub-typeface for that character range (`Content/WWO/Fonts/BarlowSemiCondensed-<Weight>.ttf`, `DigitScale`). Don't pick a number font by hand.
+- HUD words are Poppins Light whatever weight a call asks for; the weight sets only the digits' (`WWOUI::HudFontAt`, used by `FWWOPainter::Font`).
 - HUD words are capitals: `FWWOPainter::Text` and `Measure` uppercase what they are given (and set it a little apart, `CapsSpacing`), so write HUD strings in normal case and never uppercase them by hand.
 - Text is Poppins, sized from the type scale (`WWOUI::Type`: Micro, Caption, Small, Body, Title, Heading, Display) in a weight (`WWOUI::EWeight`), never the engine font and never an outline. HUD text over the world gets the painter's soft shadow (`FWWOPainter::Text`) or a HUD panel (`Tag` in `WWOHUDPaint.cpp`). Boxes use `WWOUI::Corner`, `BoxEdge` / `BoxEdgeOn` and spacing in multiples of `Grid`.
   Menu colours are the named ones in `WWOUI` (`PageColor`, `CardColor`, `CardEdge`, ...). The HUD paints in

@@ -39,20 +39,25 @@ namespace WWOUI
 		// Barlow's digits against Poppins' letters at the same size: a touch larger, so they stand as tall
 		// as Poppins' capitals.
 		constexpr float DigitScale = 1.06f;
-		// Each weight's face, read from its file once and kept (null: no file for it).
-		TSharedPtr<const FCompositeFont> LoadFace(EWeight Weight)
+		// Each weight's face, read from its file once and kept (null: no file for it). The HUD's faces
+		// (bHud) set every word in Poppins Light, whatever the weight asked for: the weight then only
+		// picks the digits' (Barlow's), so numbers keep their emphasis beside light capitals.
+		TSharedPtr<const FCompositeFont> LoadFace(EWeight Weight, bool bHud = false)
 		{
 			static const TCHAR* const Names[] = { TEXT("Light"), TEXT("Regular"), TEXT("Medium"), TEXT("SemiBold"), TEXT("Bold") };
-			static TSharedPtr<const FCompositeFont> Faces[UE_ARRAY_COUNT(Names)];
-			static bool bTried[UE_ARRAY_COUNT(Names)] = {};
+			static TSharedPtr<const FCompositeFont> AllFaces[2][UE_ARRAY_COUNT(Names)];
+			static bool bAllTried[2][UE_ARRAY_COUNT(Names)] = {};
+			TSharedPtr<const FCompositeFont>* Faces = AllFaces[bHud ? 1 : 0];
+			bool* bTried = bAllTried[bHud ? 1 : 0];
 			const int32 Index = (int32)Weight;
+			const int32 Words = bHud ? 0 : Index;
 			if (!bTried[Index])
 			{
 				bTried[Index] = true;
-				const FString File = FPaths::ProjectContentDir() / FString::Printf(TEXT("WWO/Fonts/Poppins-%s.ttf"), Names[Index]);
+				const FString File = FPaths::ProjectContentDir() / FString::Printf(TEXT("WWO/Fonts/Poppins-%s.ttf"), Names[Words]);
 				if (FPaths::FileExists(File))
 				{
-					TSharedRef<FCompositeFont> Poppins = MakeShared<FCompositeFont>(FName(Names[Index]), File, EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
+					TSharedRef<FCompositeFont> Poppins = MakeShared<FCompositeFont>(FName(Names[Words]), File, EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
 					// A character Poppins hasn't got (a check mark, other scripts) comes from the engine's own fallbacks.
 					const TSharedRef<const FCompositeFont> Engine = FCoreStyle::GetDefaultFont();
 					Poppins->FallbackTypeface = Engine->FallbackTypeface;
@@ -66,7 +71,7 @@ namespace WWOUI
 						FCompositeSubFont Numbers;
 						Numbers.CharacterRanges.Add(FInt32Range(FInt32Range::BoundsType::Inclusive(TEXT('0')), FInt32Range::BoundsType::Inclusive(TEXT('9'))));
 						Numbers.ScalingFactor = DigitScale;
-						Numbers.Typeface.Fonts.Add(FTypefaceEntry(FName(Names[Index]), Digits, EFontHinting::Default, EFontLoadingPolicy::LazyLoad));
+						Numbers.Typeface.Fonts.Add(FTypefaceEntry(FName(Names[Words]), Digits, EFontHinting::Default, EFontLoadingPolicy::LazyLoad));
 						Poppins->SubTypefaces.Insert(Numbers, 0);
 					}
 					Faces[Index] = Poppins;
@@ -76,7 +81,7 @@ namespace WWOUI
 		}
 
 		// The face for Weight, or the nearest weight that has a file (the lighter side first: Light ships).
-		TSharedPtr<const FCompositeFont> Face(EWeight Weight)
+		TSharedPtr<const FCompositeFont> Face(EWeight Weight, bool bHud = false)
 		{
 			const int32 Want = (int32)Weight;
 			for (int32 Step = 0; Step <= 4; ++Step)
@@ -84,11 +89,19 @@ namespace WWOUI
 				for (const int32 Try : { Want - Step, Want + Step })
 				{
 					if (Try < 0 || Try > 4) continue;
-					if (TSharedPtr<const FCompositeFont> Found = LoadFace((EWeight)Try)) return Found;
+					if (TSharedPtr<const FCompositeFont> Found = LoadFace((EWeight)Try, bHud)) return Found;
 				}
 			}
 			return nullptr;
 		}
+	}
+
+	FSlateFontInfo HudFontAt(float Points, EWeight Weight)
+	{
+		const TSharedPtr<const FCompositeFont> Poppins = Face(Weight, true);
+		if (!Poppins.IsValid()) return FontAt(Points, Weight);
+		const FName Typeface = Poppins->DefaultTypeface.Fonts.Num() > 0 ? Poppins->DefaultTypeface.Fonts[0].Name : NAME_None;
+		return FSlateFontInfo(Poppins, FMath::Max(1.f, Points), Typeface);
 	}
 
 	FSlateFontInfo FontAt(float Points, EWeight Weight)

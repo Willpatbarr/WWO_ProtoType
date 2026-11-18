@@ -140,7 +140,7 @@ struct FWWOPainter
 	// 96 dpi (0.75 pt/px).
 	FSlateFontInfo Font(float Px, WWOUI::EWeight Weight = WWOUI::EWeight::Medium) const
 	{
-		FSlateFontInfo F = WWOUI::FontAt(Px * 0.75f * S, Weight);
+		FSlateFontInfo F = WWOUI::HudFontAt(Px * 0.75f * S, Weight); // words in Poppins Light, digits in Weight
 		F.LetterSpacing = CapsSpacing; // capitals set a little apart
 		return F;
 	}

@@ -391,7 +391,8 @@ def main():
     wanted = [f.strip() for f in os.environ.get("WWO_GRAFT_FLORAS", ",".join(FLORAS)).split(",") if f.strip()]
     for flora in wanted:
         cfg = FLORAS[flora]
-        src = os.path.expanduser(cfg["src"])
+        # WWO_GRAFT_SRC_<FLORA>: another folder of exports for that flora (a trial build), e.g. WWO_GRAFT_SRC_VOLTVINE.
+        src = os.path.expanduser(os.environ.get("WWO_GRAFT_SRC_" + flora.upper(), cfg["src"]))
         textures = {}
         if os.path.isdir(os.path.join(src, "textures")):
             for f in sorted(os.listdir(os.path.join(src, "textures"))):
