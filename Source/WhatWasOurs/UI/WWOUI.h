@@ -22,6 +22,7 @@
 
 class UWidget;
 class UWidgetTree;
+class UTexture2D;
 class UUserWidget;
 class UTextBlock;
 class UButton;
@@ -93,6 +94,11 @@ namespace WWOUI
 	// its width; the mark is square). Keeps, if given, is put under it unseen: the text the logo
 	// stands in for, so everything around stays exactly where it was.
 	UWidget* MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps = nullptr);
+	// A flora's symbol (Tools/make_flora_symbols.py, import_flora_symbols.py) by its id (voltvine, veilspore,
+	// ironbark), Size big: the badge (white symbol on a dark shade of the flora's colour) or the bare symbol
+	// (white on clear). Null for a flora with no symbol.
+	UTexture2D* FloraSymbolTexture(FName FloraId, bool bBadge);
+	UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool bBadge = true);
 	// Godot's ring cursor, drawn over an open menu (see FWWOMenuCursor).
 	void PaintCursor(const UUserWidget* Menu, const FGeometry& Geometry, FSlateWindowElementList& Out, int32 Layer);
 

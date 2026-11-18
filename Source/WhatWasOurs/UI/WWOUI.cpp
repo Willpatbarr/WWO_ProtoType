@@ -46,6 +46,30 @@ namespace WWOUI
 		return Brush;
 	}
 
+UTexture2D* FloraSymbolTexture(FName FloraId, bool bBadge)
+{
+	// The texture names are the flora's in title case: T_Flora_VoltVine, T_Flora_VoltVine_Badge.
+	static const TMap<FName, FString> Titles = { { "voltvine", TEXT("VoltVine") }, { "veilspore", TEXT("VeilSpore") }, { "ironbark", TEXT("IronBark") } };
+	const FString* Title = Titles.Find(FloraId);
+	if (!Title) return nullptr;
+	const FString Name = FString::Printf(TEXT("T_Flora_%s%s"), **Title, bBadge ? TEXT("_Badge") : TEXT(""));
+	return LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/WWO/Textures/UI/%s.%s"), *Name, *Name));
+}
+
+UWidget* MakeFloraSymbol(UWidgetTree* Tree, FName FloraId, FVector2D Size, bool bBadge)
+{
+	UTexture2D* Texture = FloraSymbolTexture(FloraId, bBadge);
+	if (!Texture) return nullptr;
+	UImage* Image = Tree->ConstructWidget<UImage>();
+	FSlateBrush Brush;
+	Brush.SetResourceObject(Texture);
+	Brush.ImageSize = Size;
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Image->SetBrush(Brush);
+	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return Image;
+}
+
 	UWidget* MakeLogo(UWidgetTree* Tree, bool bWordmark, FVector2D Size, UWidget* Keeps)
 	{
 		UOverlay* Both = Tree->ConstructWidget<UOverlay>();

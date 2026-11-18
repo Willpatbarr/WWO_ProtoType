@@ -6,6 +6,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/WrapBox.h"
 
@@ -57,6 +59,8 @@ void UWWOCharacterMenu::BuildFloraRows()
 	if (Flora && !Flora->UltName.IsEmpty()) FloraText += TEXT("\nUlt: ") + Flora->UltName;
 	{
 		UHorizontalBox* R = Row();
+		// The flora's symbol (its badge) beside it.
+		if (UWidget* Badge = Flora ? WWOUI::MakeFloraSymbol(WidgetTree, Flora->Id, FVector2D(120.f, 120.f) * K) : nullptr) AddToRow(R, Badge);
 		AddToRow(R, Slot(FloraText, FVector2D(300, 120), WWO::Darkened(FloraColor, 0.6f), 20.f,
 			[WeakThis] { if (WeakThis.IsValid()) WeakThis->TogglePicker(TEXT("flora")); }, &FloraColor, 3.f));
 		AddContent(R);
@@ -70,8 +74,17 @@ void UWWOCharacterMenu::BuildFloraRows()
 			if (!Option->bUnlocked) continue;
 			const bool bOn = Option == Flora;
 			const FLinearColor Edge = bOn ? WWO::Lightened(Option->Color, 0.3f) : Option->Color;
-			AddToRow(R, Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\nUlt: ") + Option->UltName, FVector2D(240, 90),
+			// Its badge above its card (side by side, three don't fit the panel).
+			UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
+			if (UWidget* Badge = WWOUI::MakeFloraSymbol(WidgetTree, Option->Id, FVector2D(62.f, 62.f) * K))
+			{
+				UVerticalBoxSlot* BadgeSlot = Column->AddChildToVerticalBox(Badge);
+				BadgeSlot->SetHorizontalAlignment(HAlign_Center);
+				BadgeSlot->SetPadding(FMargin(0, 0, 0, 4.f * K));
+			}
+			Column->AddChildToVerticalBox(Slot(Option->DisplayName + (bOn ? TEXT("  ✓") : TEXT("")) + TEXT("\nUlt: ") + Option->UltName, FVector2D(220, 90),
 				WWO::Darkened(Option->Color, 0.5f), 20.f, Pick([WL, Option] { if (WL.IsValid()) WL->EquipFlora(Option); }), &Edge, bOn ? 5.f : 2.f, Option->Description));
+			AddToRow(R, Column);
 		}
 		AddContent(R);
 		if (Flora) Hint(Flora->Description);

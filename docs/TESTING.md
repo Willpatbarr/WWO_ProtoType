@@ -185,7 +185,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestMaps` | Fixed camera views of the level (about 25 s) | every map |
 | `-WWOAutoTestMods` | Weapon mods and perks against the mod data | `L_TestRange` |
 | `-WWOAutoTestGuns`, `-WWOAutoTestHidden`, `-WWOAutoTestFrames` | Variants inside the mods test: gun screenshots, hidden aim assist, the newer frames and burst counts | `L_TestRange` |
-| `-WWOAutoTestTabs` | Character menu's Weapon and Shell tabs fit on one screen | any |
+| `-WWOAutoTestTabs` | Character menu's Weapon, Shell and Flora (picker open) tabs fit on one screen | any |
 | `-WWOAutoTestVignette`, `-WWOAutoTestPose` | Low-health vignette steps; your body seen from outside | any |
 | `-WWOAutoTestTitle` | Launch screen, a local PvP match, quit to title, host (no map on the command line) | none |
 | `-WWOAutoTestTitleJoin`, `-WWOAutoTestTitleJoinFail` | A second copy joins the first; a join that fails | none |
