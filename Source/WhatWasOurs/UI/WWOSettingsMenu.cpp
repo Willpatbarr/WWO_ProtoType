@@ -248,7 +248,7 @@ void UWWOSettingsMenu::BuildPages(UWWOLoadoutSubsystem* L)
 		const FString Title = Find(Key)->Title;
 		int32 Tab = 0;
 		for (int32 t = 0; t < Layout.Num(); ++t) if (Layout[t].Contains(Title)) Tab = t;
-		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+		UScrollBox* Scroll = WWOUI::ScrollBox(WidgetTree);
 		BuildRows(Scroll, Key);
 		GlobalSwitcher->AddChild(Scroll);
 		Pages.Add({ Title, Tab });
@@ -319,12 +319,12 @@ void UWWOSettingsMenu::BuildPages(UWWOLoadoutSubsystem* L)
 	});
 	// Controls: the key bindings.
 	BindsPage = GlobalSwitcher->GetChildrenCount();
-	BindsList = WidgetTree->ConstructWidget<UScrollBox>();
+	BindsList = WWOUI::ScrollBox(WidgetTree);
 	GlobalSwitcher->AddChild(BindsList);
 	Pages.Add({ TEXT("Key Bindings"), ControlsTab });
 	BuildBinds();
 	SearchPage = GlobalSwitcher->GetChildrenCount();
-	SearchResults = WidgetTree->ConstructWidget<UScrollBox>();
+	SearchResults = WWOUI::ScrollBox(WidgetTree);
 	GlobalSwitcher->AddChild(SearchResults);
 }
 
@@ -408,7 +408,7 @@ void UWWOSettingsMenu::BuildSidebar(UHorizontalBox* Body)
 		const bool bSaved = WeakThis->SaveDefaults();
 		if (UTextBlock* Label = Cast<UTextBlock>(WeakThis->SaveButton->GetChildAt(0)))
 		{
-			Label->SetText(FText::FromString(bSaved ? TEXT("Saved ✓") : TEXT("Save failed")));
+			Label->SetText(FText::FromString(bSaved ? TEXT("Saved") : TEXT("Save failed")));
 		}
 		WeakThis->SaveRevertAt = FPlatformTime::Seconds() + 1.5; // Godot's 1.5 s timer (real time: the game is paused)
 	});
@@ -441,7 +441,7 @@ void UWWOSettingsMenu::BuildPageArea(UHorizontalBox* Body)
 	PageTitle = WWOUI::Spaced(WidgetTree, TEXT(""), 20.f, FLinearColor::White, 300);
 	Main->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(4.f * K, 26.f * K, 0, 12.f * K));
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, 6.f, WWOUI::PanelEdge, 1.f));
+	Panel->SetBrush(WWOUI::RoundBrush(WWOUI::PanelColor, WWOUI::Corner, WWOUI::PanelEdge, 1.f));
 	Panel->SetPadding(FMargin(8.f * K));
 	Panel->SetContent(GlobalSwitcher);
 	Main->AddChildToVerticalBox(Panel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));

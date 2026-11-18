@@ -310,7 +310,7 @@ void UWWOFiringTester::Build()
 	};
 	Picker(TEXT("WEAPON"), WeaponLabel, [Weak](int32 Step) { if (Weak.IsValid()) Weak->StepWeapon(Step); });
 	Picker(TEXT("SAVED CONFIG"), ConfigLabel, [Weak](int32 Step) { if (Weak.IsValid()) Weak->StepConfig(Step); });
-	Rows = Tree->ConstructWidget<UScrollBox>();
+	Rows = WWOUI::ScrollBox(Tree);
 	UVerticalBoxSlot* RowsSlot = Column->AddChildToVerticalBox(Rows);
 	RowsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	RowsSlot->SetPadding(FMargin(0.f, 12.f * K, 0.f, 8.f * K));

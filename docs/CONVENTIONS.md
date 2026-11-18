@@ -10,6 +10,7 @@ What the code does consistently, and what to reuse instead of rewriting. Paths a
 - Pitch and recoil are radians; yaw is degrees. `ApplyRecoil` yaw is positive to the left.
 - Colours are written as sRGB. Convert with `WWO::Lin` where the value meets a material or Slate.
 - Menu sizes are Godot pixels x `WWOUI::K` (1.2); menu fonts are pixels x 0.75 x `K` (`WWOUI::Font`).
+- Text is Poppins, sized from the type scale (`WWOUI::Type`: Micro, Caption, Small, Body, Title, Heading, Display) in a weight (`WWOUI::EWeight`), never the engine font and never an outline. HUD text over the world gets the painter's soft shadow (`FWWOPainter::Text`) or a HUD panel (`Tag` in `WWOHUDPaint.cpp`). Boxes use `WWOUI::Corner`, `BoxEdge` / `BoxEdgeOn` and spacing in multiples of `Grid`.
   Menu colours are the named ones in `WWOUI` (`PageColor`, `CardColor`, `CardEdge`, ...). The HUD paints in
   1600 x 900 units through `FWWOPainter`.
 
@@ -126,7 +127,7 @@ Look here before writing a new one.
 | A world sound, a flat sound, a character's own sound | `UWWOSound::Play`, `PlayFlat`, `PlayFor` |
 | In a menu: a label, spaced capitals, a thin line, a size box, a fill share, the accent colour, the palette | `WWOUI::Text`, `Spaced`, `Rule` / `RuleDown`, `Sized` / `Wide`, `Fill`, `Accent(this)`; `WWOUI::PageColor`, `CardColor`, `CardEdge`, `Dim`, ... (`UI/WWOUI.h`). Each takes the menu's own `WidgetTree` |
 | Immediate-mode drawing in the HUD's 1600 x 900 layout (box, outline, line, triangle, vignette, circle, dot, text, measure, material); the layout's scale | `FWWOPainter` (`UI/WWOPainter.h`), `WWOHUD::Scale` (`UI/WWOHUDLayout.h`) |
-| In a menu: a button, its click (plays ui_click), keeping its handler alive; a text box; fonts, rounded brushes, the logo, the ring cursor | `WWOUI::Button` / `TextButton` with a look (`FilledLook`, `CardLook`, `PlainLook`, `StillLook`), `OnClick`, `KeepPruned`; `StyleTextBox`; `Font`, `RoundBrush`, `MakeLogo`, `PaintCursor`, `K` (`UI/WWOUI.h`) |
+| In a menu: a button, its click (plays ui_click), keeping its handler alive; a text box; fonts, rounded brushes, the logo, the ring cursor | `WWOUI::Button` / `TextButton` with a look (`FilledLook`, `CardLook`, `PlainLook`, `StillLook`), `OnClick`, `KeepPruned`; `StyleTextBox`; `Font` / `FontAt` / `SetWeight` / `Type`, `RoundBrush`, `SetTip`, `ScrollBox`, `MakeLogo`, `PaintCursor`, `K` (`UI/WWOUI.h`) |
 
 ## Load-bearing names
 

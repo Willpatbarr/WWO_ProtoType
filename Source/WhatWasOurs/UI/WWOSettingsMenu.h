@@ -144,7 +144,7 @@ private:
 	void KeepHandler(UObject* Handler); // adds it, and now and then drops those whose widget has left the page
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> GlobalSwitcher;
 	UPROPERTY() TObjectPtr<UButton> SaveButton;
-	double SaveRevertAt = 0.0; // real time the "Saved ✓" label goes back to "Save as defaults"
+	double SaveRevertAt = 0.0; // real time the "Saved" label goes back to "Save as defaults"
 	int32 GlobalTab = 0;
 
 	void Build();

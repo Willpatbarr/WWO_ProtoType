@@ -365,9 +365,7 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	OldMark->SetVisibility(ESlateVisibility::Hidden);
 	Middle->AddChildToVerticalBox(OldMark)->SetHorizontalAlignment(HAlign_Center);
 	UTextBlock* Name = WWOUI::Spaced(WidgetTree, TEXT("WHAT WAS OURS"), 84.f, FLinearColor::White, 520);
-	FSlateFontInfo NameFont = Name->GetFont();
-	NameFont.TypefaceFontName = FName("Bold");
-	Name->SetFont(NameFont);
+	WWOUI::SetWeight(Name, WWOUI::EWeight::Bold);
 	// The name is the wordmark logo, as wide as the text it replaced (which keeps its room under it).
 	UVerticalBoxSlot* NameSlot = Middle->AddChildToVerticalBox(WWOUI::MakeLogo(Tree, true, FVector2D(1060.f, 132.5f) * K, Name));
 	NameSlot->SetHorizontalAlignment(HAlign_Center);
@@ -380,24 +378,7 @@ UWidget* UWWOLaunchMenu::BuildTitle()
 	RuleSlot->SetPadding(FMargin(0, 26.f * K, 0, 0));
 
 	UTextBlock* PlayLabel = WWOUI::Spaced(WidgetTree, TEXT("PLAY"), 46.f, FLinearColor::White, 700);
-	{
-		// PLAY is set in Poppins Light (Content/WWO/Fonts, SIL Open Font License), read from its file
-		// once and kept. Without the file it stays in the menus' own font.
-		static TSharedPtr<FCompositeFont> Poppins;
-		const FString File = FPaths::ProjectContentDir() / TEXT("WWO/Fonts/Poppins-Light.ttf");
-		if (!Poppins.IsValid() && FPaths::FileExists(File))
-		{
-			Poppins = MakeShared<FCompositeFont>(FName("Light"), File, EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
-		}
-		if (Poppins.IsValid())
-		{
-			FSlateFontInfo F = PlayLabel->GetFont();
-			F.FontObject = nullptr;
-			F.CompositeFont = Poppins;
-			F.TypefaceFontName = FName("Light");
-			PlayLabel->SetFont(F);
-		}
-	}
+	WWOUI::SetWeight(PlayLabel, WWOUI::EWeight::Light); // PLAY stays in Poppins Light, as it was
 	PlayLabel->SetJustification(ETextJustify::Center);
 	UOverlay* PlayInside = Tree->ConstructWidget<UOverlay>();
 	UOverlaySlot* PlayLabelSlot = PlayInside->AddChildToOverlay(PlayLabel);
@@ -503,7 +484,7 @@ UWidget* UWWOLaunchMenu::BuildSetup()
 
 	// Right: the maps (Host, Local) or the games found (Join), then the summary and START.
 	UVerticalBox* Right = Tree->ConstructWidget<UVerticalBox>();
-	UScrollBox* List = Tree->ConstructWidget<UScrollBox>();
+	UScrollBox* List = WWOUI::ScrollBox(Tree);
 	auto AddToList = [&](UWidget* W, float Height)
 	{
 		if (UScrollBoxSlot* Slot = Cast<UScrollBoxSlot>(List->AddChild(Height > 0.f ? WWOUI::Sized(Tree, W, 0.f, Height) : W))) Slot->SetPadding(FMargin(0, 0, 14.f * K, 10.f * K));

@@ -19,9 +19,12 @@
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 #include "Components/ScaleBox.h"
+#include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
+#include "Fonts/CompositeFont.h"
+#include "Misc/Paths.h"
 
 namespace WWOUI
 {
@@ -31,10 +34,96 @@ namespace WWOUI
 		return L && L->GetFlora() ? WWO::Lightened(L->GetFlora()->Color, 0.15f) : DefaultAccent;
 	}
 
-	FSlateFontInfo Font(float Px)
+	namespace
+	{
+		// Each weight's face, read from its file once and kept (null: no file for it).
+		TSharedPtr<const FCompositeFont> LoadFace(EWeight Weight)
+		{
+			static const TCHAR* const Names[] = { TEXT("Light"), TEXT("Regular"), TEXT("Medium"), TEXT("SemiBold"), TEXT("Bold") };
+			static TSharedPtr<const FCompositeFont> Faces[UE_ARRAY_COUNT(Names)];
+			static bool bTried[UE_ARRAY_COUNT(Names)] = {};
+			const int32 Index = (int32)Weight;
+			if (!bTried[Index])
+			{
+				bTried[Index] = true;
+				const FString File = FPaths::ProjectContentDir() / FString::Printf(TEXT("WWO/Fonts/Poppins-%s.ttf"), Names[Index]);
+				if (FPaths::FileExists(File))
+				{
+					TSharedRef<FCompositeFont> Poppins = MakeShared<FCompositeFont>(FName(Names[Index]), File, EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
+					// A character Poppins hasn't got (a check mark, other scripts) comes from the engine's own fallbacks.
+					const TSharedRef<const FCompositeFont> Engine = FCoreStyle::GetDefaultFont();
+					Poppins->FallbackTypeface = Engine->FallbackTypeface;
+					Poppins->SubTypefaces = Engine->SubTypefaces;
+					Faces[Index] = Poppins;
+				}
+			}
+			return Faces[Index];
+		}
+
+		// The face for Weight, or the nearest weight that has a file (the lighter side first: Light ships).
+		TSharedPtr<const FCompositeFont> Face(EWeight Weight)
+		{
+			const int32 Want = (int32)Weight;
+			for (int32 Step = 0; Step <= 4; ++Step)
+			{
+				for (const int32 Try : { Want - Step, Want + Step })
+				{
+					if (Try < 0 || Try > 4) continue;
+					if (TSharedPtr<const FCompositeFont> Found = LoadFace((EWeight)Try)) return Found;
+				}
+			}
+			return nullptr;
+		}
+	}
+
+	FSlateFontInfo FontAt(float Points, EWeight Weight)
+	{
+		const TSharedPtr<const FCompositeFont> Poppins = Face(Weight);
+		if (!Poppins.IsValid()) return FCoreStyle::GetDefaultFontStyle("Regular", FMath::Max(1.f, Points)); // no font files at all
+		const FName Typeface = Poppins->DefaultTypeface.Fonts.Num() > 0 ? Poppins->DefaultTypeface.Fonts[0].Name : NAME_None;
+		return FSlateFontInfo(Poppins, FMath::Max(1.f, Points), Typeface);
+	}
+
+	FSlateFontInfo Font(float Px, EWeight Weight)
 	{
 		// Godot font sizes are pixels; Slate's are points at 96 dpi (0.75 pt per px).
-		return FCoreStyle::GetDefaultFontStyle("Medium", Px * 0.75f * K);
+		return FontAt(Px * 0.75f * K, Weight);
+	}
+
+	void SetWeight(UTextBlock* T, EWeight Weight)
+	{
+		if (!T) return;
+		const FSlateFontInfo Old = T->GetFont();
+		FSlateFontInfo F = FontAt(Old.Size, Weight);
+		F.LetterSpacing = Old.LetterSpacing;
+		T->SetFont(F);
+	}
+
+	void SetTip(UWidgetTree* Tree, UWidget* Widget, const FString& Tip)
+	{
+		if (!Widget || Tip.IsEmpty()) return;
+		UTextBlock* Words = Text(Tree, Tip, Type::Small, TextPrimary, true);
+		Words->SetWrapTextAt(360.f * K);
+		UBorder* Box = Tree->ConstructWidget<UBorder>();
+		Box->SetBrush(RoundBrush(FLinearColor(0.07f, 0.075f, 0.09f, 0.97f), Corner, PanelEdge, BoxEdge));
+		Box->SetPadding(FMargin(3.f * Grid * K, 2.f * Grid * K));
+		Box->SetContent(Words);
+		Widget->SetToolTip(Box);
+	}
+
+	UScrollBox* ScrollBox(UWidgetTree* Tree)
+	{
+		UScrollBox* Box = Tree->ConstructWidget<UScrollBox>();
+		FScrollBarStyle Bar = Box->GetWidgetBarStyle();
+		const FSlateBrush None = RoundBrush(FLinearColor(0, 0, 0, 0), 0.f);
+		Bar.SetVerticalBackgroundImage(None).SetHorizontalBackgroundImage(None).SetVerticalTopSlotImage(None).SetVerticalBottomSlotImage(None)
+			.SetHorizontalTopSlotImage(None).SetHorizontalBottomSlotImage(None);
+		Bar.SetNormalThumbImage(RoundBrush(FLinearColor(1, 1, 1, 0.22f), 2.f));
+		Bar.SetHoveredThumbImage(RoundBrush(FLinearColor(1, 1, 1, 0.4f), 2.f));
+		Bar.SetDraggedThumbImage(RoundBrush(FLinearColor(1, 1, 1, 0.55f), 2.f));
+		Box->SetWidgetBarStyle(Bar);
+		Box->SetScrollbarThickness(FVector2D(4.f * K));
+		return Box;
 	}
 
 	FSlateBrush RoundBrush(const FLinearColor& Color, float Radius, const FLinearColor& Outline, float OutlineWidth)
@@ -146,7 +235,7 @@ UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture)
 	UTextBlock* Spaced(UWidgetTree* Tree, const FString& Str, float FontPx, const FLinearColor& Color, int32 Spacing, bool bWrap)
 	{
 		UTextBlock* T = WWOUI::Text(Tree, Str.ToUpper(), FontPx, Color, bWrap);
-		FSlateFontInfo F = T->GetFont();
+		FSlateFontInfo F = Font(FontPx, EWeight::Medium); // spaced capitals read a step heavier
 		F.LetterSpacing = Spacing;
 		T->SetFont(F);
 		return T;
@@ -200,9 +289,9 @@ UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture)
 	void StyleTextBox(UEditableTextBox* Box, float FontPx, const FMargin& PaddingPx, const FLinearColor& AccentColor)
 	{
 		FEditableTextBoxStyle BoxStyle = Box->WidgetStyle;
-		const FSlateBrush BoxBrush = RoundBrush(CardColor, 5.f, CardEdge, 1.5f);
+		const FSlateBrush BoxBrush = RoundBrush(CardColor, Corner, CardEdge, 1.5f);
 		BoxStyle.SetBackgroundImageNormal(BoxBrush).SetBackgroundImageHovered(BoxBrush).SetBackgroundImageReadOnly(BoxBrush);
-		BoxStyle.SetBackgroundImageFocused(RoundBrush(CardColor, 5.f, AccentColor, 1.5f));
+		BoxStyle.SetBackgroundImageFocused(RoundBrush(CardColor, Corner, AccentColor, 1.5f));
 		BoxStyle.SetBackgroundColor(FLinearColor::White).SetForegroundColor(FLinearColor::White).SetFocusedForegroundColor(FLinearColor::White);
 		BoxStyle.TextStyle.SetFont(Font(FontPx)).SetColorAndOpacity(FSlateColor(FLinearColor::White));
 		BoxStyle.SetPadding(FMargin(PaddingPx.Left * K, PaddingPx.Top * K, PaddingPx.Right * K, PaddingPx.Bottom * K));
@@ -279,9 +368,9 @@ UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture)
 	FButtonLook FilledLook(const FLinearColor& Color, const FMargin& Padding, bool bLeftAlign)
 	{
 		FButtonLook Look;
-		Look.Normal = RoundBrush(Color, 8.f);
-		Look.Hovered = RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), 8.f);
-		Look.Pressed = RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), 8.f);
+		Look.Normal = RoundBrush(Color, Corner);
+		Look.Hovered = RoundBrush(Color + FLinearColor(0.08f, 0.08f, 0.08f, 0.f), Corner);
+		Look.Pressed = RoundBrush(Color + FLinearColor(0.15f, 0.15f, 0.15f, 0.f), Corner);
 		Look.Padding = Padding;
 		Look.HAlign = bLeftAlign ? HAlign_Left : HAlign_Center;
 		Look.VAlign = VAlign_Center;
@@ -292,9 +381,9 @@ UWidget* FillWithSymbol(UWidgetTree* Tree, UTexture2D* Texture)
 	{
 		FButtonLook Look;
 		const bool bPlain = Fill.A <= 0.f;
-		Look.Normal = RoundBrush(Fill, 5.f, Edge, EdgeWidth);
-		Look.Hovered = RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), 5.f, bPlain ? Edge : HoverEdge, EdgeWidth);
-		Look.Pressed = RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), 5.f, bPlain ? Edge : FLinearColor::White, EdgeWidth);
+		Look.Normal = RoundBrush(Fill, Corner, Edge, EdgeWidth);
+		Look.Hovered = RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.06f) : WWO::Lightened(Fill, 0.08f), Corner, bPlain ? Edge : HoverEdge, EdgeWidth);
+		Look.Pressed = RoundBrush(bPlain ? FLinearColor(1, 1, 1, 0.1f) : WWO::Lightened(Fill, 0.14f), Corner, bPlain ? Edge : FLinearColor::White, EdgeWidth);
 		Look.Padding = Padding;
 		Look.VAlign = VAlign;
 		return Look;

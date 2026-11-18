@@ -17,9 +17,9 @@ namespace WWOSettingsUI
 	inline WWOUI::FButtonLook KeyLook(const FLinearColor& Fill, const FLinearColor& Edge, float EdgeWidth, const FMargin& Padding)
 	{
 		WWOUI::FButtonLook Look = WWOUI::FilledLook(Fill, Padding);
-		Look.Normal = WWOUI::RoundBrush(Fill, 5.f, Edge, EdgeWidth);
-		Look.Hovered = WWOUI::RoundBrush(WWOUI::CardHovered, 5.f, WWOUI::HoverEdge, 1.5f);
-		Look.Pressed = WWOUI::RoundBrush(WWOUI::CardPressed, 5.f, FLinearColor::White, 1.5f);
+		Look.Normal = WWOUI::RoundBrush(Fill, WWOUI::Corner, Edge, EdgeWidth);
+		Look.Hovered = WWOUI::RoundBrush(WWOUI::CardHovered, WWOUI::Corner, WWOUI::HoverEdge, 1.5f);
+		Look.Pressed = WWOUI::RoundBrush(WWOUI::CardPressed, WWOUI::Corner, FLinearColor::White, 1.5f);
 		return Look;
 	}
 

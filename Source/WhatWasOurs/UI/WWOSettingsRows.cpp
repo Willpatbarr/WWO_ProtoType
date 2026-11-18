@@ -246,7 +246,7 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 	FWWOBrowser& B = Browsers[Index];
 	B.Provider = MoveTemp(Provider);
 	B.Switcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
-	B.List = WidgetTree->ConstructWidget<UScrollBox>();
+	B.List = WWOUI::ScrollBox(WidgetTree);
 	B.Switcher->AddChild(B.List);
 	UVerticalBox* Detail = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -262,7 +262,7 @@ UWidget* UWWOSettingsMenu::MakeBrowser(TFunction<TArray<FWWOBrowserItem>()> Prov
 		if (WeakThis.IsValid()) WeakThis->ResetSection(WeakThis->Browsers[Index].OpenKey);
 	}, 22.f));
 	Detail->AddChildToVerticalBox(Bar);
-	B.Rows = WidgetTree->ConstructWidget<UScrollBox>();
+	B.Rows = WWOUI::ScrollBox(WidgetTree);
 	Detail->AddChildToVerticalBox(B.Rows)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	B.Switcher->AddChild(Detail);
 	ShowList(Index);

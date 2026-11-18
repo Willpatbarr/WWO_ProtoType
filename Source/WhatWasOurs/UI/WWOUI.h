@@ -30,6 +30,7 @@ class UBorder;
 class UHorizontalBox;
 class UVerticalBox;
 class UEditableTextBox;
+class UScrollBox;
 class FSlateWindowElementList;
 struct FGeometry;
 
@@ -83,12 +84,45 @@ namespace WWOUI
 	// The accent: the equipped flora's colour lightened 15%, or DefaultAccent.
 	FLinearColor Accent(const UObject* WorldContext);
 
-	// --- Fonts, brushes, logo, cursor ---------------------------------------------------------------
-	// Godot draws every label in its default font, Open Sans SemiBold; Roboto Medium is the engine's
-	// closest weight. Px is Godot pixels.
-	FSlateFontInfo Font(float Px);
+	// --- Type: every word the player sees is set in Poppins ----------------------------------------
+	// The faces are read at run time from Content/WWO/Fonts/Poppins-<Weight>.ttf (SIL Open Font
+	// License, staged with the game). A weight with no file falls back to the nearest one there is
+	// (Light is always shipped), and only with no Poppins file at all to the engine's font.
+	enum class EWeight : uint8 { Light, Regular, Medium, SemiBold, Bold };
+	// The type scale, in Godot pixels: the HUD and the menus size their text from these.
+	namespace Type
+	{
+		constexpr float Micro = 10.f;    // the smallest print: a source beside a note, the detail under a card's name in capitals
+		constexpr float Caption = 12.f;  // key hints, spaced-capital labels over a section
+		constexpr float Small = 13.f;    // secondary lines, notes, card sub-lines
+		constexpr float Body = 15.f;     // ordinary text, card titles, HUD names
+		constexpr float Title = 18.f;    // a card's or row's main words, header tabs
+		constexpr float Heading = 24.f;  // the HUD's match line, overlay messages
+		constexpr float Display = 44.f;  // the ammo count, PLAY, big numbers
+	}
+	// Text colours: words, secondary words, hints.
+	inline const FLinearColor TextPrimary(1.f, 1.f, 1.f, 0.96f);
+	inline const FLinearColor TextSecondary(1.f, 1.f, 1.f, 0.62f);
+	inline const FLinearColor TextFaint(1.f, 1.f, 1.f, 0.4f);
+	// Poppins at Points (Slate points, already scaled), in Weight. No outline: text that sits over the
+	// world gets a soft shadow or a backing panel from whoever draws it (FWWOPainter::Text).
+	FSlateFontInfo FontAt(float Points, EWeight Weight = EWeight::Regular);
+	// Poppins at Px Godot pixels in the menus' scale (K).
+	FSlateFontInfo Font(float Px, EWeight Weight = EWeight::Regular);
+	// Sets a text block's weight, keeping its size and letter spacing.
+	void SetWeight(UTextBlock* T, EWeight Weight);
+
+	// --- Boxes: one corner, one edge, one grid -----------------------------------------------------
+	constexpr float Corner = 6.f;      // every rounded box's corner radius (Godot pixels)
+	constexpr float BoxEdge = 1.5f;     // a box's ordinary edge
+	constexpr float BoxEdgeOn = 2.5f;   // the edge of the chosen card or the open slot
+	constexpr float Grid = 4.f;        // spacing and padding are multiples of this
 	// A rounded box (Radius and OutlineWidth in Godot pixels).
-	FSlateBrush RoundBrush(const FLinearColor& Color, float Radius = 8.f, const FLinearColor& Outline = FLinearColor(0, 0, 0, 0), float OutlineWidth = 0.f);
+	FSlateBrush RoundBrush(const FLinearColor& Color, float Radius = Corner, const FLinearColor& Outline = FLinearColor(0, 0, 0, 0), float OutlineWidth = 0.f);
+	// A hover tip in the menus' style (a dark card, Poppins), in place of the engine's default tooltip.
+	void SetTip(UWidgetTree* Tree, UWidget* Widget, const FString& Tip);
+	// A scroll box with the menus' scroll bar: a thin, faint, rounded thumb on no track.
+	UScrollBox* ScrollBox(UWidgetTree* Tree);
 	// The game's logo as a widget (Tools/import_ui_logos.py): the "WHAT WAS OURS" wordmark (bWordmark)
 	// or the round leaf mark, drawn Size big (the wordmark's texture is 8 : 1 and the letters fill
 	// its width; the mark is square). Keeps, if given, is put under it unseen: the text the logo
