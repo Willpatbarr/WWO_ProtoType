@@ -865,15 +865,20 @@ void UWWOHUDWidget::PaintWaveLine(const FWWOHUDFrame& F) const
 
 void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 {
-	// Two bars under the match line, your team's first (left): each team's pool, a tick where the hub
-	// opens (the threshold), the number. A bar is full at twice the threshold.
+	// Two slim bars either side of the match line (the FOOTRACE title), your team's on the left:
+	// each team's pool, a tick where the hub opens (the threshold), its number at the bar's outer end, bright
+	// once it's enough to breach. A bar is full at twice the threshold. Each team's boss line sits lower,
+	// under the vitals' status chips.
 	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
 	if (!GS || GS->BreachEnergy.Num() < 2) return;
 	const FWWOPainter& P = F.P;
 	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
 	const float Threshold = FMath::Max(GS->BreachThreshold, 1.f);
-	const FVector2D BarSize(220.f, 12.f);
-	const float Gap = 40.f, Top = 176.f; // under the vitals' status chip row (SLOWED, POISONED...)
+	const FVector2D BarSize(220.f, 7.f);
+	// Level with the match line (PaintWaveLine: 28 px text at 24), clear of it whatever it says.
+	const float LineWidth = GS->StatusLine.IsEmpty() ? 0.f : P.Measure(GS->StatusLine, P.Font(28.f, 8.f)).X;
+	const float Gap = LineWidth + 48.f, Top = 24.f + 17.f - BarSize.Y * 0.5f;
+	const float BossTop = 176.f;         // under the vitals' status chip row (SLOWED, POISONED...)
 	for (int32 Slot = 0; Slot < 2; ++Slot)
 	{
 		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
@@ -891,19 +896,20 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const float Next = GS->BreachNext.IsValidIndex(Team) ? GS->BreachNext[Team] : 0.f;
 		if (bFrozen || Next > 0.f)
 		{
-			const FVector2D NextPos(Pos.X, Pos.Y + BarSize.Y + 2.f);
-			P.Box(NextPos, FVector2D(BarSize.X, 5.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.6f));
-			P.Box(NextPos, FVector2D(BarSize.X * FMath::Clamp(Next / (Threshold * 2.f), 0.f, 1.f), 5.f), FLinearColor(0.62f, 0.64f, 0.68f, 0.9f));
+			const FVector2D NextPos(Pos.X, Pos.Y + BarSize.Y + 1.f);
+			P.Box(NextPos, FVector2D(BarSize.X, 3.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.6f));
+			P.Box(NextPos, FVector2D(BarSize.X * FMath::Clamp(Next / (Threshold * 2.f), 0.f, 1.f), 3.f), FLinearColor(0.62f, 0.64f, 0.68f, 0.9f));
 		}
-		const FString Label = FString::Printf(TEXT("%s%s  %.0f"), Slot == 0 ? TEXT("YOUR BREACH") : TEXT("THEIRS"),
-			Energy >= Threshold ? TEXT(" READY") : TEXT(""), Energy);
-		P.Text(Label, FVector2D(Pos.X + (Slot == 0 ? BarSize.X : 0.f), Pos.Y + BarSize.Y + 9.f), 16.f, Color, Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+		// The number, at the bar's outer end (bright once it's enough to breach).
+		const FString Number = FString::Printf(TEXT("%.0f"), Energy);
+		const FLinearColor NumberColor = Energy >= Threshold ? Color : WWO::Darkened(Color, 0.35f);
+		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), 15.f, NumberColor, Slot == 0 ? 1.f : 0.f, 4.f, 0.8f, 0.5f);
 		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
 		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
 		if (BossLeft >= 0.f)
 		{
 			const float Window = GS->BossWindow.IsValidIndex(Team) ? GS->BossWindow[Team] : 0.f;
-			const FVector2D BossPos(Pos.X, Pos.Y + BarSize.Y + 32.f);
+			const FVector2D BossPos(F.Center.X + (Slot == 0 ? -20.f - BarSize.X : 20.f), BossTop); // fixed: the title's width moves the meters, not this
 			P.Box(BossPos, FVector2D(BarSize.X, 8.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 			P.Box(BossPos, FVector2D(BarSize.X * FMath::Clamp(BossLeft, 0.f, 1.f), 8.f), Window > 0.f ? FLinearColor(1.f, 0.3f, 0.25f) : FLinearColor(0.55f, 0.3f, 0.3f));
 			const uint8 Core = GS->CoreState.IsValidIndex(Team) ? GS->CoreState[Team] : 0;
