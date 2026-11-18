@@ -140,19 +140,25 @@ struct FWWOPainter
 	// 96 dpi (0.75 pt/px).
 	FSlateFontInfo Font(float Px, WWOUI::EWeight Weight = WWOUI::EWeight::Medium) const
 	{
-		return WWOUI::FontAt(Px * 0.75f * S, Weight);
+		FSlateFontInfo F = WWOUI::FontAt(Px * 0.75f * S, Weight);
+		F.LetterSpacing = CapsSpacing; // capitals set a little apart
+		return F;
 	}
+	// Every word on the HUD is in capitals (digits are unaffected): Text and Measure both take the
+	// string as written and work on its capitals, so callers lay out with the same widths they draw.
+	static constexpr int32 CapsSpacing = 40; // thousandths of an em
 	FVector2D Measure(const FString& Text, const FSlateFontInfo& F) const
 	{
-		return FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text, F) / S;
+		return FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text.ToUpper(), F) / S;
 	}
 	// Text at Pos. Align: 0 = left / top, 0.5 = center, 1 = right / bottom of Pos. Shadow (0..1) is a
 	// soft drop shadow under it, for text over the world (0: none, for text on a panel); it fades
 	// with the text. Returns the text's size.
-	FVector2D Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, float AlignY = 0.f,
+	FVector2D Text(const FString& Written, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, float AlignY = 0.f,
 		WWOUI::EWeight Weight = WWOUI::EWeight::Medium, float Shadow = 1.f) const
 	{
-		if (Str.IsEmpty() || Color.A <= 0.001f) return FVector2D::ZeroVector;
+		if (Written.IsEmpty() || Color.A <= 0.001f) return FVector2D::ZeroVector;
+		const FString Str = Written.ToUpper();
 		const FSlateFontInfo F = Font(Px, Weight);
 		const FVector2D M = Measure(Str, F);
 		const FVector2D At = Pos - FVector2D(M.X * AlignX, M.Y * AlignY);
