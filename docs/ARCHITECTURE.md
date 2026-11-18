@@ -221,6 +221,11 @@ walks the table in its order (the HUD line's).
     team appears in the hub with a wave of `BossWave` in its boss room; carried out through the team's hub
     doorway (`LeaveHub`) it opens the next window; a carrier's death drops it (anyone can take it then);
     the other team delivering it heals the boss `CoreHeal`; a dropped core goes home after `CoreDropTime`.
+    Bots (`FWWOBotRoster`, as in team deathmatch; `-WWOBots=N`): with no enemy player to fight, a bot plays
+    the race (`AWWOBotController::FootRaceTick`, state `Objective`): it shoots its lane's enemies (`SenseMobs`,
+    and its boss in a window), breaches when the team has the energy and a lever or core to go for (two at
+    most), fetches a core, pulls the live lever, leaves, and carries a core out. Its aim and fire are the
+    player fight's (`AimAt`, `Shoot`).
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

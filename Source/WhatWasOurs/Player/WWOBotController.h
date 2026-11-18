@@ -23,6 +23,11 @@
 //   host is shooting at) is called out to teammates nearby, who come to help; it prefers the
 //   enemy its teammates are already on and the weaker one; some bots escort the human on their
 //   team and the rest move in pairs, the follower covering its leader's flank.
+// - In FootRace (Game/WWOFootRaceRules.h), when no enemy player has its attention, it plays the race
+//   (FootRaceTick): it fights its lane's AI enemies in the team's furthest room, breaches when the team
+//   has the energy and a reason (a lever to pull, a core to fetch; at most two at once), in the hub picks
+//   up a core it can take, pulls the live lever, and leaves; carrying a core it heads for its hub doorway.
+//   In a boss window it shoots the boss. Enemy players in the hub are fought as in team deathmatch.
 
 #include "CoreMinimal.h"
 #include "AIController.h"
@@ -32,6 +37,8 @@
 #include "WWOBotController.generated.h"
 
 class AWWOCharacter;
+class AWWOEnemy;
+class FWWOFootRaceRules;
 
 UCLASS()
 class WHATWASOURS_API AWWOBotController : public AAIController
@@ -64,7 +71,11 @@ public:
 	static int32 Retreats;
 	static int32 NoCover;
 	static int32 Swaps;
-	static int32 StuckIn[4]; // stuck hops by state
+	static int32 StuckIn[5]; // stuck hops by state
+	static int32 Breaches;   // FootRace: breaches it walked into
+	static int32 LeverPulls; // FootRace: levers it held
+	static int32 CoresCarried;
+	FString JobName() const { return Job; } // FootRace: what it's doing (logs and tests)
 	static int32 Callouts;   // callouts a teammate acted on
 	AWWOCharacter* GetFoe() const { return Foe.Get(); }
 	bool IsFollowing() const { return Leader.IsValid(); }
@@ -103,6 +114,18 @@ private:
 	// --- Firing ---
 	float NextShot = 0.f, BurstLeft = 0.f, PauseLeft = 0.f;
 	bool bWasFiring = false;
+	// One frame's aim at a target: where it is from here, and whether a shot now would be on it.
+	struct FWWOBotShot
+	{
+		float Dist = 0.f;     // m
+		float OffDeg = 180.f; // the aim's angle off it
+		FVector ToFlat = FVector::ZeroVector;
+		bool bInRange = false, bCanShoot = false;
+	};
+	// Turns the view onto Spot (leading Velocity, with the wandering aim error) and says whether to shoot.
+	FWWOBotShot AimAt(AWWOCharacter* Me, const FVector& Spot, const FVector& Velocity, float AimErrorDeg, float TurnSpeed, float DeltaSeconds);
+	// Fires to the gun's rhythm while the shot is on, reloads when empty, aims in at range.
+	void Shoot(AWWOCharacter* Me, const FWWOBotShot& Shot, float DeltaSeconds);
 
 	// --- Moving ---
 	FWWOPathFollower Path;
@@ -144,7 +167,18 @@ private:
 	void HearCallout(const AWWOCharacter* From, AWWOCharacter* Enemy);
 	void ListenToHumans(const AWWOCharacter* Me);
 
-	enum class EState : uint8 { Roam, Hunt, Fight, Retreat };
+	// --- FootRace ---
+	TWeakObjectPtr<AWWOEnemy> Mob; // the lane enemy it's shooting
+	bool bMobVisible = false;
+	float BreachReady = 0.f;       // s the team has had a reason and the energy to breach
+	float Patience = 0.f;          // s it waits for that before it goes (each bot its own)
+	bool bCarrying = false, bWasInHub = false, bPulling = false;
+	FString Job;
+	void SenseMobs(AWWOCharacter* Me, const FWWOFootRaceRules& Race);
+	void FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race, float DeltaSeconds, bool& bMoving, bool& bWantSprint);
+	float GoTo(AWWOCharacter* Me, const FVector& Feet, float DeltaSeconds, bool& bMoving, bool& bWantSprint); // returns how far (m)
+
+	enum class EState : uint8 { Roam, Hunt, Fight, Retreat, Objective };
 	EState State = EState::Roam;
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
 	friend class FWWORegress;

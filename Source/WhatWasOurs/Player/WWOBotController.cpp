@@ -20,6 +20,12 @@
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "WWOIds.h"
+#include "Game/WWOFootRaceRules.h"
+#include "Enemies/WWOEnemy.h"
+#include "Enemies/WWOEnemyTypes.h"
+#include "World/WWOBreachPortal.h"
+#include "World/WWOBreachLever.h"
+#include "World/WWOBossCore.h"
 
 int32 AWWOBotController::Sightings = 0;
 int32 AWWOBotController::PathsFound = 0;
@@ -34,7 +40,10 @@ int32 AWWOBotController::Ults = 0;
 int32 AWWOBotController::Retreats = 0;
 int32 AWWOBotController::NoCover = 0;
 int32 AWWOBotController::Swaps = 0;
-int32 AWWOBotController::StuckIn[4] = {};
+int32 AWWOBotController::StuckIn[5] = {};
+int32 AWWOBotController::Breaches = 0;
+int32 AWWOBotController::LeverPulls = 0;
+int32 AWWOBotController::CoresCarried = 0;
 int32 AWWOBotController::Callouts = 0;
 
 namespace
@@ -604,7 +613,9 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	{
 		// Dead: it comes back knowing nothing.
 		Foe = nullptr;
-		bFoeVisible = bAware = bWasFiring = bThrowing = bRetreating = false;
+		Mob = nullptr;
+		bFoeVisible = bAware = bWasFiring = bThrowing = bRetreating = bMobVisible = bCarrying = false;
+		BreachReady = 0.f;
 		Path.Points.Reset();
 		Path.Age = 99.f;
 		Goal = FVector::ZeroVector;
@@ -632,10 +643,13 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	const FBotTuning T = TuningFor(this);
 	const FVector Eye = Me->EyeLocation();
 	const FVector Here = Me->GetActorLocation();
+	const AWWOGameMode* RaceMode = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	FWWOFootRaceRules* Race = RaceMode ? RaceMode->FootRace() : nullptr;
 	if ((SenseLeft -= DeltaSeconds) <= 0.f)
 	{
 		SenseLeft = FMath::FRandRange(0.1f, 0.16f);
 		Sense(Me);
+		if (Race) SenseMobs(Me, *Race);
 	}
 	if ((TeamLeft -= DeltaSeconds) <= 0.f)
 	{
@@ -689,6 +703,7 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	}
 	const EState Was = State;
 	State = bRetreating ? EState::Retreat : (!Target || !bAware ? EState::Roam : (bFoeVisible && ReactLeft <= 0.f ? EState::Fight : EState::Hunt));
+	if (State == EState::Roam && Race) State = EState::Objective; // FootRace: nobody to fight, so the race
 	if (State != Was)
 	{
 		Stuck = 0.f;
@@ -771,63 +786,13 @@ void AWWOBotController::Tick(float DeltaSeconds)
 	}
 	else if (State == EState::Fight)
 	{
-		OnTarget += DeltaSeconds;
-		const FVector To = FoeSpot - Eye;
-		const float DistCm = FMath::Max(To.Size(), 1.f), Dist = DistCm / WWO::M;
-		const FVector ToFlat = Flat(To).GetSafeNormal();
-
-		// Aim: at the chest, a touch ahead of where it's moving (to make up for the turn lag), off
-		// by an error that wanders, bigger at first sight and against a target crossing fast.
-		if ((AimErrorLeft -= DeltaSeconds) <= 0.f)
-		{
-			AimErrorLeft = FMath::FRandRange(0.2f, 0.5f);
-			const FVector Across = FoeVelocity - To.GetSafeNormal() * FVector::DotProduct(FoeVelocity, To.GetSafeNormal());
-			const float CrossDeg = FMath::RadiansToDegrees(Across.Size() / DistCm); // degrees per second across the view
-			const float Scale = 1.f + 2.f * FMath::Exp(-OnTarget / 0.5f) + CrossDeg / 45.f;
-			AimErrorGoal = FMath::RandPointInCircle(1.f) * T.AimError * Scale;
-		}
-		AimError = FMath::Lerp(AimError, AimErrorGoal, WWO::Damp(6.f, DeltaSeconds));
-		if (!bThrowing) TurnView(Me, FoeSpot + FoeVelocity * (0.8f / TurnGain) - Eye, T.TurnSpeed, DeltaSeconds, AimError);
-
-		// Fire only with the aim on them (a body's width at that distance) and in the gun's range.
-		const float OffDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Me->AimForward(), To.GetSafeNormal()), -1.f, 1.f)));
-		const float Tolerance = FMath::Max(FMath::RadiansToDegrees(FMath::Atan(40.f / DistCm)), 0.5f) * (bShotgun ? 2.5f : 1.f) * (bWasFiring ? 1.6f : 1.f);
-		const bool bInRange = !W || Dist <= W->FireRange * (bShotgun ? 0.75f : 1.f);
-		const bool bCanShoot = W && OffDeg <= Tolerance && bInRange && !Gun->bReloading && !bThrowing && !Gun->bMeleeing;
+		const FWWOBotShot Shot = AimAt(Me, FoeSpot, FoeVelocity, T.AimError, T.TurnSpeed, DeltaSeconds);
+		const float Dist = Shot.Dist;
+		const FVector ToFlat = Shot.ToFlat;
+		const bool bInRange = Shot.bInRange;
 		PickGun(Me, Dist);
-		UseKit(Me, Target, Dist, OffDeg, bInRange, HealthLeft);
-		bool bFiring = false;
-		if (Gun->Ammo <= 0 && !Gun->bReloading) Press(EWWOAction::Reload);
-		else if (W && W->IsSemiAuto())
-		{
-			// Taps, a little slower and less even than the gun allows.
-			if (bCanShoot && Clock >= NextShot)
-			{
-				NextShot = Clock + FMath::Max(60.f / FMath::Max(W->FireRate, 1.f) * 1.05f, 0.2f) * FMath::FRandRange(1.f, 1.3f);
-				Press(EWWOAction::Fire);
-				++ShotsFired;
-			}
-			bFiring = bCanShoot;
-		}
-		else if (PauseLeft > 0.f) PauseLeft -= DeltaSeconds;
-		else if (bCanShoot)
-		{
-			// Bursts: long up close, short at range.
-			if (!bWasFiring)
-			{
-				BurstLeft = Dist < 10.f ? FMath::FRandRange(0.9f, 1.8f) : FMath::FRandRange(0.3f, 0.7f);
-				++ShotsFired;
-			}
-			Hold(EWWOAction::Fire);
-			bFiring = true;
-			if ((BurstLeft -= DeltaSeconds) <= 0.f)
-			{
-				PauseLeft = FMath::FRandRange(0.15f, 0.35f);
-				bFiring = false;
-			}
-		}
-		bWasFiring = bFiring;
-		if (bInRange && (bSniper || (!bShotgun && Dist > 6.f))) Hold(EWWOAction::Aim);
+		UseKit(Me, Target, Dist, Shot.OffDeg, bInRange, HealthLeft);
+		Shoot(Me, Shot, DeltaSeconds);
 
 		// Move: strafe, and keep the distance the gun likes. Out of range, run in.
 		const float MinRange = bShotgun ? 3.f : (bSniper ? 20.f : 7.f), MaxRange = bShotgun ? 8.f : (bSniper ? 60.f : 22.f);
@@ -888,6 +853,10 @@ void AWWOBotController::Tick(float DeltaSeconds)
 		if (Gun->Ammo < Magazine * 0.4f && FoeSeenAgo > 1.f && !Gun->bReloading) Press(EWWOAction::Reload);
 		bWantSprint = Away > 6.f && !Gun->bReloading;
 	}
+	else if (State == EState::Objective)
+	{
+		FootRaceTick(Me, *Race, DeltaSeconds, bMoving, bWantSprint);
+	}
 	else
 	{
 		if (const AWWOCharacter* Lead = Leader.Get(); Lead && !Lead->Health->bDead)
@@ -946,4 +915,265 @@ void AWWOBotController::Tick(float DeltaSeconds)
 		}
 		PickGoal(Me);
 	}
+}
+
+AWWOBotController::FWWOBotShot AWWOBotController::AimAt(AWWOCharacter* Me, const FVector& Spot, const FVector& Velocity, float AimErrorDeg, float TurnSpeed, float DeltaSeconds)
+{
+	// Moved out of Tick's Fight (as it was), so a FootRace bot aims at the lane's enemies the same way.
+	OnTarget += DeltaSeconds;
+	const FVector Eye = Me->EyeLocation();
+	UWWOWeaponComponent* Gun = Me->Weapon;
+	const UWWOWeaponData* W = Gun->GetWeaponData();
+	const bool bShotgun = W && W->Pellets > 1.5f;
+	FWWOBotShot Out;
+	const FVector To = Spot - Eye;
+	const float DistCm = FMath::Max(To.Size(), 1.f);
+	Out.Dist = DistCm / WWO::M;
+	Out.ToFlat = Flat(To).GetSafeNormal();
+
+	// Aim: at the chest, a touch ahead of where it's moving (to make up for the turn lag), off
+	// by an error that wanders, bigger at first sight and against a target crossing fast.
+	if ((AimErrorLeft -= DeltaSeconds) <= 0.f)
+	{
+		AimErrorLeft = FMath::FRandRange(0.2f, 0.5f);
+		const FVector Across = Velocity - To.GetSafeNormal() * FVector::DotProduct(Velocity, To.GetSafeNormal());
+		const float CrossDeg = FMath::RadiansToDegrees(Across.Size() / DistCm); // degrees per second across the view
+		const float Scale = 1.f + 2.f * FMath::Exp(-OnTarget / 0.5f) + CrossDeg / 45.f;
+		AimErrorGoal = FMath::RandPointInCircle(1.f) * AimErrorDeg * Scale;
+	}
+	AimError = FMath::Lerp(AimError, AimErrorGoal, WWO::Damp(6.f, DeltaSeconds));
+	if (!bThrowing) TurnView(Me, Spot + Velocity * (0.8f / TurnGain) - Eye, TurnSpeed, DeltaSeconds, AimError);
+
+	// Fire only with the aim on them (a body's width at that distance) and in the gun's range.
+	Out.OffDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Me->AimForward(), To.GetSafeNormal()), -1.f, 1.f)));
+	const float Tolerance = FMath::Max(FMath::RadiansToDegrees(FMath::Atan(40.f / DistCm)), 0.5f) * (bShotgun ? 2.5f : 1.f) * (bWasFiring ? 1.6f : 1.f);
+	Out.bInRange = !W || Out.Dist <= W->FireRange * (bShotgun ? 0.75f : 1.f);
+	Out.bCanShoot = W && Out.OffDeg <= Tolerance && Out.bInRange && !Gun->bReloading && !bThrowing && !Gun->bMeleeing;
+	return Out;
+}
+
+void AWWOBotController::Shoot(AWWOCharacter* Me, const FWWOBotShot& Shot, float DeltaSeconds)
+{
+	// Moved out of Tick's Fight (as it was): the gun's rhythm, and aiming in at range.
+	UWWOWeaponComponent* Gun = Me->Weapon;
+	const UWWOWeaponData* W = Gun->GetWeaponData();
+	const bool bShotgun = W && W->Pellets > 1.5f;
+	const bool bSniper = W && W->Zoom >= 4.f;
+	const float Dist = Shot.Dist;
+	const bool bCanShoot = Shot.bCanShoot;
+	bool bFiring = false;
+	if (Gun->Ammo <= 0 && !Gun->bReloading) Press(EWWOAction::Reload);
+	else if (W && W->IsSemiAuto())
+	{
+		// Taps, a little slower and less even than the gun allows.
+		if (bCanShoot && Clock >= NextShot)
+		{
+			NextShot = Clock + FMath::Max(60.f / FMath::Max(W->FireRate, 1.f) * 1.05f, 0.2f) * FMath::FRandRange(1.f, 1.3f);
+			Press(EWWOAction::Fire);
+			++ShotsFired;
+		}
+		bFiring = bCanShoot;
+	}
+	else if (PauseLeft > 0.f) PauseLeft -= DeltaSeconds;
+	else if (bCanShoot)
+	{
+		// Bursts: long up close, short at range.
+		if (!bWasFiring)
+		{
+			BurstLeft = Dist < 10.f ? FMath::FRandRange(0.9f, 1.8f) : FMath::FRandRange(0.3f, 0.7f);
+			++ShotsFired;
+		}
+		Hold(EWWOAction::Fire);
+		bFiring = true;
+		if ((BurstLeft -= DeltaSeconds) <= 0.f)
+		{
+			PauseLeft = FMath::FRandRange(0.15f, 0.35f);
+			bFiring = false;
+		}
+	}
+	bWasFiring = bFiring;
+	if (Shot.bInRange && (bSniper || (!bShotgun && Dist > 6.f))) Hold(EWWOAction::Aim);
+}
+
+// --- FootRace ------------------------------------------------------------------------------------
+
+void AWWOBotController::SenseMobs(AWWOCharacter* Me, const FWWOFootRaceRules& Race)
+{
+	// The nearest lane enemy of its own lane it can see (and its boss, in a damage window). It keeps the
+	// one it has while that one is still in sight.
+	const int32 Team = UWWOWorldSubsystem::TeamOf(Me);
+	const FVector Eye = Me->EyeLocation();
+	const float Range = TuningFor(this).SightRange * WWO::M;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOBotMob), false, Me);
+	auto Visible = [&](const AWWOEnemy* E)
+	{
+		if (!E || E->IsDead() || FVector::Dist(Eye, E->GetActorLocation()) > Range) return false;
+		if (E->Lane != Team) return false;
+		if (const AWWOBoss* Boss = Cast<AWWOBoss>(E); Boss && Boss->bShielded) return false; // nothing to gain shooting the shield
+		FHitResult Hit;
+		const bool bBlocked = GetWorld()->LineTraceSingleByChannel(Hit, Eye, E->BodyCenter(), ECC_Visibility, Params);
+		return !bBlocked || Hit.GetActor() == E;
+	};
+	if (Mob.IsValid() && Visible(Mob.Get()))
+	{
+		bMobVisible = true;
+		return;
+	}
+	AWWOEnemy* Best = nullptr;
+	float BestDist = TNumericLimits<float>::Max();
+	for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It)
+	{
+		const float D = FVector::DistSquared(Eye, It->GetActorLocation());
+		if (D < BestDist && Visible(*It))
+		{
+			Best = *It;
+			BestDist = D;
+		}
+	}
+	Mob = Best;
+	bMobVisible = Best != nullptr;
+}
+
+float AWWOBotController::GoTo(AWWOCharacter* Me, const FVector& Feet, float DeltaSeconds, bool& bMoving, bool& bWantSprint)
+{
+	const FVector Here = Me->GetActorLocation();
+	const float Away = FVector::Dist2D(Feet, Here) / WWO::M;
+	// The last stretch straight at the spot (a doorway's opening, a lever, a core lie on the navmesh's edge).
+	FVector Dir = Away < 2.f ? Flat(Feet - Here).GetSafeNormal() : PathDirection(Me, Feet, DeltaSeconds);
+	if (Dir.IsNearlyZero()) Dir = Flat(Feet - Here).GetSafeNormal();
+	SetMove(Me, Dir);
+	bMoving = true;
+	TurnView(Me, Dir, TuningFor(this).TurnSpeed * 0.7f, DeltaSeconds);
+	bWantSprint = Away > 6.f && !Me->Weapon->bReloading;
+	return Away;
+}
+
+void AWWOBotController::FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race, float DeltaSeconds, bool& bMoving, bool& bWantSprint)
+{
+	const int32 Team = UWWOWorldSubsystem::TeamOf(Me);
+	if (Team < 0 || Team > 1) return;
+	const FBotTuning T = TuningFor(this);
+	const AWWOGameMode* Mode = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	const bool bInHub = Race.IsBreaching(Me);
+	if (bInHub && !bWasInHub) ++Breaches;
+	bWasInHub = bInHub;
+	UWWOWeaponComponent* Gun = Me->Weapon;
+	const bool bWasPulling = bPulling;
+	bPulling = false;
+
+	// Carrying a core: out through the hub doorway.
+	bool bHasCore = false;
+	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
+	{
+		const AWWOBossCore* Core = Race.CoreOf(CoreTeam);
+		if (Core && Core->Carrier == Me) bHasCore = true;
+	}
+	if (bHasCore && !bCarrying) ++CoresCarried;
+	bCarrying = bHasCore;
+	if (bHasCore)
+	{
+		Job = TEXT("carry core");
+		if (const AWWOBreachPortal* Out = Race.HubPortal(Team)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+		return;
+	}
+
+	if (bInHub)
+	{
+		// A core it can take: its own team's fresh one, or anyone's dropped.
+		for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
+		{
+			const AWWOBossCore* Core = Race.CoreOf(CoreTeam);
+			if (!Core || Core->Carrier || (!Core->bDropped && CoreTeam != Team)) continue;
+			Job = TEXT("fetch core");
+			GoTo(Me, Core->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+			return;
+		}
+		// The live lever: stand at it and hold the key.
+		const AWWOBreachLever* Lever = Race.LeverOf(Team, Race.DoorsOpen(Team) + 1);
+		if (Lever && Lever->bLive)
+		{
+			Job = TEXT("pull lever");
+			const FVector Stand = Lever->GetActorLocation() + FRotator(0.f, Lever->GetActorRotation().Yaw, 0.f).Vector() * 1.3f * WWO::M;
+			if (Lever->InReach(Me->GetActorLocation()) && FVector::Dist2D(Stand, Me->GetActorLocation()) < 1.f * WWO::M)
+			{
+				TurnView(Me, Lever->GetActorLocation() - Me->EyeLocation(), T.TurnSpeed * 0.7f, DeltaSeconds);
+				if (!bWasPulling) ++LeverPulls;
+				bPulling = true;
+				Hold(EWWOAction::Revive);
+			}
+			else GoTo(Me, Stand, DeltaSeconds, bMoving, bWantSprint);
+			return;
+		}
+		// Nothing left to do here: out.
+		Job = TEXT("leave hub");
+		if (const AWWOBreachPortal* Out = Race.HubPortal(Team)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+		return;
+	}
+
+	// In the lane. Breach when the team has the energy and something to do in the hub: a lever (its
+	// next door), or its core waiting there. At most two at once; each bot waits its own moment.
+	const int32 Doors = Race.DoorsOpen(Team);
+	const AWWOBossCore* OwnCore = Race.CoreOf(Team);
+	const bool bReason = Doors < 3 || (OwnCore && !OwnCore->Carrier);
+	const bool bCan = Mode && Race.Energy(Team) >= Mode->BreachThreshold && !Race.IsFrozen(Team) && Race.Breachers(Team) < 2;
+	BreachReady = bReason && bCan ? BreachReady + DeltaSeconds : 0.f;
+	if (Patience <= 0.f) Patience = FMath::FRandRange(0.3f, 3.f);
+	if (BreachReady >= Patience)
+	{
+		if (const AWWOBreachPortal* Portal = Race.RoomPortal(Team, FWWOFootRaceRules::RoomName(Race.OpenedRoom(Team))))
+		{
+			Job = TEXT("breach");
+			GoTo(Me, Portal->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+			return;
+		}
+	}
+
+	// Fight the lane's enemies.
+	AWWOEnemy* Target = Mob.Get();
+	if (Target && !Target->IsDead() && bMobVisible)
+	{
+		Job = Cast<AWWOBoss>(Target) ? TEXT("shoot boss") : TEXT("fight AI");
+		const FWWOBotShot Shot = AimAt(Me, Target->BodyCenter(), Target->GetVelocity(), T.AimError, T.TurnSpeed, DeltaSeconds);
+		PickGun(Me, Shot.Dist);
+		Shoot(Me, Shot, DeltaSeconds);
+		// Keep a fighting distance: close in from far off, back off from up close, strafe between.
+		if ((StrafeLeft -= DeltaSeconds) <= 0.f)
+		{
+			StrafeLeft = FMath::FRandRange(0.5f, 1.6f);
+			if (FMath::RandBool()) StrafeDir = -StrafeDir;
+		}
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Shot.ToFlat);
+		FVector Dir = Right * StrafeDir;
+		if (Shot.Dist > 18.f || !Shot.bInRange)
+		{
+			const FVector In = PathDirection(Me, Target->FeetLocation(), DeltaSeconds);
+			Dir = (In.IsNearlyZero() ? Shot.ToFlat : In) + Right * StrafeDir * 0.4f;
+		}
+		else if (Shot.Dist < 5.f && SideIsClear(Me, -Shot.ToFlat)) Dir -= Shot.ToFlat;
+		SetMove(Me, Dir);
+		bMoving = true;
+		return;
+	}
+	OnTarget = 0.f;
+	if (Gun->Ammo < FMath::Max(Gun->MagazineSize(), 1) * 0.6f && !Gun->bReloading) Press(EWWOAction::Reload);
+
+	// Nobody in sight: to the nearest enemy of its lane, or the team's furthest room.
+	Job = TEXT("clear room");
+	const FVector Here = Me->GetActorLocation();
+	const AWWOEnemy* Nearest = nullptr;
+	float NearestDist = TNumericLimits<float>::Max();
+	for (TActorIterator<AWWOEnemy> It(GetWorld()); It; ++It)
+	{
+		if (It->IsDead() || It->Lane != Team) continue;
+		if (const AWWOBoss* Boss = Cast<AWWOBoss>(*It); Boss && Boss->bShielded) continue;
+		const float D = FVector::DistSquared(Here, It->GetActorLocation());
+		if (D < NearestDist)
+		{
+			Nearest = *It;
+			NearestDist = D;
+		}
+	}
+	FVector To = Nearest ? Nearest->FeetLocation() : Race.RoomCenter(Team, Race.OpenedRoom(Team));
+	if (To.IsZero()) return;
+	if (FVector::Dist2D(To, Here) > 3.f * WWO::M) GoTo(Me, To, DeltaSeconds, bMoving, bWantSprint);
 }

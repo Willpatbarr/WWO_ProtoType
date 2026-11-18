@@ -360,6 +360,15 @@ int32 FWWOFootRaceRules::RoomAt(int32 Team, const FVector& Where) const
 	return -1;
 }
 
+FVector FWWOFootRaceRules::RoomCenter(int32 Team, int32 Index) const
+{
+	for (const FRoom& Room : Rooms)
+	{
+		if (Room.Team == Team && Room.Index == Index) return FVector(Room.Area.GetCenter().X, Room.Area.GetCenter().Y, Room.Area.Min.Z);
+	}
+	return FVector::ZeroVector;
+}
+
 TArray<AWWOEnemy*> FWWOFootRaceRules::EnemiesIn(int32 Team, FName Name) const
 {
 	TArray<AWWOEnemy*> Out;
@@ -385,12 +394,15 @@ void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
 			UE_LOG(LogWWO, Display, TEXT("FootRace: team %d reached %s"), Team, *RoomName(Index).ToString());
 		}
 	}
-	const int32 Want = FMath::RoundToInt(Mode.RoomEnemies);
 	for (FRoom& Room : Rooms)
 	{
 		Room.Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
-		// Only the live room spawns, and not the boss room: it gets a wave with each core (SpawnBossWave).
-		if (Room.Index != Furthest[Room.Team] || Room.Index == 4 || Room.Spawns.IsEmpty()) continue;
+		// Only the live room spawns. The boss room only while its team's core is out (a wave comes with the
+		// core, SpawnBossWave, and refills until it is delivered), so the team can always earn the breach to
+		// fetch it, and nothing piles up while the boss fight goes on.
+		const bool bBoss = Room.Index == 4;
+		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty() || (bBoss && !Cores[Room.Team].IsValid())) continue;
+		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossWave : Mode.RoomEnemies);
 		if (Room.Alive.Num() >= Want)
 		{
 			Room.bFilled = true;
@@ -820,6 +832,8 @@ void FWWOFootRaceRules::SpawnBossWave(int32 Team)
 	{
 		if (Room.Team != Team || Room.Index != 4 || Room.Spawns.IsEmpty()) continue;
 		for (int32 I = 0; I < Count; ++I) SpawnInRoom(Room);
+		Room.bFilled = true; // from now on it refills at RoomRefillTime while the core is out
+		Room.SpawnLeft = Mode.RoomRefillTime;
 		UE_LOG(LogWWO, Display, TEXT("FootRace: a wave of %d in team %d's boss room"), Count, Team);
 	}
 }

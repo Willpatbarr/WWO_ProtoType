@@ -73,10 +73,11 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	bTestRun = WWOSwitches::HasAutoTestText();
 	if (WWOSwitches::HasStressText()) Stress = MakeUnique<FWWOStressHarness>();
 	if (WWOSwitches::Value(TEXT("WWOTimeLimit="), Value)) TimeLimit = FCString::Atof(*Value);
-	if (bPvP && WWOSwitches::Value(TEXT("WWOBots="), Value)) Roster.BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
+	const bool bTeams = bPvP || bFootRace; // the modes with two teams, and so bots
+	if (bTeams && WWOSwitches::Value(TEXT("WWOBots="), Value)) Roster.BotsWanted = FMath::Clamp(FCString::Atoi(*Value), 0, 11);
 	// ?bots=N: the launch screen's count for this match (a local PvP match fills both teams).
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
-	Roster.OptionBots = bPvP && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
+	Roster.OptionBots = bTeams && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
 	// (The launch screen's count is exact, not a floor under the Bots setting: see FWWOBotRoster::Wanted.)
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : bFootRace ? TEXT("FootRace") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
@@ -116,7 +117,7 @@ void AWWOGameMode::PreLogin(const FString& Options, const FString& Address, cons
 {
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	// The advertised places are a promise nothing else keeps: a full game says so here.
-	const int32 Most = bPvP ? UWWONetSubsystem::MaxPvPPlayers : UWWONetSubsystem::MaxPlayers;
+	const int32 Most = bPvP || bFootRace ? UWWONetSubsystem::MaxPvPPlayers : UWWONetSubsystem::MaxPlayers;
 	if (ErrorMessage.IsEmpty() && People() >= Most) ErrorMessage = FString::Printf(TEXT("The game is full (%d players)"), Most);
 }
 
@@ -269,10 +270,15 @@ void AWWOGameMode::Tick(float DeltaSeconds)
 	// stress harness, the status line, a due restart, then the waves' state machine.
 	if (Rules) Rules->Update(DeltaSeconds);
 	if (bWaveTest) UpdateWaveTest(DeltaSeconds);
-	if (FWWOTeamDeathmatch* Match = Deathmatch())
+	if (Deathmatch())
 	{
 		if (Stress) Stress->LogBots(*this); // stress runs only: bot states, sight lines, test shots at every head
-		Roster.Update(*this, *Match);
+		Roster.Update(*this, *Rules);
+		Roster.FollowSettings(*this);
+	}
+	else if (FootRace())
+	{
+		Roster.Update(*this, *Rules);
 		Roster.FollowSettings(*this);
 	}
 	if (Stress) Stress->Tick(*this, DeltaSeconds);

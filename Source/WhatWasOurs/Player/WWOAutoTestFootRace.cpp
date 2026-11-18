@@ -32,6 +32,9 @@
 #include "World/WWOBreachLever.h"
 #include "World/WWOBossCore.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Player/WWOBotController.h"
+#include "WhatWasOurs.h"
+#include "WWOSwitches.h"
 #include "WWOIds.h"
 #include "WWOTypes.h"
 #include "Components/CapsuleComponent.h"
@@ -456,4 +459,75 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Shot(TEXT("88_footrace_win"));
 	}
 	if (Crossed(C2 + 5.4f)) WWOTest::Exit();
+}
+
+// -WWOAutoTestFootRaceBots (on L_FootRaceTest with -WWOBots=11): the bots play FootRace while the
+// player stands in its spawn room out of the way. Every 10 s a `FootRaceBots:` line logs both teams'
+// energy, doors, bosses and cores and what the bots are doing; the match must end in a win inside the
+// time limit (-WWOFootRaceBotsTime=S, 600 by default), with bots having breached, pulled levers and
+// carried cores. Logs `AutoTest footracebots: ... ok|FAIL`.
+void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
+{
+	AWWOCharacter* P = PC->GetWWOCharacter();
+	UWorld* World = PC->GetWorld();
+	const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
+	FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr;
+	if (!P || !F) return;
+	auto Check = [](bool bOk, const FString& What) { return WWOTest::Check(TEXT("footracebots"), bOk, What); };
+	static float Limit = -1.f;
+	if (Limit < 0.f)
+	{
+		FString Value;
+		Limit = WWOSwitches::Value(TEXT("WWOFootRaceBotsTime="), Value) ? FCString::Atof(*Value) : 600.f;
+	}
+	P->Health->GodMode = 1.f;
+	// The player stays parked where it was placed: the window takes a person's keys and mouse, and the
+	// match is the bots' (a run once had a person carry a core).
+	static FVector Parked = FVector::ZeroVector;
+	if (AutoBotsRaceClock > 1.f)
+	{
+		if (Parked.IsZero()) Parked = P->GetActorLocation();
+		else if (FVector::Dist(P->GetActorLocation(), Parked) > 50.f) P->TeleportTo(Parked, P->GetActorRotation(), false, true);
+	}
+	AutoBotsRaceClock += DeltaTime;
+	int32 Bots = 0;
+	TMap<FString, int32> Jobs;
+	for (TActorIterator<AWWOBotController> It(World); It; ++It)
+	{
+		++Bots;
+		const AWWOCharacter* Body = Cast<AWWOCharacter>(It->GetPawn());
+		Jobs.FindOrAdd(!Body || Body->Health->bDead ? FString(TEXT("dead")) : It->StateIndex() == 4 ? It->JobName() : It->DebugState().Left(8))++;
+	}
+	if ((AutoBotsRaceLog -= DeltaTime) <= 0.f)
+	{
+		AutoBotsRaceLog = 10.f;
+		FString JobLine;
+		for (const TPair<FString, int32>& J : Jobs) JobLine += FString::Printf(TEXT(" %s %d,"), *J.Key, J.Value);
+		auto BossText = [F](int32 Team)
+		{
+			const AWWOBoss* Boss = F->BossOf(Team);
+			return Boss ? FString::Printf(TEXT("%.0f%%%s"), Boss->GetHealth() / FMath::Max(Boss->GetMaxHealth(), 1.f) * 100.f, Boss->bShielded ? TEXT(" sh") : TEXT(" open")) : FString(TEXT("-"));
+		};
+		UE_LOG(LogWWO, Display, TEXT("FootRaceBots: %.0fs bots %d | energy %.0f/%.0f next %.0f/%.0f | doors %d/%d | room %d/%d | boss %s / %s | cores %d/%d | breaches %d levers %d cores %d stuck %d |%s"),
+			AutoBotsRaceClock, Bots, F->Energy(0), F->Energy(1), F->NextEnergy(0), F->NextEnergy(1), F->DoorsOpen(0), F->DoorsOpen(1),
+			F->FurthestRoom(0), F->FurthestRoom(1), *BossText(0), *BossText(1), F->CoreOf(0) != nullptr, F->CoreOf(1) != nullptr,
+			AWWOBotController::Breaches, AWWOBotController::LeverPulls, AWWOBotController::CoresCarried, AWWOBotController::StuckJumps, *JobLine);
+	}
+	static float ExitAt = -1.f;
+	if (ExitAt >= 0.f)
+	{
+		if (AutoBotsRaceClock >= ExitAt) WWOTest::Exit(); // a second after the last screenshot (exiting on its frame can stall on a shader)
+		return;
+	}
+	if (F->IsOver() || AutoBotsRaceClock >= Limit)
+	{
+		Check(Bots == 11, FString::Printf(TEXT("11 bots joined, a 6 v 6 with the player (%d)"), Bots));
+		Check(AWWOBotController::Breaches >= 4, FString::Printf(TEXT("bots breached (%d)"), AWWOBotController::Breaches));
+		Check(AWWOBotController::LeverPulls >= 3, FString::Printf(TEXT("bots pulled levers (%d)"), AWWOBotController::LeverPulls));
+		Check(F->DoorsOpen(0) >= 1 && F->DoorsOpen(1) >= 1, FString::Printf(TEXT("both teams opened doors (%d, %d)"), F->DoorsOpen(0), F->DoorsOpen(1)));
+		Check(AWWOBotController::CoresCarried >= 1, FString::Printf(TEXT("bots carried boss cores (%d)"), AWWOBotController::CoresCarried));
+		Check(F->IsOver(), FString::Printf(TEXT("a team won inside %.0f s (winner %d, %.0f s)"), Limit, F->Winner, AutoBotsRaceClock));
+		Shot(TEXT("89_footracebots_end"));
+		ExitAt = AutoBotsRaceClock + 1.f;
+	}
 }

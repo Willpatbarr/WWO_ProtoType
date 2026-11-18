@@ -36,6 +36,7 @@ struct FWWOAutoTestModes
 	bool bAutoTestNet = false;        // -WWOAutoTestNet
 	bool bAutoTestPvP = false;        // -WWOAutoTestPvP
 	bool bAutoTestFootRace = false;   // -WWOAutoTestFootRace
+	bool bAutoTestFootRaceBots = false; // -WWOAutoTestFootRaceBots
 	bool bPerfTest = false;           // -WWOPerfTest
 	bool bJoinerStress = false;       // -WWOStress on a joiner: only logs its frame times
 	bool bRegress = false;            // -WWORegress: the regression scenarios (Player/WWORegress.h)
@@ -91,6 +92,9 @@ private:
 	FVector AutoFootRaceBefore = FVector::ZeroVector;
 	TWeakObjectPtr<class AWWOEnemy> AutoFootRaceEnemy;
 	void UpdateAutoFootRaceTest(float DeltaTime);
+	// -WWOAutoTestFootRaceBots (same file): a bot match of FootRace played to a win.
+	float AutoBotsRaceClock = 0.f, AutoBotsRaceLog = 0.f;
+	void UpdateAutoFootRaceBotsTest(float DeltaTime);
 	// -WWOAutoTestNet (WWOAutoTestNet.cpp): online play, run on the host and the joiner.
 	float AutoNetWait = 0.f;   // seconds since start
 	float AutoNetClock = 0.f; // seconds since both players were in and settled (negative while settling)

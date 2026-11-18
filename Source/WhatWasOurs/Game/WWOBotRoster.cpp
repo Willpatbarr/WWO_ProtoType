@@ -22,7 +22,7 @@ int32 FWWOBotRoster::Wanted(const AWWOGameMode& GM) const
 	return FMath::Clamp(Asked + BotsExtra, 0, 11);
 }
 
-void FWWOBotRoster::Update(AWWOGameMode& GM, FWWOTeamDeathmatch& Match)
+void FWWOBotRoster::Update(AWWOGameMode& GM, FWWOMatchRules& Match)
 {
 	// One a frame, once the host's own player is in.
 	const int32 Want = Wanted(GM);
@@ -36,7 +36,7 @@ void FWWOBotRoster::Update(AWWOGameMode& GM, FWWOTeamDeathmatch& Match)
 	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
 	// steady scene of moving characters for performance tests).
 	if (WWOSwitches::Has(TEXT("WWOBotsPeace"))) GM.SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
-	Match.TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
+	if (FWWOTeamDeathmatch* Deathmatch = Match.AsDeathmatch()) Deathmatch->TeamGiven.Add(Bot->GetPlayerState<AWWOPlayerState>());
 	GM.RestartPlayer(Bot);
 	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Bot->GetPawn()))
 	{

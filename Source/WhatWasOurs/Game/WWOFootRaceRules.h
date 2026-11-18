@@ -47,7 +47,8 @@
 //
 // Boss cores (World/WWOBossCore.h; the hub's CoreSpawn marker): CoreDelay s after a team's boss is up and
 // shielded, a core for that team appears in the hub (on the team's side of the marker), and a wave of
-// BossWave enemies in its boss room so the team can earn the energy to breach for it. Its team picks it
+// BossWave enemies in its boss room so the team can earn the energy to breach for it; the boss room
+// refills to BossWave (one every RoomRefillTime s) until the core is delivered. Its team picks it
 // up by walking over it; carried out through the team's hub doorway it opens the boss's next window. A
 // carrier who dies drops it where they fell: then either team can take it, and the other team carrying
 // it out through their own hub doorway heals its boss CoreHeal (up to full). A dropped core goes back to
@@ -114,6 +115,7 @@ public:
 	int32 AliveIn(int32 Team, FName Room) const { return EnemiesIn(Team, Room).Num(); }
 	TArray<AWWOEnemy*> EnemiesIn(int32 Team, FName Room) const; // the room's living enemies
 	int32 RoomAt(int32 Team, const FVector& Where) const; // which of the team's rooms a spot is in (-1: none)
+	FVector RoomCenter(int32 Team, int32 Index) const;    // the middle of a room's floor (zero: no such room)
 	// What a room spawns next: its kind by the room and how many it has spawned.
 	static FName RoomKind(int32 Index, int32 Spawned);
 
