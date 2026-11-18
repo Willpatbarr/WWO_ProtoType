@@ -298,7 +298,9 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
 - **Menus** are driven by a synthetic mouse, not focus: `FWWOMenuCursor` is a Slate input pre-processor
   (left stick moves the pointer, Cross clicks, right stick scrolls). Every button has
   `IsFocusable = false`.
-- **Shared style** (`UI/WWOUI.*`, `namespace WWOUI`): the palette, `Font`, `RoundBrush`, the logo, the ring
+- **Shared style** (`UI/WWOUI.*`, `namespace WWOUI`): the palette, the type (`Font` / `FontAt`: Poppins, read from
+  `Content/WWO/Fonts/Poppins-<Weight>.ttf`, a missing weight falling back to the nearest there is; the scale `Type`;
+  text colours), the box style (`Corner`, `BoxEdge`, `Grid`), `RoundBrush`, `SetTip`, `ScrollBox`, the logo, the ring
   cursor, and builders that take the widget tree to build into (`Text`, `Spaced`, `Rule`, `Sized`, `Fill`,
   `Button` / `TextButton` with a look, `StyleTextBox`, `Accent`) and the page header (`HeaderName`,
   `TabStrip`, `AddPageHeader`, `SetActiveTab`: settings, character, launch setup). Each menu builds in its own `WidgetTree`
@@ -321,10 +323,14 @@ model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cp
 - **Character menu** (`UI/WWOCharacterMenu.*`): `WWOCharacterMenu.cpp` builds the frame and tabs and
   handles open / close, back, turning the preview, tick and the autotest hooks; one file per tab:
   `WWOCharacterMenuOverview.cpp` (Loadout: stat bars, Build notes, cards, the hover pickers),
-  `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, mod slots, configs, the mod hover
-  and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. Both hover popups close through one
+  `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, the gun's render, mod slots, configs, the mod hover
+  and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. The editors' cards are one builder, `ItemCard` (an item's
+  badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. Both hover popups close through one
   `FWWOHoverPopup` timer. The character is `AWWOPreviewActor` (`UI/WWOPreviewActor.*`), a mannequin with
-  its own scene capture far below the level. Shared helpers: `WWOCharacterMenuPrivate.h`.
+  its own scene capture far below the level. The Weapon tab's gun is `AWWOGunPreviewActor` (`UI/WWOGunPreviewActor.*`):
+  `WWOWeapon::BuildShowcase` builds the same model as the first-person gun (mesh, kept and extra parts, the mods' parts),
+  lit by its own key, rim and fill lights on lighting channel 1, captured only while that tab is open.
+  Shared helpers: `WWOCharacterMenuPrivate.h`.
 - **HUD** (`UI/WWOHUDWidget.*`, `UI/WWOHUDPaint.cpp`): immediate-mode paint through `FWWOPainter`
   (`UI/WWOPainter.h`), in 1600 x 900 units scaled to the player's screen (`WWOHUD::Scale`). `NativePaint`
   builds one `FWWOHUDFrame` (player, gun, world subsystem, layout size, reticle point, `ToScreen`) and

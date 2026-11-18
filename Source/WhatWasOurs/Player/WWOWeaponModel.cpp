@@ -118,6 +118,128 @@ namespace WWOWeapon
 		if (Json->TryGetObjectField(TEXT("weapons"), Weapons) && (*Weapons)->TryGetObjectField(WeaponId.ToString(), Model)) return *Model;
 		return nullptr;
 	}
+
+	FJsonPartShape JsonPartShape(const TSharedPtr<FJsonObject>& O)
+	{
+		FJsonPartShape Out;
+		FString Shape = TEXT("box");
+		O->TryGetStringField(TEXT("shape"), Shape);
+		const FVector Size = WWOConfig::Vec(O, TEXT("size"), FVector(2.0));
+		const FVector Rot = WWOConfig::Vec(O, TEXT("rot"));
+		Out.Rot = FRotator(Rot.X, Rot.Y, Rot.Z);
+		Out.Mesh = WWOFX::Cube();
+		Out.Scale = Size / 100.0;
+		if (Shape == TEXT("cyl"))
+		{
+			Out.Mesh = WWOFX::Cylinder(); // stands along z: lay it along x
+			Out.Scale = FVector(Size.X * 2.0, Size.X * 2.0, Size.Y) / 100.0;
+			Out.Rot = (Out.Rot.Quaternion() * FRotator(-90.f, 0.f, 0.f).Quaternion()).Rotator();
+		}
+		else if (Shape == TEXT("sphere"))
+		{
+			Out.Mesh = WWOFX::Sphere();
+			Out.Scale = FVector(Size.X * 2.0 / 100.0);
+		}
+		double Glow = 0.0;
+		O->TryGetNumberField(TEXT("glow"), Glow);
+		Out.Glow = (float)Glow;
+		Out.Color = WWOConfig::Color(O);
+		Out.Offset = WWOConfig::Vec(O, TEXT("offset"));
+		return Out;
+	}
+
+	void BuildShowcase(UObject* Owner, USceneComponent* Parent, const UWWOWeaponData* Weapon, const UWWOLoadoutSubsystem* Loadout, TArray<UStaticMeshComponent*>& Out)
+	{
+		if (!Weapon || !Parent) return;
+		auto Add = [&](UStaticMesh* Mesh, const FVector& Scale, const FVector& Pos, const FRotator& Rot, const FLinearColor* Color, float Glow)
+		{
+			UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+			Comp->SetupAttachment(Parent);
+			Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Comp->SetStaticMesh(Mesh);
+			if (Color) Comp->SetMaterial(0, WWOFX::Material(TEXT("M_WWO_Solid")));
+			Comp->SetRelativeScale3D(Scale);
+			Comp->SetRelativeLocationAndRotation(Pos, Rot);
+			Comp->RegisterComponent();
+			if (Color)
+			{
+				if (UMaterialInstanceDynamic* Mat = Comp->CreateAndSetMaterialInstanceDynamic(0))
+				{
+					Mat->SetVectorParameterValue("Color", *Color);
+					Mat->SetScalarParameterValue("Glow", Glow);
+				}
+			}
+			Out.Add(Comp);
+		};
+		// As BuildModel: the mesh model with its extra parts and kept box parts, or the box model; then
+		// the mods' parts at their anchors. No sight dot or muzzle flash.
+		const TSharedPtr<FJsonObject> Model = ModelConfig(Weapon->Id);
+		FString MeshPath;
+		UStaticMesh* BodyMesh = Model.IsValid() && Model->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<UStaticMesh>(nullptr, *MeshPath) : nullptr;
+		TSet<FString> Keep;
+		TArray<FString> KeepList;
+		if (BodyMesh && Model->TryGetStringArrayField(TEXT("keep"), KeepList)) Keep.Append(KeepList);
+		for (const FGunPart& P : ModelParts(Weapon->Id))
+		{
+			const FString Name(P.Name);
+			if (Name == TEXT("SightDot") || Name == TEXT("MuzzleFlash") || (BodyMesh && !Keep.Contains(Name))) continue;
+			FRotator Rot = GRot(Deg(P.RotDeg.X, P.RotDeg.Y, P.RotDeg.Z));
+			UStaticMesh* Mesh = WWOFX::Sphere();
+			FVector Scale(P.Size.X * 2.f);
+			if (P.Kind == Box)
+			{
+				Mesh = WWOFX::Cube();
+				Scale = FVector(P.Size.Z, P.Size.X, P.Size.Y);
+			}
+			else if (P.Kind == Cyl)
+			{
+				Mesh = WWOFX::Cylinder();
+				Scale = FVector(P.Size.X * 2.f, P.Size.X * 2.f, P.Size.Y);
+				Rot = Rot + FRotator(90.f, 0.f, 0.f);
+			}
+			Add(Mesh, Scale, G2U(P.Pos), Rot, &P.Color, P.Glow);
+		}
+		TMap<FString, FVector> Anchors;
+		if (BodyMesh)
+		{
+			const FVector Offset = WWOConfig::Vec(Model, TEXT("offset"));
+			const FVector Rot = WWOConfig::Vec(Model, TEXT("rot"));
+			Add(BodyMesh, WWOConfig::Vec(Model, TEXT("scale"), FVector(1.0)), Offset, FRotator(Rot.X, Rot.Y, Rot.Z), nullptr, 0.f);
+			const TArray<TSharedPtr<FJsonValue>>* Extras = nullptr;
+			if (Model->TryGetArrayField(TEXT("parts"), Extras))
+			{
+				for (const TSharedPtr<FJsonValue>& Extra : *Extras)
+				{
+					if (!Extra->AsObject().IsValid()) continue;
+					const FJsonPartShape Shape = JsonPartShape(Extra->AsObject());
+					Add(Shape.Mesh, Shape.Scale, Offset + Shape.Offset, Shape.Rot, &Shape.Color, Shape.Glow);
+				}
+			}
+			const TSharedPtr<FJsonObject>* AnchorObj = nullptr;
+			if (Model->TryGetObjectField(TEXT("anchors"), AnchorObj))
+			{
+				for (const auto& Pair : (*AnchorObj)->Values) { const FString Key(Pair.Key); Anchors.Add(Key, Offset + WWOConfig::Vec(*AnchorObj, *Key)); }
+			}
+		}
+		bool bNoMods = false;
+		if (Model.IsValid()) Model->TryGetBoolField(TEXT("no_mods"), bNoMods);
+		if (Loadout && !bNoMods && Loadout->GetWeapon() == Weapon)
+		{
+			for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+			{
+				const UWWOModData* Mod = Loadout->GetMod(Slot);
+				if (!Mod) continue;
+				for (const TSharedPtr<FJsonObject>& O : Mod->VisualParts)
+				{
+					FString At = Slot.ToString();
+					O->TryGetStringField(TEXT("at"), At);
+					const FVector* Anchor = Anchors.Find(At);
+					const FJsonPartShape Shape = JsonPartShape(O);
+					Add(Shape.Mesh, Shape.Scale, (Anchor ? *Anchor : FVector::ZeroVector) + Shape.Offset, Shape.Rot, &Shape.Color, Shape.Glow);
+				}
+			}
+		}
+	}
 }
 
 UStaticMeshComponent* UWWOWeaponComponent::Part(FName Name) const
@@ -242,28 +364,8 @@ void UWWOWeaponComponent::BuildModel()
 	// or sphere (radius), all in cm; at Anchor + "offset", turned by "rot" (pitch, yaw, roll).
 	auto AddJsonPart = [&](FName Name, const TSharedPtr<FJsonObject>& O, const FVector& Anchor)
 	{
-		FString Shape = TEXT("box");
-		O->TryGetStringField(TEXT("shape"), Shape);
-		const FVector Size = WWOConfig::Vec(O, TEXT("size"), FVector(2.0));
-		const FVector Rot = WWOConfig::Vec(O, TEXT("rot"));
-		FRotator R(Rot.X, Rot.Y, Rot.Z);
-		UStaticMesh* Mesh = WWOFX::Cube();
-		FVector Scale = Size / 100.0;
-		if (Shape == TEXT("cyl"))
-		{
-			Mesh = WWOFX::Cylinder(); // stands along z: lay it along x
-			Scale = FVector(Size.X * 2.0, Size.X * 2.0, Size.Y) / 100.0;
-			R = (R.Quaternion() * FRotator(-90.f, 0.f, 0.f).Quaternion()).Rotator();
-		}
-		else if (Shape == TEXT("sphere"))
-		{
-			Mesh = WWOFX::Sphere();
-			Scale = FVector(Size.X * 2.0 / 100.0);
-		}
-		double Glow = 0.0;
-		O->TryGetNumberField(TEXT("glow"), Glow);
-		const FLinearColor Color = WWOConfig::Color(O);
-		AddPart(Name, Mesh, Scale, Anchor + WWOConfig::Vec(O, TEXT("offset")), R, &Color, (float)Glow);
+		const FJsonPartShape Shape = JsonPartShape(O);
+		AddPart(Name, Shape.Mesh, Shape.Scale, Anchor + Shape.Offset, Shape.Rot, &Shape.Color, Shape.Glow);
 		bool bHideAds = false;
 		if (O->TryGetBoolField(TEXT("hide_ads"), bHideAds) && bHideAds) AdsHiddenParts.Add(Name);
 	};
