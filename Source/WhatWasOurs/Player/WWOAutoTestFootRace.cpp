@@ -170,6 +170,8 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(FMath::IsNearlyEqual(F->Energy(Team), GM->EnergyPerEnemy, 0.01f),
 			FString::Printf(TEXT("killing an enemy earns %.0f energy (%.1f)"), GM->EnergyPerEnemy, F->Energy(Team)));
 		Check(F->Energy(1 - Team) == 0.f, TEXT("and nothing for the other team"));
+		const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+		Check(GS && GS->KillFeed.Num() == 0, FString::Printf(TEXT("an AI kill puts nothing in the kill feed (%d lines)"), GS ? GS->KillFeed.Num() : -1));
 	}
 	// Room1 -> hub -> Room1, the pool draining only while in the hub.
 	if (Crossed(7.f)) { F->SetEnergy(Team, Rich); StepInto(P, Room1); }
@@ -177,6 +179,10 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	{
 		Check(At(P, Hub) && F->IsBreaching(P), FString::Printf(TEXT("Room1's doorway leads to the team's hub doorway (at %s)"), *Where()));
 		Check(Lever1->bLive && !Lever2->bLive, TEXT("a breach from Room1 makes Lever1 live, not Lever2"));
+		const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+		const bool bFeed = GS && GS->KillFeed.Num() > 0 && GS->KillFeed.Last().How == AWWOGameState::KillEvent && GS->KillFeed.Last().Victim == TEXT("breached")
+			&& PS && GS->KillFeed.Last().Killer == PS->GetPlayerName();
+		Check(bFeed, TEXT("the breach shows in the kill feed: \"<player> breached\""));
 		EnergyMark = F->Energy(Team);
 	}
 	if (Crossed(8.5f))
@@ -241,6 +247,15 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(F->IsBreaching(P) && Lever1->bLive, TEXT("breaching from Room1 again: Lever1 is live"));
 		StandAt(PC, P, Lever1);
 	}
+	// Frame times: the worst frame in a quiet stretch before, and around Door1 opening (a hitch there was jarring).
+	static float WorstBefore = 0.f, WorstAtDoor = 0.f;
+	if (T >= 20.5f && T < 23.f) WorstBefore = FMath::Max(WorstBefore, DeltaTime);
+	if (T >= 24.f + GM->LeverHoldTime - 0.2f && T < 24.f + GM->LeverHoldTime + 1.5f) WorstAtDoor = FMath::Max(WorstAtDoor, DeltaTime);
+	if (Crossed(24.f + GM->LeverHoldTime + 1.5f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("FootRace frames: worst %.1f ms before, %.1f ms around Door1 opening"), WorstBefore * 1000.f, WorstAtDoor * 1000.f);
+		Check(WorstAtDoor < FMath::Max(WorstBefore * 2.f, 0.05f), FString::Printf(TEXT("no hitch when a door opens (worst frame %.1f ms, %.1f ms before)"), WorstAtDoor * 1000.f, WorstBefore * 1000.f));
+	}
 	if (Crossed(24.f + GM->LeverHoldTime * 0.5f))
 	{
 		Check(!Door1->IsOpen() && Lever1->Progress > 0.2f, FString::Printf(TEXT("holding the key pulls the lever over time (%.2f)"), Lever1->Progress));
@@ -249,6 +264,9 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	if (Crossed(24.f + Hold + 0.2f))
 	{
 		Check(Door1->IsOpen() && F->DoorsOpen(Team) == 1 && Lever1->bPulled, TEXT("the pull opens Door1"));
+		const AWWOGameState* Feed = World->GetGameState<AWWOGameState>();
+		Check(Feed && Feed->KillFeed.Num() > 0 && Feed->KillFeed.Last().Victim == TEXT("opened Door 1") && PS && Feed->KillFeed.Last().Killer == PS->GetPlayerName(),
+			FString::Printf(TEXT("the door shows in the kill feed: \"<player> opened Door 1\" (%s)"), Feed && Feed->KillFeed.Num() ? *Feed->KillFeed.Last().Victim : TEXT("none")));
 		Check(!Blocks(World, Door1), TEXT("an open door no longer blocks its doorway"));
 		Check(F->IsFrozen(Team), TEXT("opening a door mid-breach freezes the breach's pool"));
 		Check(!Lever2->bLive, TEXT("one door per breach: Lever2 is not live"));
@@ -288,6 +306,11 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	if (Crossed(30.f + Hold + 0.2f)) Check(Door2->IsOpen() && F->DoorsOpen(Team) == 2, TEXT("the pull opens Door2"));
 	if (Crossed(30.f + Hold + 0.5f)) StepInto(P, Hub);
 	if (Crossed(30.f + Hold + 1.5f)) Check(At(P, Room3), FString::Printf(TEXT("leaving the hub lands in Room3 (at %s)"), *Where()));
+	// Room3's first spawn is its Tank: its model is loaded at the start, so no stall when it comes.
+	static float WorstRoom3 = 0.f;
+	if (T >= 30.f + Hold + 0.5f && T < 30.f + Hold + 3.5f) WorstRoom3 = FMath::Max(WorstRoom3, DeltaTime);
+	if (Crossed(30.f + Hold + 3.5f))
+		Check(WorstRoom3 < 0.1f, FString::Printf(TEXT("no stall as Room3 fills, its Tank first (worst frame %.1f ms)"), WorstRoom3 * 1000.f));
 	// The lane rooms.
 	const int32 Want = FMath::RoundToInt(GM->RoomEnemies);
 	const float Rooms = 30.f + Hold + 1.5f + Want * GM->RoomSpawnStagger + 1.f; // Room3 has had time to fill

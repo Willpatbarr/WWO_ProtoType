@@ -509,6 +509,13 @@ void UWWOHUDWidget::PaintKillFeed(const FWWOHUDFrame& F) const
 			float X = 40.f;
 			P.Text(Line.Killer, FVector2D(X, Y), Px, TeamTint(Line.KillerTeam), 0.f, 4.f);
 			X += P.Measure(Line.Killer, FeedFont).X;
+			if (Line.How == AWWOGameState::KillEvent)
+			{
+				// Not a kill: "<who> <what happened>" (FootRace: breached, opened a door).
+				P.Text(TEXT(" ") + Line.Victim, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.85f * Alpha), 0.f, 4.f);
+				Y -= LineTall;
+				continue;
+			}
 			const FString Arrow = TEXT("  >  ");
 			P.Text(Arrow, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.75f * Alpha), 0.f, 4.f);
 			X += P.Measure(Arrow, FeedFont).X;

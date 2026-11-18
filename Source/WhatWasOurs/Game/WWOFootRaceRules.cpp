@@ -10,6 +10,7 @@
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyKinds.h"
 #include "Enemies/WWOEnemyTypes.h"
+#include "Characters/WWOBodyComponent.h"
 #include "WWOIds.h"
 #include "Allies/WWOAlly.h"
 #include "World/WWOBreachPortal.h"
@@ -75,6 +76,45 @@ void FWWOFootRaceRules::Begin()
 		GS->BossWindow = { 0.f, 0.f };
 		GS->CoreState = { 0, 0 };
 		GS->BreachThreshold = Mode.BreachThreshold;
+	}
+	// Every enemy's model, loaded now with the map: the first Tank (Room3) or boss would otherwise stall
+	// the game for most of a second while its model loads mid-match.
+	// And the clips they play (Enemies/WWOEnemyTypes.cpp's Body->Play names): the Tank's walk and casts
+	// are first needed in Room3. All kept referenced (Preloaded) so nothing unloads them before then.
+	TArray<UObject*> Loaded;
+	for (const FWWOEnemyKind& Kind : WWOEnemyKinds::All())
+	{
+		if (const AWWOEnemy* Default = Kind.Class ? Kind.Class->GetDefaultObject<AWWOEnemy>() : nullptr) UWWOBodyComponent::Preload(Default->Body->ModelKey, Loaded);
+	}
+	UWWOBodyComponent::Preload(AWWOBoss::StaticClass()->GetDefaultObject<AWWOBoss>()->Body->ModelKey, Loaded);
+	static const FName EnemyClips[] = { "Death01", "Hit_Knockback", "Idle", "Idle_Unarmed", "Jump", "Jump_Land", "Punch_Jab",
+		"Spell_Simple_Enter", "Spell_Simple_Shoot", "Sprint_Unarmed", "Walk_Unarmed" };
+	UWWOBodyComponent::PreloadAnims(EnemyClips, Loaded);
+	// And the effect materials (the Tank's shield bubble is the first M_WWO_SoftAlpha in the match: a quarter
+	// of a second to load in Room3).
+	for (const TCHAR* Name : { TEXT("M_WWO_SoftAlpha"), TEXT("M_WWO_SoftAdd"), TEXT("M_WWO_Unlit"), TEXT("M_WWO_Ground"), TEXT("M_WWO_Solid") })
+	{
+		if (UMaterialInterface* M = WWOFX::Material(Name)) Loaded.Add(M);
+	}
+	for (UObject* Object : Loaded) Preloaded.Emplace(Object);
+	// Loaded isn't enough for the Tank: the first one set up still cost a quarter of a second (its model's
+	// first set-up, done once a run). One of each enemy kind and the boss, set up now, out of sight under
+	// the map and gone a moment later, takes that cost while the match loads.
+	{
+		TArray<UClass*> Warm;
+		for (const FWWOEnemyKind& Kind : WWOEnemyKinds::All()) if (Kind.Class) Warm.Add(Kind.Class);
+		Warm.Add(AWWOBoss::StaticClass());
+		for (int32 I = 0; I < Warm.Num(); ++I)
+		{
+			const FTransform Where(FVector(I * 600.f, 0.f, -20000.f));
+			if (AWWOEnemy* E = World->SpawnActorDeferred<AWWOEnemy>(Warm[I], Where, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+			{
+				E->bRespawns = false;
+				E->FinishSpawning(Where);
+				E->SetActorTickEnabled(false);
+				E->SetLifeSpan(0.5f);
+			}
+		}
 	}
 	SpawnPortals();
 	SpawnDoorsAndLevers();
@@ -213,6 +253,11 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway into the hub (%.0f energy)"), *Body->GetName(), Team,
 		*Portal->Room.ToString(), Energy(Team));
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		const AWWOPlayerState* PS = Body->GetPlayerState<AWWOPlayerState>();
+		GS->ReportEvent(PS ? PS->GetPlayerName() : Body->GetName(), Team, TEXT("breached"));
+	}
 }
 
 void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
@@ -444,7 +489,22 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 	const bool bRecent = Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= KillCreditWindow;
 	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
 	const int32 KillerTeam = Killer ? UWWOWorldSubsystem::TeamOf(Killer) : -1;
-	if (KillerTeam >= 0 && KillerTeam != VictimTeam) CreditKill(KillerTeam, Mode.EnergyPerPlayerKill, Killer, TEXT("a player kill"));
+	AWWOPlayerState* VictimPS = Victim->GetPlayerState<AWWOPlayerState>();
+	if (VictimPS) ++VictimPS->Deaths;
+	if (KillerTeam >= 0 && KillerTeam != VictimTeam)
+	{
+		CreditKill(KillerTeam, Mode.EnergyPerPlayerKill, Killer, TEXT("a player kill"));
+		// The kill feed (the lane's AI kills stay out of it): killer > killee, as team deathmatch shows it.
+		AWWOPlayerState* KillerPS = Killer->GetPlayerState<AWWOPlayerState>();
+		const bool bPrecision = Victim->Health->bLastAttackCritical && Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 0.05;
+		if (KillerPS) ++KillerPS->Kills;
+		if (KillerPS && bPrecision) ++KillerPS->PrecisionKills;
+		if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>(); GS && KillerPS)
+		{
+			GS->ReportKill(KillerPS, KillerPS->GetPlayerName(), KillerTeam, VictimPS ? VictimPS->GetPlayerName() : Victim->GetName(), VictimTeam,
+				bPrecision ? AWWOGameState::KillPrecision : FName(), 1);
+		}
+	}
 }
 
 void FWWOFootRaceRules::OnEnemyDied(AWWOEnemy* Enemy)
@@ -550,7 +610,7 @@ bool FWWOFootRaceRules::IsLeverLive(int32 Team, int32 Door) const
 	return Door == DoorsOpen(Team) + 1 && Door <= 3 && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
 }
 
-void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door)
+void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By)
 {
 	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
 	if (!GS || Team < 0 || Team > 1 || Door != DoorsOpen(Team) + 1) return;
@@ -571,6 +631,8 @@ void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door)
 		GS->BreachFrozen[Team] = true;
 	}
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d opened Door %d%s"), Team, Door, bFreeze ? TEXT(" (its breach's pool is frozen)") : TEXT(""));
+	const AWWOPlayerState* ByState = By ? By->GetPlayerState<AWWOPlayerState>() : nullptr;
+	GS->ReportEvent(ByState ? ByState->GetPlayerName() : AWWOPlayerState::TeamName(Team), Team, FString::Printf(TEXT("opened Door %d"), Door));
 	if (Door == 3) SpawnBoss(Team);
 }
 
@@ -582,6 +644,7 @@ void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
 		if (!L || L->bPulled) continue;
 		L->bLive = IsLeverLive(L->Team, L->Door);
 		bool bHeld = false;
+		const AWWOCharacter* Puller = nullptr;
 		if (L->bLive)
 		{
 			for (const TWeakObjectPtr<AWWOCharacter>& B : InHub)
@@ -589,13 +652,14 @@ void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
 				if (B.IsValid() && !B->Health->bDead && B->bHoldingUse && UWWOWorldSubsystem::TeamOf(B.Get()) == L->Team && L->InReach(B->GetActorLocation()))
 				{
 					bHeld = true;
+					Puller = B.Get();
 					break;
 				}
 			}
 		}
 		// Let go (or out of reach) and the handle springs back.
 		L->Progress = bHeld ? L->Progress + DeltaSeconds / FMath::Max(Mode.LeverHoldTime, 0.01f) : 0.f;
-		if (L->Progress >= 1.f) OpenDoor(L->Team, L->Door);
+		if (L->Progress >= 1.f) OpenDoor(L->Team, L->Door, Puller);
 	}
 }
 

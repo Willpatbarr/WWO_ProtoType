@@ -77,6 +77,7 @@ void AWWOGameState::Text(UWorld* World, const FString& Words, const FVector& At,
 }
 
 const FName AWWOGameState::KillPrecision(TEXT("precision"));
+const FName AWWOGameState::KillEvent(TEXT("event"));
 
 void AWWOGameState::ReportKill(const AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points)
 {

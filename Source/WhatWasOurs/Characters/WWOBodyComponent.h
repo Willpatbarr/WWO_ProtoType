@@ -115,6 +115,12 @@ public:
 	// Shows a character model (a key in Config/CharacterModels.json) instead of the mannequin, which
 	// stays as the invisible animation driver the model copies its pose from. None: the mannequin.
 	void SetModel(FName Key);
+	// Loads a model's mesh and retargeter and finishes compiling the mesh now, so the first body to wear
+	// it mid-match doesn't stall the game while it loads (FootRace's later rooms and boss: a 0.7 s freeze).
+	// What it loaded goes in Out: the caller keeps those referenced until they're used (or GC unloads them).
+	static void Preload(FName Key, TArray<UObject*>& Out);
+	// The same for animation clips by name (as FindAnim looks them up).
+	static void PreloadAnims(TConstArrayView<FName> Names, TArray<UObject*>& Out);
 	USkeletalMeshComponent* GetModel() const { return Model; }
 	// The model's hands are rigid (Config/CharacterModels.json hand_fingers / hand_palm, right hand, mesh space).
 	bool bRigidHands = false;

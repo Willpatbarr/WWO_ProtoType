@@ -61,11 +61,15 @@
 // on the team can breach until that breach ends; once no one is in the hub the rest of the frozen pool
 // is thrown away and the next pool becomes the pool.
 //
+// The kill feed (AWWOGameState::ReportKill): player kills, and as event lines each breach and each door
+// opened; the lane's AI kills stay out of it.
+//
 // The level's markers (Tools/footrace_layout.py) are TargetPoints tagged with what they are and where:
 // TeamSpawn Lane<n>; PortalAnchor Lane<n> Room<k>|Boss; HubPortal Lane<n>. Lane n is team n's.
 
 #include "CoreMinimal.h"
 #include "Game/WWOMatchRules.h"
+#include "UObject/StrongObjectPtr.h"
 
 class AWWOCharacter;
 class AWWOBreachPortal;
@@ -125,7 +129,7 @@ public:
 	AWWOBreachDoor* DoorOf(int32 Team, int32 Door) const;
 	AWWOBreachLever* LeverOf(int32 Team, int32 Door) const;
 	bool IsLeverLive(int32 Team, int32 Door) const;
-	void OpenDoor(int32 Team, int32 Door);
+	void OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By = nullptr); // By: who pulled the lever (the kill feed)
 	// The two pools.
 	float NextEnergy(int32 Team) const;
 	bool IsFrozen(int32 Team) const;
@@ -189,6 +193,7 @@ private:
 	void SpawnInRoom(FRoom& Room);
 	void BindEnemy(AWWOEnemy* Enemy);
 	TArray<FRoom> Rooms;
+	TArray<TStrongObjectPtr<UObject>> Preloaded; // the enemies' models and clips, loaded at the start and kept
 	int32 Furthest[2] = { 1, 1 };
 	static void Teleport(AWWOCharacter* Body, const FTransform& Spot);
 

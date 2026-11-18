@@ -226,6 +226,10 @@ walks the table in its order (the HUD line's).
     and its boss in a window), breaches when the team has the energy and a lever or core to go for (two at
     most), fetches a core, pulls the live lever, leaves, and carries a core out. Its aim and fire are the
     player fight's (`AimAt`, `Shoot`).
+    The kill feed shows player kills and, as event lines (`AWWOGameState::ReportEvent`, `KillEvent`), each
+    breach and door; AI kills stay out. `Begin` loads every enemy's model, clips and the effect materials
+    (`UWWOBodyComponent::Preload`, `PreloadAnims`; kept in `Preloaded`) and sets up one of each enemy out of
+    sight for half a second, so the first Tank (Room3) or boss doesn't stall the match.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

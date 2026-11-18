@@ -56,6 +56,10 @@ public:
 	};
 	TArray<FKillLine> KillFeed;
 	static const FName KillPrecision;
+	// How for a line that isn't a kill: "<Killer> <Victim>", the Victim field holding what happened
+	// (FootRace: "breached", "opened Door 2"). Reported with no killer state and 0 points.
+	static const FName KillEvent;
+	void ReportEvent(const FString& Who, int32 Team, const FString& What) { ReportKill(nullptr, Who, Team, What, -1, KillEvent, 0); }
 	static constexpr int32 KillPoints = 1, PrecisionKillPoints = 2; // team score for a kill, and for a precision kill
 	void ReportKill(const class AWWOPlayerState* KillerState, const FString& Killer, int32 KillerTeam, const FString& Victim, int32 VictimTeam, FName How, int32 Points);
 
