@@ -592,7 +592,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		WWOUI::SetTip(WidgetTree, Box, Tip);
 		HoverNames.Add({ Box, Tip }); // its notes in the Build section light up while it's hovered
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
-		Size->SetWidthOverride((Under.IsEmpty() ? 56.f : 132.f) * K);
+		Size->SetWidthOverride((Under.IsEmpty() ? 56.f : 150.f) * K); // wide enough for a two-stat line
 		Size->SetHeightOverride(56.f * K);
 		Size->AddChild(Box);
 		Row->AddChildToHorizontalBox(Size)->SetPadding(FMargin(Row->GetChildrenCount() > 1 ? 8.f * K : 0.f, 0, 0, 0));
@@ -695,7 +695,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	const FVector2D At = RootGeo.AbsoluteToLocal(TileGeo.GetAbsolutePositionAtCoordinates(FVector2D(0.f, 1.f)));
 	float Width = 20.f * K;
 	const bool bWide = Name.StartsWith(TEXT("weapon")) || Name.StartsWith(TEXT("part_"));
-	for (int32 i = 0; i < Row->GetChildrenCount(); ++i) Width += (bWide ? 140.f : 64.f) * K;
+	for (int32 i = 0; i < Row->GetChildrenCount(); ++i) Width += (bWide ? 158.f : 64.f) * K;
 	if (Name.StartsWith(TEXT("weapon")) && L->GetConfigs().Num() == 0) Width = 520.f * K;
 	const float Left = FMath::Clamp((float)At.X, 8.f, FMath::Max((float)RootGeo.GetLocalSize().X - Width - 8.f, 8.f));
 	UOverlaySlot* PopupSlot = Root->AddChildToOverlay(Panel);

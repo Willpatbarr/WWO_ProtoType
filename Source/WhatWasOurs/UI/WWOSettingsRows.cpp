@@ -36,7 +36,7 @@ UWidget* UWWOSettingsMenu::MakeRow(const FString& Key, int32 RowIndex)
 	const FWWOSettingRow& Row = Find(Key)->Rows[RowIndex];
 	UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LabelSlot = Line->AddChildToHorizontalBox(MakeText(Row.Label, WWOUI::Type::Title));
+	UHorizontalBoxSlot* LabelSlot = Line->AddChildToHorizontalBox(MakeText(Row.Label, WWOUI::Type::Title, FLinearColor::White, true)); // wraps before the value (the firing tester's column is narrow)
 	LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	LabelSlot->SetVerticalAlignment(VAlign_Center);
 	Root->AddChildToVerticalBox(Line);
