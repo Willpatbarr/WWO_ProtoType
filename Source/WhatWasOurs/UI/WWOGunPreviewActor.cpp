@@ -115,7 +115,13 @@ void AWWOGunPreviewActor::ShowGun(const UWWOWeaponData* Weapon, const UWWOLoadou
 		Parts.Add(Part);
 	}
 	Frame();
-	if (Capture->bCaptureEveryFrame) Capture->CaptureScene();
+	if (bPicture)
+	{
+		PictureFrames = 12;
+		SetLights(true);
+		SetActorTickEnabled(true);
+	}
+	else if (Capture->bCaptureEveryFrame) Capture->CaptureScene();
 }
 
 void AWWOGunPreviewActor::Frame()
@@ -134,13 +140,13 @@ void AWWOGunPreviewActor::Frame()
 	// Far enough that the gun's length and its height both fit with a margin all round. The camera
 	// looks across the gun, so its length shows most when the sway turns it least toward the camera;
 	// the end that comes nearer then shows bigger by the depth it gains.
-	const float Aspect = Size.X / Size.Y;
+	const float Aspect = Shape.X / Shape.Y;
 	const float TanH = FMath::Tan(FMath::DegreesToRadians(Capture->FOVAngle * 0.5f));
 	const float TanV = TanH / Aspect;
 	const float Least = FMath::DegreesToRadians(FMath::Max(FMath::Abs(BaseYaw) - SwayYaw, 0.f));
 	const float Across = Half.X * FMath::Cos(Least) + Half.Y * FMath::Sin(Least);
 	const float Nearer = Half.X * FMath::Sin(FMath::DegreesToRadians(FMath::Abs(BaseYaw) + SwayYaw)); // how much nearer the near end gets at the most turn
-	const float Tall = Half.Z + Half.X * FMath::Sin(FMath::DegreesToRadians(-CameraPitch)) * 0.5f;
+	const float Tall = Half.Z + Half.X * FMath::Sin(FMath::DegreesToRadians(-Pitch)) * 0.5f;
 	const float Distance = FMath::Max(Across * 1.08f / TanH, Tall * 1.3f / TanV) + Nearer;
 	const FVector Forward = Capture->GetRelativeRotation().Vector();
 	Capture->SetRelativeLocation(-Forward * Distance);
@@ -151,12 +157,52 @@ void AWWOGunPreviewActor::SetLive(bool bLive)
 	Capture->bCaptureEveryFrame = bLive;
 	Capture->SetVisibility(bLive);
 	SetActorTickEnabled(bLive);
-	for (UDirectionalLightComponent* Light : { KeyLight.Get(), RimLight.Get(), FillLight.Get() }) if (Light) Light->SetVisibility(bLive);
+	SetLights(bLive);
+}
+
+void AWWOGunPreviewActor::SetLights(bool bOn)
+{
+	for (UDirectionalLightComponent* Light : { KeyLight.Get(), RimLight.Get(), FillLight.Get() }) if (Light) Light->SetVisibility(bOn);
+}
+
+void AWWOGunPreviewActor::MakePicture(const FVector2D& InShape)
+{
+	bPicture = true;
+	Shape = InShape;
+	BaseYaw = 0.f;
+	SwayYaw = 0.f;
+	Pitch = 0.f;
+	Turntable->SetRelativeRotation(FRotator::ZeroRotator);
+	Capture->SetRelativeRotation(FRotator(0.f, -90.f, 0.f)); // square on to the gun's right side
+	Capture->CaptureSource = ESceneCaptureSource::SCS_SceneColorHDR; // alpha: 0 where the gun is
+	Capture->bCaptureEveryFrame = false;
+	Capture->SetVisibility(true);
+	Backdrop->SetVisibility(false);
+	Target = NewObject<UTextureRenderTarget2D>(this);
+	Target->RenderTargetFormat = RTF_RGBA16f;
+	Target->ClearColor = FLinearColor(0.f, 0.f, 0.f, 1.f);
+	Target->InitAutoFormat(FMath::RoundToInt(Shape.X * 3.f), FMath::RoundToInt(Shape.Y * 3.f)); // drawn smaller: clean edges
+	Capture->TextureTarget = Target;
+	SetLights(false);
+	SetActorTickEnabled(false);
 }
 
 void AWWOGunPreviewActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bPicture)
+	{
+		if (PictureFrames > 0)
+		{
+			Capture->CaptureScene();
+			if (--PictureFrames == 0)
+			{
+				SetLights(false);
+				SetActorTickEnabled(false);
+			}
+		}
+		return;
+	}
 	// A slow sway about the three-quarter view (real time: the menu pauses the game).
 	Clock += FApp::GetDeltaTime();
 	Turntable->SetRelativeRotation(FRotator(0.f, BaseYaw + SwayYaw * FMath::Sin(Clock * SwayRate), 0.f));

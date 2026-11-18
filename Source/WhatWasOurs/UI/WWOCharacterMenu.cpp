@@ -121,17 +121,17 @@ UWidget* UWWOCharacterMenu::ItemCard(const FItemCard& Spec, TFunction<void()> Fn
 	{
 		// The bare symbol (white on clear) on the card's own fill, which is the badge's edge shade: the
 		// badge's square would show as a faint seam against the rounded card.
-		// Its fine lines lose alpha at card size, so it is drawn twice over itself to read as bright as on
-		// the badge.
+		// Its fine lines lose alpha at card size, so it is drawn four times over itself to read as bright
+		// as on the badge (alpha builds up: a 30% line comes out at 76%).
 		const FVector2D SymbolSize = FVector2D(Spec.Badge, Spec.Badge) * K;
 		UWidget* Symbol = nullptr;
 		if (UWidget* Once = WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize, false))
 		{
-			UOverlay* Twice = Tree->ConstructWidget<UOverlay>();
-			Twice->SetVisibility(ESlateVisibility::HitTestInvisible);
-			Twice->AddChildToOverlay(Once);
-			Twice->AddChildToOverlay(WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize, false));
-			Symbol = Twice;
+			UOverlay* Stack = Tree->ConstructWidget<UOverlay>();
+			Stack->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Stack->AddChildToOverlay(Once);
+			for (int32 i = 0; i < 3; ++i) Stack->AddChildToOverlay(WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize, false));
+			Symbol = Stack;
 		}
 		if (!Symbol) Symbol = WWOUI::MakeSymbol(Tree, Spec.Kind, Spec.Id, SymbolSize);
 		UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(Symbol);
@@ -287,6 +287,7 @@ void UWWOCharacterMenu::Open()
 		PreviewSlot->SetSize(WWOUI::Fill(1.f));
 		PreviewSlot->SetHorizontalAlignment(HAlign_Fill);
 		PreviewSlot->SetVerticalAlignment(VAlign_Fill);
+		PreviewSlot->SetPadding(FMargin(0, 24.f * K, 0, 0)); // level with the panel's top, clear of the header's line
 		TileSwitcher->AddChild(Editor);
 		HeaderHandlers = CardHandlers; // the tabs were made with Card: keep theirs past BuildOverview's reset
 	}

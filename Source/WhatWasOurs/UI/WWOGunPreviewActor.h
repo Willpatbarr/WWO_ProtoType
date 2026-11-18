@@ -39,6 +39,12 @@ public:
 	// The capture and the sway run only while the gun is on screen.
 	void SetLive(bool bLive);
 	FName ShownId() const { return Shown; }
+	// Picture mode (the HUD's weapon pictures): call once, right after spawning. The gun is seen flat
+	// from its right side with nothing behind it, into a Shape-sized target whose alpha is the gun's
+	// cut-out (scene colour, inverse opacity: M_WWO_HUDGun shows it). It does not sway or capture every
+	// frame: each ShowGun takes the picture over the next few frames (so textures and shaders that
+	// are still loading have arrived) and then the lights and the tick go off again.
+	void MakePicture(const FVector2D& Shape);
 
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> Target;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> Capture;
@@ -54,6 +60,11 @@ private:
 	FName Shown;
 	float Clock = 0.f;
 	// The three-quarter view: the gun turned this far toward the camera, and the camera's pitch down.
-	static constexpr float BaseYaw = -28.f, SwayYaw = 14.f, SwayRate = 0.45f, CameraPitch = -12.f;
+	static constexpr float SwayRate = 0.45f, CameraPitch = -12.f;
+	float BaseYaw = -28.f, SwayYaw = 14.f, Pitch = CameraPitch;
+	FVector2D Shape = Size;     // the picture's shape (Frame fits the gun to it)
+	bool bPicture = false;
+	int32 PictureFrames = 0;    // picture mode: captures still to take
+	void SetLights(bool bOn);
 	void Frame();
 };

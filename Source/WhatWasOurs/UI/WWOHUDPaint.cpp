@@ -694,29 +694,64 @@ void UWWOHUDWidget::PaintAmmo(const FWWOHUDFrame& F) const
 	const UWWOWeaponData* W = F.W;
 	const FVector2D Size = F.Size;
 	const FVector2D Center = F.Center;
-	// Ammo (bottom right): weapon name, the count (red when low), reload bar.
+	// The weapon corner (bottom right). One row on the bottom line, from the right: what is in reserve
+	// (endless for now: an infinity sign), the magazine's count, large (red when low), the weapon in
+	// hand's picture, and the stowed weapon's, smaller and dimmed. Over the row, right-aligned: the
+	// weapon's name and the perks' line. The reload bar runs under the count while reloading.
 	if (W)
 	{
-		// A bottom-right stack, right-aligned on one edge: the perks' line, the weapon's name, the count,
-		// and the reload bar under the count while reloading. Each sits on a soft shadow.
 		const int32 Mag = Gun->MagazineSize();
 		const FVector2D Corner(Size.X - 40.f, Size.Y - 40.f);
 		const FVector2D Lift(0.f, Gun->bReloading ? 0.f : -12.f);
-		P.Text(W->DisplayName, Corner - FVector2D(0, 86) - Lift, Type::Title, FLinearColor::White, 1.f, 0.f, EWeight::Medium);
 		if (Gun->ConfigToastLeft > 0.f)
 		{
 			Tag(P, Gun->ConfigToast, FVector2D(Center.X, Size.Y - 150.f), Type::Title, FLinearColor::White, 0.5f, 0.5f, EWeight::Medium,
 				FVector2D(16.f, 6.f), FMath::Min(Gun->ConfigToastLeft / 0.4f, 1.f));
 		}
-		// Weapon mod perks (draft): streaks, counters and timers above the weapon name.
-		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 110) - Lift, Type::Body, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 0.f, EWeight::Medium);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
-		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
-		const float CountPx = Gun->bReloading && Gun->Ammo < Mag ? Type::Heading : Type::Display;
-		P.Text(Count, Corner - FVector2D(0, 62) - Lift, CountPx, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 0.f, EWeight::SemiBold);
+		const bool bWord = Gun->bReloading && Gun->Ammo < Mag;
+		const FString Count = bWord ? FString(TEXT("RELOADING")) : FString::FromInt(Gun->Ammo);
+		const float CountPx = bWord ? Type::Heading : Type::Display;
+		const FString Reserve(TEXT("\u221E")); // endless
+		const float ReservePx = 38.f; // the sign is small for its size in the fallback font that has it
+		const float ReserveWide = P.Measure(Reserve, P.Font(ReservePx, EWeight::Medium)).X;
+		const float CountWide = P.Measure(Count, P.Font(CountPx, EWeight::SemiBold)).X;
+		const float RowTop = Corner.Y - 62.f - Lift.Y; // the count's top
+		float Left = Corner.X;
+		if (!bWord)
+		{
+			P.Text(Reserve, FVector2D(Left, RowTop + 8.f), ReservePx, FLinearColor(1, 1, 1, 0.65f), 1.f, 0.f, EWeight::Medium);
+			Left -= ReserveWide + 10.f;
+		}
+		P.Text(Count, FVector2D(Left, RowTop), CountPx, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 0.f, EWeight::SemiBold);
+		Left -= CountWide + 18.f;
+		const float NumbersWide = Corner.X - Left;
+		// The pictures stand on the count's line, the one in hand beside the numbers.
+		const float Bottom = Corner.Y - Lift.Y - 14.f;
+		const FVector2D Big = GunPictureShape * 0.82f, Small = GunPictureShape * 0.5f;
+		if (GunMats[0])
+		{
+			GunMats[0]->SetScalarParameterValue("Gain", 1.5f);
+			GunMats[0]->SetScalarParameterValue("Alpha", 1.f);
+			GunMats[0]->SetScalarParameterValue("Dim", 0.f);
+			P.MaterialBox(GunMats[0], FVector2D(Left - Big.X, Bottom - Big.Y), Big);
+			Left -= Big.X + 10.f;
+		}
+		if (GunMats[1] && !GunShown[1].IsEmpty())
+		{
+			GunMats[1]->SetScalarParameterValue("Gain", 1.5f);
+			GunMats[1]->SetScalarParameterValue("Alpha", 0.6f);
+			GunMats[1]->SetScalarParameterValue("Dim", 0.6f);
+			P.MaterialBox(GunMats[1], FVector2D(Left - Small.X, Bottom - Small.Y), Small);
+		}
+		// The name and the perks sit over the row, clear of the picture's top (a pistol's picture is tall).
+		const float NameTop = FMath::Min(RowTop - 26.f, (GunMats[0] ? Bottom - Big.Y : RowTop) - 28.f);
+		P.Text(W->DisplayName, FVector2D(Corner.X, NameTop), Type::Title, FLinearColor::White, 1.f, 0.f, EWeight::Medium);
+		// Weapon mod perks (draft): streaks, counters and timers above the weapon name.
+		P.Text(Gun->PerkStatus(), FVector2D(Corner.X, NameTop - 24.f), Type::Body, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 0.f, EWeight::Medium);
 		if (Gun->bReloading)
 		{
-			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(CountPx, EWeight::SemiBold)).X, P.Measure(W->DisplayName, P.Font(Type::Title)).X);
+			const float BarWidth = FMath::Max(160.f, NumbersWide - 18.f);
 			RoundBar(P, Corner - FVector2D(BarWidth, 6), FVector2D(BarWidth, 6), Gun->ReloadProgress, FLinearColor(0.85f, 0.88f, 0.95f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 		}
 	}
@@ -728,11 +763,12 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 	AWWOCharacter* Pl = F.Pl;
 	const UWWOLoadoutSubsystem* Loadout = F.Loadout;
 	const FVector2D Size = F.Size;
-	// Grenade, abilities and ult (bottom left): a 64 px square each with its name under it.
+	// Grenade, abilities and ult (bottom left): a row of 64 px squares close together, no names (the
+	// symbols say it), the ult's square a little larger; all stand on one bottom line.
 	if (Loadout)
 	{
-		const float Pad = 14.f;
-		FVector2D Pos(40.f, Size.Y - 40.f - 64.f - 22.f);
+		const float Pad = 8.f, UltSide = 80.f;
+		FVector2D Pos(40.f, Size.Y - 40.f - 64.f);
 		const double Now = Pl->GetWorld()->GetRealTimeSeconds();
 		if (const UWWOGrenadeData* G = Loadout->GetGrenade())
 		{
@@ -757,8 +793,7 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 					RoundBar(Over, Pos + FVector2D(6, 56), FVector2D(52, 4), Charges - Ready, FLinearColor(1, 1, 1, 0.85f), FLinearColor(0, 0, 0, 0.45f));
 				}
 			}
-			P.Text(G->DisplayName, Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(Type::Body)).X - 64.f);
+			Pos.X += 64 + Pad;
 		}
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 		{
@@ -817,17 +852,17 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				}
 				break;
 			}
-			P.Text(A->DisplayName, Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(Type::Body)).X - 64.f);
+			Pos.X += 64 + Pad;
 		}
 		// Ult: fills in the grenade's color, pulses when ready.
 		const FLinearColor UltColor = Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
-		ChargeBox(P, Pos, FVector2D(64, 64), UltColor, Pl->Ult->Charge);
+		const FVector2D UltBox(UltSide, UltSide);
+		const FVector2D UltPos = Pos - FVector2D(0.f, UltSide - 64.f); // same bottom line as the rest
+		ChargeBox(P, UltPos, UltBox, UltColor, Pl->Ult->Charge);
 		if (Pl->Ult->IsReady() && !Pl->Ult->bActive)
 		{
-			KitRing(P, Pos, FVector2D(64, 64), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)));
+			KitRing(P, UltPos, UltBox, FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)));
 		}
-		P.Text(TEXT("Ult"), Pos + FVector2D(0, 70), Type::Body, FLinearColor::White, 0.f);
 	}
 }
 

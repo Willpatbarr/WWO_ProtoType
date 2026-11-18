@@ -72,6 +72,14 @@ private:
 	int32 FpsFrames = 0;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> VignetteMat;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> ScopeMat;
+	// The weapon corner's pictures: [0] the weapon in hand, [1] the stowed one. Each is a gun preview
+	// actor in picture mode (far below the level) and the material that shows its capture; GunShown
+	// is what each last photographed (weapon and mods), so it is retaken only when that changes.
+	static inline const FVector2D GunPictureShape = FVector2D(216.f, 84.f);
+	UPROPERTY() TObjectPtr<class AWWOGunPreviewActor> GunPictures[2];
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> GunMats[2];
+	FString GunShown[2];
+	void UpdateGunPictures();
 
 	AWWOCharacter* Player() const;
 	void Bind(AWWOCharacter* P);

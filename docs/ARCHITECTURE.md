@@ -334,7 +334,7 @@ joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importin
   lights, all directional on lighting channel 2 and switched on only while the menu is open; no sky light or level
   reflections), fixed exposure near the arenas' (`CharacterExposure`) so flora glow keeps its colour, soft bloom, temporal
   AA on a supersampled target, a backdrop (`M_WWO_PreviewBackdrop`) whose edges match the page with a soft pool of light
-  behind the figure, and a contact shadow under the feet (`M_WWO_PreviewShadow`; both from `Tools/create_preview_materials.py`). The Weapon tab's gun is `AWWOGunPreviewActor` (`UI/WWOGunPreviewActor.*`):
+  behind the figure, and a contact shadow under the feet (`M_WWO_PreviewShadow`; both from `Tools/create_preview_materials.py`). The Weapon tab's gun is `AWWOGunPreviewActor` (`UI/WWOGunPreviewActor.*`): The preview character stands in the unarmed idle loop (`AWWOPreviewActor::IdleAnim`), animating while the menu pauses the game. The HUD's weapon corner (`PaintAmmo`) shows two more `AWWOGunPreviewActor`s in picture mode (`MakePicture`: side on, no backdrop, scene colour with the gun's cut-out in alpha, retaken only when the weapon or its mods change) through `M_WWO_HUDGun` (`Tools/create_hud_materials.py`): the weapon in hand and the stowed one, beside the magazine count and the reserve sign.
   `WWOWeapon::BuildShowcase` builds the same model as the first-person gun (mesh, kept and extra parts, the mods' parts),
   lit by its own key, rim and fill lights on lighting channel 1, captured only while that tab is open.
   Shared helpers: `WWOCharacterMenuPrivate.h`.

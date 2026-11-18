@@ -226,6 +226,16 @@ struct FWWOPainter
 		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
 			ESlateDrawEffect::None, Tint);
 	}
+	// A UI material drawn over a box (the HUD's weapon pictures).
+	void MaterialBox(UMaterialInstanceDynamic* Mat, FVector2D Pos, FVector2D BoxSize) const
+	{
+		if (!Mat) return;
+		FSlateBrush Brush;
+		Brush.SetResourceObject(Mat);
+		Brush.ImageSize = FVector2D(BoxSize * S);
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
+			ESlateDrawEffect::None, FLinearColor::White);
+	}
 	void Material(UMaterialInstanceDynamic* Mat, FVector2D Offset = FVector2D::ZeroVector) const
 	{
 		if (!Mat) return;

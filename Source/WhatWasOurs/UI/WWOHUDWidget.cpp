@@ -8,6 +8,10 @@
 #include "Flora/WWOSporeFog.h"
 #include "Flora/WWOFloraEffects.h"
 #include "Systems/WWOWorldSubsystem.h"
+#include "Systems/WWOLoadoutSubsystem.h"
+#include "UI/WWOGunPreviewActor.h"
+#include "Engine/GameInstance.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Systems/WWOTargetable.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
@@ -93,6 +97,53 @@ void UWWOHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_Vignette"))) VignetteMat = UMaterialInstanceDynamic::Create(M, this);
 		if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_Scope"))) ScopeMat = UMaterialInstanceDynamic::Create(M, this);
+	}
+	UpdateGunPictures();
+}
+
+void UWWOHUDWidget::UpdateGunPictures()
+{
+	// The weapon in hand (with its mods) and the one in the other slot (as it comes: the loadout only
+	// knows the mods of the weapon in hand), each photographed when it changes.
+	UWorld* World = GetWorld();
+	const UWWOLoadoutSubsystem* L = World && World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UWWOLoadoutSubsystem>() : nullptr;
+	if (!L) return;
+	const UWWOWeaponData* Guns[2] = { L->GetWeapon(), nullptr };
+	const int32 Other = L->GetSlotConfig(1 - L->GetActiveSlot());
+	if (Other != INDEX_NONE)
+	{
+		const FName Id = L->GetConfigs()[Other].Weapon;
+		for (const UWWOWeaponData* W : L->Catalog.Weapons) if (W && W->Id == Id) Guns[1] = W;
+	}
+	for (int32 i = 0; i < 2; ++i)
+	{
+		FString Key = Guns[i] ? Guns[i]->Id.ToString() : FString();
+		if (i == 0 && Guns[i])
+		{
+			for (const FName& Slot : UWWOLoadoutSubsystem::ModSlots())
+			{
+				const UWWOModData* Mod = L->GetMod(Slot);
+				Key += TEXT("|") + (Mod ? Mod->Id.ToString() : FString());
+			}
+		}
+		if (!GunPictures[i])
+		{
+			if (!Guns[i]) continue;
+			GunPictures[i] = World->SpawnActor<AWWOGunPreviewActor>(FVector(3000.f * (i + 1), 12000.f, -50000.f), FRotator::ZeroRotator, WWO::AlwaysSpawn());
+			if (!GunPictures[i]) continue;
+			GunPictures[i]->MakePicture(GunPictureShape);
+			if (UMaterialInterface* M = WWOFX::Material(TEXT("M_WWO_HUDGun")))
+			{
+				GunMats[i] = UMaterialInstanceDynamic::Create(M, this);
+				GunMats[i]->SetTextureParameterValue("Tex", GunPictures[i]->Target);
+			}
+			GunShown[i].Reset();
+		}
+		if (Key != GunShown[i])
+		{
+			GunShown[i] = Key;
+			GunPictures[i]->ShowGun(Guns[i], L);
+		}
 	}
 }
 

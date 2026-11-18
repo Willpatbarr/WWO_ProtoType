@@ -339,15 +339,7 @@ void UWWOCharacterMenu::BuildOverview()
 	TopBox->SetHeightOverride(156.f * K);
 	TopBox->AddChild(Top);
 	Right->AddChildToVerticalBox(TopBox);
-	// The bars under the kit (two weapons, four shell parts) share the rest of the column evenly, the
-	// same gap between each; each bar's words centred in it.
-	const FMargin BarPad(16.f, 8.f);
-	auto AddBar = [&](UWidget* Bar)
-	{
-		UVerticalBoxSlot* S = Right->AddChildToVerticalBox(Bar);
-		S->SetSize(WWOUI::Fill(1.f));
-		S->SetPadding(FMargin(0, 14.f * K, 0, 0));
-	};
+	const FMargin BarPad(16.f, 10.f);
 	// A bar's mark at its left: a short upright line (the accent for the weapon in hand).
 	auto Marked = [&](const FLinearColor& Color) -> UWidget*
 	{
@@ -383,37 +375,40 @@ void UWWOCharacterMenu::BuildOverview()
 		WordsSlot->SetVerticalAlignment(VAlign_Center);
 		UWidget* Bar = Card(Row, Open(TEXT("Weapons")), WWOUI::CardColor, WWOUI::CardEdgeStrong, WWOUI::BoxEdge, BarPad);
 		HoverTiles.Add({ Bar, FString::Printf(TEXT("weapon%d"), WeaponSlot) });
-		AddBar(Bar);
+		Right->AddChildToVerticalBox(Bar)->SetPadding(FMargin(0, 26.f * K, 0, 0));
 	}
-	// The four frame parts (the shell), one bar each like the weapons: the slot over the part's name,
-	// what it changes at the right. (There is no art for the parts, so no picture: the bars share the
-	// column's height with the weapons', evenly.)
+	// The four frame parts (the shell): a two by two grid of tall cards filling the rest of the column.
+	// Each card's upper area is kept clear for the part's picture (art to come); its words sit at the
+	// bottom: the slot, the part's name, what it changes.
+	UUniformGridPanel* Parts = Tree->ConstructWidget<UUniformGridPanel>();
+	Parts->SetSlotPadding(FMargin(7.f * K));
 	static const TCHAR* const PartSlots[] = { TEXT("head"), TEXT("arms"), TEXT("core"), TEXT("legs") };
 	for (int32 i = 0; i < 4; ++i)
 	{
 		const UWWOFramePartData* Part = L->GetFramePart(PartSlots[i]);
-		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
-		Row->AddChildToHorizontalBox(Marked(FLinearColor(1, 1, 1, 0.3f)))->SetPadding(FMargin(0, 6.f * K));
+		UOverlay* In = Tree->ConstructWidget<UOverlay>();
+		UOverlaySlot* Tick = In->AddChildToOverlay(WWOUI::Spaced(WidgetTree, TEXT("/"), WWOUI::Type::Body, Accent, 0));
+		Tick->SetHorizontalAlignment(HAlign_Right);
+		Tick->SetVerticalAlignment(VAlign_Top);
 		UVerticalBox* Words = Tree->ConstructWidget<UVerticalBox>();
-		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, PartSlots[i], WWOUI::Type::Micro, Dim, 240));
-		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Part ? Part->DisplayName : TEXT("Standard"), WWOUI::Type::Body, FLinearColor::White, 180))->SetPadding(FMargin(0, 6.f * K, 0, 0));
-		UHorizontalBoxSlot* WordsSlot = Row->AddChildToHorizontalBox(Words);
-		WordsSlot->SetPadding(FMargin(18.f * K, 0, 0, 0));
-		WordsSlot->SetVerticalAlignment(VAlign_Center);
-		WordsSlot->SetSize(WWOUI::Fill(1.f));
-		UTextBlock* Detail = WWOUI::Spaced(WidgetTree, Part ? Part->Summary().Replace(TEXT("\n"), TEXT(" ")) : FString(), WWOUI::Type::Micro, Dim, 60, true);
-		Detail->SetJustification(ETextJustify::Right);
-		UHorizontalBoxSlot* DetailSlot = Row->AddChildToHorizontalBox(Detail);
-		DetailSlot->SetSize(WWOUI::Fill(0.8f));
-		DetailSlot->SetVerticalAlignment(VAlign_Center);
-		DetailSlot->SetPadding(FMargin(12.f * K, 0, 0, 0));
-		UWidget* PartCard = Card(Row, Open(TEXT("Frame Parts")), WWOUI::CardColor, WWOUI::CardEdgeStrong, WWOUI::BoxEdge, BarPad);
+		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, PartSlots[i], WWOUI::Type::Caption, Dim, 220));
+		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Part ? Part->DisplayName : TEXT("Standard"), WWOUI::Type::Small, FLinearColor::White, 160, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+		if (Part) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Part->Summary().Replace(TEXT("\n"), TEXT(" ")), WWOUI::Type::Micro, Dim, 40, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
+		UOverlaySlot* WordsSlot = In->AddChildToOverlay(Words);
+		WordsSlot->SetHorizontalAlignment(HAlign_Fill);
+		WordsSlot->SetVerticalAlignment(VAlign_Bottom);
+		UWidget* PartCard = Card(In, Open(TEXT("Frame Parts")), WWOUI::CardColor, WWOUI::CardEdgeStrong, WWOUI::BoxEdge, FMargin(18.f, 12.f));
 		HoverTiles.Add({ PartCard, FString(TEXT("part_")) + PartSlots[i] });
-		AddBar(PartCard);
+		UUniformGridSlot* Cell = Parts->AddChildToUniformGrid(PartCard, i / 2, i % 2);
+		Cell->SetHorizontalAlignment(HAlign_Fill);
+		Cell->SetVerticalAlignment(VAlign_Fill);
 	}
+	UVerticalBoxSlot* PartsSlot = Right->AddChildToVerticalBox(Parts);
+	PartsSlot->SetSize(WWOUI::Fill(1.f));
+	PartsSlot->SetPadding(FMargin(-7.f * K, 20.f * K, -7.f * K, -7.f * K));
 	UHorizontalBoxSlot* RightSlot = Overview->AddChildToHorizontalBox(Right);
 	RightSlot->SetSize(WWOUI::Fill(0.31f));
-	RightSlot->SetPadding(FMargin(36.f * K, 40.f * K, 16.f * K, 28.f * K));
+	RightSlot->SetPadding(FMargin(36.f * K, 40.f * K, 16.f * K, 16.f * K));
 }
 
 void UWWOCharacterMenu::UpdateStatPreview(const UWWOFramePartData* Part, bool bEquipped)
