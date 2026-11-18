@@ -889,6 +889,18 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const FString Label = FString::Printf(TEXT("%s%s  %.0f"), Slot == 0 ? TEXT("YOUR BREACH") : TEXT("THEIRS"),
 			Energy >= Threshold ? TEXT(" READY") : TEXT(""), Energy);
 		P.Text(Label, FVector2D(Pos.X + (Slot == 0 ? BarSize.X : 0.f), Pos.Y + BarSize.Y + 9.f), 16.f, Color, Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
+		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
+		if (BossLeft >= 0.f)
+		{
+			const float Window = GS->BossWindow.IsValidIndex(Team) ? GS->BossWindow[Team] : 0.f;
+			const FVector2D BossPos(Pos.X, Pos.Y + BarSize.Y + 32.f);
+			P.Box(BossPos, FVector2D(BarSize.X, 8.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
+			P.Box(BossPos, FVector2D(BarSize.X * FMath::Clamp(BossLeft, 0.f, 1.f), 8.f), Window > 0.f ? FLinearColor(1.f, 0.3f, 0.25f) : FLinearColor(0.55f, 0.3f, 0.3f));
+			const FString BossLine = Window > 0.f ? FString::Printf(TEXT("BOSS %.0f%%  WINDOW %.0fs"), BossLeft * 100.f, FMath::CeilToFloat(Window))
+				: FString::Printf(TEXT("BOSS %.0f%%  SHIELDED"), BossLeft * 100.f);
+			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), 15.f, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+		}
 	}
 	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
 	const AWWOBreachLever* Near = nullptr;

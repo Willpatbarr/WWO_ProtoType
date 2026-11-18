@@ -8,7 +8,9 @@
 //   pool, a hub kill splits between the pools, Lever2 waits; leaving lands in Room2 and swaps the pools;
 //   a breach from Room2 opens Door2; leaving lands in Room3;
 // - lane rooms: both Room1s fill at the start, Room3 fills (with its Tank) once stood in, a lane's
-//   enemies leave the other team's players alone, a kill is refilled after RoomRefillTime.
+//   enemies leave the other team's players alone, a kill is refilled after RoomRefillTime;
+// - the boss: Door3 brings it up shielded (hits do nothing), a window (opened as wwo.BossWindow does)
+//   lets hits land and ends on time, the next window is a third longer, killing it wins the race.
 // Screenshots 88_footrace_*. Logs `AutoTest footrace: ... ok|FAIL`.
 
 #include "Player/WWOAutoTest.h"
@@ -21,6 +23,8 @@
 #include "Game/WWOPlayerState.h"
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyKinds.h"
+#include "Enemies/WWOEnemyTypes.h"
+#include "Game/WWOGameState.h"
 #include "World/WWOBreachPortal.h"
 #include "World/WWOBreachDoor.h"
 #include "World/WWOBreachLever.h"
@@ -321,5 +325,65 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		P->SetViewRotation(0.f, Spot.Rotator().Yaw);
 	}
 	if (Crossed(Rooms + 1.5f + GM->RoomRefillTime)) Shot(TEXT("88_footrace_room_enemies"));
-	if (Crossed(Rooms + 2.f + GM->RoomRefillTime)) WWOTest::Exit();
+	// The boss. Door3 opened straight (the levers are tested above), with a short window to wait out.
+	const float B = Rooms + 2.f + GM->RoomRefillTime;
+	AWWOGameMode* Mutable = Cast<AWWOGameMode>(World->GetAuthGameMode());
+	AWWOBoss* Boss = F->BossOf(Team);
+	auto Hit = [P](AWWOBoss* Target, float Amount)
+	{
+		FWWODamageBy By(P);
+		Target->ApplyHit(Amount, false, Target->GetActorLocation(), FLinearColor::White);
+	};
+	const float Window = 2.f;
+	if (Crossed(B))
+	{
+		Mutable->BossWindow = Window;
+		F->OpenDoor(Team, 3);
+	}
+	if (Crossed(B + 0.5f))
+	{
+		Check(F->DoorsOpen(Team) == 3 && Boss != nullptr, TEXT("opening Door3 brings the team's boss up"));
+		Check(F->BossOf(1 - Team) == nullptr, TEXT("and not the other team's"));
+		if (Boss)
+		{
+			Check(Boss->bShielded && FMath::IsNearlyEqual(Boss->GetMaxHealth(), GM->BossHealth), FString::Printf(TEXT("shielded, with %.0f health (%.0f)"), GM->BossHealth, Boss->GetMaxHealth()));
+			Hit(Boss, 500.f);
+		}
+	}
+	if (Boss && Crossed(B + 0.7f)) Check(Boss->GetHealth() == Boss->GetMaxHealth(), FString::Printf(TEXT("a hit on the shield does nothing (%.0f)"), Boss->GetHealth()));
+	if (Boss && Crossed(B + 1.f))
+	{
+		F->OpenBossWindow(Team);
+		Check(!Boss->bShielded && F->BossCycle(Team) == 1 && FMath::IsNearlyEqual(F->BossWindowLeft(Team), Window, 0.05f),
+			FString::Printf(TEXT("a window drops the shield for %.1f s (%.2f)"), Window, F->BossWindowLeft(Team)));
+		Hit(Boss, 500.f);
+	}
+	if (Boss && Crossed(B + 1.2f)) Check(FMath::IsNearlyEqual(Boss->GetHealth(), GM->BossHealth - 500.f, 1.f), FString::Printf(TEXT("hits land in the window (%.0f)"), Boss->GetHealth()));
+	if (Boss && Crossed(B + 1.f + Window + 0.3f)) Check(Boss->bShielded && F->BossWindowLeft(Team) == 0.f, TEXT("the shield is back when the window ends"));
+	if (Boss && Crossed(B + 3.6f))
+	{
+		F->OpenBossWindow(Team);
+		Check(F->BossCycle(Team) == 2 && FMath::IsNearlyEqual(F->BossWindowLeft(Team), Window * 4.f / 3.f, 0.05f),
+			FString::Printf(TEXT("the second window is a third longer (%.2f s)"), F->BossWindowLeft(Team)));
+		Check(PC->GetWorld()->GetGameState<AWWOGameState>()->BossWindow.IsValidIndex(Team), TEXT("the boss shows on the game state"));
+		// A look at it: from the boss room's doorway.
+		if (AWWOBreachPortal* BossDoorway = F->RoomPortal(Team, "Boss"))
+		{
+			const FTransform Spot = BossDoorway->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+			const FRotator Facing = (Boss->GetActorLocation() - Spot.GetLocation()).Rotation();
+			P->TeleportTo(Spot.GetLocation(), FRotator(0.f, Facing.Yaw, 0.f), false, true);
+			PC->SetControlRotation(FRotator(0.f, Facing.Yaw, 0.f));
+			P->SetViewRotation(0.f, Facing.Yaw);
+		}
+	}
+	if (Boss && Crossed(B + 4.f)) Shot(TEXT("88_footrace_boss"));
+	if (Boss && Crossed(B + 4.2f)) Hit(Boss, GM->BossHealth * 2.f);
+	if (Crossed(B + 4.6f))
+	{
+		Check(F->IsOver() && F->Winner == Team, FString::Printf(TEXT("killing the boss wins the race for its team (winner %d)"), F->Winner));
+		const AWWOGameState* GS = PC->GetWorld()->GetGameState<AWWOGameState>();
+		Check(GS && GS->bMatchOver && GS->MatchWinner == Team, TEXT("and every machine is told"));
+		Shot(TEXT("88_footrace_win"));
+	}
+	if (Crossed(B + 5.f)) WWOTest::Exit();
 }

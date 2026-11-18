@@ -679,3 +679,60 @@ void AWWOTank::Animate(float DeltaSeconds)
 	if (Speed > 0.3f) Body->Play("Walk_Unarmed", FMath::Clamp(Speed / (WalkAnimSpeed * ModelScale), 0.5f, 2.f));
 	else Body->Play("Idle_Unarmed");
 }
+
+// --- FootRace's boss ---------------------------------------------------------------------------
+
+AWWOBoss::AWWOBoss(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ModelScale = 1.55f * Size;
+	GetCapsuleComponent()->InitCapsuleSize(45.f * Size, 140.f * Size);
+	BodyHitbox->InitCapsuleSize(42.f * Size, 130.f * Size);
+	BodyHitbox->SetRelativeLocation(FVector(0, 0, -10.f * Size));
+	Body->BodyColor = FLinearColor(0.36f, 0.2f, 0.2f); // a darker, redder Tank
+}
+
+void AWWOBoss::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWWOBoss, bShielded);
+}
+
+void AWWOBoss::Setup()
+{
+	Super::Setup();
+	if (HasAuthority() && BossHealth > 0.f)
+	{
+		MaxHealth = BossHealth;
+		Health = MaxHealth;
+	}
+	// No Tank bubble: the boss shield is the only one.
+	Shield = 0.f;
+	MaxShield = 0.f;
+	// The boss shield: a big soft bubble round the whole body, shown while it is up.
+	BossBubble = WWOFX::AddSoftSphere(this, GetRootComponent(), FLinearColor(1.f, 0.35f, 0.3f), 0.35f, 1.2f, false, true);
+	BossBubble->SetRelativeScale3D(FVector(1.f, 1.f, 1.4f) * BodyHeight() * 0.85f / 100.f);
+	ShowShield();
+}
+
+void AWWOBoss::SetShielded(bool bOn)
+{
+	bShielded = bOn;
+	ShowShield();
+}
+
+void AWWOBoss::OnRep_Shielded()
+{
+	ShowShield();
+}
+
+void AWWOBoss::ShowShield()
+{
+	if (BossBubble) BossBubble->SetVisibility(bShielded);
+}
+
+float AWWOBoss::Absorb(float Damage, bool bCritical, const FVector& Point)
+{
+	if (!bShielded) return Damage; // a damage window: every hit lands
+	UWWOWorldSubsystem::Get(this)->SpawnDamageNumber(0.f, false, Point, FLinearColor(1.f, 0.35f, 0.3f));
+	return 0.f;
+}

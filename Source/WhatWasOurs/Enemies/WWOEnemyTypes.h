@@ -129,11 +129,14 @@ protected:
 	virtual float BodyHeight() const override { return 280.f; }
 	virtual float BodyRadius() const override { return 45.f; }
 
-private:
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Bubble;
+protected:
 	// Online the host's shield replicates: joiners draw the bubble from it (and guess kills through it).
+	// (Protected: the FootRace boss turns the Tank's own shield off.)
 	UPROPERTY(ReplicatedUsing = OnRep_Shield) float Shield = 0.f;
 	UPROPERTY(Replicated) float MaxShield = 0.f;
+
+private:
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Bubble;
 	UFUNCTION() void OnRep_Shield(float Before);
 	void UpdateBubble(float DeltaSeconds);
 	float SinceHit = 99.f, LobTimer = 1.5f, SlamCooldown = 0.f, SlamTime = -1.f, Lobbing = 0.f, BubbleFlash = 0.f;
@@ -146,4 +149,36 @@ private:
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
 	friend class FWWORegress;
 
+};
+
+// FootRace's boss (Game/WWOFootRaceRules.h): a bigger, tougher Tank, for now. Its health is the game
+// mode's BossHealth (the rules set it before it spawns). It has none of the Tank's own shield; instead the
+// rules hold a boss shield up (bShielded) that takes every hit, and drop it for a damage window.
+UCLASS()
+class WHATWASOURS_API AWWOBoss : public AWWOTank
+{
+	GENERATED_BODY()
+
+public:
+	AWWOBoss(const FObjectInitializer& ObjectInitializer);
+
+	static constexpr float Size = 1.6f;   // times a Tank
+	float BossHealth = 0.f;               // host, before FinishSpawning: its health (0: the Tank's)
+	UPROPERTY(ReplicatedUsing = OnRep_Shielded) bool bShielded = true;
+	void SetShielded(bool bOn);           // host
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual bool IsRankAndFile() const override { return false; }
+	float GetHealthFraction() const { return MaxHealth > 0.f ? Health / MaxHealth : 0.f; }
+
+protected:
+	virtual void Setup() override;
+	virtual float Absorb(float Damage, bool bCritical, const FVector& Point) override;
+	virtual float BodyHeight() const override { return 280.f * Size; }
+	virtual float BodyRadius() const override { return 45.f * Size; }
+
+private:
+	UFUNCTION() void OnRep_Shielded();
+	void ShowShield();
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> BossBubble;
 };

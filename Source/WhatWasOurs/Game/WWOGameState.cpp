@@ -24,6 +24,8 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, BreachNext);
 	DOREPLIFETIME(AWWOGameState, BreachFrozen);
 	DOREPLIFETIME(AWWOGameState, DoorsOpen);
+	DOREPLIFETIME(AWWOGameState, BossHealth);
+	DOREPLIFETIME(AWWOGameState, BossWindow);
 }
 
 AWWOGameState* AWWOGameState::HostRelay(UWorld* World)

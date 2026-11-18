@@ -214,6 +214,9 @@ walks the table in its order (the HUD line's).
     A door opened mid-breach freezes that pool (`BreachFrozen`); earnings go to `BreachNext` (hub kills
     split) until nobody is in the hub, then the next pool takes over. Leaving the hub lands in the furthest
     room opened.
+    The boss (`AWWOBoss`, a bigger Tank, on `BossSpawn`): up and shielded when Door3 opens; `OpenBossWindow`
+    (for now the console's `wwo.BossWindow`) drops the shield for `BossWindow` s, a third longer each
+    window; killing it ends the match (`EndMatch`, `IsOver`) with that team the winner.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
     wants, adding one a tick, one making room for a joiner (`RetireFor`), one for a leaver, bots' health
     following the Bots settings.

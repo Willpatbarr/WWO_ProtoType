@@ -56,6 +56,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 10.f;        // per second, for each of the team's players in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDeathLoss = 0.25f;   // share of the pool lost when one of them dies in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.5f;      // s of holding the Revive key at a lever to pull it
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 3000.f;       // each team's boss
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWindow = 15.f;         // s: the first damage window (t); each next is t/3 longer
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomEnemies = 8.f;         // enemies a team's live room holds
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomSpawnStagger = 0.4f;   // s between spawns while a room first fills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomRefillTime = 3.f;      // s between spawns once it has filled

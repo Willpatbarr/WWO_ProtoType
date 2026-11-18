@@ -40,6 +40,12 @@
 // opens at most one door). A breacher holds the Revive key at it for LeverHoldTime and it opens.
 // Leaving the hub lands a player in the furthest room their team has opened.
 //
+// The boss (Enemies/WWOEnemyTypes.h, AWWOBoss; a BossSpawn marker per lane): spawned when the team
+// opens Door3, shielded. OpenBossWindow drops the shield for a damage window, BossWindow s long the
+// first time and a third of that longer each time after (t, 1.33t, 1.67t...); then the shield is back.
+// (The boss cores will open the windows; for now the console's wwo.BossWindow does.) The first team to
+// kill its boss wins the match.
+//
 // Two pools (the design doc's 2.1): a door opened while the team's breachers are in the hub freezes
 // the pool they are on. They keep draining it; what the team earns goes to the next pool
 // (AWWOGameState::BreachNext) instead, but a kill made in the hub is split evenly between the two. Nobody
@@ -56,6 +62,7 @@ class AWWOCharacter;
 class AWWOBreachPortal;
 class AWWOBreachDoor;
 class AWWOBreachLever;
+class AWWOBoss;
 class AWWOEnemy;
 class UWWOHealthComponent;
 
@@ -72,6 +79,7 @@ public:
 	virtual void Update(float DeltaSeconds) override;
 	virtual void OnPlayerJoined(APlayerController* NewPlayer) override;
 	virtual FString StatusText(FLinearColor& OutColor) const override;
+	virtual bool IsOver() const override { return State == EWWOWaveState::MatchOver; }
 	virtual FWWOFootRaceRules* AsFootRace() override { return this; }
 
 	// A spot in the player's team's spawn room (respawns, and a body's first placing).
@@ -110,6 +118,13 @@ public:
 	// The two pools.
 	float NextEnergy(int32 Team) const;
 	bool IsFrozen(int32 Team) const;
+	// The bosses.
+	AWWOBoss* BossOf(int32 Team) const { return Team >= 0 && Team <= 1 ? Bosses[Team].Get() : nullptr; }
+	int32 BossCycle(int32 Team) const { return Team >= 0 && Team <= 1 ? Cycles[Team] : 0; }
+	float BossWindowLeft(int32 Team) const { return Team >= 0 && Team <= 1 ? WindowLeft[Team] : 0.f; }
+	float WindowLength(int32 Cycle) const; // the Cycle'th damage window (1-based)
+	void OpenBossWindow(int32 Team);       // drops the team's boss shield for its next window (if it's up)
+	int32 Winner = -1;
 	// Energy earned by Killer's team: to the pool, or (while frozen) to the next pool, or split in the hub.
 	void CreditKill(int32 Team, float Amount, const AWWOCharacter* Killer, const TCHAR* Why);
 
@@ -127,6 +142,12 @@ private:
 	void UpdateLevers(float DeltaSeconds);
 	void EndBreachesDone(); // a team with nobody left in the hub: its breach is over (and a frozen pool swaps)
 	void SetNext(int32 Team, float Value);
+	void SpawnBoss(int32 Team);
+	void UpdateBosses(float DeltaSeconds);
+	void EndMatch(int32 WinningTeam);
+	TWeakObjectPtr<AWWOBoss> Bosses[2];
+	int32 Cycles[2] = { 0, 0 };
+	float WindowLeft[2] = { 0.f, 0.f };
 	TArray<TWeakObjectPtr<AWWOBreachDoor>> Doors;
 	TArray<TWeakObjectPtr<AWWOBreachLever>> Levers;
 	TSet<int32> EnteredFrom[2]; // the rooms (1-4) the team's current breach went in by

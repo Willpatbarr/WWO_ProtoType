@@ -33,6 +33,10 @@ public:
 	UPROPERTY(Replicated) TArray<float> BreachNext;
 	UPROPERTY(Replicated) TArray<bool> BreachFrozen;
 	UPROPERTY(Replicated) TArray<int32> DoorsOpen;
+	// Each team's boss: its health as a share of full (-1: not spawned yet), and the seconds left in its
+	// damage window (0: the shield is up).
+	UPROPERTY(Replicated) TArray<float> BossHealth;
+	UPROPERTY(Replicated) TArray<float> BossWindow;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

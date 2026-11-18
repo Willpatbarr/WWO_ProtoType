@@ -9,6 +9,7 @@
 #include "Player/WWOHealthComponent.h"
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyKinds.h"
+#include "Enemies/WWOEnemyTypes.h"
 #include "WWOIds.h"
 #include "Allies/WWOAlly.h"
 #include "World/WWOBreachPortal.h"
@@ -69,6 +70,8 @@ void FWWOFootRaceRules::Begin()
 		GS->BreachNext = { 0.f, 0.f };
 		GS->BreachFrozen = { false, false };
 		GS->DoorsOpen = { 0, 0 };
+		GS->BossHealth = { -1.f, -1.f };
+		GS->BossWindow = { 0.f, 0.f };
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	SpawnPortals();
@@ -151,6 +154,7 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	EndBreachesDone();
 	UpdateLevers(DeltaSeconds);
 	UpdateRooms(DeltaSeconds);
+	UpdateBosses(DeltaSeconds);
 	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 	{
 		if (!Body || !Body->Health) continue;
@@ -440,6 +444,11 @@ void FWWOFootRaceRules::Teleport(AWWOCharacter* Body, const FTransform& Spot)
 FString FWWOFootRaceRules::StatusText(FLinearColor& OutColor) const
 {
 	OutColor = FLinearColor::White;
+	if (State == EWWOWaveState::MatchOver)
+	{
+		OutColor = FLinearColor(0.6f, 1.f, 0.65f);
+		return AWWOPlayerState::TeamName(Winner) + TEXT(" WINS THE RACE");
+	}
 	return TEXT("FOOTRACE");
 }
 
@@ -537,6 +546,7 @@ void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door)
 		GS->BreachFrozen[Team] = true;
 	}
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d opened Door %d%s"), Team, Door, bFreeze ? TEXT(" (its breach's pool is frozen)") : TEXT(""));
+	if (Door == 3) SpawnBoss(Team);
 }
 
 void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
@@ -615,4 +625,85 @@ void FWWOFootRaceRules::CreditKill(int32 Team, float Amount, const AWWOCharacter
 	SetNext(Team, NextEnergy(Team) + Amount - ToPool);
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d %+.0f energy (%s; frozen: %.0f to the pool, %.0f to the next), now %.0f + %.0f next"),
 		Team, Amount, Why, ToPool, Amount - ToPool, Energy(Team), NextEnergy(Team));
+}
+
+// --- The bosses ------------------------------------------------------------------------------------
+
+float FWWOFootRaceRules::WindowLength(int32 Cycle) const
+{
+	return Mode.BossWindow * (1.f + (FMath::Max(Cycle, 1) - 1) / 3.f);
+}
+
+void FWWOFootRaceRules::SpawnBoss(int32 Team)
+{
+	if (Team < 0 || Team > 1 || Bosses[Team].IsValid()) return;
+	UWorld* World = Mode.GetWorld();
+	const ATargetPoint* Marker = nullptr;
+	for (TActorIterator<ATargetPoint> It(World); It; ++It)
+	{
+		if (It->ActorHasTag("BossSpawn") && It->ActorHasTag(LaneTag(Team))) Marker = *It;
+	}
+	if (!Marker) return;
+	const float Half = AWWOBoss::StaticClass()->GetDefaultObject<AWWOBoss>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const FTransform Where(FRotator(0.f, Marker->GetActorRotation().Yaw, 0.f), Marker->GetActorLocation() + FVector(0, 0, Half + 5.f));
+	AWWOBoss* Boss = World->SpawnActorDeferred<AWWOBoss>(AWWOBoss::StaticClass(), Where, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (!Boss) return;
+	Boss->BossHealth = Mode.BossHealth;
+	Boss->bRespawns = false;
+	Boss->Lane = (int8)Team;
+	Boss->FinishSpawning(Where);
+	Bosses[Team] = Boss;
+	Cycles[Team] = 0;
+	WindowLeft[Team] = 0.f;
+	BindEnemy(Boss);
+	EnemyBindings.Add({ Boss, Boss->OnDied.AddWeakLambda(&Mode, [this, Team](AWWOEnemy*) { EndMatch(Team); }) });
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossHealth);
+}
+
+void FWWOFootRaceRules::OpenBossWindow(int32 Team)
+{
+	AWWOBoss* Boss = BossOf(Team);
+	if (!Boss || Boss->IsDead() || !Boss->bShielded || State != EWWOWaveState::Match) return;
+	++Cycles[Team];
+	WindowLeft[Team] = WindowLength(Cycles[Team]);
+	Boss->SetShielded(false);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss shield is down: window %d, %.1f s"), Team, Cycles[Team], WindowLeft[Team]);
+}
+
+void FWWOFootRaceRules::UpdateBosses(float DeltaSeconds)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		AWWOBoss* Boss = BossOf(Team);
+		if (Boss && !Boss->IsDead() && WindowLeft[Team] > 0.f)
+		{
+			WindowLeft[Team] = FMath::Max(0.f, WindowLeft[Team] - DeltaSeconds);
+			if (WindowLeft[Team] == 0.f)
+			{
+				Boss->SetShielded(true);
+				UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss shield is back up after window %d"), Team, Cycles[Team]);
+			}
+		}
+		if (!GS) continue;
+		if (GS->BossHealth.Num() < 2) GS->BossHealth.Init(-1.f, 2);
+		if (GS->BossWindow.Num() < 2) GS->BossWindow.Init(0.f, 2);
+		GS->BossHealth[Team] = Boss ? (Boss->IsDead() ? 0.f : Boss->GetHealthFraction()) : -1.f;
+		GS->BossWindow[Team] = WindowLeft[Team];
+	}
+}
+
+void FWWOFootRaceRules::EndMatch(int32 WinningTeam)
+{
+	if (State == EWWOWaveState::MatchOver) return;
+	State = EWWOWaveState::MatchOver;
+	Winner = WinningTeam;
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		GS->bMatchOver = true;
+		GS->MatchWinner = (int8)WinningTeam;
+	}
+	if (Mode.bTestRun) Mode.RestartLeft = 6.f;
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d killed its boss and wins"), WinningTeam);
 }

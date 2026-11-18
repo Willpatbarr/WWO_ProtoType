@@ -4,6 +4,7 @@
 #include "Game/WWOGameMode.h"
 #include "Game/WWOTesterRules.h"
 #include "Game/WWOFootRaceRules.h"
+#include "Systems/WWOWorldSubsystem.h"
 #include "Game/WWOWaveRules.h"
 #include "Game/WWOTeamDeathmatch.h"
 #include "Game/WWOPlayerState.h"
@@ -32,6 +33,17 @@ namespace
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (AWWOGameMode* GM = WaveMode(World)) GM->JumpToWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : (GM->Waves() ? GM->Waves()->Wave : 0) + 1);
+		}));
+	// FootRace, until boss cores exist: drop a boss's shield for its next damage window.
+	FAutoConsoleCommandWithWorldAndArgs BossWindowCommand(TEXT("wwo.BossWindow"),
+		TEXT("wwo.BossWindow [team]: FootRace: drop that team's boss shield for its next damage window (default: your team's)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AWWOGameMode* GM = WaveMode(World);
+			FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr;
+			if (!F) return;
+			const int32 Team = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : FMath::Max(0, UWWOWorldSubsystem::TeamOf(UWWOWorldSubsystem::Get(World)->GetPlayer()));
+			F->OpenBossWindow(Team);
 		}));
 }
 
