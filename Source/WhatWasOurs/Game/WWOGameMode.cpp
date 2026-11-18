@@ -47,6 +47,15 @@ namespace
 		}));
 }
 
+int32 AWWOGameMode::FootRaceTeamSize(const FString& MapName)
+{
+	// The map table's team size (UWWONetSubsystem::Maps); 4 for a map it doesn't list.
+	FString Level = FPaths::GetBaseFilename(MapName);
+	Level.RemoveFromStart(TEXT("UEDPIE_0_"));
+	const FWWOMapInfo* Info = UWWONetSubsystem::FindMap(FName(*Level));
+	return Info ? FMath::Max(Info->TeamSize, 1) : 4;
+}
+
 AWWOGameMode::AWWOGameMode()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -79,6 +88,10 @@ void AWWOGameMode::InitGame(const FString& MapName, const FString& Options, FStr
 	const FString BotsOption = UGameplayStatics::ParseOption(Options, TEXT("bots"));
 	Roster.OptionBots = bTeams && !BotsOption.IsEmpty() ? FMath::Clamp(FCString::Atoi(*BotsOption), 0, 11) : -1;
 	// (The launch screen's count is exact, not a floor under the Bots setting: see FWWOBotRoster::Wanted.)
+	// FootRace fills both teams to the map's team size with bots (4 v 4 for now), unless told otherwise.
+	// A test run takes only what its command line asks for.
+	if (bFootRace && Roster.OptionBots < 0 && Roster.BotsWanted <= 0 && !WWOSwitches::HasAutoTestText())
+		Roster.OptionBots = FootRaceTeamSize(MapName) * 2 - 1;
 	UE_LOG(LogWWO, Display, TEXT("Game: %s on %s%s"), bPvP ? TEXT("PvP team deathmatch") : bFootRace ? TEXT("FootRace") : TEXT("waves"), *MapName,
 		bPvP ? *FString::Printf(TEXT(" (kill target %.0f, time limit %.0f min, respawn %.1f s)"), KillTarget, TimeLimit, PvPRespawnTime) : TEXT(""));
 }
@@ -117,7 +130,7 @@ void AWWOGameMode::PreLogin(const FString& Options, const FString& Address, cons
 {
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	// The advertised places are a promise nothing else keeps: a full game says so here.
-	const int32 Most = bPvP || bFootRace ? UWWONetSubsystem::MaxPvPPlayers : UWWONetSubsystem::MaxPlayers;
+	const int32 Most = bFootRace ? FootRaceTeamSize(GetWorld()->GetMapName()) * 2 : bPvP ? UWWONetSubsystem::MaxPvPPlayers : UWWONetSubsystem::MaxPlayers;
 	if (ErrorMessage.IsEmpty() && People() >= Most) ErrorMessage = FString::Printf(TEXT("The game is full (%d players)"), Most);
 }
 

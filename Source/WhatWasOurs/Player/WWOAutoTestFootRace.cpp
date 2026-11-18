@@ -461,7 +461,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	if (Crossed(C2 + 5.4f)) WWOTest::Exit();
 }
 
-// -WWOAutoTestFootRaceBots (on L_FootRaceTest with -WWOBots=11): the bots play FootRace while the
+// -WWOAutoTestFootRaceBots (on L_FootRaceTest with -WWOBots=7: 4 v 4): the bots play FootRace while the
 // player stands in its spawn room out of the way. Every 10 s a `FootRaceBots:` line logs both teams'
 // energy, doors, bosses and cores and what the bots are doing; the match must end in a win inside the
 // time limit (-WWOFootRaceBotsTime=S, 600 by default), with bots having breached, pulled levers and
@@ -521,7 +521,8 @@ void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
 	}
 	if (F->IsOver() || AutoBotsRaceClock >= Limit)
 	{
-		Check(Bots == 11, FString::Printf(TEXT("11 bots joined, a 6 v 6 with the player (%d)"), Bots));
+		const int32 Want = AWWOGameMode::FootRaceTeamSize(World->GetMapName()) * 2 - 1;
+		Check(Bots == Want, FString::Printf(TEXT("%d bots joined, full teams with the player (%d)"), Want, Bots));
 		Check(AWWOBotController::Breaches >= 4, FString::Printf(TEXT("bots breached (%d)"), AWWOBotController::Breaches));
 		Check(AWWOBotController::LeverPulls >= 3, FString::Printf(TEXT("bots pulled levers (%d)"), AWWOBotController::LeverPulls));
 		Check(F->DoorsOpen(0) >= 1 && F->DoorsOpen(1) >= 1, FString::Printf(TEXT("both teams opened doors (%d, %d)"), F->DoorsOpen(0), F->DoorsOpen(1)));

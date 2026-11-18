@@ -50,7 +50,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "PvP") float TimeLimit = 10.f;    // minutes (0 = off)
 	UPROPERTY(EditAnywhere, Category = "PvP") float PvPRespawnTime = 3.f;
 	// FootRace breach energy (Game/WWOFootRaceRules.h): a team's shared pool.
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 100.f;   // a team needs this much to enter the hub
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachThreshold = 110.f;   // a team needs this much to enter the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerEnemy = 10.f;     // for each AI enemy a player kills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float EnergyPerPlayerKill = 25.f; // for each player of the other team killed
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 10.f;        // per second, for each of the team's players in the hub
@@ -61,8 +61,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDelay = 5.f;          // s after a boss shield goes up before the next core (and its wave)
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreHeal = 400.f;         // a core the other team delivers heals the boss this much
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDropTime = 15.f;      // s a dropped core lies before it goes back to the hub
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWave = 6.f;           // enemies in the boss room with each core
-	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomEnemies = 8.f;         // enemies a team's live room holds
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWave = 9.f;           // enemies in the boss room with each core
+	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomEnemies = 12.f;         // enemies a team's live room holds
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomSpawnStagger = 0.4f;   // s between spawns while a room first fills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomRefillTime = 3.f;      // s between spawns once it has filled
 	// Bot players (PvP; AWWOBotController reads these, the host's values count).
@@ -94,6 +94,7 @@ public:
 	bool bTester = false;
 	// FootRace (?footrace, or any map whose name has FootRace in it: Game/WWOFootRaceRules.h).
 	bool bFootRace = false;
+	static int32 FootRaceTeamSize(const FString& MapName); // players per team (the map table's; 4 by default)
 	// The rules of this match (Game/WWOMatchRules.h), chosen in InitGame, and typed views of them.
 	TUniquePtr<FWWOMatchRules> Rules;
 	FWWOTesterRules* Tester() const { return Rules ? Rules->AsTester() : nullptr; }

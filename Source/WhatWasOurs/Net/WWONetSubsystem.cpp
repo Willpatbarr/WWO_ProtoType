@@ -38,7 +38,7 @@ const TArray<FWWOMapInfo>& UWWONetSubsystem::Maps()
 		{ "L_Arboretum", TEXT("Arboretum"), TEXT("4 v 4 · greenhouses over a tunnel"), true, false, 4 },
 		{ "L_Cascade", TEXT("Cascade"), TEXT("6 v 6 · decks and bridges over the falls"), true, true, 6 },
 		{ "L_TestRange", TEXT("Test Range"), TEXT("Gray-box sandbox, no waves"), false, true, 4 },
-		{ "L_FootRaceTest", TEXT("FootRace Test"), TEXT("Gray box · two lanes of rooms and a hub"), false, true, 6 },
+		{ "L_FootRaceTest", TEXT("FootRace Test"), TEXT("4 v 4 · two lanes of rooms and a hub"), false, true, 4 },
 	};
 	return List;
 }
