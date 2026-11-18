@@ -141,15 +141,22 @@ void UWWOBodyComponent::RebuildGrafts()
 	{
 		AttachBall("pelvis", Hips + F.Right * 0.17f * F.U + F.Forward * 0.04f * F.U, GrenadeRadius, GrenadeColor);
 	}
-	if (F.Has(WWOIds::Ability::Seedburst))
+	if (FloraId == WWOIds::Flora::VeilSpore && !ModelGrafts(FloraId, F)) SporeGrafts(F);
+	if (FloraId == WWOIds::Flora::IronBark && !ModelGrafts(FloraId, F)) BarkGrafts(F);
+	// Seedburst: the flora's own model of it where it has one (IronBark's SK_IB_Seedburst, a cluster of
+	// pods added by ModelGrafts), else three seeds in a row along the belt.
+	const bool bSeedModel = Grafts.ContainsByPredicate([](const UPrimitiveComponent* C)
+	{
+		const USkeletalMeshComponent* S = Cast<USkeletalMeshComponent>(C);
+		return S && S->GetSkeletalMeshAsset() && S->GetSkeletalMeshAsset()->GetName().EndsWith(TEXT("_Seedburst"));
+	});
+	if (F.Has(WWOIds::Ability::Seedburst) && !bSeedModel)
 	{
 		for (int32 i = 0; i < 3; ++i) // in a row along the belt
 		{
 			AttachBall("pelvis", Hips - F.Right * 0.165f * F.U + F.Forward * (0.07f - 0.07f * i) * F.U, SeedRadius, GrenadeColor);
 		}
 	}
-	if (FloraId == WWOIds::Flora::VeilSpore && !ModelGrafts(FloraId, F)) SporeGrafts(F);
-	if (FloraId == WWOIds::Flora::IronBark && !ModelGrafts(FloraId, F)) BarkGrafts(F);
 }
 
 void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& PodColor)
@@ -300,9 +307,10 @@ bool UWWOBodyComponent::ModelGrafts(FName FloraId, const FWWOGraftFrame& F)
 	// - VeilSpore: the grenade's mushrooms on the right hip (SK_VS_Grenade_<GrenadeId>); Spore Fog
 	//   Damage a cap over the head and a cluster on the right shoulder, Spore Dash shelves down the
 	//   left leg, Spore Patches mushroom patches round the body; mycelium over each.
-	// - IronBark: bark plates split by glowing orange cracks: Extra Grenade the chest (a chevron), a
-	//   collar and pauldrons; Shield Share shells over the forearms; Root Bombs cuisses and greaves;
-	//   the grenade's seed pods hanging from the belt (SK_IB_Grenade_<GrenadeId>).
+	// - IronBark: bark shingles split by glowing orange cracks: Extra Grenade the chest (a chevron), a
+	//   collar and pauldrons; Shield Share shield guards on the forearms; Root Bombs on the thighs and
+	//   shins; Seedburst a cluster of small pods on the right of the belt; the grenade's amber pods
+	//   hanging from the front left of the belt (SK_IB_Grenade_<GrenadeId>).
 	if (!Model || !bModelGrafts) return false;
 	const TCHAR* Prefix = FloraId == WWOIds::Flora::VoltVine ? TEXT("SK_VV_")
 		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SK_VS_")
