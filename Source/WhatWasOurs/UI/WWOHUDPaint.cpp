@@ -55,6 +55,35 @@ namespace
 	const FLinearColor HealthColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor HealthLowColor(1.f, 0.3f, 0.25f);
 	constexpr float LowAmmo = 0.25f;
+	using WWOUI::EWeight;
+	namespace Type = WWOUI::Type;
+	// The HUD's one panel: a dark, see-through rounded box with a faint edge, behind text that needs to
+	// read over the world (the match line, the kill feed, prompts, status chips).
+	const FLinearColor HudPanel(0.035f, 0.04f, 0.05f, 0.58f);
+	const FLinearColor HudPanelEdge(1.f, 1.f, 1.f, 0.08f);
+
+	// Str on its own panel (HudPanel, Pad round the text), placed by Align like FWWOPainter::Text.
+	// Alpha fades panel and text together. Returns the panel's size.
+	FVector2D Tag(const FWWOPainter& P, const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX, float AlignY,
+		EWeight Weight = EWeight::Medium, FVector2D Pad = FVector2D(14.f, 5.f), float Alpha = 1.f)
+	{
+		if (Str.IsEmpty() || Alpha <= 0.001f) return FVector2D::ZeroVector;
+		const FVector2D M = P.Measure(Str, P.Font(Px, Weight));
+		const FVector2D Box = M + Pad * 2.f;
+		const FVector2D At = Pos - FVector2D(Box.X * AlignX, Box.Y * AlignY);
+		P.Panel(At, Box, WWO::WithAlpha(HudPanel, HudPanel.A * Alpha), WWO::WithAlpha(HudPanelEdge, HudPanelEdge.A * Alpha), 1.f);
+		P.Text(Str, At + Pad, Px, WWO::WithAlpha(Color, Color.A * Alpha), 0.f, 0.f, Weight, 0.f);
+		return Box;
+	}
+
+	// A bar on a track, both rounded: Track behind, Fill (0..1) of it in Color from the left.
+	void RoundBar(const FWWOPainter& P, FVector2D Pos, FVector2D Size, float Fill, const FLinearColor& Color, const FLinearColor& Track)
+	{
+		const float R = Size.Y * 0.5f;
+		P.Panel(Pos, Size, Track, FLinearColor(0, 0, 0, 0), 0.f, R);
+		const float Wide = Size.X * FMath::Clamp(Fill, 0.f, 1.f);
+		if (Wide > 0.5f) P.Panel(Pos, FVector2D(FMath::Max(Wide, Size.Y), Size.Y), Color, FLinearColor(0, 0, 0, 0), 0.f, R);
+	}
 
 	// A square with a symbol (a grenade's badge, UI/WWOUI.h): the badge as it is when charged, white edged;
 	// charging, darkened above the line it has filled up to from the bottom.
@@ -254,7 +283,7 @@ void UWWOHUDWidget::PaintWorldLabels(const FWWOHUDFrame& F) const
 			// Off to the side of the hit (left or right by its jitter) so the number doesn't cover the target.
 			if (!T.Follow.IsValid()) At.X += (T.Jitter >= 0.f ? 1.f : -1.f) * Pl->DamageNumberOffset;
 			const float FontPx = T.bCritical ? 48.f : 36.f;
-			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, 8.f * PxPerFontPx, 0.8f, 0.5f);
+			P.Text(T.Text, At, FontPx * PxPerFontPx, WWO::WithAlpha(T.Color, T.Alpha()), 0.5f, 0.5f, EWeight::SemiBold);
 		}
 	}
 	// Teammate labels.
@@ -263,7 +292,7 @@ void UWWOHUDWidget::PaintWorldLabels(const FWWOHUDFrame& F) const
 		FVector2D At;
 		if (!F.ToScreen(Ally->GetActorLocation() + FVector(0, 0, 125.f), At)) continue;
 		const FLinearColor C = Ally->IsDown() ? FLinearColor(1, 0.4f, 0.35f) : (Ally->Shield > 0.f ? ShieldColor : FLinearColor(1, 0.9f, 0.9f));
-		P.Text(Ally->StatusText(), At, 15.f, C, 0.5f);
+		P.Text(Ally->StatusText(), At, Type::Small, C, 0.5f, 1.f);
 	}
 }
 
@@ -370,7 +399,7 @@ void UWWOHUDWidget::PaintAssistDebug(const FWWOHUDFrame& F) const
 		FVector2D At;
 		if (Assist->FrictionPart.IsValid() && F.ToScreen(Assist->FrictionPart.Position, At)) P.Circle(At, 6.f, FLinearColor(1.f, 0.85f, 0.2f, 0.9f), 2.f, 16);
 		P.Text(FString::Printf(TEXT("Aim assist: %s (strength %d%%)  range %.0f m"), Assist->UsingController() ? TEXT("controller") : TEXT("mouse"),
-			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), AimAt + FVector2D(0, 120.f - 17.f), 18.f, FLinearColor::White, 0.5f, 0.f); // Godot: draw_string, baseline at +120, no outline
+			FMath::RoundToInt(Assist->ConeScale() * 100.f), Assist->EffectiveRange()), AimAt + FVector2D(0, 104.f), Type::Small, FLinearColor::White, 0.5f, 0.f, EWeight::Regular);
 	}
 	// Hidden assist markers (Settings, Aim Assist): what the after-shot assist just did, under the
 	// reticle for 0.4 s each. Cyan STEER: the recoil's fall-back bent toward the target. Magenta
@@ -391,7 +420,7 @@ void UWWOHUDWidget::PaintAssistDebug(const FWWOHUDFrame& F) const
 		{
 			const float Age = (float)(Now - M.At);
 			if (Age > 0.4f) continue;
-			P.Text(M.Label, AimAt + FVector2D(0.f, Y), 15.f, WWO::WithAlpha(M.Color, 1.f - Age / 0.4f), 0.5f, 4.f);
+			P.Text(M.Label, AimAt + FVector2D(0.f, Y), Type::Caption, WWO::WithAlpha(M.Color, 1.f - Age / 0.4f), 0.5f, 0.f, EWeight::SemiBold);
 			Y += 17.f;
 		}
 	}
@@ -420,7 +449,7 @@ void UWWOHUDWidget::PaintHealthBars(const FWWOHUDFrame& F) const
 		P.Box(Pos, FVector2D(Wide * Fraction, HealthTall), BarHealthColor);
 		if (bShield) P.Box(TopLeft, FVector2D(Wide * FMath::Clamp(Target->GetShield() / Target->GetMaxShield(), 0.f, 1.f), ShieldTall), BarShieldColor);
 		// (No health and shield numbers over the bars any more.) A player's gamer tag, or a bot's "bot3", sits on them.
-		if (!Name.IsEmpty()) P.Text(Name, TopLeft + FVector2D(Wide * 0.5f, -21), 15.f, FLinearColor(1.f, 1.f, 1.f, 0.92f), 0.5f, 3.f);
+		if (!Name.IsEmpty()) P.Text(Name, TopLeft + FVector2D(Wide * 0.5f, -4.f), Type::Small, FLinearColor(1.f, 1.f, 1.f, 0.92f), 0.5f, 1.f);
 	};
 	// The name on a player's bars: their player state's (the gamer tag they joined with; bots are bot1, bot2...).
 	auto TagOf = [](const AActor* Actor) -> FString
@@ -491,7 +520,7 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 	// FootRace: your team opening its next door shows there too ("Next door opened!"), whoever pulled it.
 	if (const AWWOGameState* Mine = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
-		constexpr float Shown = 2.5f, Fade = 0.5f, Px = 22.f, LineTall = 30.f, Right = 150.f;
+		constexpr float Shown = 2.5f, Fade = 0.5f, Px = Type::Title, LineTall = 28.f, Right = 150.f;
 		const double KillNow = FPlatformTime::Seconds();
 		float Y = AimAt.Y;
 		for (int32 Index = Mine->KillFeed.Num() - 1; Index >= 0; --Index)
@@ -504,7 +533,7 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 			if (bOurDoor)
 			{
 				const float DoorAlpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
-				P.Text(TEXT("Next door opened!"), FVector2D(AimAt.X + Right, Y), Px, WWO::WithAlpha(FLinearColor(0.6f, 1.f, 0.65f), DoorAlpha), 0.f, 5.f, 0.75f * DoorAlpha, 0.5f);
+				P.Text(TEXT("Next door opened!"), FVector2D(AimAt.X + Right, Y), Px, WWO::WithAlpha(FLinearColor(0.6f, 1.f, 0.65f), DoorAlpha), 0.f, 0.5f, EWeight::SemiBold);
 				Y -= LineTall;
 				continue;
 			}
@@ -512,7 +541,7 @@ void UWWOHUDWidget::PaintKillPopups(const FWWOHUDFrame& F) const
 			const bool bPrecision = Line.How == AWWOGameState::KillPrecision;
 			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
 			P.Text(FString::Printf(TEXT("%s +%d"), bPrecision ? TEXT("Precision kill") : TEXT("Kill"), Line.Points), FVector2D(AimAt.X + Right, Y), Px,
-				WWO::WithAlpha(bPrecision ? UWWOWorldSubsystem::CritColor() : FLinearColor::White, Alpha), 0.f, 5.f, 0.75f * Alpha, 0.5f);
+				WWO::WithAlpha(bPrecision ? UWWOWorldSubsystem::CritColor() : FLinearColor::White, Alpha), 0.f, 0.5f, EWeight::SemiBold);
 			Y -= LineTall;
 		}
 	}
@@ -526,32 +555,33 @@ void UWWOHUDWidget::PaintKillFeed(const FWWOHUDFrame& F) const
 	// name in its team's color, the newest at the bottom, each line for 6 s and fading over its last one.
 	if (const AWWOGameState* Feed = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
-		constexpr float Shown = 6.f, Fade = 1.f, Px = 16.f, LineTall = 23.f;
+		constexpr float Shown = 6.f, Fade = 1.f, Px = Type::Small, LineTall = 30.f;
 		const double FeedNow = FPlatformTime::Seconds();
-		const FSlateFontInfo FeedFont = P.Font(Px, 4.f);
+		const FSlateFontInfo FeedFont = P.Font(Px, EWeight::SemiBold);
+		const FVector2D Pad(10.f, 4.f);
 		// Built upward from the newest line, which sits just above the boxes (their top is 126 px off the bottom).
-		float Y = P.Size.Y - 126.f - 14.f - LineTall;
+		// Each line on its own panel (HudPanel), the names in their teams' colours.
+		float Y = P.Size.Y - 126.f - 18.f - LineTall;
 		for (int32 Index = Feed->KillFeed.Num() - 1; Index >= 0; --Index)
 		{
 			const AWWOGameState::FKillLine& Line = Feed->KillFeed[Index];
 			const float Age = float(FeedNow - Line.At);
 			if (Age > Shown) break; // older ones are older still
 			const float Alpha = FMath::Clamp((Shown - Age) / Fade, 0.f, 1.f);
-			auto TeamTint = [&](int32 Team) { return WWO::WithAlpha(Team >= 0 ? AWWOPlayerState::TeamColor(Team) : FLinearColor::White, Alpha); };
-			float X = 40.f;
-			P.Text(Line.Killer, FVector2D(X, Y), Px, TeamTint(Line.KillerTeam), 0.f, 4.f);
-			X += P.Measure(Line.Killer, FeedFont).X;
-			if (Line.How == AWWOGameState::KillEvent)
-			{
-				// Not a kill: "<who> <what happened>" (FootRace: breached, opened a door).
-				P.Text(TEXT(" ") + Line.Victim, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.85f * Alpha), 0.f, 4.f);
-				Y -= LineTall;
-				continue;
-			}
-			const FString Arrow = TEXT("  >  ");
-			P.Text(Arrow, FVector2D(X, Y), Px, FLinearColor(1.f, 1.f, 1.f, 0.75f * Alpha), 0.f, 4.f);
-			X += P.Measure(Arrow, FeedFont).X;
-			P.Text(Line.Victim, FVector2D(X, Y), Px, TeamTint(Line.VictimTeam), 0.f, 4.f);
+			auto TeamTint = [&](int32 Team) { return WWO::WithAlpha(Team >= 0 ? WWO::Lightened(AWWOPlayerState::TeamColor(Team), 0.2f) : FLinearColor::White, Alpha); };
+			// Not a kill: "<who> <what happened>" (FootRace: breached, opened a door).
+			const bool bEvent = Line.How == AWWOGameState::KillEvent;
+			const FString Middle = bEvent ? TEXT(" ") + Line.Victim : FString(TEXT("   \u203A   "));
+			const FString Last = bEvent ? FString() : Line.Victim;
+			const FSlateFontInfo MiddleFont = P.Font(Px, EWeight::Regular);
+			const float Wide = P.Measure(Line.Killer, FeedFont).X + P.Measure(Middle, MiddleFont).X + (Last.IsEmpty() ? 0.f : P.Measure(Last, FeedFont).X);
+			const float TextTall = P.Measure(TEXT("Ag"), FeedFont).Y;
+			P.Panel(FVector2D(40.f, Y), FVector2D(Wide, TextTall) + Pad * 2.f, WWO::WithAlpha(HudPanel, HudPanel.A * Alpha), WWO::WithAlpha(HudPanelEdge, HudPanelEdge.A * Alpha), 1.f);
+			float X = 40.f + Pad.X;
+			const float TextY = Y + Pad.Y;
+			X += P.Text(Line.Killer, FVector2D(X, TextY), Px, TeamTint(Line.KillerTeam), 0.f, 0.f, EWeight::SemiBold, 0.f).X;
+			X += P.Text(Middle, FVector2D(X, TextY), Px, FLinearColor(1.f, 1.f, 1.f, (bEvent ? 0.85f : 0.55f) * Alpha), 0.f, 0.f, EWeight::Regular, 0.f).X;
+			if (!Last.IsEmpty()) P.Text(Last, FVector2D(X, TextY), Px, TeamTint(Line.VictimTeam), 0.f, 0.f, EWeight::SemiBold, 0.f);
 			Y -= LineTall;
 		}
 	}
@@ -640,26 +670,27 @@ void UWWOHUDWidget::PaintAmmo(const FWWOHUDFrame& F) const
 	// Ammo (bottom right): weapon name, the count (red when low), reload bar.
 	if (W)
 	{
-		// Godot stacks these in a bottom-right VBox (4 px apart): the hidden reload bar takes no
-		// room, so the labels sit 12 px lower when not reloading, and the bar spans the widest row.
+		// A bottom-right stack, right-aligned on one edge: the perks' line, the weapon's name, the count,
+		// and the reload bar under the count while reloading. Each sits on a soft shadow.
 		const int32 Mag = Gun->MagazineSize();
 		const FVector2D Corner(Size.X - 40.f, Size.Y - 40.f);
 		const FVector2D Lift(0.f, Gun->bReloading ? 0.f : -12.f);
-		P.Text(W->DisplayName, Corner - FVector2D(0, 92) - Lift, 20.f, FLinearColor::White, 1.f, 6.f, 0.7f);
+		P.Text(W->DisplayName, Corner - FVector2D(0, 86) - Lift, Type::Title, FLinearColor::White, 1.f, 0.f, EWeight::Medium);
 		if (Gun->ConfigToastLeft > 0.f)
 		{
-			P.Text(Gun->ConfigToast, FVector2D(Center.X, Size.Y - 150.f), 24.f, WWO::WithAlpha(FLinearColor::White, FMath::Min(Gun->ConfigToastLeft / 0.4f, 1.f)), 0.5f, 6.f, 0.7f);
+			Tag(P, Gun->ConfigToast, FVector2D(Center.X, Size.Y - 150.f), Type::Title, FLinearColor::White, 0.5f, 0.5f, EWeight::Medium,
+				FVector2D(16.f, 6.f), FMath::Min(Gun->ConfigToastLeft / 0.4f, 1.f));
 		}
 		// Weapon mod perks (draft): streaks, counters and timers above the weapon name.
-		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 120) - Lift, 18.f, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 6.f, 0.7f);
+		P.Text(Gun->PerkStatus(), Corner - FVector2D(0, 110) - Lift, Type::Small, FLinearColor(0.6f, 0.85f, 1.f), 1.f, 0.f, EWeight::Medium);
 		const bool bLow = Gun->Ammo <= int32(Mag * LowAmmo);
 		const FString Count = Gun->bReloading && Gun->Ammo < Mag ? TEXT("RELOADING") : FString::Printf(TEXT("%d / %d"), Gun->Ammo, Mag);
-		P.Text(Count, Corner - FVector2D(0, 66) - Lift, 44.f, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 8.f, 0.7f);
+		const float CountPx = Gun->bReloading && Gun->Ammo < Mag ? Type::Heading : Type::Display;
+		P.Text(Count, Corner - FVector2D(0, 62) - Lift, CountPx, bLow && !Gun->bReloading ? FLinearColor(1, 0.3f, 0.25f) : FLinearColor::White, 1.f, 0.f, EWeight::SemiBold);
 		if (Gun->bReloading)
 		{
-			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(44.f, 8.f)).X, P.Measure(W->DisplayName, P.Font(20.f)).X);
-			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth, 8), FLinearColor(0.15f, 0.15f, 0.17f, 0.9f));
-			P.Box(Corner - FVector2D(BarWidth, 8), FVector2D(BarWidth * Gun->ReloadProgress, 8), FLinearColor(0.75f, 0.78f, 0.85f));
+			const float BarWidth = (float)FMath::Max3(160.0, P.Measure(Count, P.Font(CountPx, EWeight::SemiBold)).X, P.Measure(W->DisplayName, P.Font(Type::Title)).X);
+			RoundBar(P, Corner - FVector2D(BarWidth, 6), FVector2D(BarWidth, 6), Gun->ReloadProgress, FLinearColor(0.85f, 0.88f, 0.95f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 		}
 	}
 }
@@ -691,7 +722,7 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 			{
 				// Extra Grenade: how many are ready, and the next one filling.
 				const int32 Ready = FMath::FloorToInt(Charges);
-				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(4, 2), 16.f, FLinearColor::White, 0.f, 4.f); // over the dark badge
+				P.Text(FString::Printf(TEXT("x%d"), Ready), Pos + FVector2D(5, 3), Type::Small, FLinearColor::White, 0.f, 0.f, EWeight::SemiBold); // over the dark badge
 				if (Ready >= 1 && Charges < Pl->Grenades->MaxCharges())
 				{
 					FWWOPainter Over = P; // above the badge (SymbolChargeBox)
@@ -699,8 +730,8 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 					Over.Box(Pos + FVector2D(0, 59), FVector2D(64 * (Charges - Ready), 5), FLinearColor(1, 1, 1, 0.8f));
 				}
 			}
-			P.Text(G->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(16.f)).X - 64.f);
+			P.Text(G->DisplayName, Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(G->DisplayName, P.Font(Type::Small)).X - 64.f);
 		}
 		for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
 		{
@@ -759,8 +790,8 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 				}
 				break;
 			}
-			P.Text(A->DisplayName, Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
-			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(16.f)).X - 64.f);
+			P.Text(A->DisplayName, Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
+			Pos.X += 64 + Pad + FMath::Max(0.f, P.Measure(A->DisplayName, P.Font(Type::Small)).X - 64.f);
 		}
 		// Ult: fills in the grenade's color, pulses when ready.
 		const FLinearColor UltColor = Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
@@ -769,7 +800,7 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 		{
 			P.Outline(Pos - FVector2D(3, 3), FVector2D(70, 70), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)), 3.f);
 		}
-		P.Text(TEXT("Ult"), Pos + FVector2D(0, 68), 16.f, FLinearColor::White, 0.f);
+		P.Text(TEXT("Ult"), Pos + FVector2D(0, 70), Type::Small, FLinearColor::White, 0.f);
 	}
 }
 
@@ -788,15 +819,14 @@ void UWWOHUDWidget::PaintVitals(const FWWOHUDFrame& F) const
 	{
 		const float Full = FMath::Min(H->MaxShield() * Unit, Box.X);
 		const FVector2D At(Origin.X + (Box.X - Full) * 0.5f, Origin.Y);
-		P.Box(At, FVector2D(Full, 10), FLinearColor(0, 0, 0, 0.45f));
-		P.Box(At, FVector2D(Full * H->Shield / H->MaxShield(), 10), ShieldColor);
+		RoundBar(P, At, FVector2D(Full, 8), H->Shield / H->MaxShield(), ShieldColor, FLinearColor(0, 0, 0, 0.4f));
 	}
 	const float FullH = FMath::Min(H->MaxHealth() * Unit, Box.X);
 	const FVector2D HAt(Origin.X + (Box.X - FullH) * 0.5f, Origin.Y + 14.f);
 	const float Frac = H->Health / H->MaxHealth();
-	P.Box(HAt, FVector2D(FullH, 16), FLinearColor(0, 0, 0, 0.45f));
-	P.Box(HAt, FVector2D(FullH * Frac, 16), Frac < 0.35f ? HealthLowColor : HealthColor);
-	P.Outline(HAt, FVector2D(FullH, 16), FLinearColor(1, 1, 1, 0.5f), 1.f);
+	// Rounded, on a dark track with a faint edge (no hard outline).
+	P.Panel(HAt - FVector2D(1.f, 1.f), FVector2D(FullH + 2.f, 16.f), FLinearColor(0, 0, 0, 0.42f), FLinearColor(1, 1, 1, 0.22f), 1.f, 5.f);
+	if (Frac > 0.f) P.Panel(HAt, FVector2D(FMath::Max(FullH * Frac, 8.f), 14.f), Frac < 0.35f ? HealthLowColor : HealthColor, FLinearColor(0, 0, 0, 0), 0.f, 4.f);
 
 	// What's on you right now: a row of chips under the vitals (NativeTick lists them), each with
 	// its name, the seconds left where it has a timer, and a bar that drains with it.
@@ -810,11 +840,11 @@ void UWWOHUDWidget::PaintVitals(const FWWOHUDFrame& F) const
 		const FString Key = Chip.Label.Left(6);
 		const float Of = Chip.Of > 0.f ? Chip.Of : ChipPeak.FindRef(Key);
 		const FVector2D At(X, Origin.Y + 40.f);
-		P.Box(At, ChipSize, FLinearColor(0, 0, 0, 0.55f));
-		P.Box(At, FVector2D(4.f, ChipSize.Y), Chip.Color);
-		if (Chip.Left > 0.f && Of > 0.f) P.Box(At + FVector2D(4.f, ChipSize.Y - 3.f), FVector2D((ChipSize.X - 4.f) * FMath::Clamp(Chip.Left / Of, 0.f, 1.f), 3.f), Chip.Color);
+		// A HUD panel with a dot of the chip's colour, its words, and a thin bar that drains along its foot.
+		P.Panel(At, ChipSize, HudPanel, WWO::WithAlpha(Chip.Color, 0.35f), 1.f);
+		if (Chip.Left > 0.f && Of > 0.f) P.Box(At + FVector2D(6.f, ChipSize.Y - 4.f), FVector2D((ChipSize.X - 12.f) * FMath::Clamp(Chip.Left / Of, 0.f, 1.f), 2.f), Chip.Color);
 		const FString Text = Chip.Left > 0.f ? FString::Printf(TEXT("%s  %.1f"), *Chip.Label, Chip.Left) : Chip.Label;
-		P.Text(Text, At + FVector2D(ChipSize.X * 0.5f + 2.f, 3.f), 14.f, Chip.Color, 0.5f);
+		P.Text(Text, At + ChipSize * 0.5f + FVector2D(0.f, -0.5f), Type::Caption, Chip.Color, 0.5f, 0.5f, EWeight::SemiBold, 0.f);
 		X += ChipSize.X + Gap;
 	}
 }
@@ -883,30 +913,28 @@ void UWWOHUDWidget::PaintOverlays(const FWWOHUDFrame& F) const
 	P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.8f, 0.05f, 0.02f, DamageFlash));
 	auto ReviveBar = [&](float Frac, float Y)
 	{
-		const FVector2D BarSize(320.f, 12.f), BarAt(Center.X - BarSize.X * 0.5f, Y);
-		P.Box(BarAt, BarSize, FLinearColor(0, 0, 0, 0.5f));
-		P.Box(BarAt, FVector2D(BarSize.X * FMath::Clamp(Frac, 0.f, 1.f), BarSize.Y), FLinearColor(0.45f, 1.f, 0.55f));
-		P.Outline(BarAt, BarSize, FLinearColor(1, 1, 1, 0.6f), 1.f);
+		const FVector2D BarSize(320.f, 8.f), BarAt(Center.X - BarSize.X * 0.5f, Y);
+		RoundBar(P, BarAt, BarSize, Frac, FLinearColor(0.45f, 1.f, 0.55f), FLinearColor(0, 0, 0, 0.5f));
 	};
 	if (H->bDead && H->IsOnline() && !UWWOWorldSubsystem::IsPvP(Pl))
 	{
 		// Down: a teammate can bring you back.
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.05f, 0.f, 0.f, 0.45f));
-		P.Text(TEXT("You're down"), Center - FVector2D(0, 50), 40.f, FLinearColor::White, 0.5f);
-		P.Text(H->BeingRevived > 0.f ? TEXT("Being revived") : TEXT("A teammate can revive you"), Center, 30.f, FLinearColor::White, 0.5f);
+		P.Text(TEXT("You're down"), Center - FVector2D(0, 30), Type::Display, FLinearColor::White, 0.5f, 1.f, EWeight::SemiBold);
+		P.Text(H->BeingRevived > 0.f ? TEXT("Being revived") : TEXT("A teammate can revive you"), Center + FVector2D(0, 4), Type::Heading, WWOUI::TextSecondary, 0.5f, 0.f, EWeight::Regular);
 		if (H->BeingRevived > 0.f) ReviveBar(H->BeingRevived, Center.Y + 40.f);
 	}
 	else if (H->bDead)
 	{
 		P.Box(FVector2D::ZeroVector, Size, FLinearColor(0.05f, 0.f, 0.f, 0.6f));
-		P.Text(TEXT("You died"), Center - FVector2D(0, 50), 40.f, FLinearColor::White, 0.5f);
-		P.Text(FString::Printf(TEXT("Respawning in %.1f"), FMath::Max(H->RespawnLeft, 0.f)), Center, 40.f, FLinearColor::White, 0.5f);
+		P.Text(TEXT("You died"), Center - FVector2D(0, 30), Type::Display, FLinearColor::White, 0.5f, 1.f, EWeight::SemiBold);
+		P.Text(FString::Printf(TEXT("Respawning in %.1f"), FMath::Max(H->RespawnLeft, 0.f)), Center + FVector2D(0, 4), Type::Heading, WWOUI::TextSecondary, 0.5f, 0.f, EWeight::Regular);
 	}
 	else if (const AWWOCharacter* Downed = H->FindReviveTarget())
 	{
 		// Next to a downed teammate: how to revive them, and how far along you are.
 		const AWWOPlayerController* Keys = Cast<AWWOPlayerController>(PC);
-		P.Text(FString::Printf(TEXT("Hold %s to revive"), Keys ? *Keys->BindHint("revive") : TEXT("Revive")), Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
+		Tag(P, FString::Printf(TEXT("Hold %s to revive"), Keys ? *Keys->BindHint("revive") : TEXT("Revive")), Center + FVector2D(0, 90), Type::Title, FLinearColor::White, 0.5f, 0.5f);
 		if (Downed->Health->BeingRevived > 0.f) ReviveBar(Downed->Health->BeingRevived, Center.Y + 125.f);
 	}
 }
@@ -919,7 +947,8 @@ void UWWOHUDWidget::PaintWaveLine(const FWWOHUDFrame& F) const
 	// The wave line (top center), from the host's game state (the game mode only exists there).
 	if (const AWWOGameState* GS = Pl->GetWorld()->GetGameState<AWWOGameState>())
 	{
-		if (!GS->StatusLine.IsEmpty()) P.Text(GS->StatusLine, FVector2D(Center.X, 24.f), 28.f, GS->StatusColor, 0.5f, 8.f, 0.85f);
+		// On a HUD panel, its top where the text's top was.
+		if (!GS->StatusLine.IsEmpty()) Tag(P, GS->StatusLine, FVector2D(Center.X, 18.f), Type::Heading, GS->StatusColor, 0.5f, 0.f, EWeight::SemiBold, FVector2D(18.f, 4.f));
 	}
 }
 
@@ -936,8 +965,8 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 	const float Threshold = FMath::Max(GS->BreachThreshold, 1.f);
 	const FVector2D BarSize(220.f, 7.f);
 	// Level with the match line (PaintWaveLine: 28 px text at 24), clear of it whatever it says.
-	const float LineWidth = GS->StatusLine.IsEmpty() ? 0.f : P.Measure(GS->StatusLine, P.Font(28.f, 8.f)).X;
-	const float Gap = LineWidth + 48.f, Top = 24.f + 17.f - BarSize.Y * 0.5f;
+	const FVector2D LineSize = GS->StatusLine.IsEmpty() ? FVector2D(0.f, 34.f) : P.Measure(GS->StatusLine, P.Font(Type::Heading, EWeight::SemiBold)) + FVector2D(36.f, 8.f); // its panel (PaintWaveLine)
+	const float Gap = LineSize.X + 28.f, Top = 18.f + LineSize.Y * 0.5f - BarSize.Y * 0.5f;
 	const float BossTop = 176.f;         // under the vitals' status chip row (SLOWED, POISONED...)
 	for (int32 Slot = 0; Slot < 2; ++Slot)
 	{
@@ -963,7 +992,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		// The number, at the bar's outer end (bright once it's enough to breach).
 		const FString Number = FString::Printf(TEXT("%.0f"), Energy);
 		const FLinearColor NumberColor = Energy >= Threshold ? Color : WWO::Darkened(Color, 0.35f);
-		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), 15.f, NumberColor, Slot == 0 ? 1.f : 0.f, 4.f, 0.8f, 0.5f);
+		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), Type::Small, NumberColor, Slot == 0 ? 1.f : 0.f, 0.5f, EWeight::SemiBold);
 		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
 		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
 		if (BossLeft >= 0.f)
@@ -976,7 +1005,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 			const TCHAR* CoreText = Core == 1 ? TEXT("  CORE IN HUB") : Core == 2 ? TEXT("  CORE CARRIED") : Core == 3 ? TEXT("  CORE DROPPED") : TEXT("");
 			const FString BossLine = Window > 0.f ? FString::Printf(TEXT("BOSS %.0f%%  WINDOW %.0fs"), BossLeft * 100.f, FMath::CeilToFloat(Window))
 				: FString::Printf(TEXT("BOSS %.0f%%  SHIELDED%s"), BossLeft * 100.f, CoreText);
-			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), 15.f, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 5.f, 0.8f);
+			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), Type::Small, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 0.f, EWeight::SemiBold);
 		}
 	}
 	// Carrying a core: where to take it.
@@ -985,7 +1014,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		if (It->Carrier != F.Pl) continue;
 		const FString Line = It->Team == Mine ? TEXT("You have your core: take it through your hub doorway to drop your boss's shield")
 			: TEXT("You have their core: take it through your hub doorway to heal their boss");
-		P.Text(Line, F.Center + FVector2D(0, 160), 24.f, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f); // sRGB (the painter converts)
+		Tag(P, Line, F.Center + FVector2D(0, 160), Type::Title, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f, 0.5f); // sRGB (the painter converts)
 	}
 	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
 	const AWWOBreachLever* Near = nullptr;
@@ -1003,13 +1032,8 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 	else if (Near->Door > Opened + 1) Line = FString::Printf(TEXT("Door %d: open Door %d first"), (int32)Near->Door, Opened + 1);
 	else if (GS->BreachFrozen.IsValidIndex(Mine) && GS->BreachFrozen[Mine]) Line = TEXT("One door per breach: breach again for the next");
 	else Line = FString::Printf(TEXT("Door %d: breach from Room %d to unlock this lever"), (int32)Near->Door, (int32)Near->Door);
-	P.Text(Line, F.Center + FVector2D(0, 90), 26.f, FLinearColor::White, 0.5f);
-	if (Near->Progress > 0.f)
-	{
-		const FVector2D BarPos(F.Center.X - 110.f, F.Center.Y + 125.f);
-		P.Box(BarPos, FVector2D(220.f, 10.f), FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
-		P.Box(BarPos, FVector2D(220.f * FMath::Clamp(Near->Progress, 0.f, 1.f), 10.f), FLinearColor::White);
-	}
+	Tag(P, Line, F.Center + FVector2D(0, 90), Type::Title, FLinearColor::White, 0.5f, 0.5f);
+	if (Near->Progress > 0.f) RoundBar(P, FVector2D(F.Center.X - 110.f, F.Center.Y + 125.f), FVector2D(220.f, 8.f), Near->Progress, FLinearColor::White, FLinearColor(0.1f, 0.1f, 0.12f, 0.7f));
 }
 
 void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
@@ -1071,7 +1095,7 @@ void UWWOHUDWidget::PaintFps(const FWWOHUDFrame& F) const
 	{
 		const FLinearColor C = FpsShown >= 59.f ? FLinearColor(0.45f, 1.f, 0.45f) : FpsShown >= 30.f ? FLinearColor(1.f, 0.85f, 0.3f) : FLinearColor(1.f, 0.35f, 0.3f);
 		const float Top = Pl->RadarSize > 1.f ? 24.f + Pl->RadarSize * 2.f + 10.f : 14.f; // under the radar
-		P.Text(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(FpsShown)), FVector2D(24.f, Top), 26.f, C, 0.f, 6.f, 0.85f);
-		P.Text(FString::Printf(TEXT("%.1f ms"), 1000.f / FpsShown), FVector2D(24.f, Top + 32.f), 16.f, FLinearColor(1.f, 1.f, 1.f, 0.85f), 0.f, 4.f, 0.85f);
+		P.Text(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(FpsShown)), FVector2D(24.f, Top), Type::Title, C, 0.f, 0.f, EWeight::SemiBold);
+		P.Text(FString::Printf(TEXT("%.1f ms"), 1000.f / FpsShown), FVector2D(24.f, Top + 26.f), Type::Caption, WWOUI::TextSecondary, 0.f, 0.f, EWeight::Medium);
 	}
 }

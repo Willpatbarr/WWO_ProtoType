@@ -14,6 +14,7 @@
 #include "Rendering/SlateRenderer.h"
 #include "Styling/CoreStyle.h"
 #include "UI/WWOHUDLayout.h"
+#include "UI/WWOUI.h"
 
 // Paints in the Godot 1600 x 900 layout, scaled to the real size.
 struct FWWOPainter
@@ -135,30 +136,55 @@ struct FWWOPainter
 	{
 		for (float R = Radius; R > 0.f; R -= 0.75f) Circle(Center, R, Color, 1.5f, 16);
 	}
-	// Godot draws every label in its default font, Open Sans SemiBold: Roboto Medium is the
-	// engine's closest weight. Sizes are Godot pixels; Slate's are points at 96 dpi (0.75 pt/px).
-	FSlateFontInfo Font(float Px, float Outline = 6.f, float OutlineAlpha = 0.75f) const
+	// Poppins (WWOUI::FontAt), no outline. Sizes are Godot pixels (WWOUI::Type); Slate's are points at
+	// 96 dpi (0.75 pt/px).
+	FSlateFontInfo Font(float Px, WWOUI::EWeight Weight = WWOUI::EWeight::Medium) const
 	{
-		FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Medium", FMath::Max(1.f, Px * 0.75f * S));
-		F.OutlineSettings.OutlineSize = FMath::RoundToInt(Outline * 0.5f * S);
-		F.OutlineSettings.OutlineColor = FLinearColor(0, 0, 0, OutlineAlpha);
-		return F;
+		return WWOUI::FontAt(Px * 0.75f * S, Weight);
 	}
 	FVector2D Measure(const FString& Text, const FSlateFontInfo& F) const
 	{
 		return FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text, F) / S;
 	}
-	// Align: 0 = left / top, 0.5 = center, 1 = right / bottom of Pos. The outline fades with
-	// the text, like a Godot modulate (Slate doesn't tint outlines on its own).
-	void Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, float Outline = 6.f,
-		float OutlineAlpha = 0.75f, float AlignY = 0.f) const
+	// Text at Pos. Align: 0 = left / top, 0.5 = center, 1 = right / bottom of Pos. Shadow (0..1) is a
+	// soft drop shadow under it, for text over the world (0: none, for text on a panel); it fades
+	// with the text. Returns the text's size.
+	FVector2D Text(const FString& Str, FVector2D Pos, float Px, const FLinearColor& Color, float AlignX = 0.f, float AlignY = 0.f,
+		WWOUI::EWeight Weight = WWOUI::EWeight::Medium, float Shadow = 1.f) const
 	{
-		if (Str.IsEmpty() || Color.A <= 0.001f) return;
-		const FSlateFontInfo F = Font(Px, Outline, OutlineAlpha * Color.A);
+		if (Str.IsEmpty() || Color.A <= 0.001f) return FVector2D::ZeroVector;
+		const FSlateFontInfo F = Font(Px, Weight);
 		const FVector2D M = Measure(Str, F);
 		const FVector2D At = Pos - FVector2D(M.X * AlignX, M.Y * AlignY);
-		FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
+		if (Shadow > 0.f)
+		{
+			// A soft shadow: a few faint copies a little down, spread sideways, so it reads as a blur
+			// under the letters rather than a hard edge round them. Grows a touch with the text.
+			const float Drop = FMath::Clamp(Px * 0.06f, 1.f, 2.5f);
+			const FLinearColor Dark(0.f, 0.f, 0.f, 0.22f * Shadow * Color.A);
+			for (const FVector2D Off : { FVector2D(0.f, Drop), FVector2D(-Drop * 0.6f, Drop * 0.8f), FVector2D(Drop * 0.6f, Drop * 0.8f), FVector2D(0.f, Drop * 1.7f) })
+			{
+				FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f((At + Off) * S))), Str, F,
+					ESlateDrawEffect::None, Dark);
+			}
+		}
+		FSlateDrawElement::MakeText(Out, Layer + 2, Geo.ToPaintGeometry(FVector2f(M * S), FSlateLayoutTransform(FVector2f(At * S))), Str, F,
 			ESlateDrawEffect::None, WWO::Lin(Color));
+		return M;
+	}
+	// A rounded panel (WWOUI's corner unless given): Fill inside an optional Edge, Width wide.
+	void Panel(FVector2D Pos, FVector2D BoxSize, const FLinearColor& Fill, const FLinearColor& Edge = FLinearColor(0, 0, 0, 0), float Width = 0.f,
+		float Radius = WWOUI::Corner) const
+	{
+		if (Fill.A <= 0.001f && (Edge.A <= 0.001f || Width <= 0.f)) return;
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		const float R = FMath::Min(Radius, FMath::Min(BoxSize.X, BoxSize.Y) * 0.5f) * S;
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(R, R, R, R), FSlateColor(WWO::Lin(Edge)), Width * S);
+		Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(BoxSize * S), FSlateLayoutTransform(FVector2f(Pos * S))), &Brush,
+			ESlateDrawEffect::None, WWO::Lin(Fill));
 	}
 	// A texture (a UI symbol, say) stretched over the box; Tint multiplies it (white: as it is).
 	void Image(UTexture2D* Texture, FVector2D Pos, FVector2D BoxSize, const FLinearColor& Tint = FLinearColor::White) const
