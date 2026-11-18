@@ -16,6 +16,9 @@
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "WWOIds.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "TimerManager.h"
 
 // The body's own directions and scale while the grafts are placed.
 struct FWWOGraftFrame
@@ -276,6 +279,26 @@ void UWWOBodyComponent::VoltGrafts(const FWWOGraftFrame& F, const FLinearColor& 
 	}
 }
 
+void UWWOBodyComponent::UpdateGraftDetail()
+{
+	// Five times a second: the grafts in full within 4 m of the camera, their middle level to 12 m,
+	// their lowest beyond. The distance is as seen: a zoomed scope brings a far player near. Half a
+	// meter of slack before a level comes back up, so one standing on a line doesn't flicker.
+	const UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager || !GetOwner()) return;
+	const float Zoom = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(PC->PlayerCameraManager->GetFOVAngle(), 5.f, 170.f) * 0.5f));
+	const float Dist = FVector::Dist(PC->PlayerCameraManager->GetCameraLocation(), GetOwner()->GetActorLocation()) * Zoom;
+	const float Mid = 4.f * WWO::M, Low = 12.f * WWO::M, Slack = 0.5f * WWO::M;
+	int32 Level = Dist > Low ? 2 : Dist > Mid ? 1 : 0;
+	if (Level < GraftDetail && Dist > (GraftDetail == 2 ? Low : Mid) - Slack) Level = GraftDetail;
+	GraftDetail = Level;
+	for (UPrimitiveComponent* P : Grafts)
+	{
+		if (USkeletalMeshComponent* S = Cast<USkeletalMeshComponent>(P); S && S->bIgnoreLeaderPoseComponentLOD) S->SetForcedLOD(Level + 1);
+	}
+}
+
 USkeletalMeshComponent* UWWOBodyComponent::AddModelGraft(const FString& Name)
 {
 	// A graft skinned to the model's own skeleton, posed by the model (its leader).
@@ -289,6 +312,19 @@ USkeletalMeshComponent* UWWOBodyComponent::AddModelGraft(const FString& Name)
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	C->LightingChannels = Model->LightingChannels; // lit like the body (the menu preview has its own lights)
 	C->SetLeaderPoseComponent(Model);
+	// Its level of detail is set by UpdateGraftDetail, from how far the camera is. Following the body
+	// (the default for a led mesh) it would always be drawn in full, since the body has one level:
+	// with eleven VoltVine players in view that cost 3 to 4 ms a frame. The menu's preview keeps
+	// every graft in full.
+	if (!bFullDetailGrafts)
+	{
+		C->bIgnoreLeaderPoseComponentLOD = true;
+		C->SetForcedLOD(GraftDetail + 1);
+		if (UWorld* World = GetWorld(); World && !GraftDetailTimer.IsValid())
+		{
+			World->GetTimerManager().SetTimer(GraftDetailTimer, this, &UWWOBodyComponent::UpdateGraftDetail, 0.2f, true, 0.01f + 0.01f * (GetUniqueID() % 19)); // staggered between bodies; not from the random stream (bot kits are drawn from it)
+		}
+	}
 	C->RegisterComponent();
 	GetOwner()->AddInstanceComponent(C);
 	ApplyShadowOnly(C); // your own: hidden from you, casting your shadow, as the model is

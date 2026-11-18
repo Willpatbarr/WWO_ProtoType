@@ -292,7 +292,7 @@ name, `/Game/WWO/Anims/Body/A_<name>` first, then `/Game/WWO/Anims/UAL/A_<name>`
 model. Flora grafts are procedural meshes (`FWWOGraftBuilder`, `WWOBodyGrafts.cpp`). The three floras share the robot
 frame (`SK_RobotFrame`, `Tools/import_robot_frame.py`), surfaced by `M_WWO_Robot` and its role instances (armour, trim,
 joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importing the frame); its skinned grafts come from
-`Tools/import_robot_grafts.py`.
+`Tools/import_robot_grafts.py`. Each skinned graft has three levels of detail; `UWWOBodyComponent::UpdateGraftDetail` forces the level from the camera's distance five times a second (full within 4 m, middle to 12 m, lowest beyond; scaled by zoom), because a mesh led by the body would otherwise follow the body's single level. The menu preview sets `bFullDetailGrafts`.
 
 ## UI
 

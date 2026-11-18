@@ -72,6 +72,7 @@ AWWOPreviewActor::AWWOPreviewActor()
 	Backdrop->CastShadow = false;
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
 	Body->BodyColor = FLinearColor(0.3f, 0.42f, 0.55f);
+	Body->bFullDetailGrafts = true; // seen close, through a capture: always in full
 	Mesh->LightingChannels.bChannel0 = false; // the grafts copy the body's channels
 	Mesh->LightingChannels.bChannel2 = true;
 	// The lights travel along their forward vector. The camera looks down -X from +X; its left is +Y.

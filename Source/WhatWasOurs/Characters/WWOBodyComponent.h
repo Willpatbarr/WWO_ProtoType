@@ -161,6 +161,12 @@ private:
 	FName ActiveModel;
 	bool bFollowsLoadout = false;
 	bool bModelGrafts = false;  // keep the flora grafts on the model
+public:
+	bool bFullDetailGrafts = false; // the grafts never drop detail with distance (the menu's preview)
+private:
+	void UpdateGraftDetail();     // sets the grafts' level of detail from the camera's distance (on a timer)
+	FTimerHandle GraftDetailTimer;
+	int32 GraftDetail = 0;        // 0 full, 1 middle, 2 lowest
 	bool bModelPinned = false;  // keep AttachBox's plain boxes on the model (glowing ones always stay)
 	TSet<TObjectPtr<UPrimitiveComponent>> GlowingPinned;
 	void UpdateModelExtras(); // shows or hides the mannequin, grafts and boxes for the model
