@@ -337,18 +337,27 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 	case 37: if (AutoMenuClock > Wait) { Release(EKeys::Gamepad_Special_Left); Check(Character->IsOpen() && PC->IsPaused(), TEXT("touchpad opens the character menu")); Next(); } break;
 	case 38:
 	{
-		// The Loadout tab, then with the cursor resting on the grenade tile (its initials), which
-		// drops the row of other grenades under it.
+		// The Loadout tab, then with the cursor steered onto the grenade tile (its badge: found by the
+		// tile's name, it has no text), which drops the row of other grenades under it.
 		static int32 Sub = 0;
 		static float SubAt = 0.f;
-		FString GrenadeInitials;
-		TArray<FString> Words;
-		Grenade.ParseIntoArray(Words, TEXT(" "));
-		for (const FString& Word : Words) if (GrenadeInitials.Len() < 2) GrenadeInitials += Word.Left(1).ToUpper();
 		FVector2D At;
+		FSlateRect GrenadeTile;
+		const bool bGrenadeTile = Character->AutoTestTileRect(TEXT("grenade"), GrenadeTile);
 		if (Sub == 0 && AutoMenuClock > 0.5f) { Shot(TEXT("28_menu_character")); Sub = 1; }
-		else if (Sub == 1 && AutoMenuClock > 0.8f && (!FindButton(Character, GrenadeInitials, At) || Steer(At) || AutoMenuClock > 5.f)) { Sub = 2; SubAt = AutoMenuClock; }
-		else if (Sub == 2 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_hover")); Sub = 3; SubAt = AutoMenuClock; }
+		else if (Sub == 1 && AutoMenuClock > 0.8f && (!bGrenadeTile || Steer(GrenadeTile.GetCenter()) || AutoMenuClock > 5.f))
+		{
+			Check(bGrenadeTile && GrenadeTile.ContainsPoint(App.GetCursorPos()), TEXT("the stick steers the cursor onto the grenade tile"));
+			Sub = 2;
+			SubAt = AutoMenuClock;
+		}
+		else if (Sub == 2 && AutoMenuClock > SubAt + 0.6f)
+		{
+			Check(Character->AutoTestHoverRow() == TEXT("grenade"), FString::Printf(TEXT("resting on the grenade tile opens its row of grenades (open: '%s')"), *Character->AutoTestHoverRow()));
+			Shot(TEXT("28_menu_character_hover"));
+			Sub = 3;
+			SubAt = AutoMenuClock;
+		}
 		// Then on the head's shell card (the part you have on: yellow on the bars), and on another
 		// head in the row that opens (green and red for what swapping would do).
 		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f && (!FindButton(Character, TEXT("HEAD"), At) || Steer(At) || AutoMenuClock > SubAt + 5.f)) { Sub = 4; SubAt = AutoMenuClock; }
