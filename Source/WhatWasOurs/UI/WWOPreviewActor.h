@@ -35,6 +35,10 @@ public:
 
 	// The preview's area in the Godot layout: what's left of the menu row beside the tiles.
 	static inline const FVector2D Size = FVector2D(600.f, 780.f);
+	// The capture camera (level, 45 degrees tall): 2.55 m out and 0.93 m up, so the robot fills about
+	// 90% of the preview image's height (measured on the menu screenshots: 640 of its 710 pixels at
+	// 1600 x 900), with room above for a VeilSpore hood and below for the floor shadow.
+	static inline const FVector CameraAt = FVector(255.f, 0.f, 93.f);
 	// The backdrop's color, so it comes out as the panel's (0.1, 0.11, 0.13) after the capture's
 	// tonemapping, at BackdropBias; at another exposure it's scaled to match (BackdropFor).
 	// ExposureBias is the gun preview's (AWWOGunPreviewActor); the character uses CharacterExposure.

@@ -105,7 +105,7 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 		}
 		else
 		{
-			Preview->Capture->SetRelativeLocation(FVector(275.f, 0.f, 98.f)); // the menu's framing (AWWOPreviewActor)
+			Preview->Capture->SetRelativeLocation(AWWOPreviewActor::CameraAt); // the menu's framing
 			Preview->Capture->FOVAngle = AutoGraftCaptureFov;
 		}
 	};

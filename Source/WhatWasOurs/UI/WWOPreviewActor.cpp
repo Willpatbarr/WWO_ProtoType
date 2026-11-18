@@ -25,8 +25,8 @@ AWWOPreviewActor::AWWOPreviewActor()
 	Capture->SetupAttachment(GetRootComponent());
 	// Godot's preview camera: 4.4 m in front, 1.1 m above the feet, level, 45 degrees tall (Godot
 	// FOVs are vertical; Unreal's are horizontal, so convert for the preview's shape).
-	// (Now nearer, 2.75 m and 0.98 m up, so the character fills the menu's tall middle column.)
-	Capture->SetRelativeLocationAndRotation(FVector(275.f, 0.f, 98.f), FRotator(0.f, 180.f, 0.f));
+	// (Now nearer, CameraAt, so the character fills the menu's tall middle column.)
+	Capture->SetRelativeLocationAndRotation(CameraAt, FRotator(0.f, 180.f, 0.f));
 	Capture->FOVAngle = FMath::RadiansToDegrees(2.f * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(22.5f)) * Size.X / Size.Y));
 	Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
 	Capture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR; // tone mapped (filmic), like the game's view
@@ -93,7 +93,7 @@ AWWOPreviewActor::AWWOPreviewActor()
 	FillLight = MakeLight(TEXT("FillLight"), -8.f, 145.f, 2.4f, FLinearColor(0.82f, 0.88f, 1.f));        // front right, low, cool
 	RimLeft = MakeLight(TEXT("RimLeft"), -28.f, -35.f, 9.f, FLinearColor(0.9f, 0.94f, 1.f));             // behind, left
 	RimRight = MakeLight(TEXT("RimRight"), -22.f, 38.f, 11.f, FLinearColor(0.85f, 0.9f, 1.f));           // behind, right
-	TopLight = MakeLight(TEXT("TopLight"), -82.f, 180.f, 0.5f, FLinearColor(1.f, 1.f, 1.f));             // overhead
+	TopLight = MakeLight(TEXT("TopLight"), -82.f, 180.f, 0.3f, FLinearColor(1.f, 1.f, 1.f));             // overhead (faint: the feet's flat tops caught it most)
 	BounceLight = MakeLight(TEXT("BounceLight"), 55.f, 180.f, 0.5f, FLinearColor(1.f, 0.95f, 0.9f));     // from the floor
 	// Only the key casts shadows: soft (a wide source), with short contact shadows for the creases.
 	KeyLight->CastShadows = true;
