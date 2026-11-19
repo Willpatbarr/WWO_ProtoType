@@ -521,6 +521,21 @@ void UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
 	if (bChanged && HasShells()) RebuildShell();
 }
 
+void UWWOBodyComponent::ShellFromLoadout(const UWWOLoadoutSubsystem* Loadout)
+{
+	static const FName Slots[NumShellSlots] = { "head", "core", "arms", "legs" };
+	const TSharedPtr<FJsonObject> Json = CharacterModels();
+	const TSharedPtr<FJsonObject>* Looks = nullptr;
+	if (Json.IsValid()) Json->TryGetObjectField(TEXT("shell_looks"), Looks);
+	int32 Picks[NumShellSlots] = { 0, 0, 0, 0 };
+	for (int32 i = 0; i < NumShellSlots; ++i)
+	{
+		const UWWOFramePartData* Part = Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr;
+		if (Part && Looks) (*Looks)->TryGetNumberField(Part->Id.ToString(), Picks[i]);
+	}
+	SetShell(Picks[0], Picks[1], Picks[2], Picks[3]);
+}
+
 USkeletalMesh* UWWOBodyComponent::ShellMesh(int32 Slot) const
 {
 	if (!HasShells() || Slot < 0 || Slot >= NumShellSlots) return nullptr;

@@ -109,6 +109,7 @@ void UWWOBodyComponent::RebuildGrafts()
 	}
 	bRegionColors = true;
 	ApplyColors();
+	ShellFromLoadout(Loadout); // and, on a robot that wears shell parts, that part's look
 
 	// show_flora.
 	FWWOGraftFrame F;

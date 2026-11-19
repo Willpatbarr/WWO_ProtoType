@@ -131,6 +131,9 @@ public:
 	enum EShellSlot { ShellHead, ShellCore, ShellArms, ShellLegs, NumShellSlots };
 	int32 ShellPick[NumShellSlots] = { 0, 0, 0, 0 };
 	void SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs);
+	// Each slot wears the look of the frame part equipped in it (Config/CharacterModels.json "shell_looks":
+	// frame part id -> shell number; a part not listed there looks like the base robot).
+	void ShellFromLoadout(const class UWWOLoadoutSubsystem* Loadout);
 	// The mesh a slot shows now (the debug override, else this body's pick); null without shells.
 	USkeletalMesh* ShellMesh(int32 Slot) const;
 	bool HasShells() const { return bShells && Model != nullptr; }
