@@ -360,8 +360,25 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 		}
 		// Then on the head's shell card (the part you have on: yellow on the bars), and on another
 		// head in the row that opens (green and red for what swapping would do).
-		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f && (!FindButton(Character, TEXT("HEAD"), At) || Steer(At) || AutoMenuClock > SubAt + 5.f)) { Sub = 4; SubAt = AutoMenuClock; }
-		else if (Sub == 4 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_part")); Sub = 5; SubAt = AutoMenuClock; }
+		// (By the tile's name too: the card's first text is its corner mark.)
+		else if (Sub == 3 && AutoMenuClock > SubAt + 0.3f)
+		{
+			FSlateRect HeadTile;
+			const bool bHeadTile = Character->AutoTestTileRect(TEXT("part_head"), HeadTile);
+			if (!bHeadTile || Steer(HeadTile.GetCenter()) || AutoMenuClock > SubAt + 5.f)
+			{
+				Check(bHeadTile && HeadTile.ContainsPoint(App.GetCursorPos()), TEXT("the stick steers the cursor onto the head card"));
+				Sub = 4;
+				SubAt = AutoMenuClock;
+			}
+		}
+		else if (Sub == 4 && AutoMenuClock > SubAt + 0.6f)
+		{
+			Check(Character->AutoTestHoverRow() == TEXT("part_head"), FString::Printf(TEXT("resting on the head card opens its row of heads (open: '%s')"), *Character->AutoTestHoverRow()));
+			Shot(TEXT("28_menu_character_part"));
+			Sub = 5;
+			SubAt = AutoMenuClock;
+		}
 		else if (Sub == 5 && AutoMenuClock > SubAt + 0.3f)
 		{
 			FString Other;
@@ -369,9 +386,21 @@ bool FWWOAutoTest::UpdateAutoMenuTest(AWWOCharacter* P, float DeltaTime)
 			{
 				for (const UWWOFramePartData* Part : L->FramePartsFor("head")) if (Part->bUnlocked && Part != L->GetFramePart("head") && Other.IsEmpty()) Other = Part->DisplayName.ToUpper();
 			}
-			if (Other.IsEmpty() || !FindButton(Character, Other, At) || Steer(At) || AutoMenuClock > SubAt + 5.f) { Sub = 6; SubAt = AutoMenuClock; }
+			const bool bFound = !Other.IsEmpty() && FindButton(Character, Other, At);
+			if (!bFound || Steer(At) || AutoMenuClock > SubAt + 5.f)
+			{
+				Check(bFound && FVector2D::Distance(At, App.GetCursorPos()) < 6.f, FString::Printf(TEXT("the stick steers the cursor onto %s in the row"), *Other));
+				Sub = 6;
+				SubAt = AutoMenuClock;
+			}
 		}
-		else if (Sub == 6 && AutoMenuClock > SubAt + 0.6f) { Shot(TEXT("28_menu_character_part_swap")); Sub = 7; SubAt = AutoMenuClock; }
+		else if (Sub == 6 && AutoMenuClock > SubAt + 0.6f)
+		{
+			Check(Character->AutoTestHoverRow() == TEXT("part_head"), TEXT("the row of heads stays open with the cursor on one"));
+			Shot(TEXT("28_menu_character_part_swap"));
+			Sub = 7;
+			SubAt = AutoMenuClock;
+		}
 		else if (Sub == 7 && AutoMenuClock > SubAt + 0.3f) { Sub = 0; Next(); }
 		break;
 	}
