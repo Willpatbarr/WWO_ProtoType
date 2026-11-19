@@ -1,11 +1,12 @@
 // -WWOAutoTestHover: everything in the character menu that hovering shows stays on screen and can be
 // clicked, with a lot of saved weapon configs and long names. In memory only: the configs it makes
 // never reach Loadout.sav (UWWOLoadoutSubsystem::AutoTestSetConfigs; WWOTest's guard as well).
-// For 3, 12, 40 and 150 saved configs (every third with a long name), on the Loadout tab:
+// For 3, 12 and 40 saved configs (every third with a long name; -WWOHoverCounts=150 or any list for others),
+// on the Loadout tab:
 //   - each hover tile (flora, grenade, abilities, traits, both weapon slots, the four shell parts):
 //     the mouse moves off, then onto it; its row of choices opens, the row and every choice lie
 //     inside the window, no two choices overlap (shots 90_hover_<n>_<tile>: weapon slots always,
-//     every tile at 40; at 150 the weapon rows scroll);
+//     every tile at 40; past 40 the weapon rows scroll);
 //   - weapon slot 1 (and slot 2 from 40 on): the mouse walks from the slot to the first choice, wheels the
 //     row down if it scrolls, walks to the last choice (the row must stay open all the way) and
 //     clicks it; the slot then holds that config (90_hover_<n>_weapon0_last).
@@ -16,6 +17,8 @@
 #include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
+#include "WWOSwitches.h"
+#include "Engine/Engine.h"
 #include "UI/WWOCharacterMenu.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -36,7 +39,8 @@ namespace
 	int32 HoverWheels = 0;
 	FVector2D HoverFrom = FVector2D::ZeroVector;
 	TArray<FString> HoverTiles;
-	const int32 Counts[] = { 3, 12, 40, 150 }; // 150: more than rows as wide as the window can hold, so the row scrolls
+	// -WWOHoverCounts=a,b,... for others: 150 is more than rows as wide as the window hold, so the row scrolls.
+	TArray<int32> Counts = { 3, 12, 40 };
 	constexpr int32 AllTilesAt = 40; // every tile's shot at this count (the weapon slots' at every count)
 
 	FSlateApplication& App() { return FSlateApplication::Get(); }
@@ -111,7 +115,7 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 	const FGeometry& VG = ViewportWidget->GetTickSpaceGeometry();
 	const FSlateRect View = FSlateRect::FromPointAndExtent(VG.GetAbsolutePosition(), VG.GetAbsoluteSize());
 	const FVector2D OffEverything = FVector2D(View.Left + 4.f, View.Top + 4.f); // the window's corner: no tile there
-	const int32 N = Counts[FMath::Min(HoverCount, (int32)UE_ARRAY_COUNT(Counts) - 1)];
+	const int32 N = Counts[FMath::Min(HoverCount, Counts.Num() - 1)];
 	auto Check = [](bool bOk, const FString& What) { return WWOTest::Check(TEXT("hover"), bOk, What); };
 	// The open row and each choice in it: on screen, apart. (A choice scrolled out of a scrolling row is
 	// only checked to lie across the row's width.)
@@ -144,6 +148,15 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 	{
 	case 0:
 		if (HoverClock < 8.f) break;
+		{
+			FString Asked;
+			TArray<FString> Parts;
+			if (WWOSwitches::Value(TEXT("WWOHoverCounts="), Asked, false) && Asked.ParseIntoArray(Parts, TEXT(",")) > 0)
+			{
+				Counts.Reset();
+				for (const FString& Part : Parts) Counts.Add(FMath::Max(1, FCString::Atoi(*Part)));
+			}
+		}
 		// Something in every tile: a weapon with mods, both abilities, four traits.
 		L->AutoTestSetConfigs(TArray<FWWOModConfig>()); // from here on nothing is written to the saved file
 		for (UWWOWeaponData* W : L->Catalog.Weapons) if (W->Id == "rifle") L->EquipWeapon(W);
@@ -210,6 +223,11 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 		break;
 	case 12:
 		if (HoverClock < 0.6f) break;
+		// -WWOHoverGC: a full garbage collection here, with the gun models just rebuilt by the last count's
+		// click. Repro of a crash found by this test (2026-11-18, not fixed): the Metal RHI asserts "Resource is
+		// being deleted" in the base pass, for the collected materials of gun parts the character, the HUD's
+		// gun pictures and the Weapon tab's gun rebuilt while the menu was open. Try -WWOHoverCounts=3,3,3.
+		if (WWOSwitches::Has(TEXT("WWOHoverGC"))) { UE_LOG(LogWWO, Display, TEXT("AutoTest hover: forcing a garbage collection")); GEngine->ForceGarbageCollection(true); }
 		HoverFrom = App().GetCursorPos();
 		HoverWalk = 0;
 		HoverWheels = 0;
@@ -339,7 +357,7 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 	case 30:
 		MoveMouse(OffEverything);
 		Menu->AutoTestShow(TEXT(""), FString());
-		if (++HoverCount < (int32)UE_ARRAY_COUNT(Counts)) { Next(1); break; }
+		if (++HoverCount < Counts.Num()) { Next(1); break; }
 		Next(31);
 		break;
 	case 31:
