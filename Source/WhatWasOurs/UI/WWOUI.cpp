@@ -130,15 +130,17 @@ namespace WWOUI
 		T->SetFont(F);
 	}
 
-	void Ellipsis(UTextBlock* T, float Width)
+	bool Ellipsis(UTextBlock* T, float Width)
 	{
-		if (!T) return;
+		if (!T) return false;
 		// Ellipsis needs the text clipped to its own box, and a side to cut from (not a centred line).
 		T->SetClipping(EWidgetClipping::ClipToBounds);
 		T->SetTextOverflowPolicy(ETextOverflowPolicy::Ellipsis);
-		if (!FSlateApplication::IsInitialized() || !FSlateApplication::Get().GetRenderer()) return;
+		if (!FSlateApplication::IsInitialized() || !FSlateApplication::Get().GetRenderer()) return false;
 		const float Wide = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(T->GetText(), T->GetFont()).X;
-		if (Wide > Width) T->SetJustification(ETextJustify::Left);
+		if (Wide <= Width) return false;
+		T->SetJustification(ETextJustify::Left);
+		return true;
 	}
 
 	void SetTip(UWidgetTree* Tree, UWidget* Widget, const FString& Tip)

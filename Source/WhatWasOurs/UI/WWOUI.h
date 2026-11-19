@@ -114,8 +114,8 @@ namespace WWOUI
 	// Sets a text block's weight, keeping its size and letter spacing.
 	void SetWeight(UTextBlock* T, EWeight Weight);
 	// A one-line text that may be longer than the Width (layout units) it has: cut off at its own edge
-	// with "...". A centred one that is too long is set from the left, where the cut can show.
-	void Ellipsis(UTextBlock* T, float Width);
+	// with "...". A centred one that is too long is set from the left, where the cut can show. True: it is cut.
+	bool Ellipsis(UTextBlock* T, float Width);
 
 	// --- Boxes: one corner, one edge, one grid -----------------------------------------------------
 	constexpr float Corner = 6.f;      // every rounded box's corner radius (Godot pixels)

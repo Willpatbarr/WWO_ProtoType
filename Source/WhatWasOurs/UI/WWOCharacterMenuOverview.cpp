@@ -26,8 +26,8 @@ using namespace WWOCharacterMenuUI;
 namespace
 {
 	// The Loadout tab's hover row of choices (Godot pixels): a square choice's side (and every choice's
-	// height), a weapon config's or shell part's width, the gap between choices.
-	constexpr float ChoiceSide = 56.f, WideChoice = 150.f, ChoiceGap = 8.f;
+	// height), a weapon config's width, a shell part's (its two-stat line whole), the gap between choices.
+	constexpr float ChoiceSide = 56.f, WideChoice = 150.f, PartChoice = 162.f, ChoiceGap = 8.f;
 
 	// Up to two initials, standing in for an icon until there is art.
 	FString Initials(const FString& Name)
@@ -563,6 +563,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	const FLinearColor Accent = WWOUI::Accent(this);
 	// The choices, laid out in rows below (as many rows as it takes to keep the row on screen).
 	TArray<UWidget*> Items;
+	const float Wide = Name.StartsWith(TEXT("part_")) ? PartChoice : WideChoice; // a choice with a second line
 	// One choice: a square of initials (wider, with a second line, for a weapon config).
 	// Symbol: the item's badge filling the square in place of the initials.
 	auto Option = [&](const FString& Label, const FString& Under, const FString& Tip, bool bOn, const FLinearColor& Fill, const FLinearColor& Edge, TFunction<void()> Pick,
@@ -576,19 +577,20 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 			// A name too long for the box ends in "..." (the tip has it whole) instead of running into the next one.
 			UTextBlock* Text = WWOUI::Spaced(WidgetTree, Label, Under.IsEmpty() ? WWOUI::Type::Title : WWOUI::Type::Small, bOn ? FLinearColor::White : FLinearColor(1, 1, 1, 0.85f), 40);
 			Text->SetJustification(ETextJustify::Center);
-			const float Inset = 4.f * K; // a cut-off name keeps clear of the card's edge
-			const float TextWidth = ((Under.IsEmpty() ? ChoiceSide : WideChoice) - 12.f) * K - 2.f * Inset; // inside the card's edge and padding
-			WWOUI::Ellipsis(Text, TextWidth);
+			const float TextWidth = ((Under.IsEmpty() ? ChoiceSide : Wide) - 12.f) * K; // inside the card's edge and padding
+			const FMargin Inset(4.f * K, 0); // a cut-off name keeps clear of the card's edge
+			const bool bCut = WWOUI::Ellipsis(Text, TextWidth);
 			UVerticalBoxSlot* TextSlot = In->AddChildToVerticalBox(Text);
 			TextSlot->SetSize(WWOUI::Fill(1.f));
 			TextSlot->SetVerticalAlignment(VAlign_Center);
-			TextSlot->SetPadding(FMargin(Inset, 0));
+			if (bCut) TextSlot->SetPadding(Inset);
 			if (!Under.IsEmpty())
 			{
 				UTextBlock* Second = WWOUI::Spaced(WidgetTree, Under, WWOUI::Type::Micro, FLinearColor(1, 1, 1, 0.6f), 60);
 				Second->SetJustification(ETextJustify::Center);
-				WWOUI::Ellipsis(Second, TextWidth);
-				In->AddChildToVerticalBox(Second)->SetPadding(FMargin(Inset, 0));
+				const bool bSecondCut = WWOUI::Ellipsis(Second, TextWidth);
+				UVerticalBoxSlot* SecondSlot = In->AddChildToVerticalBox(Second);
+				if (bSecondCut) SecondSlot->SetPadding(Inset);
 			}
 			Inside = In;
 		}
@@ -597,7 +599,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 		WWOUI::SetTip(WidgetTree, Box, Tip);
 		HoverNames.Add({ Box, Tip }); // its notes in the Build section light up while it's hovered
 		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
-		Size->SetWidthOverride((Symbol || Under.IsEmpty() ? ChoiceSide : WideChoice) * K); // wide enough for a two-stat line
+		Size->SetWidthOverride((Symbol || Under.IsEmpty() ? ChoiceSide : Wide) * K);
 		Size->SetHeightOverride(ChoiceSide * K);
 		Size->AddChild(Box);
 		Items.Add(Size);
@@ -703,7 +705,7 @@ void UWWOCharacterMenu::OpenHoverPicker(const FString& Name, UWidget* Tile)
 	const bool bMessage = Items.Num() == 1 && !Cast<USizeBox>(Items[0]);
 	const bool bWide = Name.StartsWith(TEXT("weapon")) || Name.StartsWith(TEXT("part_"));
 	const float Gap = ChoiceGap * K, Pad = 10.f * K, Margin = 8.f, Off = 4.f; // Margin: from the window's edges; Off: from the tile
-	const float ItemW = (bMessage ? 500.f : bWide ? WideChoice : ChoiceSide) * K, ItemH = (bMessage ? 44.f : ChoiceSide) * K;
+	const float ItemW = (bMessage ? 500.f : bWide ? Wide : ChoiceSide) * K, ItemH = (bMessage ? 44.f : ChoiceSide) * K;
 	const float RoomBelow = RootSize.Y - TileFoot.Y - Off - Margin, RoomAbove = TileTop.Y - Off - Margin;
 	const int32 FitAcross = FMath::Max(1, FMath::FloorToInt((RootSize.X - 2.f * Margin - 2.f * Pad + Gap) / (ItemW + Gap)));
 	auto Tall = [&](int32 Across) { const int32 Rows = FMath::DivideAndRoundUp(Items.Num(), Across); return Rows * ItemH + (Rows - 1) * Gap + 2.f * Pad; };
