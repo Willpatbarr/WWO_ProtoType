@@ -223,10 +223,11 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 		break;
 	case 12:
 		if (HoverClock < 0.6f) break;
-		// -WWOHoverGC: a full garbage collection here, with the gun models just rebuilt by the last count's
-		// click. Repro of a crash found by this test (2026-11-18, not fixed): the Metal RHI asserts "Resource is
-		// being deleted" in the base pass, for the collected materials of gun parts the character, the HUD's
-		// gun pictures and the Weapon tab's gun rebuilt while the menu was open. Try -WWOHoverCounts=3,3,3.
+		// -WWOHoverGC: a full garbage collection here, after the last count's click rebuilt the gun models.
+		// It reproduced a crash this test found (2026-11-18): the Metal RHI's "Resource is being deleted" in
+		// the base pass, when a GC destroyed a material parameter collection instance the world had made
+		// again after a body model was unloaded and loaded back (UWWOLoadoutSubsystem::KeepBodyModelsLoaded).
+		// -WWOHoverCounts=3,3,3 -WWOHoverGC crashed in most runs before that fix.
 		if (WWOSwitches::Has(TEXT("WWOHoverGC"))) { UE_LOG(LogWWO, Display, TEXT("AutoTest hover: forcing a garbage collection")); GEngine->ForceGarbageCollection(true); }
 		HoverFrom = App().GetCursorPos();
 		HoverWalk = 0;

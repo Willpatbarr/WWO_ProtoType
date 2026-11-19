@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Systems/WWOConfig.h"
+#include "Characters/WWOBodyComponent.h"
 
 namespace
 {
@@ -30,6 +31,7 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	Catalog.Load(this);
+	KeepBodyModelsLoaded();
 	Equipped.Abilities.SetNum(AbilitySlots);
 	if (!LoadSave())
 	{
@@ -50,6 +52,21 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	UE_LOG(LogWWO, Log, TEXT("Loadout: %d weapons, %d grenades, %d abilities, %d frame parts, %d floras, %d traits, %d weapon mods, %d configs"),
 		Catalog.Weapons.Num(), Catalog.Grenades.Num(), Catalog.Abilities.Num(), Catalog.FrameParts.Num(), Catalog.Floras.Num(), Catalog.Traits.Num(),
 		Catalog.WeaponMods.Num(), ModConfigs.Configs.Num());
+}
+
+void UWWOLoadoutSubsystem::KeepBodyModelsLoaded()
+{
+	if (bCopy) return;
+	KeptLoaded.Reset();
+	const TSharedPtr<FJsonObject> Bodies = WWOConfig::LoadCached(TEXT("CharacterModels.json"));
+	const TSharedPtr<FJsonObject>* Models = nullptr;
+	if (Bodies.IsValid() && Bodies->TryGetObjectField(TEXT("models"), Models))
+	{
+		TArray<UObject*> Loaded;
+		for (const auto& Pair : (*Models)->Values) UWWOBodyComponent::Preload(FName(*Pair.Key), Loaded);
+		for (UObject* O : Loaded) KeptLoaded.AddUnique(O);
+	}
+	UE_LOG(LogWWO, Log, TEXT("Loadout: %d body model assets kept loaded"), KeptLoaded.Num());
 }
 
 // --- Equipping --------------------------------------------------------------------------

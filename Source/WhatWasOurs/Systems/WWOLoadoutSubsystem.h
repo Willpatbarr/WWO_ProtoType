@@ -128,6 +128,14 @@ public:
 private:
 	UPROPERTY() FWWOEquipped Equipped;
 	FWWOModConfigs ModConfigs;
+	// Every body model in Config/CharacterModels.json (the Paragon heroes and minions bots and enemies
+	// wear), loaded for the whole run. Their materials use a material parameter collection; when the last
+	// body of a model went and a garbage collection unloaded it, the world dropped that collection's
+	// instance, made a new one when a body loaded the model again, and a later collection destroyed an
+	// instance whose uniform buffer cached draw commands still used: the Metal RHI asserted "Resource is
+	// being deleted" in the base pass (found by -WWOAutoTestHover, 2026-11-18).
+	UPROPERTY() TArray<TObjectPtr<UObject>> KeptLoaded;
+	void KeepBodyModelsLoaded();
 
 	bool bCopy = false; // a joiner's loadout on the host
 	bool bSaveDue = false;
