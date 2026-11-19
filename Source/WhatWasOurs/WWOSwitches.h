@@ -9,6 +9,7 @@
 //   -WWOAutoTestMenus           menus by injected controller and keyboard input
 //   -WWOAutoTestBody            body states, third person, first-person hands
 //   -WWOBodyFlora=<id>          with -WWOAutoTestBody: wear that flora (its grafts) for the third-person shots
+//   -WWOShell=<n> or <h,c,a,l>  every robot wears shell n (0 base, 1 sleek, 2 scout), or a shell per part: head, core, arms, legs (also the wwo.Shell console command)
 //   -WWOAutoTestGrafts          six loadouts in the character preview
 //   -WWOAutoTestMaps            fixed camera views of the level
 //   -WWOAutoTestMods            weapon mods and perks against the mod data

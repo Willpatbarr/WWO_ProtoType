@@ -261,6 +261,7 @@ private:
 	// Hands on the gun: the player's own character model (the mannequin without one), only its arms
 	// shown, each solved every frame to reach where a first-person rifle pose holds the gun.
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> HandsMesh;
+	UPROPERTY() TObjectPtr<class USkeletalMeshComponent> HandsArmour; // the arms shell part over the hands mesh, if the robot wears parts
 	UPROPERTY() TObjectPtr<USkeletalMesh> HandsAsset;
 	UPROPERTY() TObjectPtr<UAnimSequence> HandsPose;
 	struct FHandsArm

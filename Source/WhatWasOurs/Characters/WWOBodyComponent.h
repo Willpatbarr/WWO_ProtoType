@@ -19,6 +19,7 @@
 #include "WWOBodyComponent.generated.h"
 
 class USkeletalMeshComponent;
+class USkeletalMesh;
 class UStaticMeshComponent;
 class UPrimitiveComponent;
 class UStaticMesh;
@@ -122,6 +123,20 @@ public:
 	// The same for animation clips by name (as FindAnim looks them up).
 	static void PreloadAnims(TConstArrayView<FName> Names, TArray<UObject*>& Out);
 	USkeletalMeshComponent* GetModel() const { return Model; }
+	// Shell parts (a model with "shells" in Config/CharacterModels.json, the robot frame): the model is
+	// the robot's bare skeleton (joints, struts, hands: SK_RobotSkeleton) and a head, core, arms and legs
+	// mesh play on its pose, each from any shell (/Game/WWO/Characters/RobotFrame/Shells/SK_Shell<n>_<Slot>,
+	// Tools/import_shell_parts.py; shell 0 is the base robot's own armour). Whatever a part leaves
+	// uncovered shows the skeleton.
+	enum EShellSlot { ShellHead, ShellCore, ShellArms, ShellLegs, NumShellSlots };
+	int32 ShellPick[NumShellSlots] = { 0, 0, 0, 0 };
+	void SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs);
+	// The mesh a slot shows now (the debug override, else this body's pick); null without shells.
+	USkeletalMesh* ShellMesh(int32 Slot) const;
+	bool HasShells() const { return bShells && Model != nullptr; }
+	// Debug: every body's shell, whatever it picked (wwo.Shell, -WWOShell=); -1 leaves a slot alone.
+	static int32 ShellOverride[NumShellSlots];
+	static void SetShellOverride(UWorld* World, const int32 Picks[NumShellSlots]);
 	// The model's hands are rigid (Config/CharacterModels.json hand_fingers / hand_palm, right hand, mesh space).
 	bool bRigidHands = false;
 	FVector HandFingers = FVector::ZeroVector, HandPalm = FVector::ZeroVector;
@@ -177,6 +192,11 @@ private:
 	float FpBodyBack = 0.f;
 	UPROPERTY() TObjectPtr<USkeletalMeshComponent> FpBody; // your own legs and feet in first person
 	UPROPERTY() TObjectPtr<class UIKRetargeter> ModelRetargeter;
+	bool bShells = false;
+	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> ShellParts;   // on the model
+	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> FpShellParts; // on your own first-person legs
+	void RebuildShell();
+	USkeletalMeshComponent* AddShellPart(USkeletalMeshComponent* Leader, USkeletalMesh* Asset);
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);

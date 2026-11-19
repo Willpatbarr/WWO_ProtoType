@@ -6,6 +6,9 @@
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
+#include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
+#include "WWOSwitches.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Characters/WWOBodyAnimInstance.h"
@@ -201,6 +204,12 @@ void UWWOBodyComponent::SetModel(FName Key)
 	USkeletalMeshComponent* Driver = GetMesh();
 	UE_LOG(LogWWO, Verbose, TEXT("Body %s: model '%s' (driver %s)"), *GetOwner()->GetName(), *Key.ToString(), Driver ? TEXT("yes") : TEXT("none"));
 	if (!Driver || (Key == ActiveModel && (Model || Key.IsNone()))) return;
+	for (const TArray<TObjectPtr<USkeletalMeshComponent>>* List : { &ShellParts, &FpShellParts })
+	{
+		for (USkeletalMeshComponent* C : *List) if (C) C->DestroyComponent();
+	}
+	ShellParts.Reset();
+	FpShellParts.Reset();
 	if (Model) Model->DestroyComponent();
 	Model = nullptr;
 	if (FpBody) FpBody->DestroyComponent();
@@ -210,6 +219,18 @@ void UWWOBodyComponent::SetModel(FName Key)
 	const TSharedPtr<FJsonObject> Config = ModelConfig(Key);
 	FString MeshPath;
 	USkeletalMesh* Asset = Config.IsValid() && Config->TryGetStringField(TEXT("mesh"), MeshPath) ? LoadObject<USkeletalMesh>(nullptr, *MeshPath) : nullptr;
+	// "shells": the model is the robot's bare skeleton, and its armour is four swappable parts (RebuildShell).
+	bShells = false;
+	if (Asset && Config->TryGetBoolField(TEXT("shells"), bShells) && bShells)
+	{
+		USkeletalMesh* Bare = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/WWO/Characters/RobotFrame/Shells/SK_RobotSkeleton.SK_RobotSkeleton"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (Bare && Bare->GetSkeleton() == Asset->GetSkeleton()) Asset = Bare;
+		else
+		{
+			bShells = false;
+			UE_LOG(LogWWO, Warning, TEXT("Character model '%s': shells are on but SK_RobotSkeleton is missing (Tools/import_shell_parts.py); showing the whole mesh"), *Key.ToString());
+		}
+	}
 	const FString K = Key.ToString();
 	// "retargeter": another model's retargeter (several keys sharing one model, as the three floras
 	// sharing the robot frame do); its own RTG_Manny_<key> otherwise.
@@ -353,6 +374,7 @@ void UWWOBodyComponent::RefreshOverlay()
 	if (Alpha <= 0.f && Rim <= 0.f)
 	{
 		if (Mesh->GetOverlayMaterial()) Mesh->SetOverlayMaterial(nullptr);
+		for (USkeletalMeshComponent* C : ShellParts) if (C && C->GetOverlayMaterial()) C->SetOverlayMaterial(nullptr);
 		return;
 	}
 	if (!HighlightMat)
@@ -365,6 +387,7 @@ void UWWOBodyComponent::RefreshOverlay()
 	HighlightMat->SetScalarParameterValue("Rim", Rim);
 	HighlightMat->SetVectorParameterValue("Color", bTeam ? TeamTint : FLinearColor(1.f, 0.15f, 0.1f)); // the material's default red
 	if (Mesh->GetOverlayMaterial() != HighlightMat) Mesh->SetOverlayMaterial(HighlightMat);
+	for (USkeletalMeshComponent* C : ShellParts) if (C && C->GetOverlayMaterial() != HighlightMat) C->SetOverlayMaterial(HighlightMat); // the armour is most of what you see
 }
 
 void UWWOBodyComponent::UpdateModelExtras()
@@ -409,6 +432,7 @@ void UWWOBodyComponent::ApplyModelView()
 	{
 		if (FpBody) FpBody->DestroyComponent();
 		FpBody = nullptr;
+		RebuildShell();
 		return;
 	}
 	if (!FpBody)
@@ -431,6 +455,129 @@ void UWWOBodyComponent::ApplyModelView()
 	}
 	// The model hangs off the mannequin, whose mesh space faces +y.
 	FpBody->SetRelativeLocation(FVector(0.f, -FpBodyBack, 0.f));
+	RebuildShell();
+}
+
+// --- Shell parts ---------------------------------------------------------------------------------
+
+int32 UWWOBodyComponent::ShellOverride[UWWOBodyComponent::NumShellSlots] = { -1, -1, -1, -1 };
+
+namespace
+{
+	const TCHAR* const ShellSlotNames[UWWOBodyComponent::NumShellSlots] = { TEXT("Head"), TEXT("Core"), TEXT("Arms"), TEXT("Legs") };
+
+	// "2" (every slot) or "2,1,0,2" / "2 1 0 2" (head, core, arms, legs); "-" or "off" leaves a slot to the body's own pick.
+	void ParseShellPicks(const TArray<FString>& Args, int32 Out[UWWOBodyComponent::NumShellSlots])
+	{
+		for (int32 i = 0; i < UWWOBodyComponent::NumShellSlots; ++i)
+		{
+			const FString* A = Args.IsValidIndex(i) ? &Args[i] : (Args.Num() == 1 ? &Args[0] : nullptr);
+			Out[i] = A && A->IsNumeric() ? FCString::Atoi(**A) : -1;
+		}
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs ShellCommand(TEXT("wwo.Shell"),
+		TEXT("wwo.Shell <n>: every robot wears shell n (0 base, 1 sleek, 2 scout). wwo.Shell <head> <core> <arms> <legs>: a shell per part. wwo.Shell off: back to each body's own."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Picks[UWWOBodyComponent::NumShellSlots];
+			ParseShellPicks(Args, Picks);
+			UWWOBodyComponent::SetShellOverride(World, Picks);
+		}));
+
+	// -WWOShell=2 or -WWOShell=2,1,0,2: the same from the command line, read once.
+	void ReadShellSwitch()
+	{
+		static bool bRead = false;
+		if (bRead) return;
+		bRead = true;
+		FString Text;
+		if (!WWOSwitches::Value(TEXT("WWOShell="), Text, false)) return;
+		TArray<FString> Args;
+		Text.ParseIntoArray(Args, TEXT(","));
+		ParseShellPicks(Args, UWWOBodyComponent::ShellOverride);
+	}
+}
+
+void UWWOBodyComponent::SetShellOverride(UWorld* World, const int32 Picks[NumShellSlots])
+{
+	ReadShellSwitch(); // (so a later first read doesn't undo this)
+	for (int32 i = 0; i < NumShellSlots; ++i) ShellOverride[i] = Picks[i];
+	for (TObjectIterator<UWWOBodyComponent> It; It; ++It)
+	{
+		if (It->GetWorld() == World && It->HasShells()) It->RebuildShell();
+	}
+}
+
+void UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
+{
+	const int32 Picks[NumShellSlots] = { Head, Core, Arms, Legs };
+	bool bChanged = false;
+	for (int32 i = 0; i < NumShellSlots; ++i)
+	{
+		bChanged |= ShellPick[i] != Picks[i];
+		ShellPick[i] = Picks[i];
+	}
+	if (bChanged && HasShells()) RebuildShell();
+}
+
+USkeletalMesh* UWWOBodyComponent::ShellMesh(int32 Slot) const
+{
+	if (!HasShells() || Slot < 0 || Slot >= NumShellSlots) return nullptr;
+	ReadShellSwitch();
+	const USkeleton* Skeleton = Model->GetSkeletalMeshAsset() ? Model->GetSkeletalMeshAsset()->GetSkeleton() : nullptr;
+	// The picked shell's part; a shell that has none for this slot (or isn't imported) shows the base robot's.
+	for (const int32 Shell : { ShellOverride[Slot] >= 0 ? ShellOverride[Slot] : ShellPick[Slot], 0 })
+	{
+		const FString Name = FString::Printf(TEXT("SK_Shell%d_%s"), Shell, ShellSlotNames[Slot]);
+		USkeletalMesh* Asset = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Shells/%s.%s"), *Name, *Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (Asset && Asset->GetSkeleton() == Skeleton) return Asset;
+	}
+	return nullptr;
+}
+
+USkeletalMeshComponent* UWWOBodyComponent::AddShellPart(USkeletalMeshComponent* Leader, USkeletalMesh* Asset)
+{
+	// A part skinned to the robot's skeleton, posed by the mesh it sits on (its leader).
+	USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(GetOwner());
+	C->SetSkeletalMeshAsset(Asset);
+	C->SetupAttachment(Leader);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->LightingChannels = Leader->LightingChannels; // lit like the body (the menu preview has its own lights)
+	C->SetLeaderPoseComponent(Leader);
+	C->RegisterComponent();
+	GetOwner()->AddInstanceComponent(C);
+	return C;
+}
+
+void UWWOBodyComponent::RebuildShell()
+{
+	for (const TArray<TObjectPtr<USkeletalMeshComponent>>* List : { &ShellParts, &FpShellParts })
+	{
+		for (USkeletalMeshComponent* C : *List) if (C) C->DestroyComponent();
+	}
+	ShellParts.Reset();
+	FpShellParts.Reset();
+	if (!HasShells()) return;
+	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+	{
+		USkeletalMesh* Asset = ShellMesh(Slot);
+		if (!Asset) continue;
+		USkeletalMeshComponent* C = AddShellPart(Model, Asset);
+		ApplyShadowOnly(C); // your own: hidden from you, casting your shadow, as the model is
+		C->bCastHiddenShadow = bShadowOnly;
+		C->SetOverlayMaterial(Model->GetOverlayMaterial());
+		ShellParts.Add(C);
+		// Your own legs in first person (FpBody: the skeleton from the hide bone down) wear their parts too.
+		if (FpBody && (Slot == ShellLegs || Slot == ShellCore))
+		{
+			USkeletalMeshComponent* F = AddShellPart(FpBody, Asset);
+			F->SetCastShadow(false);
+			F->SetOnlyOwnerSee(true);
+			for (const FName Bone : FpHideBones) F->HideBoneByName(Bone, PBO_None);
+			FpShellParts.Add(F);
+		}
+	}
 }
 
 void UWWOBodyComponent::ApplyShadowOnly(UPrimitiveComponent* C) const

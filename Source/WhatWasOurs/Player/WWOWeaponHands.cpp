@@ -187,6 +187,7 @@ void UWWOWeaponComponent::UpdateHands()
 	if (bFirstPersonHidden) // someone else's character or a bot: nobody sees first-person hands on it
 	{
 		if (HandsMesh) HandsMesh->SetVisibility(false);
+		if (HandsArmour) HandsArmour->SetVisibility(false);
 		return;
 	}
 	USkeletalMesh* Want = nullptr;
@@ -195,6 +196,29 @@ void UWWOWeaponComponent::UpdateHands()
 	if (Want != HandsAsset || !HandsMesh) BuildHands(Want);
 	const bool bShow = !bFirstPersonHidden && HandsOwner.Num() > 0 && IsVisible();
 	HandsMesh->SetVisibility(bShow);
+	// A robot with shell parts: the hands mesh is its bare skeleton, and the arms part it wears goes over
+	// it, on the same pose (UWWOBodyComponent::ShellMesh).
+	USkeletalMesh* Armour = P && P->Body && HandsAsset == Want ? P->Body->ShellMesh(UWWOBodyComponent::ShellArms) : nullptr;
+	if (Armour && !HandsArmour)
+	{
+		HandsArmour = NewObject<USkeletalMeshComponent>(GetOwner());
+		HandsArmour->SetupAttachment(HandsMesh);
+		HandsArmour->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		HandsArmour->SetCastShadow(false);
+		HandsArmour->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+		HandsArmour->SetBoundsScale(4.f);
+		HandsArmour->SetLeaderPoseComponent(HandsMesh);
+		HandsArmour->RegisterComponent();
+	}
+	if (HandsArmour)
+	{
+		if (Armour && HandsArmour->GetSkeletalMeshAsset() != Armour)
+		{
+			HandsArmour->SetSkeletalMeshAsset(Armour);
+			HandsArmour->SetLeaderPoseComponent(HandsMesh, true);
+		}
+		HandsArmour->SetVisibility(bShow && Armour != nullptr);
+	}
 	if (!bShow) return;
 	const FReferenceSkeleton& Ref = HandsAsset->GetRefSkeleton();
 	// The clip's rifle onto this gun: anything held against the clip's rifle moves to the same place on ours.
