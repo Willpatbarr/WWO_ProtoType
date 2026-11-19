@@ -1,83 +1,89 @@
 {
- "_comment": "Sound effects. Each event names the sounds it picks from at random (assets in /Game/WWO/Audio, imported from Tools/audio_src by Tools/import_sounds.py), its volume, the pitch range each play picks from, and how far it carries in meters (0 = heard only by the player it's for). The game plays an event by name (WWOSound::Play); an event that isn't listed here, or lists no sounds, is silent. Edit and restart; rerun the import script only after adding files. The placeholder sounds are Kenney's Sci-Fi Sounds, Impact Sounds and Interface Sounds packs (kenney.nl, CC0).",
+ "_comment": "Sound effects. Each event names the sounds it picks from at random (assets in /Game/WWO/Audio, imported from Tools/audio_src by Tools/import_sounds.py), its volume, the pitch range each play picks from, and how far it carries in meters (0 = heard only by the player it's for). The game plays an event by name (WWOSound::Play); an event that isn't listed here, or lists no sounds, is silent. Edit and restart; rerun the import script only after adding files. The placeholder sounds are Kenney's Sci-Fi Sounds, Impact Sounds and Interface Sounds packs (kenney.nl, CC0). The guns' shots (S_gun_*) are from the 'Punchy Gun shots' pack Will downloaded (~/Downloads/punchy_gun_shots.zip), mixed down to mono so they play from a place in the world; the hand cannon's (S_gun_handcannon_*) are built from them by ~/Documents/WWO_Handcannon/tools/make_handcannon_sfx.py (the revolver blast pitched down, a low thump, the canyon shot's echo).",
  "events": {
   "fire_rifle": {
    "sounds": [
-    "S_laserSmall_000",
-    "S_laserSmall_001",
-    "S_laserSmall_002",
-    "S_laserSmall_003",
-    "S_laserSmall_004"
+    "S_gun_rifle_000",
+    "S_gun_rifle_001",
+    "S_gun_rifle_002",
+    "S_gun_rifle_003"
    ],
-   "volume": 0.6,
+   "volume": 0.4,
    "pitch": [
-    0.92,
-    1.08
+    0.97,
+    1.04
    ],
-   "range": 60
+   "range": 80
   },
   "fire_handcannon": {
    "sounds": [
-    "S_laserLarge_000",
-    "S_laserLarge_001",
-    "S_laserLarge_002"
-   ],
-   "volume": 0.75,
-   "pitch": [
-    0.95,
-    1.05
-   ],
-   "range": 70
-  },
-  "fire_shotgun": {
-   "sounds": [
-    "S_explosionCrunch_000",
-    "S_explosionCrunch_001"
-   ],
-   "volume": 0.7,
-   "pitch": [
-    1.35,
-    1.55
-   ],
-   "range": 70
-  },
-  "fire_sniper": {
-   "sounds": [
-    "S_laserLarge_003",
-    "S_laserLarge_004"
-   ],
-   "volume": 0.85,
-   "pitch": [
-    0.7,
-    0.78
-   ],
-   "range": 90
-  },
-  "fire_burstrifle": {
-   "sounds": [
-    "S_laserSmall_000",
-    "S_laserSmall_002",
-    "S_laserSmall_004"
-   ],
-   "volume": 0.65,
-   "pitch": [
-    0.78,
-    0.86
-   ],
-   "range": 70
-  },
-  "fire": {
-   "sounds": [
-    "S_laserRetro_000",
-    "S_laserRetro_001",
-    "S_laserRetro_002"
+    "S_gun_handcannon_000",
+    "S_gun_handcannon_001",
+    "S_gun_handcannon_002",
+    "S_gun_handcannon_003"
    ],
    "volume": 0.6,
    "pitch": [
+    0.96,
+    1.02
+   ],
+   "range": 90
+  },
+  "fire_shotgun": {
+   "sounds": [
+    "S_gun_shotgun_000",
+    "S_gun_shotgun_001",
+    "S_gun_shotgun_002",
+    "S_gun_shotgun_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.96,
+    1.03
+   ],
+   "range": 90
+  },
+  "fire_sniper": {
+   "sounds": [
+    "S_gun_canyon_000",
+    "S_gun_canyon_001",
+    "S_gun_canyon_002",
+    "S_gun_canyon_003"
+   ],
+   "volume": 0.8,
+   "pitch": [
+    0.94,
+    1.0
+   ],
+   "range": 120
+  },
+  "fire_burstrifle": {
+   "sounds": [
+    "S_gun_pistol_000",
+    "S_gun_pistol_001",
+    "S_gun_pistol_002",
+    "S_gun_pistol_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
+    0.97,
+    1.04
+   ],
+   "range": 80
+  },
+  "fire": {
+   "sounds": [
+    "S_gun_pistol_000",
+    "S_gun_pistol_001",
+    "S_gun_pistol_002",
+    "S_gun_pistol_003"
+   ],
+   "volume": 0.5,
+   "pitch": [
     0.95,
     1.05
    ],
-   "range": 60
+   "range": 80
   },
   "soldier_shot": {
    "sounds": [

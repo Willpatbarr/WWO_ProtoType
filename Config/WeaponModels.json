@@ -1,5 +1,5 @@
 {
-  "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. hand is where the grip is (from the mesh's own origin, after scale and rot): the point that sits in the right hand of the gun other players see. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game.",
+  "_comment": "Gun models (draft). Each weapon's mesh replaces the Godot box model. All positions are in the gun's own space: cm, x forward, y right, z up, with the origin at the sight point (the aim line). scale/rot (pitch, yaw, roll)/offset place the mesh; muzzle, anchors and parts are relative to offset, so moving offset moves the whole gun; muzzle is where the flash shows; anchors are where each mod slot's parts attach. hand is where the grip is (from the mesh's own origin, after scale and rot): the point that sits in the right hand of the gun other players see. keep lists Godot box parts to keep (the sniper's scope). parts adds extra shapes (same format as a mod's parts). Edit and restart the game; no build needed. Meshes are from Epic's Lyra Starter Game, except the hand cannon: the project's own model (built in Blender, Tools/import_handcannon.py).",
   "weapons": {
     "rifle": {
       "mesh": "/Game/WWO/Meshes/SM_Rifle_NoSights.SM_Rifle_NoSights",
@@ -18,19 +18,19 @@
       }
     },
     "handcannon": {
-      "mesh": "/Game/Weapons/Pistol/Mesh/SM_Pistol.SM_Pistol",
-      "hand": [-4, 0, -4],
-      "scale": 1.1,
-      "rot": [0, -90, 0],
-      "offset": [0, 0, -6.4],
-      "muzzle": [13.5, 0.0, 3.4],
+      "mesh": "/Game/WWO/Weapons/HandCannon/SM_HandCannon.SM_HandCannon",
+      "hand": [-6, 0, 7],
+      "scale": 0.7,
+      "rot": [0, 0, 0],
+      "offset": [0, 0, -15.6],
+      "muzzle": [18.8, 0, 11.6],
       "anchors": {
-        "barrel": [13.5, 0.0, 3.4],
-        "magazine": [-5.1, 0.0, -11.0],
-        "stock": [-10.2, 0.0, 1.7],
-        "sight": [2, 0, 5.4],
-        "chambering": [4, 2.4, 1],
-        "grip": [6.8, 0.0, -0.8]
+        "barrel": [18.8, 0, 11.6],
+        "magazine": [0.35, 0, 6.8],
+        "stock": [-11.1, 0, 11.5],
+        "sight": [1, 0, 14.8],
+        "chambering": [8, 1.55, 11.6],
+        "grip": [7, 0, 7.5]
       }
     },
     "burstrifle": {
