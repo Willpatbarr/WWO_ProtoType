@@ -57,8 +57,29 @@ void UWWOBodyComponent::Preload(FName Key, TArray<UObject*>& Out)
 	FString RK = Key.ToString();
 	Config->TryGetStringField(TEXT("retargeter"), RK);
 	if (UIKRetargeter* R = LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *RK, *RK))) Out.Add(R);
+	// A model that wears shell parts: its bare skeleton and every shell's parts, so a part swapped in
+	// mid-match (yours, or another player's arriving over the network) never loads from disk in a frame.
+	TArray<USkinnedAsset*> Compile = { Asset };
+	bool bWearsShells = false;
+	if (Config->TryGetBoolField(TEXT("shells"), bWearsShells) && bWearsShells)
+	{
+		const auto Load = [&](const FString& Name)
+		{
+			const FString Package = TEXT("/Game/WWO/Characters/RobotFrame/Shells/") + Name;
+			if (!FPackageName::DoesPackageExist(Package)) return false;
+			if (USkeletalMesh* Part = LoadObject<USkeletalMesh>(nullptr, *(Package + TEXT(".") + Name))) { Out.AddUnique(Part); Compile.AddUnique(Part); }
+			return true;
+		};
+		Load(TEXT("SK_RobotSkeleton"));
+		for (int32 Shell = 0; Shell < 64; ++Shell)
+		{
+			bool bAny = false;
+			for (const TCHAR* Slot : { TEXT("Head"), TEXT("Core"), TEXT("Arms"), TEXT("Legs") }) bAny |= Load(FString::Printf(TEXT("SK_Shell%d_%s"), Shell, Slot));
+			if (!bAny) break; // shells are numbered from 0 without gaps
+		}
+	}
 #if WITH_EDITOR // the asset compiler exists only in editor builds; a packaged game loads meshes ready-made
-	FSkinnedAssetCompilingManager::Get().FinishCompilation({ Asset });
+	FSkinnedAssetCompilingManager::Get().FinishCompilation(Compile);
 #endif
 }
 
@@ -574,6 +595,8 @@ void UWWOBodyComponent::RebuildShell()
 	ShellParts.Reset();
 	FpShellParts.Reset();
 	if (!HasShells()) return;
+	const double Started = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT { UE_LOG(LogWWO, Verbose, TEXT("Body %s: shell rebuilt in %.2f ms"), *GetOwner()->GetName(), (FPlatformTime::Seconds() - Started) * 1000.0); };
 	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
 	{
 		USkeletalMesh* Asset = ShellMesh(Slot);
