@@ -19,15 +19,50 @@ fi
 if [ -f "$PROJECT_DIR/Saved/WWO/Keybinds.json" ]; then
   cp "$PROJECT_DIR/Saved/WWO/Keybinds.json" "$PROJECT_DIR/Config/ShippedKeybinds.json"
 fi
-# WWO_CMDLINE: switches baked into the app (its UECommandLine.txt), e.g. " -FeatureLevelES31".
+# WWO_SKIP_BUILD=1 packages the last staged build again (signing or launcher changes only).
+if [ -z "$WWO_SKIP_BUILD" ]; then
 "$ENGINE/Build/BatchFiles/RunUAT.sh" BuildCookRun -project="$PROJECT_DIR/WhatWasOurs.uproject" \
   -platform=Mac -clientconfig=Development -build -cook -stage -pak \
-  -noP4 -utf8output -nocompileeditor -skipbuildeditor ${WWO_CMDLINE:+-cmdline="$WWO_CMDLINE"}
+  -noP4 -utf8output -nocompileeditor -skipbuildeditor
+fi
 # UAT's -archive copies the bare compiled app on Mac (no content or libraries); the staged app
 # (Saved/StagedBuilds/Mac/WhatWasOurs.app, content in Contents/UE) is the complete one.
 mkdir -p "$OUT"
 rm -rf "$OUT/WhatWasOurs.app" "$OUT/Mac"
 ditto "$PROJECT_DIR/Saved/StagedBuilds/Mac/WhatWasOurs.app" "$OUT/WhatWasOurs.app"
+# WWO_CMDLINE: switches every launch of the app gets, e.g. WWO_CMDLINE="-FeatureLevelES31" for the mobile
+# renderer. A packaged Mac app reads no command-line file, so the app's executable becomes a small
+# launcher that starts the real game binary beside it with these switches added.
+if [ -n "$WWO_CMDLINE" ]; then
+  LSRC="$(mktemp -t wwo_launcher).c"
+  {
+    echo '#include <libgen.h>'; echo '#include <mach-o/dyld.h>'; echo '#include <stdio.h>'
+    echo '#include <stdlib.h>'; echo '#include <unistd.h>'
+    printf 'static const char* Extra[] = {'
+    for W in $WWO_CMDLINE; do printf '"%s", ' "$W"; done
+    echo '0};'
+    cat <<'CSRC'
+int main(int argc, char** argv)
+{
+	char Path[4096], Real[4096], Target[4096];
+	uint32_t Size = sizeof(Path);
+	if (_NSGetExecutablePath(Path, &Size) != 0 || !realpath(Path, Real)) return 1;
+	snprintf(Target, sizeof(Target), "%s/WhatWasOurs", dirname(Real));
+	int Extras = 0; while (Extra[Extras]) ++Extras;
+	char** Args = calloc(argc + Extras + 1, sizeof(char*));
+	Args[0] = Target;
+	for (int i = 1; i < argc; ++i) Args[i] = argv[i];
+	for (int i = 0; i < Extras; ++i) Args[argc + i] = (char*)Extra[i];
+	execv(Target, Args);
+	return 1;
+}
+CSRC
+  } > "$LSRC"
+  clang -O2 -arch arm64 -mmacosx-version-min=13.0 -o "$OUT/WhatWasOurs.app/Contents/MacOS/WhatWasOursLauncher" "$LSRC"
+  rm -f "$LSRC"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable WhatWasOursLauncher" "$OUT/WhatWasOurs.app/Contents/Info.plist"
+  echo "Launcher added: every launch gets $WWO_CMDLINE"
+fi
 # Sign with this Mac's Apple Development identity when there is one (WWO_SIGN_ID picks another).
 # An ad-hoc signature changes every build, and macOS then asks for Local Network access again on
 # every Mac the new build runs on; a stable identity keeps the permission across builds.
@@ -73,7 +108,7 @@ if [ -n "$DEVID" ]; then
 PLIST
   # Every library and helper inside first (Unreal keeps them under Contents/UE, where --deep does not
   # look), then the app itself.
-  find "$APP" -type f \( -name "*.dylib" -o -name "*.so" -o -perm -u+x \) ! -path "$APP/Contents/MacOS/WhatWasOurs" -print0 |
+  find "$APP" -type f \( -name "*.dylib" -o -name "*.so" -o -perm -u+x \) -print0 |
     while IFS= read -r -d '' F; do
       if file -b "$F" | grep -q "Mach-O"; then
         codesign --force --timestamp --options runtime --entitlements "$ENTS" --sign "$DEVID" "$F"
