@@ -19,9 +19,10 @@ fi
 if [ -f "$PROJECT_DIR/Saved/WWO/Keybinds.json" ]; then
   cp "$PROJECT_DIR/Saved/WWO/Keybinds.json" "$PROJECT_DIR/Config/ShippedKeybinds.json"
 fi
+# WWO_CMDLINE: switches baked into the app (its UECommandLine.txt), e.g. " -FeatureLevelES31".
 "$ENGINE/Build/BatchFiles/RunUAT.sh" BuildCookRun -project="$PROJECT_DIR/WhatWasOurs.uproject" \
   -platform=Mac -clientconfig=Development -build -cook -stage -pak \
-  -noP4 -utf8output -nocompileeditor -skipbuildeditor
+  -noP4 -utf8output -nocompileeditor -skipbuildeditor ${WWO_CMDLINE:+-cmdline="$WWO_CMDLINE"}
 # UAT's -archive copies the bare compiled app on Mac (no content or libraries); the staged app
 # (Saved/StagedBuilds/Mac/WhatWasOurs.app, content in Contents/UE) is the complete one.
 mkdir -p "$OUT"
