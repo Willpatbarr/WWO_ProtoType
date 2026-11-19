@@ -90,10 +90,7 @@
 		"RechargeTime": 25,
 		"DetonationTime": 0.85000002384185791,
 		"ThrowRelease": 0.2199999988079071,
-		"ThrowFollow": 0.20000000298023224,
-		"ThrowArmYaw": -12,
-		"ThrowArmPitch": 8,
-		"ThrowArmPush": 0
+		"ThrowFollow": 0.20000000298023224
 	},
 	"global/Player":
 	{
@@ -208,6 +205,24 @@
 		"TimeLimit": 10,
 		"PvPRespawnTime": 3
 	},
+	"global/FootRace":
+	{
+		"BreachThreshold": 158.125,
+		"EnergyPerEnemy": 10,
+		"EnergyPerPlayerKill": 25,
+		"BreachDrain": 15,
+		"BreachDeathLoss": 0.25,
+		"LeverHoldTime": 1.7250000238418579,
+		"BossHealth": 9000,
+		"BossWindow": 15,
+		"CoreDelay": 5,
+		"CoreHeal": 400,
+		"CoreDropTime": 15,
+		"BossWave": 9,
+		"RoomEnemies": 12,
+		"RoomSpawnStagger": 0.40000000596046448,
+		"RoomRefillTime": 3
+	},
 	"global/Bots":
 	{
 		"Bots": 8,
@@ -222,6 +237,7 @@
 		"BotAggression": 0.34999999403953552,
 		"BotKitUse": 1,
 		"BotStickToPlayer": 0.30000001192092896,
+		"BotBreachAt": 0.64999997615814209,
 		"BotCalloutRange": 40
 	},
 	"global/Waves":
@@ -543,7 +559,7 @@
 		"ScopeOverlay": 0,
 		"SightHeight": 0.70000028610229492,
 		"SemiAuto": 0,
-		"FireRate": 150,
+		"FireRate": 160,
 		"Burst": 3,
 		"BurstRate": 820,
 		"Damage": 15,
@@ -552,31 +568,31 @@
 		"Pellets": 1,
 		"PelletSpread": 0,
 		"HipSpread": 0.5,
-		"RecoilUp": 0.85000002384185791,
+		"RecoilUp": 1,
 		"RecoilSide": 0.079999998211860657,
 		"RecoilKickTime": 0.059999998658895493,
-		"RecoilRecovery": 1,
+		"RecoilRecovery": 0.80000001192092896,
 		"RecoilRecoveryTime": 0.44999998807907104,
 		"RecoilRecoverySync": 0,
 		"RecoilRecoveryCurve": 3.5,
 		"RecoilRecoveryDelay": 0,
-		"VerticalKick": 7.3000001907348633,
+		"VerticalKick": 8.6000003814697266,
 		"HorizontalKick": 0,
 		"KickHold": 0.029999999329447746,
 		"KickReturn": 0.059999998658895493,
 		"AdsKick": 0.02500000037252903,
-		"KickPush": 0.60000002384185791,
+		"KickPush": 1.1000000238418579,
 		"KickPivotDown": 0,
 		"KickPivotAhead": 5,
 		"KickSide": 0.15000000596046448,
 		"RecoilShape": 1,
-		"BurstRecoilLater": 0.55000001192092896,
+		"BurstRecoilLater": 0.65000003576278687,
 		"MagazineSize": 27,
-		"ReloadTime": 2.0999999046325684,
-		"RumbleStrong": 0.34999999403953552,
-		"RumbleWeak": 0.55000001192092896,
-		"RumbleTime": 0.049999997019767761,
-		"PunchFov": 0.5,
+		"ReloadTime": 1.7999999523162842,
+		"RumbleStrong": 0.45000001788139343,
+		"RumbleWeak": 0.85000002384185791,
+		"RumbleTime": 0.070000000298023224,
+		"PunchFov": 0.60000002384185791,
 		"PunchRoll": 0.25,
 		"PunchTime": 0.070000000298023224,
 		"ViewmodelFov": 65,
@@ -720,12 +736,12 @@
 	},
 	"ability/thornfist":
 	{
-		"MeleeDamageMult": 1.5,
-		"Duration": 9,
-		"Cooldown": 19,
-		"DischargeArcs": 6,
-		"DischargeRadius": 1.2000000476837158,
-		"DischargeTime": 0.34999999403953552
+		"MeleeDamageMult": 1.2999999523162842,
+		"Duration": 12.5,
+		"Cooldown": 30,
+		"DischargeArcs": 3,
+		"DischargeRadius": 0.85000002384185791,
+		"DischargeTime": 0.60000002384185791
 	},
 	"ability/melee_guard":
 	{
@@ -734,8 +750,8 @@
 	},
 	"ability/static_charge":
 	{
-		"ChargeDamage": 150,
-		"ChainDamage": 120,
+		"ChargeDamage": 300,
+		"ChainDamage": 80,
 		"ChainJumps": 8,
 		"ChainRange": 8,
 		"ChainFalloff": 0.85000002384185791,
@@ -860,8 +876,8 @@
 		"BlastRadius": 6.3000001907348633,
 		"ThrowDistanceMult": 0.55000001192092896,
 		"RechargeMult": 0.80000001192092896,
-		"FuseMult": 0.80000001192092896,
-		"Bounce": 0.20000000298023224,
+		"FuseMult": 0.94999998807907104,
+		"Bounce": 0.10000000149011612,
 		"PoolDps": 40,
 		"PoolTime": 8
 	},
