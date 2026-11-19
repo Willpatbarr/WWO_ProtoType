@@ -54,7 +54,9 @@ void UWWOBodyComponent::Preload(FName Key, TArray<UObject*>& Out)
 	FString RK = Key.ToString();
 	Config->TryGetStringField(TEXT("retargeter"), RK);
 	if (UIKRetargeter* R = LoadObject<UIKRetargeter>(nullptr, *FString::Printf(TEXT("/Game/WWO/Retarget/RTG_Manny_%s.RTG_Manny_%s"), *RK, *RK))) Out.Add(R);
+#if WITH_EDITOR // the asset compiler exists only in editor builds; a packaged game loads meshes ready-made
 	FSkinnedAssetCompilingManager::Get().FinishCompilation({ Asset });
+#endif
 }
 
 void UWWOBodyComponent::PreloadAnims(TConstArrayView<FName> Names, TArray<UObject*>& Out)
