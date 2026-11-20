@@ -103,6 +103,21 @@ LEG_SPIRAL = ["@seam_hip_l", W("thigh_l", 0.12, "outer", perp=True),
               W("calf_l", 0.25, "front", perp=True), W("calf_l", 0.45, "inner", perp=True),
               W("calf_l", 0.65, "back", perp=True), "ankle_outer_l"]
 
+
+
+def COIL(bone, t0, t1, turns, start=0):
+    """Waypoints winding round a limb bone `turns` times from t0 to t1, a quarter turn apart (front, inner,
+    back, outer, as the spirals go), starting at the start'th of those."""
+    seq = ["front", "inner", "back", "outer"]
+    n = int(round(turns * 4)) + 1
+    return [W(bone, t0 + (t1 - t0) * k / (n - 1), seq[(start + k) % 4], perp=True) for k in range(n)]
+
+
+# Tighter coils than the spirals, one limb segment each (VoltVine's vines wind 1.5 to 2.5 times round each).
+UPPERARM_COIL = ["@seam_shoulder_l", "shoulder_outer_l"] + COIL("upperarm_l", 0.24, 0.92, 1.5)
+FOREARM_COIL = COIL("lowerarm_l", 0.06, 0.9, 2.5, start=3)
+SHIN_COIL = COIL("calf_l", 0.08, 0.9, 2.0, start=0)
+
 PATHS = {
     "Head": {
         "head_ring":  P(ring=dict(bone="head", t=0.76, n=8), closed=True, kind="ring"),   # round the head at brow height
@@ -117,12 +132,28 @@ PATHS = {
                         "hip_back"]),          # down the spine (mid waypoints keep it on the centre line over back gear)
         "collar_to_shoulder_l": P(["collar_l", "@seam_shoulder_l"], sided=True, to_seam="seam_shoulder_l"),
         "waist_to_hip_l":       P(["waist_side_l", "@seam_hip_l"], sided=True, to_seam="seam_hip_l"),   # meets leg_line
+        # sash_l's twin across the back: left shoulder, diagonally down the back, right hip.
+        "sash_back_l": P(["collar_l", W("spine_02", 0.55, {"back": 1, "inner": 0.3}), W("spine_02", 0.25, {"back": 1, "inner": 0.8}),
+                          W("spine_02", 0.04, {"back": 1, "inner": 1.4}), "waist_side_r"], sided=True),
+        # A belt round the waist that leans: about 6 cm higher on its own side (the left here) than the other,
+        # just under the waist line in front and behind. Starts at the front, goes round the left first.
+        "belt_lean_l": P([W("spine_01", 0.0, "front", off={"up": -0.5}),
+                          W("spine_01", 0.0, {"front": 1, "outer": 1}, off={"up": 1.8}),
+                          W("spine_01", 0.0, "outer", off={"up": 4.0}),
+                          W("spine_01", 0.0, {"back": 1, "outer": 1}, off={"up": 1.5}),
+                          W("spine_01", 0.0, "back", off={"up": -1.0}),
+                          W("spine_01", 0.0, {"back": 1, "inner": 1}, off={"up": -2.0}),
+                          W("spine_01", 0.0, "inner", off={"up": -2.5}),
+                          W("spine_01", 0.0, {"front": 1, "inner": 1}, off={"up": -2.0})],
+                         closed=True, kind="ring", sided=True),
     },
     "Arms": {
         "arm_line_l":   P(["@seam_shoulder_l", "shoulder_outer_l", "elbow_outer_l", "wrist_outer_l"], sided=True,
                           from_seam="seam_shoulder_l"),
         "arm_spiral_l": P(ARM_SPIRAL, sided=True, kind="spiral", from_seam="seam_shoulder_l"),
         "wrist_ring_l": P(ring=dict(bone="lowerarm_l", t=0.88, n=8), closed=True, kind="ring", sided=True),
+        "upperarm_coil_l": P(UPPERARM_COIL, sided=True, kind="spiral", from_seam="seam_shoulder_l"),  # 1.5 turns to the elbow
+        "forearm_coil_l":  P(FOREARM_COIL, sided=True, kind="spiral"),                                   # 2.5 turns elbow to wrist
     },
     "Legs": {
         "leg_line_l":   P(["@seam_hip_l", "thigh_outer_l", "shin_outer_l", "ankle_outer_l"], sided=True,
@@ -130,6 +161,7 @@ PATHS = {
         "leg_spiral_l": P(LEG_SPIRAL, sided=True, kind="spiral", from_seam="seam_hip_l"),
         "thigh_ring_l": P(ring=dict(bone="thigh_l", t=0.5, n=8), closed=True, kind="ring", sided=True),
         "ankle_ring_l": P(ring=dict(bone="calf_l", t=0.9, n=8), closed=True, kind="ring", sided=True),
+        "shin_coil_l":  P(SHIN_COIL, sided=True, kind="spiral"),                                         # 2 turns knee to ankle
     },
 }
 

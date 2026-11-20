@@ -1,0 +1,68 @@
+{
+  "_comment": "DRAFT, not read by the game yet: VeilSpore as a recipe of kit pieces on the shell parts' anchors and paths, in the shape of Config/GraftRecipes.json's ironbark entry, to be merged into it once the game reads the fields marked NEW below. Mocked up in Blender by ~/Documents/WWO_Flora/tools/mock_veilspore_on_anchors.py (which reads this file and places exactly what it says, on the base robot and shells 1 and 2; renders in ~/Documents/WWO_Flora/kit_veilspore/review). The pieces are static meshes from ~/Documents/WWO_Flora/kit_veilspore (make_veilspore_kit.py, listed in its kit.json), imported by Tools/import_graft_kit.py to /Game/WWO/Flora/VeilSpore/Kit/SM_VS_<Piece> with MI_VS_Fungus. Everything in the existing format keeps its meaning (anchor, path, range, spacing_cm, offset [out, across, up] cm, scale_by_size, size_ref, '{s}'); across = up x n in the game's (Unreal) space, which on a front-facing anchor is the robot's right and on a back-facing one its left. NEW fields: (1) piece 'mesh' with 'mesh': a kit static mesh's asset name (in the flora's 'kit' folder, below). The mesh is authored in its attach frame: origin on the surface, +Z out of it (n), +X the placement's up, so in Unreal its rotation is FRotationMatrix::MakeFromXZ(Up, N); 'length'/'width' etc. do not apply. (2) 'kit': per flora, the folder its meshes are in. (3) Grenade keys 'grenade_<grenade id>' (e.g. grenade_spore_pool): used instead of 'grenade' when that grenade is equipped; 'grenade' stays the fallback. (4) 'up': which way the piece's +X points: 'anchor' (the anchor's up; the default on anchors), 'path' (the path's direction; the default on paths), 'path_reverse', or 'world' (the robot's up, +Z of its reference pose, laid flat into the surface; where the surface faces nearly straight up or down, |n.z| > 0.9, the anchor's or path's own up is used instead). Shelf fungi want 'world' so their caps sit level and their glowing gills face down whatever way the path runs. (5) 'at': one piece at this fraction of a path's length (instead of spacing_cm/range). (6) 'scale': a uniform scale on the mesh (default 1), multiplied by scale_by_size's factor. (7) 'scale_along': [first, last]: along a path, the scale grades linearly from first to last over the range (big shelves at the shoulder, small at the wrist). (8) 'zigzag_cm': along a path, successive pieces are pushed alternately +/- this far across, two staggered columns like roof tiles. (9) 'pitch' and 'roll': fixed rotations in degrees: roll turns the piece round its own Z (n); pitch round its own Y, positive tipping its +Z toward its +X (a shelf's rim lifts, its gills turn out to a viewer below). (10) 'jitter': seeded randomness per piece: {'roll': deg, 'pitch': deg, 'scale': fraction, 'slide_cm': cm}: each a uniform +/- amount; slide_cm moves the piece in the surface's plane and is clamped to the anchor's size (on a path: to half the spacing). (11) 'seed': the placement's random seed (default 1); the game seeds an FRandomStream with it (and the piece's index along a path) so the same loadout always grows the same way, whatever the robot. (12) 'stack': {'count': n, 'step_cm': d, 'shrink': f}: n copies of the piece, each step_cm further along its +X (up the surface) and f times the size of the one before, overlapping (shelves stacked like roof tiles); applied after jitter. Pieces in the mock are measured against the anchors in the bind pose only: a piece is rigid on the anchor's (or path point's) bone, so a piece spanning a joint (elbow, knee, shoulder) bends with neither side; keep large pieces off joints.",
+  "floras": {
+    "veilspore": {
+      "kit": "/Game/WWO/Flora/VeilSpore/Kit",
+      "grenade": [
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 0, 0], "scale": 1.15, "pitch": 10, "seed": 31 },
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 3.5, -2.5], "scale": 0.8, "pitch": 5, "jitter": { "roll": 20 }, "seed": 32 },
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, -3.5, -2], "scale": 0.75, "jitter": { "roll": 20 }, "seed": 33 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "waist_to_hip_r", "at": 0.8, "up": "world", "offset": [-0.3, 0, 0], "scale": 0.7, "seed": 34 }
+      ],
+      "grenade_spore_blast": [
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 0, 0], "scale": 1.15, "pitch": 10, "seed": 31 },
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 3.5, -2.5], "scale": 0.8, "pitch": 5, "jitter": { "roll": 20 }, "seed": 32 },
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, -3.5, -2], "scale": 0.75, "jitter": { "roll": 20 }, "seed": 33 },
+        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 0, -4.5], "scale": 0.55, "jitter": { "roll": 25 }, "seed": 35 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "waist_to_hip_r", "at": 0.8, "up": "world", "offset": [-0.3, 0, 0], "scale": 0.7, "seed": 34 }
+      ],
+      "grenade_spore_pool": [
+        { "piece": "mesh", "mesh": "SM_VS_Stack3", "path": "waist_to_hip_r", "at": 0.95, "up": "world", "offset": [0, 0, -4], "scale": 0.75, "pitch": 8, "seed": 41 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "waist_to_hip_r", "at": 0.8, "up": "world", "offset": [-0.3, 0, 0], "scale": 0.7, "seed": 34 }
+      ],
+      "grenade_poison_spike": [
+        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, -3.3, 0], "jitter": { "roll": 15, "scale": 0.15 }, "seed": 51 },
+        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, -1.1, 1], "jitter": { "roll": 15, "scale": 0.15 }, "seed": 52 },
+        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 1.1, -1], "jitter": { "roll": 15, "scale": 0.15 }, "seed": 53 },
+        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "path": "waist_to_hip_r", "at": 0.85, "up": "world", "offset": [0, 3.3, 0], "jitter": { "roll": 15, "scale": 0.15 }, "seed": 54 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "waist_to_hip_r", "at": 0.8, "up": "world", "offset": [-0.3, 0, 0], "scale": 0.7, "seed": 34 }
+      ],
+      "spore_fog_damage": [
+        { "piece": "mesh", "mesh": "SM_VS_HoodCrown", "anchor": "head_top", "offset": [-1, 0, 0], "seed": 1 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "head_ring", "range": [0.58, 0.88], "spacing_cm": 7, "up": "world", "offset": [-0.5, 0, -2], "scale": 0.9, "pitch": 8, "jitter": { "roll": 12, "pitch": 8, "scale": 0.12 }, "seed": 2 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "head_ring", "range": [0.15, 0.4], "spacing_cm": 8, "up": "world", "offset": [-0.5, 0, -2], "scale": 0.85, "pitch": 8, "jitter": { "roll": 12, "pitch": 8, "scale": 0.12 }, "seed": 3 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "head_back", "up": "world", "offset": [0, 0, -3], "pitch": 10, "jitter": { "roll": 10 }, "seed": 4 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "head_side_r", "up": "world", "offset": [0, 0, -5], "pitch": 12, "jitter": { "roll": 10 }, "seed": 5 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "collar_r", "up": "world", "offset": [0, 0, 0], "pitch": 15, "jitter": { "roll": 15, "scale": 0.1 }, "seed": 6 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "collar_to_shoulder_r", "range": [0.3, 1.0], "spacing_cm": 7, "up": "world", "scale_along": [1.0, 1.05], "zigzag_cm": 3, "pitch": 15, "jitter": { "roll": 15, "pitch": 8, "scale": 0.1 }, "seed": 7 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "shoulder_top_r", "up": "world", "offset": [0, 0, 0], "pitch": 15, "jitter": { "roll": 10 }, "seed": 8 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "arm_line_r", "range": [0.12, 0.97], "spacing_cm": 5, "up": "world", "scale_along": [1.3, 0.45], "zigzag_cm": 2.5, "pitch": 22, "jitter": { "roll": 15, "pitch": 8, "scale": 0.12 }, "seed": 9 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "anchor": "chest_side_r", "up": "world", "offset": [-0.3, 0, 2], "seed": 10 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "anchor": "collar_r", "up": "world", "offset": [-0.3, 0, -4], "jitter": { "roll": 30 }, "seed": 11 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "chest_ring", "range": [0.74, 0.98], "spacing_cm": 10, "up": "world", "offset": [-0.3, 0, 4], "jitter": { "roll": 40, "scale": 0.15, "slide_cm": 2 }, "seed": 15 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "path": "collar_to_shoulder_r", "range": [0.2, 0.8], "spacing_cm": 10, "up": "world", "offset": [-0.3, 0, 0], "jitter": { "roll": 40 }, "seed": 16 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "path": "arm_line_r", "range": [0.1, 0.95], "spacing_cm": 11, "up": "path_reverse", "offset": [-0.5, 0, 0], "scale_along": [1.0, 0.8], "jitter": { "roll": 15 }, "seed": 12 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumStrand", "path": "arm_line_r", "range": [0.05, 0.95], "spacing_cm": 13, "up": "path", "offset": [-0.3, 2, 0], "jitter": { "roll": 15 }, "seed": 14 }
+      ],
+      "spore_dash": [
+        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "waist_to_hip_l", "range": [0.4, 1.0], "spacing_cm": 6, "up": "world", "scale": 1.05, "pitch": 25, "jitter": { "roll": 12, "scale": 0.1 }, "seed": 21 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "leg_line_l", "range": [0.04, 0.6], "spacing_cm": 5, "up": "world", "scale_along": [1.15, 0.6], "zigzag_cm": 3, "pitch": 30, "jitter": { "roll": 15, "pitch": 8, "scale": 0.12 }, "seed": 22 },
+        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "path": "leg_line_l", "range": [0.62, 0.9], "spacing_cm": 4.5, "up": "world", "scale_along": [1.0, 0.7], "zigzag_cm": 2.5, "pitch": 30, "jitter": { "roll": 15, "pitch": 8, "scale": 0.12 }, "seed": 23 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "path": "leg_line_l", "range": [0.03, 0.92], "spacing_cm": 10, "up": "path_reverse", "offset": [-0.5, 0, 0], "jitter": { "roll": 15 }, "seed": 24 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "anchor": "thigh_front_l", "offset": [-0.5, 0, 0], "seed": 25 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "anchor": "shin_front_l", "offset": [-0.5, 0, 0], "scale": 0.9, "seed": 27 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumStrand", "path": "leg_line_l", "range": [0.05, 0.98], "spacing_cm": 12, "up": "path", "offset": [-0.3, 2.5, 0], "jitter": { "roll": 15 }, "seed": 26 }
+      ],
+      "spore_patches": [
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "anchor": "back_lower", "up": "world", "offset": [-0.3, 0, 0], "seed": 61 },
+        { "piece": "mesh", "mesh": "SM_VS_Stack3", "anchor": "back_lower", "up": "world", "offset": [0, 0, -4], "scale": 0.7, "pitch": 10, "jitter": { "roll": 10 }, "seed": 62 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumPatch", "anchor": "back_upper", "up": "world", "offset": [-0.3, 4, 0], "jitter": { "roll": 40 }, "seed": 63 },
+        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "back_upper", "up": "world", "offset": [0, 4, -2], "scale": 0.85, "pitch": 10, "jitter": { "roll": 10 }, "seed": 64 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "path": "thigh_ring_r", "at": 0.5, "up": "world", "offset": [-0.5, 0, 0], "seed": 65 },
+        { "piece": "mesh", "mesh": "SM_VS_Stack2", "path": "thigh_ring_r", "at": 0.5, "up": "world", "offset": [0, 0, -2], "scale": 0.75, "pitch": 15, "seed": 66 },
+        { "piece": "mesh", "mesh": "SM_VS_MyceliumWrap", "anchor": "upperarm_outer_l", "offset": [-0.5, 0, 0], "scale": 0.85, "seed": 67 },
+        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "upperarm_outer_l", "up": "world", "offset": [0, 0, -2], "scale": 0.7, "pitch": 15, "seed": 68 }
+      ]
+    }
+  }
+}

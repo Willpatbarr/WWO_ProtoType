@@ -129,6 +129,7 @@ seams = docs["SK_RobotSkeleton"]["anchors"]
 worst = (0, "")
 joins = [("Core", "collar_to_shoulder_%s", "Arms", "arm_line_%s", "seam_shoulder_%s"),
          ("Core", "collar_to_shoulder_%s", "Arms", "arm_spiral_%s", "seam_shoulder_%s"),
+         ("Core", "collar_to_shoulder_%s", "Arms", "upperarm_coil_%s", "seam_shoulder_%s"),
          ("Core", "waist_to_hip_%s", "Legs", "leg_line_%s", "seam_hip_%s"),
          ("Core", "waist_to_hip_%s", "Legs", "leg_spiral_%s", "seam_hip_%s")]
 gap_worst = (0, "")

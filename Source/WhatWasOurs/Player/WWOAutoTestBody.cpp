@@ -186,7 +186,9 @@ bool FWWOAutoTest::UpdateAutoBodyTest(AWWOCharacter* P, float DeltaTime)
 	{
 		const FVector Feet = P->GetActorLocation() - FVector(0.f, 0.f, P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		const FVector Fwd = P->GetActorForwardVector(), Right = P->GetActorRightVector();
-		Look(Feet + Fwd * 260.f + Right * Side * 200.f + FVector(0.f, 0.f, 130.f), Feet + FVector(0.f, 0.f, 60.f), 60.f);
+		// -WWOBodyClose: from about half as far (the grafts at the hips, knees and hands, in motion).
+		const float Near = WWOSwitches::Has(TEXT("WWOBodyClose")) ? 0.55f : 1.f;
+		Look(Feet + (Fwd * 260.f + Right * Side * 200.f) * Near + FVector(0.f, 0.f, 130.f * Near), Feet + FVector(0.f, 0.f, 60.f), 60.f);
 	};
 	auto LogPlayer = [&](const TCHAR* What)
 	{

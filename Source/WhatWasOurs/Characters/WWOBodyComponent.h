@@ -28,6 +28,7 @@ struct FWWOGraftFrame;
 struct FWWOShellPoint;
 struct FWWOShellPath;
 struct FWWOShellAnchorSet;
+struct FWWOVineJoints;
 class UMaterialInstanceDynamic;
 class UAnimSequence;
 class UWWOBodyAnimInstance;
@@ -228,6 +229,7 @@ private:
 	FName AnchorFlora, AnchorGrenade;
 	TArray<FName> AnchorIds;
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> AnchorParts; // (also in Grafts)
+	TSharedPtr<FWWOVineJoints> VineJoints; // VoltVine's vines where they pass between bones, posed every frame (WWOVineGraft.h)
 	bool UseAnchorGrafts(FName FloraId) const;
 	void BuildAnchorGrafts();
 	void ClearAnchorGrafts();
