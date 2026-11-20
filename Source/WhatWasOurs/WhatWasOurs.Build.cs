@@ -13,6 +13,9 @@ public class WhatWasOurs : ModuleRules
 		{
 			RuntimeDependencies.Add("$(ProjectDir)/Config/" + Name, StagedFileType.UFS);
 		}
+		// The flora graft recipes, and each shell part's graft anchors (one file per part, exported from Blender).
+		RuntimeDependencies.Add("$(ProjectDir)/Config/GraftRecipes.json", StagedFileType.UFS);
+		RuntimeDependencies.Add("$(ProjectDir)/Config/ShellAnchors/*.json", StagedFileType.UFS);
 		// Windows: MSVC's shadow checks (errors under these build settings) also count a local that
 		// has the name of a class member, which the UI code does all over (a "Slot" local in a
 		// widget, where UWidget has a Slot member). Clang's check doesn't, and stays on for Mac builds.

@@ -1,0 +1,35 @@
+{
+  "_comment": "Flora grafts placed from the shell parts' graft anchors (Config/ShellAnchors/*.json, names in Art/Shells/tools/anchor_spec.py), so they fit whatever head, core, arms and legs a robot wears (Characters/WWOBodyAnchors.cpp). Used instead of the fitted model grafts where a model has anchor_grafts on (Config/CharacterModels.json) or with wwo.AnchorGrafts 1 / -WWOAnchorGrafts, and only for a flora listed here; edit and restart, no build. floras.<flora id>: a list of placements per thing equipped: 'grenade' (any grenade) and each ability id. A placement puts one piece on an anchor ('anchor': its name) or one every spacing_cm along a path ('path': its name; 'range': [from, to] fractions of its length, default [0, 1]). '{s}' in a name means both sides: once with l, once with r (the r one's across offset is mirrored). Each piece is laid in the anchor's frame: out of the surface (n), across (up x n; on a front-facing anchor that is the robot's right), and its up (Head and Core: toward the robot's up; Arms and Legs: along the limb toward the body; along a path: the path's direction). offset: [out, across, up] cm from the anchor; keep it small: an anchor measures the part's surface only at its own point, and a few cm away another shell's surface can stand several cm further out or in (the scout core's codpiece buried pods placed 9 cm above hip_front, or 4 to 8 cm to its side); stay within the anchor's size. along: which way a plate's length runs: 'down' (against up: down the body, down a limb toward the hand or foot; the default), 'up', or 'across'. scale_by_size: the piece grows or shrinks with the anchor's size (its size / size_ref, default 5 cm, kept within 0.6 to 1.6), so a bigger part's flat spot gets a bigger piece. Pieces (FWWOGraftBuilder, all sizes cm): 'plate', a bark slab with glowing cracks: length, width, curve (the radius it bends round, small to wrap a limb; default 30), thickness (default 2), lift (its far end, toward along, raised off the body, default 0), cracked (default true); 'seed_pod', an amber pod hanging straight down from the point on a stalk: length, width, stalk (default 10, 3.5, 4).",
+  "floras": {
+    "ironbark": {
+      "grenade": [
+        { "piece": "plate", "path": "waist_ring", "spacing_cm": 8, "along": "up", "length": 7, "width": 6, "curve": 14, "thickness": 1.6, "cracked": false },
+        { "piece": "seed_pod", "anchor": "hip_front", "offset": [4.5, 1.5, 1], "length": 9, "width": 3.4, "stalk": 2.5 },
+        { "piece": "seed_pod", "anchor": "hip_front", "offset": [4.5, -2.5, 0], "length": 7.5, "width": 3, "stalk": 3.5 }
+      ],
+      "extra_grenade": [
+        { "piece": "plate", "anchor": "chest_front", "offset": [0.6, 0, 2], "scale_by_size": true, "size_ref": 9, "length": 15, "width": 12, "curve": 22, "thickness": 2.2, "lift": 1.5 },
+        { "piece": "plate", "anchor": "chest_front", "offset": [0.2, 8, 4], "length": 11, "width": 8, "curve": 18, "lift": 1.2 },
+        { "piece": "plate", "anchor": "chest_front", "offset": [0.2, -8, 4], "length": 11, "width": 8, "curve": 18, "lift": 1.2 },
+        { "piece": "plate", "anchor": "collar_{s}", "offset": [0.6, 0, 0], "length": 9, "width": 8, "curve": 12, "lift": 1, "cracked": false },
+        { "piece": "plate", "path": "collar_to_shoulder_{s}", "range": [0.45, 1], "spacing_cm": 7, "along": "up", "length": 6, "width": 7, "curve": 10, "thickness": 1.6, "cracked": false },
+        { "piece": "plate", "anchor": "shoulder_outer_{s}", "offset": [0.8, 0, 2], "scale_by_size": true, "size_ref": 6, "length": 14, "width": 13, "curve": 7, "thickness": 2.4, "lift": 1.5 },
+        { "piece": "plate", "anchor": "upperarm_outer_{s}", "offset": [0.6, 0, 1], "length": 10, "width": 9, "curve": 6, "lift": 1, "cracked": false }
+      ],
+      "shield_share": [
+        { "piece": "plate", "anchor": "forearm_outer_{s}", "offset": [0.6, 0, 0], "scale_by_size": true, "size_ref": 5, "length": 20, "width": 9, "curve": 5, "thickness": 2.2 },
+        { "piece": "plate", "anchor": "elbow_outer_{s}", "offset": [0.6, 0, 1], "length": 7, "width": 7, "curve": 6, "lift": 1, "cracked": false }
+      ],
+      "root_bombs": [
+        { "piece": "plate", "anchor": "shin_front_{s}", "offset": [0.6, 0, 2], "length": 26, "width": 10, "curve": 6, "thickness": 2.4 },
+        { "piece": "plate", "anchor": "knee_front_{s}", "offset": [0.6, 0, 1], "length": 7, "width": 8, "curve": 6, "lift": 1, "cracked": false },
+        { "piece": "plate", "anchor": "thigh_outer_{s}", "offset": [0.6, 0, 0], "scale_by_size": true, "size_ref": 9, "length": 12, "width": 9, "curve": 9 }
+      ],
+      "seedburst": [
+        { "piece": "seed_pod", "anchor": "waist_side_r", "offset": [2, -4, -2], "length": 6, "width": 2.5, "stalk": 3 },
+        { "piece": "seed_pod", "anchor": "waist_side_r", "offset": [2, 0, -1], "length": 6.5, "width": 2.7, "stalk": 2.5 },
+        { "piece": "seed_pod", "anchor": "waist_side_r", "offset": [2, 4, -2], "length": 6, "width": 2.5, "stalk": 3 }
+      ]
+    }
+  }
+}

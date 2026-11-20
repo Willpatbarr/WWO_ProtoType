@@ -94,6 +94,8 @@ void UWWOBodyComponent::RebuildGrafts()
 		if (C) C->DestroyComponent();
 	}
 	Grafts.Reset();
+	AnchorParts.Reset(); // (they were in Grafts)
+	bAnchorGraftsLive = false;
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	USkeletalMeshComponent* Mesh = GetMesh();
 	if (!Loadout || !Mesh) return;
@@ -135,6 +137,18 @@ void UWWOBodyComponent::RebuildGrafts()
 	FString Key = F.Grenade.ToString();
 	for (const FName& Id : F.Ids) Key += TEXT("|") + Id.ToString();
 	F.Random.Initialize(int32(GetTypeHash(Key)));
+
+	// A robot placing grafts from its parts' anchors, where the flora has a recipe (WWOBodyAnchors.cpp):
+	// those instead of everything below. Kept, so a part swap places them again (RebuildShell).
+	if (UseAnchorGrafts(FloraId))
+	{
+		bAnchorGraftsLive = true;
+		AnchorFlora = FloraId;
+		AnchorGrenade = F.Grenade;
+		AnchorIds = F.Ids;
+		BuildAnchorGrafts();
+		return;
+	}
 
 	const FVector Hips = GodotBonePoint("pelvis");
 	if (FloraId == WWOIds::Flora::VoltVine)

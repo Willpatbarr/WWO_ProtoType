@@ -223,7 +223,7 @@ Timed functions are wrapped in `WWO_PROF` (`Player/WWOProf.h`) and show as `Perf
 ### Other
 
 `-WWOTitle` forces the launch screen. `-WWOGamerTag=<name>` sets the tag for one run; `-WWONoTestTag`
-leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`, `wwo.BossWindow [team]` (FootRace: drop a boss's shield for its next window).
+leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`, `wwo.BossWindow [team]` (FootRace: drop a boss's shield for its next window), `wwo.Shell <n>` or `wwo.Shell <head> <core> <arms> <legs>` (every robot's shell parts; `-WWOShell=`), `wwo.ShellAnchors 0|1|2` (draw the robots' graft anchors; 2 adds their paths; not in shipping builds), `wwo.AnchorGrafts 0|1` (flora grafts from the anchors, `Config/GraftRecipes.json`; -1 per model; `-WWOAnchorGrafts`).
 
 **Any `-WWO...` switch on the command line skips the launch screen**, and a switch containing
 `WWOAutoTest` marks the run as a test run (keybinds are not loaded or saved, the gamer tag is `tester`,

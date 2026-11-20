@@ -225,6 +225,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	USkeletalMeshComponent* Driver = GetMesh();
 	UE_LOG(LogWWO, Verbose, TEXT("Body %s: model '%s' (driver %s)"), *GetOwner()->GetName(), *Key.ToString(), Driver ? TEXT("yes") : TEXT("none"));
 	if (!Driver || (Key == ActiveModel && (Model || Key.IsNone()))) return;
+	ClearAnchorGrafts(); // (pinned to the model about to go; RebuildShell places them on the new one)
 	for (const TArray<TObjectPtr<USkeletalMeshComponent>>* List : { &ShellParts, &FpShellParts })
 	{
 		for (USkeletalMeshComponent* C : *List) if (C) C->DestroyComponent();
@@ -270,6 +271,8 @@ void UWWOBodyComponent::SetModel(FName Key)
 	bModelPinned = false;
 	Config->TryGetBoolField(TEXT("grafts"), bModelGrafts);
 	Config->TryGetBoolField(TEXT("pinned"), bModelPinned);
+	bModelAnchorGrafts = false;
+	Config->TryGetBoolField(TEXT("anchor_grafts"), bModelAnchorGrafts);
 	// Your own model in first person: everything from this bone up is hidden, and the body sits
 	// this far behind the camera (cm), so looking down shows your legs and feet and not your chest.
 	FString HideBone = TEXT("spine_02");
@@ -594,13 +597,19 @@ void UWWOBodyComponent::RebuildShell()
 	}
 	ShellParts.Reset();
 	FpShellParts.Reset();
-	if (!HasShells()) return;
+	for (FName& Part : WornParts) Part = NAME_None;
+	if (!HasShells())
+	{
+		ClearAnchorGrafts();
+		return;
+	}
 	const double Started = FPlatformTime::Seconds();
 	ON_SCOPE_EXIT { UE_LOG(LogWWO, Verbose, TEXT("Body %s: shell rebuilt in %.2f ms"), *GetOwner()->GetName(), (FPlatformTime::Seconds() - Started) * 1000.0); };
 	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
 	{
 		USkeletalMesh* Asset = ShellMesh(Slot);
 		if (!Asset) continue;
+		WornParts[Slot] = Asset->GetFName();
 		USkeletalMeshComponent* C = AddShellPart(Model, Asset);
 		ApplyShadowOnly(C); // your own: hidden from you, casting your shadow, as the model is
 		C->bCastHiddenShadow = bShadowOnly;
@@ -616,6 +625,7 @@ void UWWOBodyComponent::RebuildShell()
 			FpShellParts.Add(F);
 		}
 	}
+	if (bAnchorGraftsLive) BuildAnchorGrafts(); // the new parts' anchors are elsewhere
 }
 
 void UWWOBodyComponent::ApplyShadowOnly(UPrimitiveComponent* C) const

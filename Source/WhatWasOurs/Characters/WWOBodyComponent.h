@@ -25,6 +25,9 @@ class UPrimitiveComponent;
 class UStaticMesh;
 class FWWOGraftBuilder;
 struct FWWOGraftFrame;
+struct FWWOShellPoint;
+struct FWWOShellPath;
+struct FWWOShellAnchorSet;
 class UMaterialInstanceDynamic;
 class UAnimSequence;
 class UWWOBodyAnimInstance;
@@ -140,6 +143,23 @@ public:
 	// Debug: every body's shell, whatever it picked (wwo.Shell, -WWOShell=); -1 leaves a slot alone.
 	static int32 ShellOverride[NumShellSlots];
 	static void SetShellOverride(UWorld* World, const int32 Picks[NumShellSlots]);
+	// Graft anchors (Characters/WWOShellAnchors.h, WWOBodyAnchors.cpp), while HasShells(): the named spots and
+	// lines of the parts worn now (they follow ShellMesh, so wwo.Shell and a part swap move them), and the
+	// bare skeleton's seams. An anchor name is looked up in each slot's worn part, then the seams.
+	const FWWOShellPoint* FindAnchorPoint(FName Name, bool* bOutSeam = nullptr) const;
+	// Where it is now (X out of the surface, Z its 'up'), and its size in cm. False if no worn part has it.
+	bool FindAnchor(FName Name, FTransform& OutWorld, float* OutSize = nullptr) const;
+	const FWWOShellPath* FindPath(FName Name) const;
+	// A path's points where they are now. bBridgeSeams: a path that starts or ends at a seam begins or
+	// ends on that seam's point (so a Core path and the Arms path after it meet); a closed one ends where it began.
+	bool PathWorld(FName Name, TArray<FVector>& Out, bool bBridgeSeams = true) const;
+	FTransform PointWorld(const FWWOShellPoint& Point) const; // an anchor or path point, now
+	// The anchor set of the part worn in a slot (NumShellSlots: the skeleton's seams); null without one.
+	const FWWOShellAnchorSet* WornAnchors(int32 Slot) const;
+	// Anchor grafts: the flora's pieces placed from Config/GraftRecipes.json on the worn parts' anchors, instead
+	// of the fitted model grafts. Per model "anchor_grafts" in Config/CharacterModels.json, or for every robot
+	// with wwo.AnchorGrafts 0|1 (-1: per model) / -WWOAnchorGrafts. Rebuilds every body following its loadout.
+	static void RebuildAllGrafts(UWorld* World);
 	// The model's hands are rigid (Config/CharacterModels.json hand_fingers / hand_palm, right hand, mesh space).
 	bool bRigidHands = false;
 	FVector HandFingers = FVector::ZeroVector, HandPalm = FVector::ZeroVector;
@@ -200,6 +220,17 @@ private:
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> FpShellParts; // on your own first-person legs
 	void RebuildShell();
 	USkeletalMeshComponent* AddShellPart(USkeletalMeshComponent* Leader, USkeletalMesh* Asset);
+	FName WornParts[NumShellSlots]; // the part each slot shows (RebuildShell), whose anchors FindAnchor reads
+	// Anchor grafts (WWOBodyAnchors.cpp): what RebuildGrafts chose, kept so a part swap (RebuildShell) can
+	// place them again on the new part's anchors.
+	bool bModelAnchorGrafts = false; // the model's "anchor_grafts"
+	bool bAnchorGraftsLive = false;
+	FName AnchorFlora, AnchorGrenade;
+	TArray<FName> AnchorIds;
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> AnchorParts; // (also in Grafts)
+	bool UseAnchorGrafts(FName FloraId) const;
+	void BuildAnchorGrafts();
+	void ClearAnchorGrafts();
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);
