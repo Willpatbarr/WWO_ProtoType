@@ -1002,9 +1002,13 @@ void FWWOVineGraft::NetPatch(FName Bone, const FVector& At, const FVector& N0, c
 	NetBuild(Knots, Style, Surface, Glow, R, [Bone](float) { return FStationOwner{ Bone, INDEX_NONE, 0.f }; });
 }
 
-void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& Knots, const FWWONetStyle& Style, const FWWOShellSurface& Surface,
+void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyle& Style, const FWWOShellSurface& Surface,
 	const TArray<FVector4>& Glow, FRandomStream& R, const TFunctionRef<FStationOwner(float Along)> OwnerAt)
 {
+	// Knots inside an obstacle (Blocked) are left out: the net grows round it.
+	TArray<FNetKnot> Kept;
+	if (Blocked) for (const FNetKnot& K : AllKnots) { if (Blocked(K.P)) ++KnotsBlocked; else Kept.Add(K); }
+	const TArray<FNetKnot>& Knots = Blocked ? Kept : AllKnots;
 	const int32 Num = Knots.Num();
 	if (Num < 2) return;
 	const int32 Before = FungusTris();

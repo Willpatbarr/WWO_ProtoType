@@ -9,7 +9,9 @@
 # closed over its gaps and smoothed: a shrink-wrap). Anchors are ray hits on the wrap; paths are shortest
 # lines over it. Space: the rig file's, in cm (x = the robot's left, -y = front, z = up), bind pose.
 # Each part's JSON also carries 'surface': the wrap itself, thinned to one point per SURFACE_CELL cm cube (with
-# its normal and bone), so the game can put things on the part between its anchors and paths (FWWOShellSurface).
+# its normal and bone), so the game can put things on the part between its anchors and paths (FWWOShellSurface),
+# its keep-clear 'volumes' (the head's face; the same names on every part of a slot) and its optional
+# 'obstacles' (thin bits standing out of the wrap, such as an antenna; only the parts that have them).
 import bpy, bmesh, sys, os, json, math, heapq, importlib, re
 import numpy as np
 from mathutils import Vector
@@ -407,6 +409,83 @@ def ring_points(w, spec):
     return out
 
 
+# ---------- keep-clear volumes and obstacles ----------
+def face_volume(w, A, spec):
+    """The front of the head between the jaw and the brow (the wrap facing the front), as a half-ellipsoid over
+    it: its flat side as deep as the face's deepest part, its round side reaching 'pad' cm out past the most
+    forward bit (goggles, visor) and as wide and tall as the face plus 'pad' (rig cm: p the centre of its flat
+    side, n the way out of the face, up, radii [across, up, out])."""
+    lo = A["jaw_front"]["p"][2] - spec["lo"]; hi = A["head_front"]["p"][2] + spec["hi"]
+    front = np.array([0, -1.0, 0])
+    m = (w.N @ front > spec["facing"]) & (w.V[:, 2] >= lo) & (w.V[:, 2] <= hi)
+    F = w.V[m]
+    if len(F) < 10: warn("%s face: only %d wrap points face the front" % (w.name, len(F))); F = w.V[(w.V[:, 2] >= lo) & (w.V[:, 2] <= hi)]
+    back = float(np.percentile(F[:, 1], 90))                 # the face's deepest part (y grows toward the back)
+    cx = 0.5 * (F[:, 0].min() + F[:, 0].max()); cz = 0.5 * (F[:, 2].min() + F[:, 2].max())
+    pad = spec["pad"]
+    radii = [0.5 * (F[:, 0].max() - F[:, 0].min()) + pad, 0.5 * (F[:, 2].max() - F[:, 2].min()) + pad, max(back - F[:, 1].min(), 1.0) + pad]
+    log(w.name, "face volume at (%.1f, %.1f, %.1f) radii %s from %d wrap points" % (cx, back, cz, [round(r, 1) for r in radii], len(F)))
+    return dict(kind="half_ellipsoid", p=np.array([cx, back, cz]), n=front, up=np.array([0, 0, 1.0]), radii=radii, bone=w.bone(np.array([cx, F[:, 1].min(), cz])))
+
+
+def find_obstacles(w, PV, PT, spec):
+    """Thin bits of the part (its own triangles PV/PT) that the wrap only covers with a thin tube: the part's
+    voxel solid less its opening by a ball of radius spec['thick'] / 2 (what a ball that big cannot reach into),
+    in clumps at least spec['min_len'] cm long standing spec['out'] cm or more off what is left, each as a capsule
+    {a, b, radius, bone} (rig cm)."""
+    vox = SPEC.WRAP["voxel"]
+    pts = sample(PV, PT, vox * 0.45)
+    F, lo = closed_solid(pts, vox, SPEC.WRAP["close"])
+    r = spec["thick"] * 0.5 / vox; R = int(math.ceil(r))
+    ball = [(i, j, k) for i in range(-R, R + 1) for j in range(-R, R + 1) for k in range(-R, R + 1) if 0 < i * i + j * j + k * k <= r * r + 1e-6]
+    O = dilate(~dilate(~F, ball), ball)                      # the opening: the solid without its thin bits
+    # how far each voxel is from the opened solid (in voxels, up to 'out' + a bit)
+    steps = int(math.ceil(spec["out"] / vox)) + 1
+    six = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+    near = O.copy()
+    for _ in range(steps): near = dilate(near, six)
+    idx = np.floor((pts - lo) / vox).astype(int)
+    thin = F[idx[:, 0], idx[:, 1], idx[:, 2]] & ~near[idx[:, 0], idx[:, 1], idx[:, 2]]
+    if not thin.any(): log(w.name, "obstacles: none"); return {}
+    P = pts[thin]
+    key = np.floor(P / 1.0).astype(int)
+    cells = {}
+    for i, k in enumerate(map(tuple, key)): cells.setdefault(k, []).append(i)
+    seen, clumps = set(), []
+    for k0 in cells:
+        if k0 in seen: continue
+        st = [k0]; seen.add(k0); ids = []
+        while st:
+            k = st.pop(); ids.extend(cells[k])
+            for d in ((i, j, l) for i in (-1, 0, 1) for j in (-1, 0, 1) for l in (-1, 0, 1)):
+                n = (k[0] + d[0], k[1] + d[1], k[2] + d[2])
+                if n in cells and n not in seen: seen.add(n); st.append(n)
+        clumps.append(P[ids])
+    out = []
+    for C in clumps:
+        c = C.mean(0); _, _, vt = np.linalg.svd(C - c, full_matrices=False); ax = vt[0]
+        s = (C - c) @ ax; a, b = c + ax * s.min(), c + ax * s.max()
+        if s.max() - s.min() < spec["min_len"]:
+            continue
+        perp = np.linalg.norm((C - c) - np.outer(s, ax), axis=1)
+        rad = float(perp.max()) + spec["pad"]
+        # the end nearer the rest of the part runs on toward it by 'out', so the capsule reaches what it stands on
+        on = lambda q: O[tuple(np.clip(np.floor((q - lo) / vox).astype(int), 0, np.array(O.shape) - 1))]
+        ka = min(range(0, 40), key=lambda t: 0 if on(a - ax * t * 0.5) else 1)
+        kb = min(range(0, 40), key=lambda t: 0 if on(b + ax * t * 0.5) else 1)
+        if ka <= kb: a = a - ax * (spec["out"] + vox)
+        else: b = b + ax * (spec["out"] + vox)
+        out.append(dict(a=a, b=b, radius=rad, bone=w.bone(0.5 * (a + b)), length=float(np.linalg.norm(b - a)), points=len(C)))
+    out.sort(key=lambda o: -o["length"])
+    res = {}
+    for k, o in enumerate(out):
+        res["protrusion_%d" % (k + 1)] = o
+        log(w.name, "obstacle protrusion_%d: %.1f cm long, radius %.1f, from (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f), %d points" %
+            ((k + 1), o["length"], o["radius"], *o["a"], *o["b"], o["points"]))
+    log(w.name, "obstacles: %d thin clumps, %d kept (sizes %s)" % (len(clumps), len(out), sorted([len(c) for c in clumps], reverse=True)[:12]))
+    return res
+
+
 # ---------- the run ----------
 PIECES = {"Head": [("Head", 0)], "Core": [("Core", 0)], "Arms": [("Arms_l", 1), ("Arms_r", -1)],
           "Legs": [("Legs_l", 1), ("Legs_r", -1)]}
@@ -426,7 +505,7 @@ def run():
     for slot in SS.SLOTS:
         PV, PT, PB = mesh_tris(parts[slot])
         anchors_spec = expand(SPEC.ANCHORS[slot]); paths_spec = expand(SPEC.PATHS[slot])
-        A, Pa = {}, {}
+        A, Pa, Vo, Ob = {}, {}, {}, {}
         for pname, side in PIECES[slot]:
             bones = piece_bones(slot, side)
             pm = np.ones(len(PT), bool) if not side else (PV[PT].mean(1)[:, 0] * side) > 0
@@ -458,7 +537,14 @@ def run():
                 path.update(from_seam=e["from_seam"], to_seam=e["to_seam"], kind=e["kind"])
                 Pa[name] = path
                 log(slot, name, "length %.1f points %d" % (path["length"], len(path["points"])))
-        results[slot] = (A, Pa)
+            for name, e in SPEC.VOLUMES.get(slot, {}).items():
+                if e["kind"] == "face": Vo[name] = face_volume(w, A, e)
+            if slot in SPEC.OBSTACLES["slots"]:
+                Ob.update(find_obstacles(w, PV, PT[pm], SPEC.OBSTACLES))
+        part = "SK_Shell%d_%s" % (SHELL, slot)
+        for name, o in SPEC.OBSTACLES_EXTRA.get(part, {}).items():
+            Ob[name] = dict(a=np.array(o["a"], float), b=np.array(o["b"], float), radius=o["radius"], bone=o["bone"])
+        results[slot] = (A, Pa, Vo, Ob)
     return parts, seam, results, wraps
 
 
@@ -496,13 +582,19 @@ def dump(obj, ind=0):
     return "[\n" + ",\n".join(pad + dump(x, ind + 1) for x in obj) + "\n" + " " * ind + "]"
 
 
-def write(name, slot, anchors, paths, surf=None):
+def write(name, slot, anchors, paths, surf=None, volumes=None, obstacles=None):
     doc = {"part": name, "shell": SHELL if slot != "Skeleton" else None, "slot": slot, "space": "blender_rig_cm",
            "anchors": {k: dict(p=r3(a["p"]), n=r4(a["n"]), up=r4(a["up"]), size=round(float(a["size"]), 2), bone=a["bone"])
                        for k, a in anchors.items()},
            "paths": {k: dict(closed=bool(p["closed"]), length=round(p["length"], 2), from_seam=p["from_seam"], to_seam=p["to_seam"],
                              points=[dict(p=r3(q["p"]), n=r4(q["n"]), bone=q["bone"]) for q in p["points"]])
                      for k, p in paths.items()}}
+    if volumes:
+        doc["volumes"] = {k: dict(kind=v["kind"], p=r3(v["p"]), n=r4(v["n"]), up=r4(v["up"]), radii=[round(float(x), 2) for x in v["radii"]],
+                                  bone=v["bone"]) for k, v in volumes.items()}
+    if obstacles:
+        doc["obstacles"] = {k: dict(kind="capsule", a=r3(o["a"]), b=r3(o["b"]), radius=round(float(o["radius"]), 2), bone=o["bone"])
+                            for k, o in obstacles.items()}
     if surf:
         doc["surface"] = {"cell": SURFACE_CELL, "bones": surf[0], "points": surf[1]}
     path = os.path.join(OUT, name + ".json")
@@ -578,12 +670,12 @@ def render(parts, seam, results, wraps, show_wraps):
 
 if __name__ == "__main__":
     parts, seam, results, wraps = run()
-    for slot, (A, Pa) in results.items():
-        write("SK_Shell%d_%s" % (SHELL, slot), slot, A, Pa, surface([wraps[p] for p, _ in PIECES[slot]]))
+    for slot, (A, Pa, Vo, Ob) in results.items():
+        write("SK_Shell%d_%s" % (SHELL, slot), slot, A, Pa, surface([wraps[p] for p, _ in PIECES[slot]]), Vo, Ob)
     if WHICH == "base":
         write("SK_RobotSkeleton", "Skeleton", seam, {})
     # seam joins in this file (the cross-shell check is check_anchors.py)
-    for slot, (A, Pa) in results.items():
+    for slot, (A, Pa, _, _) in results.items():
         for name, p in Pa.items():
             for key, end in (("from_seam", 0), ("to_seam", -1)):
                 if p[key]:

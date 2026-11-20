@@ -5,7 +5,9 @@
 // part (Art/Shells/tools/make_anchors.py, names in anchor_spec.py) to Config/ShellAnchors/<part>.json:
 // SK_Shell<n>_<Slot>.json for each part, SK_RobotSkeleton.json for the seams. Every part of a slot has
 // the same anchor and path names, so a recipe that names them fits every shell. Each part's file also carries
-// its surface ('surface': the skin its anchors and paths lie on, a point every ~2 cm), for placing things between them.
+// its surface ('surface': the skin its anchors and paths lie on, a point every ~2 cm), for placing things between them,
+// its keep-clear 'volumes' (Head: 'face'; the same names on every part of a slot) and, optionally, its own
+// 'obstacles' (thin bits standing out of it, such as the scout head's antenna, which every graft keeps off).
 //
 // The files are in "blender_rig_cm": the bind pose in centimetres, x = the robot's left, -y = its front,
 // z = up, feet at z = 0. Here each point is turned into the robot mesh's own space (FromRig) and then
@@ -35,6 +37,21 @@ struct FWWOShellPath
 	TArray<FWWOShellPoint> Points;
 };
 
+// A keep-clear volume, in the mesh's reference pose: a capsule (A to B, Radii.X) or a half-ellipsoid (A its centre,
+// N the way out of its round side, Up; Radii across, up and out; nothing behind its flat side counts).
+struct FWWOShellVolume
+{
+	enum EKind { Capsule, HalfEllipsoid };
+	EKind Kind = Capsule;
+	FName Bone;
+	FVector A = FVector::ZeroVector, B = FVector::ZeroVector, N = FVector::ForwardVector, Up = FVector::UpVector;
+	FVector Radii = FVector::OneVector;
+	// Is P inside it (made Grow cm bigger all round)?
+	bool Contains(const FVector& P, float Grow = 0.f) const;
+	// The way from it to P (from its axis or centre), to push a piece clear.
+	FVector Away(const FVector& P) const;
+};
+
 // The worn parts' surface (reference pose, mesh space), sampled by each part's 'surface' (its wrap, the skin its
 // anchors and paths lie on, thinned to a point every ~2 cm), for placing things away from any anchor: a point is
 // pulled onto the surface from its nearest samples (each sample's own tangent plane, weighted by nearness and by
@@ -54,6 +71,23 @@ struct FWWOShellSurface
 	// From P (on the surface, N its normal) Dist cm over the surface toward Dir (made tangent at each hop).
 	void Walk(FVector& P, FVector& N, const FVector& Dir, float Dist, FName* OutBone = nullptr) const;
 
+	// Seats a rigid piece on the surface. Under: points of its underside; it turns about Pivot and moves along Out.
+	// Fitted (least squares, a few rounds) so its underside stands Clear cm off the surface, leaning with it by up
+	// to MaxTiltDeg (about any axis square to Out, or only about OnlyAxis when that is not zero), then moved out
+	// so no point of it is under the surface. False when too few of its points are over the surface.
+	struct FSeat
+	{
+		FQuat Turn = FQuat::Identity; // about Pivot
+		FVector Move = FVector::ZeroVector;
+		float MeanBefore = 0.f, MaxBefore = 0.f, MinBefore = 0.f, MeanAfter = 0.f, MaxAfter = 0.f, MinAfter = 0.f; // the gaps, cm
+		float TiltDeg = 0.f;
+		TArray<float> Gaps; // each point's gap, seated (NaN: no surface under it)
+		// Where a point of the piece goes.
+		FVector Apply(const FVector& P, const FVector& Pivot) const { return Turn.RotateVector(P - Pivot) + Pivot + Move; }
+	};
+	bool Seat(const TArray<FVector>& Under, const FVector& Pivot, const FVector& Out, float Clear, float MaxTiltDeg,
+		const FVector& OnlyAxis, FSeat& Result) const;
+
 private:
 	static constexpr float Cell = 4.f;
 	TMap<FIntVector, TArray<int32>> Grid;
@@ -68,6 +102,8 @@ struct FWWOShellAnchorSet
 	TMap<FName, FWWOShellPoint> Anchors;
 	TMap<FName, FWWOShellPath> Paths;
 	TArray<FWWOShellSurface::FSample> Surface; // the part's wrap, a point every ~2 cm (the file's 'surface')
+	TMap<FName, FWWOShellVolume> Volumes;   // keep-clear volumes every part of the slot has (Head: 'face')
+	TMap<FName, FWWOShellVolume> Obstacles; // this part's own (optional): thin bits standing out of it
 	const USkeletalMesh* RefMesh = nullptr;
 };
 

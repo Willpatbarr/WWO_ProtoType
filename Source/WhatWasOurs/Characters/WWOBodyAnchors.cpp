@@ -3,7 +3,8 @@
 // and placed again whenever a part is swapped: procedural bark plates and seed pods (FWWOGraftBuilder),
 // VoltVine's vines along chains of paths with their leaves, tendrils and crystal pods (FWWOVineGraft), and
 // VeilSpore's kit pieces (static meshes: shelf fungi, its hood, caps) laid on anchors and along paths, with its
-// mycelium grown over the surface between them (FWWOVineGraft::KitPiece, Net).
+// mycelium grown over the surface between them (FWWOVineGraft::KitPiece, Net). Plates and pods can be seated on the
+// worn parts' surface (FWWOShellSurface::Seat), and every piece keeps off the parts' obstacles (an antenna).
 
 #include "Characters/WWOBodyComponent.h"
 #include "Characters/WWOShellAnchors.h"
@@ -183,14 +184,6 @@ namespace
 		return St;
 	}
 
-	// The point on segment A-B nearest P.
-	FVector OnSegment(const FVector& P, const FVector& A, const FVector& B)
-	{
-		const FVector AB = B - A;
-		const double L2 = AB.SizeSquared();
-		return L2 < UE_SMALL_NUMBER ? A : A + AB * FMath::Clamp(FVector::DotProduct(P - A, AB) / L2, 0.0, 1.0);
-	}
-
 	// Up made square to N (any square direction if it runs along N).
 	FVector Tangent(const FVector& N, const FVector& Up)
 	{
@@ -324,32 +317,195 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 		return *B;
 	};
 	int32 Pieces = 0, Missing = 0;
+	// The worn parts' surface (their wraps' samples and anchors, FWWOShellSurface): made on the first piece that is
+	// walked over it or seated on it.
+	TUniquePtr<FWWOShellSurface> Surface;
+	auto SurfaceNow = [&]() -> const FWWOShellSurface&
+	{
+		if (!Surface)
+		{
+			Surface = MakeUnique<FWWOShellSurface>();
+			for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+			{
+				const FWWOShellAnchorSet* Set = WornAnchors(Slot);
+				if (!Set) continue;
+				for (const FWWOShellSurface::FSample& P : Set->Surface) Surface->Add(P);
+				for (const TPair<FName, FWWOShellPoint>& It : Set->Anchors) Surface->Add(It.Value);
+			}
+			Surface->Finish();
+		}
+		return *Surface;
+	};
+	// Every worn part's obstacles (thin bits standing out of it, such as the scout head's antenna): no piece may enter
+	// one (Grow cm bigger), whatever the recipe says.
+	TArray<const FWWOShellVolume*> Obstacles;
+	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+	{
+		if (const FWWOShellAnchorSet* Set = WornAnchors(Slot)) for (const TPair<FName, FWWOShellVolume>& It : Set->Obstacles) Obstacles.Add(&It.Value);
+	}
+	auto FindVolume = [&](FName Name) -> const FWWOShellVolume*
+	{
+		for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+		{
+			const FWWOShellAnchorSet* Set = WornAnchors(Slot);
+			if (const FWWOShellVolume* V = Set ? Set->Volumes.Find(Name) : nullptr) return V;
+		}
+		return nullptr;
+	};
+	auto Obstacle = [&](const FVector& P, float Grow) -> const FWWOShellVolume*
+	{
+		for (const FWWOShellVolume* V : Obstacles) if (V->Contains(P, Grow)) return V;
+		return nullptr;
+	};
+	int32 ObstaclePushed = 0, ObstacleLeftOut = 0, VineInObstacles = 0;
+	int32 Seated = 0;
+	float SeatGapBefore = 0.f, SeatGapAfter = 0.f; // the seated pieces' mean gaps under them, summed (cm)
 	// One piece at one point. Sign is -1 on the right side of a "{s}" pair: its across offset is mirrored.
+	// seat: its offset's across and up are walked over the surface, and it is then fitted to the surface under it
+	// (FWWOShellSurface::Seat: moved in or out, leaning with it), its offset's out the gap left under it.
 	auto Place = [&](const FWWOShellPoint& At, float Scale, float Sign, const TSharedPtr<FJsonObject>& O)
 	{
-		const FVector Across = FVector::CrossProduct(At.RefUp, At.RefN); // the anchor frame's Y (up x out)
 		const FVector Off = WWOConfig::Vec(O, TEXT("offset"));
-		const FVector Center = At.RefP + At.RefN * Off.X + Across * Off.Y * Sign + At.RefUp * Off.Z;
+		const bool bSeat = Flag(O, TEXT("seat"), false);
+		FVector P = At.RefP, N = At.RefN, Up = At.RefUp;
+		FName Bone = At.Bone;
+		if (bSeat && (Off.Y != 0.0 || Off.Z != 0.0))
+		{
+			const FWWOShellSurface& Sf = SurfaceNow();
+			FName Walked = Bone;
+			if (Off.Z != 0.0) Sf.Walk(P, N, Tangent(N, Up), float(Off.Z), &Walked);
+			if (Off.Y != 0.0) Sf.Walk(P, N, FVector::CrossProduct(Tangent(N, Up), N), float(Off.Y) * Sign, &Walked);
+			Up = Tangent(N, Up);
+			if (FVector::Dist(P, At.RefP) > 0.5f) Bone = Walked;
+		}
+		const FVector Across = FVector::CrossProduct(Up, N); // the anchor frame's Y (up x out)
+		FVector Center = bSeat ? P : At.RefP + At.RefN * Off.X + Across * Off.Y * Sign + At.RefUp * Off.Z;
 		FString Piece, AlongWord(TEXT("down"));
 		O->TryGetStringField(TEXT("piece"), Piece);
 		O->TryGetStringField(TEXT("along"), AlongWord);
-		const FVector Along = AlongWord == TEXT("up") ? At.RefUp : AlongWord == TEXT("across") ? Across * Sign : -At.RefUp;
+		FVector Along = AlongWord == TEXT("up") ? Up : AlongWord == TEXT("across") ? Across * Sign : -Up;
 		const float Cm = 1.f / WWO::M; // the builder's sizes are meters
-		FWWOGraftBuilder& B = BuilderFor(At.Bone);
-		if (Piece == TEXT("plate"))
-		{
-			B.Plate(Center, At.RefN, Along, Num(O, TEXT("length"), 12.0) * Scale * Cm, Num(O, TEXT("width"), 8.0) * Scale * Cm,
-				FMath::Max(Num(O, TEXT("curve"), 30.0) * Scale, 1.0) * Cm, Num(O, TEXT("thickness"), 2.0) * Cm, Num(O, TEXT("lift"), 0.0) * Cm,
-				Flag(O, TEXT("cracked"), true));
-		}
-		else if (Piece == TEXT("seed_pod"))
-		{
-			B.SeedPod(Center, Num(O, TEXT("length"), 10.0) * Scale * Cm, Num(O, TEXT("width"), 3.5) * Scale * Cm, Num(O, TEXT("stalk"), 4.0) * Cm);
-		}
-		else
+		const bool bPlate = Piece == TEXT("plate"), bPod = Piece == TEXT("seed_pod");
+		if (!bPlate && !bPod)
 		{
 			UE_LOG(LogWWO, Warning, TEXT("Graft recipes: unknown piece '%s'"), *Piece);
 			return;
+		}
+		const float Length = Num(O, TEXT("length"), bPlate ? 12.0 : 10.0) * Scale, Width = Num(O, TEXT("width"), bPlate ? 8.0 : 3.5) * Scale;
+		float Curve = FMath::Max(Num(O, TEXT("curve"), 30.0) * Scale, 1.0);
+		const float Stalk = Num(O, TEXT("stalk"), 4.0);
+		// The piece's underside (cm), to seat it and to keep it off the obstacles; X: how far across a plate each is.
+		TArray<FVector> Under;
+		TArray<float> X;
+		const FVector Back = FVector(N.X, N.Y, 0.f).GetSafeNormal(UE_SMALL_NUMBER, N); // a pod's way out: level
+		auto Underside = [&](float Bend)
+		{
+			Under.Reset();
+			X.Reset();
+			if (bPlate)
+			{
+				// As FWWOGraftBuilder::Plate lays its inside (without its lift): rows along it, bent round its length.
+				const FVector Side = FVector::CrossProduct(N, Along).GetSafeNormal();
+				for (int32 Row = 0; Row <= 4; ++Row)
+				{
+					const float V = Row / 4.f - 0.5f;
+					const float Taper = 1.f - FMath::Pow(FMath::Abs(V * 2.f), 2.4f) * (V > 0.f ? 0.78f : 0.6f);
+					for (int32 Col = 0; Col <= 4; ++Col)
+					{
+						const float A = (Col / 2.f - 1.f) * Width * 0.5f * Taper / Bend;
+						Under.Add(Center + Along * V * Length + Side * FMath::Sin(A) * Bend + N * (FMath::Cos(A) - 1.f) * Bend);
+						X.Add(FMath::Sin(A) * Bend);
+					}
+				}
+			}
+			else
+			{
+				// Hanging straight down from its top: the stalk's top, then the back of its body (toward the body).
+				Under.Add(Center);
+				for (int32 k = 1; k <= 5; ++k)
+				{
+					const float T = k / 6.f;
+					const float R = Width * FMath::Pow(FMath::Max(FMath::Sin(UE_PI * FMath::Pow(T, 1.35f)), 0.f), 0.7f);
+					Under.Add(Center - FVector::UpVector * (Stalk + T * Length) - Back * R);
+				}
+			}
+		};
+		Underside(Curve);
+		FVector Hang = FVector::ZeroVector;
+		FString What; // (for the log: its anchor or path, its offset)
+		if (!O->TryGetStringField(TEXT("anchor"), What)) O->TryGetStringField(TEXT("path"), What);
+		What = FString::Printf(TEXT("%s %s [%g %g %g]"), *Piece, *What.Replace(TEXT("{s}"), Sign < 0.f ? TEXT("r") : TEXT("l")), Off.X, Off.Y, Off.Z);
+		if (!bSeat && UE_LOG_ACTIVE(LogWWO, Verbose))
+		{
+			// (How well an unseated piece fits, to compare.)
+			FWWOShellSurface::FSeat Fit;
+			if (SurfaceNow().Seat(Under, Center, bPod ? Back : N, 0.f, 0.f, FVector::ZeroVector, Fit))
+			{
+				UE_LOG(LogWWO, Verbose, TEXT("Anchor fit: %s (not seated): gap mean %.1f (%.1f..%.1f) cm"), *What, Fit.MeanBefore, Fit.MinBefore, Fit.MaxBefore);
+			}
+		}
+		if (bSeat)
+		{
+			// A plate leans any way (up to 25 degrees); a pod swings only toward or away from the body (up to 30), from its top.
+			const FVector Pivot = Center;
+			FWWOShellSurface::FSeat Fit;
+			auto Fitted = [&]() { return SurfaceNow().Seat(Under, Pivot, bPod ? Back : N, FMath::Max(float(Off.X), 0.f), bPod ? 30.f : 25.f,
+				bPod ? FVector::CrossProduct(FVector::UpVector, Back).GetSafeNormal() : FVector::ZeroVector, Fit); };
+			bool bFitted = Fitted();
+			const float GapFirst = Fit.MeanBefore, MinFirst = Fit.MinBefore, MaxFirst = Fit.MaxBefore;
+			if (bFitted && bPlate)
+			{
+				// A plate also bends to the surface across it: the gaps' rise toward its edges (q x^2) says how much
+				// more (or less) it should curl (its inside drops x^2 / 2 Curve), within half to three times the recipe's.
+				double Sx = 0, Sy = 0, Sxx = 0, Sxy = 0;
+				int32 Count = 0;
+				for (int32 i = 0; i < Under.Num(); ++i)
+				{
+					if (FMath::IsNaN(Fit.Gaps[i])) continue;
+					const double Q = X[i] * X[i];
+					Sx += Q; Sy += Fit.Gaps[i]; Sxx += Q * Q; Sxy += Q * Fit.Gaps[i];
+					++Count;
+				}
+				const double Den = Count * Sxx - Sx * Sx;
+				if (Count > 4 && Den > 1e-6)
+				{
+					const double Q = (Count * Sxy - Sx * Sy) / Den;
+					const float Bend = FMath::Clamp(1.f / FMath::Max(1.f / Curve + 2.f * float(Q), 1e-3f), Curve * 0.5f, Curve * 3.f);
+					if (FMath::Abs(Bend - Curve) > Curve * 0.05f)
+					{
+						Curve = Bend;
+						Underside(Curve);
+						bFitted = Fitted();
+					}
+				}
+			}
+			if (bFitted)
+			{
+				for (FVector& U : Under) U = Fit.Apply(U, Pivot);
+				Center = Fit.Apply(Center, Pivot);
+				N = Fit.Turn.RotateVector(N);
+				Along = Fit.Turn.RotateVector(Along);
+				if (bPod) Hang = Fit.Turn.RotateVector(-FVector::UpVector);
+				++Seated;
+				SeatGapBefore += GapFirst;
+				SeatGapAfter += Fit.MeanAfter;
+				UE_LOG(LogWWO, Verbose, TEXT("Anchor seat: %s: gap mean %.1f (%.1f..%.1f) -> %.1f (%.1f..%.1f) cm, tilt %.0f deg, curve %.1f"), *What,
+					GapFirst, MinFirst, MaxFirst, Fit.MeanAfter, Fit.MinAfter, Fit.MaxAfter, Fit.TiltDeg, Curve);
+			}
+		}
+		for (const FVector& U : Under)
+		{
+			if (Obstacle(U, 1.f)) { ++ObstacleLeftOut; return; }
+		}
+		FWWOGraftBuilder& B = BuilderFor(Bone);
+		if (bPlate)
+		{
+			B.Plate(Center, N, Along, Length * Cm, Width * Cm, Curve * Cm, Num(O, TEXT("thickness"), 2.0) * Cm, Num(O, TEXT("lift"), 0.0) * Cm,
+				Flag(O, TEXT("cracked"), true));
+		}
+		else
+		{
+			B.SeedPod(Center, Length * Cm, Width * Cm, Stalk * Cm, Hang);
 		}
 		++Pieces;
 	};
@@ -357,13 +513,19 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 	TUniquePtr<FWWOVineGraft> Vines;
 	auto VinesNow = [&]() -> FWWOVineGraft&
 	{
-		if (!Vines) Vines = MakeUnique<FWWOVineGraft>(Mesh, Random, VineJointsMode != 0);
+		if (!Vines)
+		{
+			Vines = MakeUnique<FWWOVineGraft>(Mesh, Random, VineJointsMode != 0);
+			if (Obstacles.Num() > 0) Vines->Blocked = [&](const FVector& P) { return Obstacle(P, 0.5f) != nullptr; };
+		}
 		return *Vines;
 	};
 	// A vine's line: its 'paths' one after another (each over 'range' [from, to] of its length; from > to runs it
 	// backward), each next one joined to the last by a short lifted bridge (across a seam, where a Core path's end
-	// and an Arms or Legs path's start lie a few cm apart on their own parts). False if a path is missing.
-	auto VineLine = [&](const TSharedPtr<FJsonObject>& O, const TFunctionRef<FString(const FString&)> Named, FWWOVineLine& Line)
+	// and an Arms or Legs path's start lie a few cm apart on their own parts). A path's offset_cm moves its line that far
+	// sideways over the surface, a lane beside it, toward 'toward' ('front', 'back', 'up', 'down', 'outer'; default
+	// 'back'): round the limb from a line down its outside. False if a path is missing.
+	auto VineLine = [&](const TSharedPtr<FJsonObject>& O, const TFunctionRef<FString(const FString&)> Named, float Sign, FWWOVineLine& Line)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Paths = nullptr;
 		if (!O->TryGetArrayField(TEXT("paths"), Paths)) return false;
@@ -378,6 +540,10 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 			const float Thick = Num(E, TEXT("thickness"), 1.0);
 			const FVector2D LeafScale = Pair(E, TEXT("leaf_scale"), FVector2D(1.0, 1.0));
 			const float Leafy = Flag(E, TEXT("leaves"), true) ? 1.f : 0.f;
+			const float Lane = Num(E, TEXT("offset_cm"), 0.0);
+			FString Toward(TEXT("back"));
+			E->TryGetStringField(TEXT("toward"), Toward);
+			const FVector LaneWay = Word(Toward, Sign);
 			const TArray<FWWOShellPoint>& Pts = Path->Points;
 			TArray<float> At;
 			At.Add(0.f);
@@ -395,9 +561,14 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 				while (k + 2 < Pts.Num() && At[k + 1] < S) ++k;
 				const float Len = At[k + 1] - At[k];
 				const float T = Len > UE_SMALL_NUMBER ? FMath::Clamp((S - At[k]) / Len, 0.f, 1.f) : 0.f;
-				const FVector P = FMath::Lerp(Pts[k].RefP, Pts[k + 1].RefP, T);
-				const FVector N = FMath::Lerp(Pts[k].RefN, Pts[k + 1].RefN, T).GetSafeNormal();
-				const FName Bone = T < 0.5f ? Pts[k].Bone : Pts[k + 1].Bone;
+				FVector P = FMath::Lerp(Pts[k].RefP, Pts[k + 1].RefP, T);
+				FVector N = FMath::Lerp(Pts[k].RefN, Pts[k + 1].RefN, T).GetSafeNormal();
+				FName Bone = T < 0.5f ? Pts[k].Bone : Pts[k + 1].Bone;
+				if (Lane != 0.f)
+				{
+					const FVector Side = FVector::CrossProduct((Pts[k + 1].RefP - Pts[k].RefP).GetSafeNormal(), N);
+					SurfaceNow().Walk(P, N, FVector::DotProduct(Side, LaneWay) < 0.0 ? -Side : Side, Lane, &Bone);
+				}
 				const float F = Walk.Num() > 1 ? float(w) / (Walk.Num() - 1) : 0.f;
 				const float LS = FMath::Lerp(float(LeafScale.X), float(LeafScale.Y), F);
 				if (w == 0 && Line.Num() > 0)
@@ -431,7 +602,7 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 			FWWOVineLine Line;
 			if (Piece == TEXT("vine"))
 			{
-				if (!VineLine(O, Named, Line)) { ++Missing; return; }
+				if (!VineLine(O, Named, Sign, Line)) { ++Missing; return; }
 			}
 			else
 			{
@@ -444,6 +615,7 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 				FWWOVineGraft::BoneWrap(Mesh, B, To, Range.X, Range.Y, Num(O, TEXT("turns"), 1.0), Num(O, TEXT("phase"), 0.0),
 					Pair(O, TEXT("radii"), FVector2D(3.0, 3.0)), FVector(Sign, 0.0, 0.0), Line);
 			}
+			for (const FVector& P : Line.P) VineInObstacles += Obstacle(P, 1.f) ? 1 : 0; // (not avoided yet: counted)
 			G.Vine(FWWOVineGraft::Resample(Line, 1.2f), VineStyle(O, Sign));
 			return;
 		}
@@ -471,23 +643,6 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 	// near them).
 	FString Kit;
 	R->TryGetStringField(TEXT("kit"), Kit);
-	TUniquePtr<FWWOShellSurface> Surface;
-	auto SurfaceNow = [&]() -> const FWWOShellSurface&
-	{
-		if (!Surface)
-		{
-			Surface = MakeUnique<FWWOShellSurface>();
-			for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
-			{
-				const FWWOShellAnchorSet* Set = WornAnchors(Slot);
-				if (!Set) continue;
-				for (const FWWOShellSurface::FSample& P : Set->Surface) Surface->Add(P);
-				for (const TPair<FName, FWWOShellPoint>& It : Set->Anchors) Surface->Add(It.Value);
-			}
-			Surface->Finish();
-		}
-		return *Surface;
-	};
 	TArray<FVector4> Glow;           // each cap's gills (where, how far their light reaches the mycelium)
 	TArray<TFunction<void()>> Later; // the mycelium
 	int32 KeptOff = 0;               // pieces left out to keep the face clear
@@ -543,24 +698,43 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 		const TSharedPtr<FJsonObject> Stack = Object(O, TEXT("stack"));
 		const int32 Count = Stack ? FMath::Clamp(int32(Num(Stack, TEXT("count"), 1.0)), 1, 8) : 1;
 		const float StepCm = Stack ? Num(Stack, TEXT("step_cm"), 4.0) : 0.f, Shrink = Stack ? Num(Stack, TEXT("shrink"), 0.8) : 1.f;
-		// keep_off: capsules (anchor 'from' to anchor 'to', 'radius' cm) no vertex may enter (the face); a piece
+		// keep_off: volumes no vertex may enter: a capsule between two anchors ({from, to, radius}, the face: from
+		// head_front to jaw_front) or a volume the worn parts carry ({volume: name}, or just its name: 'face'). A piece
 		// that would is moved up to 'push' cm toward its own -X (its up reversed: the crown's back), else left out.
-		struct FCapsule { FVector A, B; float Radius, Push; };
-		TArray<FCapsule> Keep;
+		// The worn parts' obstacles are kept off too, always: a piece is moved up to 4 cm away from one, else left out.
+		struct FKeep { FWWOShellVolume V; float Push; bool bObstacle; };
+		TArray<FKeep> Keep;
 		TArray<TSharedPtr<FJsonValue>> KeepList;
 		const TArray<TSharedPtr<FJsonValue>>* KeepArray = nullptr;
+		FString KeepName;
 		if (const TSharedPtr<FJsonObject> K = Object(O, TEXT("keep_off"))) KeepList.Add(MakeShared<FJsonValueObject>(K));
 		else if (O->TryGetArrayField(TEXT("keep_off"), KeepArray)) KeepList = *KeepArray;
+		else if (O->TryGetStringField(TEXT("keep_off"), KeepName)) KeepList.Add(MakeShared<FJsonValueString>(KeepName));
 		for (const TSharedPtr<FJsonValue>& V : KeepList)
 		{
-			const TSharedPtr<FJsonObject> K = V->AsObject();
-			FString From, To;
+			const TSharedPtr<FJsonObject> K = V->Type == EJson::Object ? V->AsObject() : nullptr;
+			FString Vol, From, To;
+			if (V->Type == EJson::String) Vol = V->AsString();
+			else if (K.IsValid()) K->TryGetStringField(TEXT("volume"), Vol);
+			const float Push = K.IsValid() ? float(Num(K, TEXT("push"), 0.0)) : 0.f;
+			if (!Vol.IsEmpty())
+			{
+				if (const FWWOShellVolume* Found = FindVolume(FName(*Named(Vol)))) Keep.Add({ *Found, Push, false });
+				else ++Missing;
+				continue;
+			}
 			if (!K.IsValid() || !K->TryGetStringField(TEXT("from"), From)) continue;
 			if (!K->TryGetStringField(TEXT("to"), To)) To = From;
 			const FWWOShellPoint* A = FindAnchorPoint(FName(*Named(From)));
 			const FWWOShellPoint* B = FindAnchorPoint(FName(*Named(To)));
-			if (A && B) Keep.Add({ A->RefP, B->RefP, float(Num(K, TEXT("radius"), 6.0)), float(Num(K, TEXT("push"), 0.0)) });
+			if (!A || !B) { ++Missing; continue; }
+			FWWOShellVolume Cap;
+			Cap.A = A->RefP;
+			Cap.B = B->RefP;
+			Cap.Radii = FVector(Num(K, TEXT("radius"), 6.0));
+			Keep.Add({ Cap, Push, false });
 		}
+		for (const FWWOShellVolume* V : Obstacles) Keep.Add({ *V, 4.f, true });
 		const bool bCap = !MeshName.Contains(TEXT("Mycelium")); // its gills light the mycelium round it
 		for (int32 i = 0; i < Spots.Num(); ++i)
 		{
@@ -604,31 +778,43 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 					return FTransform(Q, At + Nn * Off.X, FVector(ScC));
 				};
 				FTransform Xf = Place(Pc, Nc);
-				auto Clashes = [&](const FTransform& X) -> const FCapsule*
+				auto Clashes = [&](const FTransform& X) -> const FKeep*
 				{
-					for (const FCapsule& K : Keep)
+					for (const FKeep& K : Keep)
 					{
-						for (int32 v = 0; v < Shape->V.Num(); v += 3)
+						for (int32 v = 0; v < Shape->V.Num(); v += 3) if (K.V.Contains(X.TransformPosition(Shape->V[v]))) return &K;
+						// A thin obstacle (an antenna) can pass through a big triangle between its corners: its axis is tested too.
+						if (!K.bObstacle || K.V.Kind != FWWOShellVolume::Capsule) continue;
+						const FTransform Inv = X.Inverse();
+						const FVector A = Inv.TransformPosition(K.V.A), B = Inv.TransformPosition(K.V.B);
+						if (!Shape->Bounds.ExpandBy(K.V.Radii.X / FMath::Max(float(X.GetScale3D().X), 0.01f)).Intersect(FBox(TArray<FVector>{ A, B }))) continue;
+						const TArray<int32>& T = Shape->Tris[0];
+						for (int32 t = 0; t + 2 < T.Num(); t += 3)
 						{
-							const FVector W = X.TransformPosition(Shape->V[v]);
-							if (FVector::DistSquared(W, OnSegment(W, K.A, K.B)) < K.Radius * K.Radius) return &K;
+							FVector Hit, HitN;
+							if (FMath::SegmentTriangleIntersection(A, B, Shape->V[T[t]], Shape->V[T[t + 1]], Shape->V[T[t + 2]], Hit, HitN)) return &K;
 						}
 					}
 					return nullptr;
 				};
 				bool bKeep = true;
-				if (const FCapsule* K = Clashes(Xf))
+				const FKeep* Hit = Clashes(Xf);
+				if (Hit)
 				{
 					bKeep = false;
-					for (float Back = 1.f; Back <= K->Push; Back += 1.f)
+					// Away from an obstacle (over the surface, from where the piece's middle is), else back along its own -X.
+					const FVector Mid = Xf.TransformPosition(Shape->Bounds.GetCenter());
+					const FVector Way = Hit->bObstacle ? Tangent(Nc, Hit->V.Away(Mid)) : -Tangent(Nc, UpWant);
+					for (float Back = 1.f; Back <= Hit->Push; Back += 1.f)
 					{
 						FVector Pb = Pc, Nb = Nc;
-						SurfaceNow().Walk(Pb, Nb, -Tangent(Nc, UpWant), Back, &Bc);
+						SurfaceNow().Walk(Pb, Nb, Way, Back, &Bc);
 						Xf = Place(Pb, Nb);
 						if (!Clashes(Xf)) { bKeep = true; break; }
 					}
 				}
-				if (!bKeep) { ++KeptOff; continue; }
+				if (Hit && Hit->bObstacle) ++(bKeep ? ObstaclePushed : ObstacleLeftOut);
+				if (!bKeep) { KeptOff += Hit->bObstacle ? 0 : 1; continue; }
 				VinesNow().KitPiece(Bc, *Shape, Xf);
 				if (bCap) Glow.Add(FVector4(Xf.TransformPosition(Shape->Bounds.GetCenter()), FMath::Max(Shape->Bounds.GetExtent().GetMax() * ScC, 4.0)));
 			}
@@ -648,7 +834,7 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 			return;
 		}
 		FWWOVineLine Line;
-		if (!VineLine(O, Named, Line)) { ++Missing; return; }
+		if (!VineLine(O, Named, Sign, Line)) { ++Missing; return; }
 		Later.Add([&, Line, St, Seed, Sign]() { VinesNow().Net(Line, St, SurfaceNow(), Sign, Glow, Seed); });
 	};
 	auto Section = [&](const FString& Name)
@@ -758,8 +944,9 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 		KitTris = Vines->KitTris;
 		NetTris = Vines->NetTris;
 	}
-	UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts for %s (%s) on %s, %s, %s, %s: %d pieces in %d meshes, %d anchors or paths missing, %d kept off the face, vines %d triangles rigid + %d in %d joint stations (kit pieces %d, mycelium %d), %.2f ms"),
+	UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts for %s (%s) on %s, %s, %s, %s: %d pieces in %d meshes, %d anchors or paths missing, %d kept off the face, vines %d triangles rigid + %d in %d joint stations (kit pieces %d, mycelium %d), seated %d (mean gap %.2f -> %.2f cm), obstacles %d: %d pieces pushed, %d left out, %d net knots left out, %d vine points inside, %.2f ms"),
 		*GetOwner()->GetName(), *AnchorFlora.ToString(), *Key, *WornParts[ShellHead].ToString(), *WornParts[ShellCore].ToString(),
 		*WornParts[ShellArms].ToString(), *WornParts[ShellLegs].ToString(), Pieces, AnchorParts.Num(), Missing, KeptOff, VineTris, JointTris,
-		VineJoints ? VineJoints->Stations.Num() : 0, KitTris, NetTris, (FPlatformTime::Seconds() - Started) * 1000.0);
+		VineJoints ? VineJoints->Stations.Num() : 0, KitTris, NetTris, Seated, Seated ? SeatGapBefore / Seated : 0.f, Seated ? SeatGapAfter / Seated : 0.f,
+		Obstacles.Num(), ObstaclePushed, ObstacleLeftOut, Vines ? Vines->KnotsBlocked : 0, VineInObstacles, (FPlatformTime::Seconds() - Started) * 1000.0);
 }

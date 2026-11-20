@@ -162,6 +162,11 @@ PATHS = {
         "wrist_ring_l": P(ring=dict(bone="lowerarm_l", t=0.88, n=8), closed=True, kind="ring", sided=True),
         "upperarm_coil_l": P(UPPERARM_COIL, sided=True, kind="spiral", from_seam="seam_shoulder_l"),  # 1.5 turns to the elbow
         "forearm_coil_l":  P(FOREARM_COIL, sided=True, kind="spiral"),                                   # 2.5 turns elbow to wrist
+        # A line down the arm's back (arm_line runs down its outside)
+        "arm_back_line_l":  P(["@seam_shoulder_l", W("upperarm_l", 0.2, {"back": 1, "outer": 0.6}, perp=True),
+                               W("upperarm_l", 0.55, "back", perp=True), W("lowerarm_l", 0.08, "back", perp=True),
+                               W("lowerarm_l", 0.5, "back", perp=True), W("lowerarm_l", 0.88, "back", perp=True)],
+                              sided=True, from_seam="seam_shoulder_l"),
     },
     "Legs": {
         "leg_line_l":   P(["@seam_hip_l", "thigh_outer_l", "shin_outer_l", "ankle_outer_l"], sided=True,
@@ -170,8 +175,28 @@ PATHS = {
         "thigh_ring_l": P(ring=dict(bone="thigh_l", t=0.5, n=8), closed=True, kind="ring", sided=True),
         "ankle_ring_l": P(ring=dict(bone="calf_l", t=0.9, n=8), closed=True, kind="ring", sided=True),
         "shin_coil_l":  P(SHIN_COIL, sided=True, kind="spiral"),                                         # 2 turns knee to ankle
+        # A line down the leg's back (leg_line runs down its outside)
+        "leg_back_line_l": P(["@seam_hip_l", W("thigh_l", 0.15, {"back": 1, "outer": 0.7}, perp=True),
+                              W("thigh_l", 0.5, "back", perp=True), W("calf_l", 0.05, "back", perp=True),
+                              W("calf_l", 0.45, "back", perp=True), W("calf_l", 0.88, "back", perp=True)],
+                             sided=True, from_seam="seam_hip_l"),
     },
 }
+
+# Keep-clear VOLUMES: named per slot, so every part of the slot has them (a recipe's keep_off can name one).
+# Each is made from the part's own wrap. 'face': a half-ellipsoid over the front of the head (the wrap facing
+# the front by more than 'facing', from 'lo' cm below the jaw anchor to 'hi' cm above the brow anchor (- : below
+# it): the visor, eyes, goggles, mouth), its flat side as deep as the face, 'pad' cm bigger all round than the face.
+VOLUMES = {"Head": {"face": dict(kind="face", facing=0.6, lo=2.0, hi=-1.0, pad=1.5)}}
+
+# OBSTACLES: optional per part (other parts of the slot need not have them): thin bits standing out of the
+# part (an antenna, a cable), which every recipe keeps its pieces off. Found automatically: the bits of the
+# part's voxel solid thinner than 'thick' cm (a ball that big cannot reach into them) and more than 'out' cm
+# from the rest, in clumps at least 'min_len' cm long, each as a capsule (radius 'pad' cm more than the clump's).
+# Only for the slots in 'slots'. EXTRA: hand-made ones per part, {part: {name: dict(a=[x, y, z], b=[x, y, z],
+# radius=cm, bone=name)}} (rig cm), for anything detection misses.
+OBSTACLES = dict(thick=4.0, out=1.5, min_len=3.0, pad=0.6, slots=("Head",))
+OBSTACLES_EXTRA = {}
 
 # The wrap: voxel size, how wide a gap it closes (cm), and smoothing.
 WRAP = dict(voxel=1.25, close=3.0, smooth_iters=12, smooth_lambda=0.6)

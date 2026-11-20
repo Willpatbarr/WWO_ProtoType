@@ -168,6 +168,10 @@ public:
 	// The line resampled every Step cm (per-point values carried along).
 	static FWWOVineLine Resample(const FWWOVineLine& In, float Step);
 
+	// Where the net may not go (the worn parts' obstacles, FWWOShellVolume): its knots there are left out.
+	TFunction<bool(const FVector&)> Blocked;
+	int32 KnotsBlocked = 0; // for the log
+
 	TMap<FName, FWWOVineMesh> Rigid; // by bone
 	TSharedPtr<FWWOVineJoints> Joints;
 	int32 Pieces = 0;

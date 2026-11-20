@@ -7,6 +7,7 @@
 #include "Player/WWOAutoTest.h"
 #include "Player/WWOPlayerController.h"
 #include "Player/WWOTestRun.h"
+#include "WWOSwitches.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
 #include "Characters/WWOBodyComponent.h"
@@ -114,7 +115,13 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 	{
 		const float At = CloseAt + 0.5f + k * CloseEvery;
 		if (Crossed(At)) Equip(GraftLoadouts[k]);
-		if (Crossed(At + 0.7f)) { Turn(-35.f); Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close"), k, GraftLoadouts[k].Name)); }
+		if (Crossed(At + 0.7f))
+		{
+			float CloseYaw = -35.f; // -WWOGraftsCloseYaw: another angle (90: from the robot's side)
+			WWOSwitches::Value(TEXT("WWOGraftsCloseYaw="), CloseYaw);
+			Turn(CloseYaw);
+			Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close"), k, GraftLoadouts[k].Name));
+		}
 		if (Crossed(At + 1.2f)) { Turn(150.f); Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close_back"), k, GraftLoadouts[k].Name)); }
 	}
 	const float EndAt = CloseAt + 0.5f + NumGraftLoadouts * CloseEvery + 0.3f;

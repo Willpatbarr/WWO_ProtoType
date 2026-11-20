@@ -362,12 +362,14 @@ void FWWOGraftBuilder::OnOval(const FVector& A, const FVector& B, const FVector&
 	OutNormal = (Side * FMath::Cos(Angle) / Rx + Front * FMath::Sin(Angle) / Ry).GetSafeNormal();
 }
 
-void FWWOGraftBuilder::SeedPod(const FVector& Top, float Length, float Width, float Stalk)
+void FWWOGraftBuilder::SeedPod(const FVector& Top, float Length, float Width, float Stalk, const FVector& Hang)
 {
-	// A glossy orange teardrop hanging below Top on a short stalk.
-	const FVector Start = Top + Down * Stalk * Unit;
+	// A glossy orange teardrop hanging below Top on a short stalk (along Hang when given: a pod leaning on the body).
+	const FVector H = Hang.IsNearlyZero() ? Down : Hang.GetSafeNormal();
+	const FQuat Lean = FQuat::FindBetweenNormals(Down, H);
+	const FVector Start = Top + H * Stalk * Unit;
 	// Godot's little (0.004, 0, 0.003) kink, in Unreal's axes.
-	Tube({ Top, FMath::Lerp(Top, Start, 0.5f) + FVector(-0.003f, 0.004f, 0.f) * Unit, Start + Up * 0.005f * Unit }, 0.005f, false);
+	Tube({ Top, FMath::Lerp(Top, Start, 0.5f) + Lean.RotateVector(FVector(-0.003f, 0.004f, 0.f)) * Unit, Start - H * 0.005f * Unit }, 0.005f, false);
 	constexpr int32 Sides = 9, NumRings = 9;
 	TArray<TArray<FVector>> Rings;
 	for (int32 r = 0; r <= NumRings; ++r)
@@ -378,7 +380,7 @@ void FWWOGraftBuilder::SeedPod(const FVector& Top, float Length, float Width, fl
 		for (int32 s = 0; s < Sides; ++s)
 		{
 			const float Angle = UE_TWO_PI * s / Sides;
-			Ring.Add(Start + Down * T * Length * Unit + FVector(-FMath::Sin(Angle), FMath::Cos(Angle), 0.f) * Radius); // Godot (cos, 0, sin)
+			Ring.Add(Start + H * T * Length * Unit + Lean.RotateVector(FVector(-FMath::Sin(Angle), FMath::Cos(Angle), 0.f)) * Radius); // Godot (cos, 0, sin)
 		}
 	}
 	Paint = FColor::White;

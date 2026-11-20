@@ -158,8 +158,44 @@ const FWWOShellAnchorSet* WWOShellAnchors::Find(FName Part, const USkeletalMesh*
 			}
 		}
 	}
+	// Keep-clear volumes (the slot's) and obstacles (this part's own): {kind, ..., bone}.
+	auto Volumes = [&](const TCHAR* Field, TMap<FName, FWWOShellVolume>& Out)
+	{
+		const TSharedPtr<FJsonObject>* List = nullptr;
+		if (!Json->TryGetObjectField(Field, List)) return;
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& It : (*List)->Values)
+		{
+			const TSharedPtr<FJsonObject> O = It.Value->AsObject();
+			FString Kind;
+			if (!O.IsValid() || !O->TryGetStringField(TEXT("kind"), Kind)) continue;
+			FWWOShellVolume V;
+			V.Bone = NameOr(O, TEXT("bone"));
+			if (Kind == TEXT("capsule"))
+			{
+				V.Kind = FWWOShellVolume::Capsule;
+				V.A = FromRig(Vec3(O, TEXT("a")));
+				V.B = FromRig(Vec3(O, TEXT("b")));
+				double R = 1.0;
+				O->TryGetNumberField(TEXT("radius"), R);
+				V.Radii = FVector(R);
+			}
+			else if (Kind == TEXT("half_ellipsoid"))
+			{
+				V.Kind = FWWOShellVolume::HalfEllipsoid;
+				V.A = FromRig(Vec3(O, TEXT("p")));
+				V.N = FromRig(Vec3(O, TEXT("n"))).GetSafeNormal();
+				V.Up = FromRig(Vec3(O, TEXT("up"))).GetSafeNormal();
+				V.Radii = Vec3(O, TEXT("radii")); // across, up, out: lengths, no axes to flip
+			}
+			else continue;
+			Out.Add(FName(*It.Key), V);
+		}
+	};
+	Volumes(TEXT("volumes"), Set->Volumes);
+	Volumes(TEXT("obstacles"), Set->Obstacles);
 	if (Missing > 0) UE_LOG(LogWWO, Warning, TEXT("Shell anchors: %s: %d points name a bone %s lacks; left out"), *Part.ToString(), Missing, *Mesh->GetName());
-	UE_LOG(LogWWO, Display, TEXT("Shell anchors: %s: %d anchors, %d paths, %d surface samples"), *Part.ToString(), Set->Anchors.Num(), Set->Paths.Num(), Set->Surface.Num());
+	UE_LOG(LogWWO, Display, TEXT("Shell anchors: %s: %d anchors, %d paths, %d surface samples, %d volumes, %d obstacles"), *Part.ToString(),
+		Set->Anchors.Num(), Set->Paths.Num(), Set->Surface.Num(), Set->Volumes.Num(), Set->Obstacles.Num());
 	return Cache.Add(Key, MoveTemp(Set)).Get();
 }
 
@@ -189,6 +225,34 @@ void WWOShellAnchors::Sample(const FWWOShellPath& Path, const USkeletalMesh* Mes
 		const FVector N = FMath::Lerp(A.RefN, B.RefN, T);
 		Out.Add(MakePoint(Mesh, T < 0.5f ? A.Bone : B.Bone, P, N, B.RefP - A.RefP, 0.f));
 	}
+}
+
+// --- FWWOShellVolume -----------------------------------------------------------------------------
+
+bool FWWOShellVolume::Contains(const FVector& P, float Grow) const
+{
+	if (Kind == Capsule)
+	{
+		const FVector AB = B - A;
+		const double L2 = AB.SizeSquared();
+		const FVector On = L2 < UE_SMALL_NUMBER ? A : A + AB * FMath::Clamp(FVector::DotProduct(P - A, AB) / L2, 0.0, 1.0);
+		return FVector::DistSquared(P, On) < FMath::Square(Radii.X + Grow);
+	}
+	const FVector D = P - A;
+	const double Out = FVector::DotProduct(D, N);
+	if (Out < -Grow) return false; // behind its flat side
+	const FVector Across = FVector::CrossProduct(Up, N);
+	return FMath::Square(FVector::DotProduct(D, Across) / (Radii.X + Grow)) + FMath::Square(FVector::DotProduct(D, Up) / (Radii.Y + Grow))
+		+ FMath::Square(FMath::Max(Out, 0.0) / (Radii.Z + Grow)) < 1.0;
+}
+
+FVector FWWOShellVolume::Away(const FVector& P) const
+{
+	if (Kind == HalfEllipsoid) return (P - A).GetSafeNormal(UE_SMALL_NUMBER, N);
+	const FVector AB = B - A;
+	const double L2 = AB.SizeSquared();
+	const FVector On = L2 < UE_SMALL_NUMBER ? A : A + AB * FMath::Clamp(FVector::DotProduct(P - A, AB) / L2, 0.0, 1.0);
+	return (P - On).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 }
 
 // --- FWWOShellSurface ----------------------------------------------------------------------------
@@ -263,6 +327,102 @@ void FWWOShellSurface::Walk(FVector& P, FVector& N, const FVector& Dir, float Di
 		P += D * Step;
 		Project(P, N, OutBone);
 	}
+}
+
+bool FWWOShellSurface::Seat(const TArray<FVector>& Under, const FVector& Pivot, const FVector& Out0, float Clear, float MaxTiltDeg,
+	const FVector& OnlyAxis, FSeat& Result) const
+{
+	Result = FSeat();
+	const FVector Out = Out0.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	// The gap under each point (along the surface's normal there), with that normal; false where it finds no surface.
+	TArray<float> Gap;
+	TArray<FVector> Norm;
+	TArray<bool> Ok;
+	auto Measure = [&](float& Mean, float& Max, float& Min)
+	{
+		Gap.SetNum(Under.Num());
+		Norm.SetNum(Under.Num());
+		Ok.SetNum(Under.Num());
+		int32 Count = 0;
+		Mean = 0.f; Max = -1e9f; Min = 1e9f;
+		const FVector OutNow = Result.Turn.RotateVector(Out);
+		for (int32 i = 0; i < Under.Num(); ++i)
+		{
+			const FVector Q = Result.Apply(Under[i], Pivot);
+			FVector S = Q, Ns = OutNow;
+			Ok[i] = Project(S, Ns) && FVector::DotProduct(Ns, OutNow) > 0.2;
+			if (!Ok[i]) continue;
+			Gap[i] = FVector::DotProduct(Q - S, Ns);
+			Norm[i] = Ns;
+			Mean += Gap[i];
+			Max = FMath::Max(Max, Gap[i]);
+			Min = FMath::Min(Min, Gap[i]);
+			++Count;
+		}
+		if (Count) Mean /= Count;
+		return Count;
+	};
+	const int32 Need = FMath::Max(2, Under.Num() / 2);
+	if (Measure(Result.MeanBefore, Result.MaxBefore, Result.MinBefore) < Need) return false;
+	const FVector Only = OnlyAxis.GetSafeNormal();
+	for (int32 Round = 0; Round < 4; ++Round)
+	{
+		float Mean, Max, Min;
+		if (Measure(Mean, Max, Min) < Need) break;
+		// Unknowns: small turns a, b about E1, E2 (square to Out; only E1 = OnlyAxis if given) and a move t along Out.
+		// Each point's gap changes by a (E1 x r).n + b (E2 x r).n + t (Out.n); wanted: Clear - gap.
+		const FVector OutNow = Result.Turn.RotateVector(Out);
+		const FVector E1 = Only.IsZero() ? FVector::CrossProduct(OutNow, FMath::Abs(OutNow.Z) < 0.9f ? FVector::UpVector : FVector::ForwardVector).GetSafeNormal() : Only;
+		const FVector E2 = Only.IsZero() ? FVector::CrossProduct(OutNow, E1).GetSafeNormal() : FVector::ZeroVector;
+		const FVector Center = Pivot + Result.Move;
+		double M[3][3] = {}, V[3] = {}, R2 = 0.0;
+		for (int32 i = 0; i < Under.Num(); ++i)
+		{
+			if (!Ok[i]) continue;
+			const FVector r = Result.Apply(Under[i], Pivot) - Center;
+			const double J[3] = { FVector::DotProduct(FVector::CrossProduct(E1, r), Norm[i]), Only.IsZero() ? FVector::DotProduct(FVector::CrossProduct(E2, r), Norm[i]) : 0.0,
+				FVector::DotProduct(OutNow, Norm[i]) };
+			const double Want = Clear - Gap[i];
+			for (int32 a = 0; a < 3; ++a) { V[a] += J[a] * Want; for (int32 b = 0; b < 3; ++b) M[a][b] += J[a] * J[b]; }
+			R2 += r.SizeSquared();
+		}
+		// A little damping on the turns (a footprint along a line cannot say how to turn about that line).
+		const double Damp = 0.02 * R2 + 1e-3;
+		M[0][0] += Damp; M[1][1] += Damp; M[2][2] += 1e-3;
+		// 3x3 solve (Cramer).
+		auto Det = [](const double A[3][3]) { return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]); };
+		const double D = Det(M);
+		if (FMath::Abs(D) < 1e-12) break;
+		double X[3];
+		for (int32 c = 0; c < 3; ++c)
+		{
+			double C[3][3];
+			for (int32 a = 0; a < 3; ++a) for (int32 b = 0; b < 3; ++b) C[a][b] = b == c ? V[a] : M[a][b];
+			X[c] = Det(C) / D;
+		}
+		const FQuat Step = FQuat(E1, float(X[0])) * (Only.IsZero() ? FQuat(E2, float(X[1])) : FQuat::Identity);
+		FQuat Turn = Step * Result.Turn;
+		// No more than MaxTiltDeg from the way it was.
+		const float Tilt = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Turn.RotateVector(Out), Out), -1.0, 1.0)));
+		if (Tilt > MaxTiltDeg)
+		{
+			Turn = FQuat::Slerp(FQuat::Identity, Turn, MaxTiltDeg / Tilt);
+		}
+		Result.Turn = Turn;
+		Result.Move += OutNow * float(X[2]);
+	}
+	// Then out until nothing is under the surface.
+	for (int32 Round = 0; Round < 3; ++Round)
+	{
+		float Mean, Max, Min;
+		if (Measure(Mean, Max, Min) < Need || Min >= -0.05f) break;
+		Result.Move += Result.Turn.RotateVector(Out) * (-Min);
+	}
+	Measure(Result.MeanAfter, Result.MaxAfter, Result.MinAfter);
+	Result.Gaps.SetNum(Under.Num());
+	for (int32 i = 0; i < Under.Num(); ++i) Result.Gaps[i] = Ok[i] ? Gap[i] : NAN;
+	Result.TiltDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Result.Turn.RotateVector(Out), Out), -1.0, 1.0)));
+	return true;
 }
 
 void WWOShellAnchors::Verify(const USkeletalMesh* Mesh)

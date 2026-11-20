@@ -47,7 +47,7 @@ public:
 		float Curve = 0.3f, float Thickness = 0.022f, float Lift = 0.f, bool bCracked = true);
 	static void OnOval(const FVector& A, const FVector& B, const FVector& Side, const FVector& Front, float Rx, float Ry, float T, float Angle,
 		float Unit, FVector& OutPoint, FVector& OutNormal);
-	void SeedPod(const FVector& Top, float Length, float Width, float Stalk = 0.04f);
+	void SeedPod(const FVector& Top, float Length, float Width, float Stalk = 0.04f, const FVector& Hang = FVector::ZeroVector);
 	// --- SporeGraft ---
 	void Web(const FVector& A, const FVector& B, const FVector& Side, const FVector& Front, float Rx, float Ry,
 		FVector2D Start, float Heading, float Length, float Thickness = 0.007f, int32 Depth = 4);

@@ -182,7 +182,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestMenus` | Both menus by injected controller and keyboard input (about 30 s) | any |
 | `-WWOAutoTestBody` | Body states, your own body in third person, first-person hands (about 1 min) | `L_Arena` |
 | `-WWOAutoTestBody -WWOBodyFlora=<id>` | The same, wearing that flora for the third-person shots (its grafts on the moving body; the loadout guard puts yours back). `-WWOBodyClose`: those shots from about half as far | `L_Arena` |
-| `-WWOAutoTestGrafts` | Six loadouts in the character preview (about 25 s) | any |
+| `-WWOAutoTestGrafts` | Six loadouts in the character preview (about 25 s). `-WWOGraftsCloseYaw=<deg>`: its close-ups (35_*) from that angle instead of -35 (55: the robot's left side, to see how flush pieces sit) | any |
 | `-WWOAutoTestMaps` | Fixed camera views of the level (about 25 s) | every map |
 | `-WWOAutoTestMods` | Weapon mods and perks against the mod data | `L_TestRange` |
 | `-WWOAutoTestGuns`, `-WWOAutoTestHidden`, `-WWOAutoTestFrames` | Variants inside the mods test: gun screenshots, hidden aim assist, the newer frames and burst counts | `L_TestRange` |
@@ -223,7 +223,7 @@ Timed functions are wrapped in `WWO_PROF` (`Player/WWOProf.h`) and show as `Perf
 ### Other
 
 `-WWOTitle` forces the launch screen. `-WWOGamerTag=<name>` sets the tag for one run; `-WWONoTestTag`
-leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`, `wwo.BossWindow [team]` (FootRace: drop a boss's shield for its next window), `wwo.Shell <n>` or `wwo.Shell <head> <core> <arms> <legs>` (every robot's shell parts; `-WWOShell=`), `wwo.ShellAnchors 0|1|2` (draw the robots' graft anchors; 2 adds their paths; not in shipping builds), `wwo.AnchorGrafts 0|1` (flora grafts from the anchors, `Config/GraftRecipes.json`; -1 per model; `-WWOAnchorGrafts`), `wwo.AnchorVineJoints 0|1` (their vines posed between the two bones where they pass a joint, the default, or rigid on each bone: to see the gaps that opens; the body test logs `Vine joints on ...` with how wide those would be).
+leaves it empty. `-WWOTimeLimit=S` sets the PvP time limit. Console: `wwo.SkipWave`, `wwo.Wave <n>`, `wwo.BossWindow [team]` (FootRace: drop a boss's shield for its next window), `wwo.Shell <n>` or `wwo.Shell <head> <core> <arms> <legs>` (every robot's shell parts; `-WWOShell=`), `wwo.ShellAnchors 0|1|2` (draw the robots' graft anchors; 2 adds their paths; not in shipping builds), `wwo.AnchorGrafts 0|1` (flora grafts from the anchors, `Config/GraftRecipes.json`; -1 per model; `-WWOAnchorGrafts`), `wwo.AnchorVineJoints 0|1` (their vines posed between the two bones where they pass a joint, the default, or rigid on each bone: to see the gaps that opens; the body test logs `Vine joints on ...` with how wide those would be). Each anchor-graft build logs `anchor grafts for ...` with how many pieces were seated (and their mean gap before and after), kept off the face, and pushed or left out by the parts' obstacles; with `-LogCmds="LogWWO Verbose"` it also logs every plate's and pod's gap (`Anchor seat:` seated, `Anchor fit:` not).
 
 **Any `-WWO...` switch on the command line skips the launch screen**, and a switch containing
 `WWOAutoTest` marks the run as a test run (keybinds are not loaded or saved, the gamer tag is `tester`,

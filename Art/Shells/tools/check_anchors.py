@@ -1,6 +1,8 @@
 # Checks the graft-anchor JSON that make_anchors.py writes (plain Python 3, no Blender):
 #   python3 Art/Shells/tools/check_anchors.py
 # Exits 1 if any check fails. Mirror differences on parts listed in ASYMMETRIC are reported, not failed.
+# Anchors, paths and keep-clear 'volumes' must have the same names on every part of a slot; 'obstacles' are
+# optional (a part's own: only the parts that have them), so their names are not compared, only their shape.
 import json, math, os, sys, glob, itertools
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -44,9 +46,10 @@ for k in docs: docs[k] = load(k)
 shells = sorted({int(k[8]) for k in docs if k.startswith("SK_Shell")})
 print("files:", len(docs), "shells:", shells)
 for k in sorted(docs):
-    print("  %-22s %6.1f KB  anchors %2d  paths %2d  surface %4d" % (k, os.path.getsize(os.path.join(DIR, k + ".json")) / 1024,
+    print("  %-22s %6.1f KB  anchors %2d  paths %2d  surface %4d  volumes %d  obstacles %d" % (k, os.path.getsize(os.path.join(DIR, k + ".json")) / 1024,
                                                       len(docs[k]["anchors"]), len(docs[k]["paths"]),
-                                                      len(docs[k].get("surface", {}).get("points", []))))
+                                                      len(docs[k].get("surface", {}).get("points", [])),
+                                                      len(docs[k].get("volumes", {})), len(docs[k].get("obstacles", {}))))
 
 # 1. the same names per slot
 for slot in SLOTS:
@@ -57,7 +60,10 @@ for slot in SLOTS:
     for p in parts[1:]:
         if set(docs[p]["anchors"]) != a0: fail(p, "anchor names differ from", parts[0], set(docs[p]["anchors"]) ^ a0)
         if set(docs[p]["paths"]) != p0: fail(p, "path names differ from", parts[0], set(docs[p]["paths"]) ^ p0)
-    print("%-5s same names on all shells: %d anchors, %d paths" % (slot, len(a0), len(p0)))
+        v0 = set(docs[parts[0]].get("volumes", {}))
+        if set(docs[p].get("volumes", {})) != v0: fail(p, "volume names differ from", parts[0], set(docs[p].get("volumes", {})) ^ v0)
+    print("%-5s same names on all shells: %d anchors, %d paths, %d volumes; obstacles (optional) %s" % (slot, len(a0), len(p0),
+          len(docs[parts[0]].get("volumes", {})), [len(docs[p].get("obstacles", {})) for p in parts]))
 
 # 2. per file: unit vectors, spacing, closure, bones, header
 worst_step = (0, None); worst_unit = 0.0
@@ -87,6 +93,13 @@ for name, d in sorted(docs.items()):
         if abs(sum(segs) - p["length"]) > 0.05 * p["length"] + 0.1: fail(name, pn, "length mismatch")
         for key in ("from_seam", "to_seam"):
             if p[key] and p[key] not in docs["SK_RobotSkeleton"]["anchors"]: fail(name, pn, key, p[key], "unknown seam")
+    for vn, v in d.get("volumes", {}).items():
+        if v.get("kind") != "half_ellipsoid" or len(v.get("radii", [])) != 3 or min(v["radii"]) <= 0: fail(name, "volume", vn, "bad shape")
+        elif abs(norm(v["n"]) - 1) > 2e-3 or abs(norm(v["up"]) - 1) > 2e-3 or abs(sum(x * y for x, y in zip(v["n"], v["up"]))) > 0.02: fail(name, "volume", vn, "bad frame")
+        if v.get("bone") not in BONES[slot]: fail(name, "volume", vn, "bone", v.get("bone"), "not in", slot)
+    for on, o in d.get("obstacles", {}).items():
+        if o.get("kind") != "capsule" or not 0 < o.get("radius", 0) < 10 or not 0 < dist(o["a"], o["b"]) < 60: fail(name, "obstacle", on, "bad capsule")
+        if o.get("bone") not in BONES[slot]: fail(name, "obstacle", on, "bone", o.get("bone"), "not in", slot)
     surf = d.get("surface")
     if slot != "Skeleton":
         if not surf or not surf.get("points"): fail(name, "no surface samples")
