@@ -18,6 +18,7 @@ ASYMMETRIC = {
     "SK_Shell2_Head": "the scout head is deliberately one-sided",
     ("SK_Shell0_Core", "chest_ring"): "the base robot's torso has a one-sided component under the right arm "
                                       "(x -17..-7, z 135-145); its wrap differs left/right by up to 4 cm there",
+    ("SK_Shell0_Core", "chest_side_line_l"): "it passes the same one-sided component under the right arm as chest_ring",
 }
 STEP, STEP_TOL, JUMP, MIRROR_TOL, SEAM_TOL = 2.0, 1.0, 5.0, 1.5, 4.0
 fails, notes = [], []
@@ -43,8 +44,9 @@ for k in docs: docs[k] = load(k)
 shells = sorted({int(k[8]) for k in docs if k.startswith("SK_Shell")})
 print("files:", len(docs), "shells:", shells)
 for k in sorted(docs):
-    print("  %-22s %6.1f KB  anchors %2d  paths %2d" % (k, os.path.getsize(os.path.join(DIR, k + ".json")) / 1024,
-                                                      len(docs[k]["anchors"]), len(docs[k]["paths"])))
+    print("  %-22s %6.1f KB  anchors %2d  paths %2d  surface %4d" % (k, os.path.getsize(os.path.join(DIR, k + ".json")) / 1024,
+                                                      len(docs[k]["anchors"]), len(docs[k]["paths"]),
+                                                      len(docs[k].get("surface", {}).get("points", []))))
 
 # 1. the same names per slot
 for slot in SLOTS:
@@ -85,6 +87,13 @@ for name, d in sorted(docs.items()):
         if abs(sum(segs) - p["length"]) > 0.05 * p["length"] + 0.1: fail(name, pn, "length mismatch")
         for key in ("from_seam", "to_seam"):
             if p[key] and p[key] not in docs["SK_RobotSkeleton"]["anchors"]: fail(name, pn, key, p[key], "unknown seam")
+    surf = d.get("surface")
+    if slot != "Skeleton":
+        if not surf or not surf.get("points"): fail(name, "no surface samples")
+        else:
+            for row in surf["points"]:
+                if abs(norm(row[3:6]) - 1) > 0.01: fail(name, "surface normal not unit", row); break
+                if surf["bones"][row[6]] not in BONES[slot]: fail(name, "surface bone", surf["bones"][row[6]], "not in", slot); break
 print("worst unit-length error %.5f; worst step deviation from %.1f cm: %.2f (%s)" % (worst_unit, STEP, worst_step[0], worst_step[1]))
 
 # 3. _l/_r mirror pairs
@@ -131,16 +140,22 @@ joins = [("Core", "collar_to_shoulder_%s", "Arms", "arm_line_%s", "seam_shoulder
          ("Core", "collar_to_shoulder_%s", "Arms", "arm_spiral_%s", "seam_shoulder_%s"),
          ("Core", "collar_to_shoulder_%s", "Arms", "upperarm_coil_%s", "seam_shoulder_%s"),
          ("Core", "waist_to_hip_%s", "Legs", "leg_line_%s", "seam_hip_%s"),
-         ("Core", "waist_to_hip_%s", "Legs", "leg_spiral_%s", "seam_hip_%s")]
+         ("Core", "waist_to_hip_%s", "Legs", "leg_spiral_%s", "seam_hip_%s"),
+         ("Core", "neck_to_collar_%s", "Head", "head_to_collar_%s", "seam_neck_%s")]
 gap_worst = (0, "")
 for (cs, cp, ls, lp, sn), side in itertools.product(joins, ("l", "r")):
     for a, b in itertools.product(shells, shells):
         core = docs["SK_Shell%d_%s" % (a, cs)]["paths"][cp % side]
         limb = docs["SK_Shell%d_%s" % (b, ls)]["paths"][lp % side]
         s = seams[sn % side]["p"]
-        assert core["to_seam"] == sn % side and limb["from_seam"] == sn % side
-        e1 = dist(core["points"][-1]["p"], s); e2 = dist(limb["points"][0]["p"], s)
-        gap = dist(core["points"][-1]["p"], limb["points"][0]["p"])
+        if core.get("from_seam") == sn % side:          # the neck: the head's path ends where the core's starts
+            assert limb["to_seam"] == sn % side
+            ce, le = core["points"][0]["p"], limb["points"][-1]["p"]
+        else:
+            assert core["to_seam"] == sn % side and limb["from_seam"] == sn % side
+            ce, le = core["points"][-1]["p"], limb["points"][0]["p"]
+        e1 = dist(ce, s); e2 = dist(le, s)
+        gap = dist(ce, le)
         tag = "%s core shell %d + %s shell %d, %s: core end %.2f, limb start %.2f, gap %.2f" % (sn % side, a, ls, b, lp % side, e1, e2, gap)
         if max(e1, e2) > worst[0]: worst = (max(e1, e2), tag)
         if gap > gap_worst[0]: gap_worst = (gap, tag)

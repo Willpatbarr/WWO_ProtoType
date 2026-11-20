@@ -2,8 +2,9 @@
 parts' anchors and paths (Config/GraftRecipes.json, piece "mesh"), built in Blender by
 ~/Documents/WWO_Flora/tools/make_<flora>_kit.py into one folder of SM_<prefix>_<Piece>.fbx (+ kit.json).
 
-UNTESTED: written alongside Tools/import_robot_grafts.py (same Interchange pipeline and asset calls,
-with static meshes instead of skeletal ones) but never run yet.
+The game does not draw these meshes as they are: it copies their geometry into the meshes it builds per
+bone (Characters/WWOVineGraft.cpp, KitPiece), so they keep their vertices on the CPU (allow_cpu_access), as
+Tools/import_vine_pieces.py's leaves do.
 
 Settings (environment variables, VeilSpore defaults):
   WWO_KIT_FLORA      the flora's folder name under /Game/WWO/Flora (default VeilSpore)
@@ -16,10 +17,11 @@ Settings (environment variables, VeilSpore defaults):
 Run headless from the project folder:
   UnrealEditor-Cmd WhatWasOurs.uproject -run=pythonscript -script=<abs path>/Tools/import_graft_kit.py -unattended -nullrhi
 
-- Meshes: /Game/WWO/Flora/<Flora>/Kit/SM_<prefix>_<Piece>, static, no collision needed (cosmetic),
-  their one slot given the flora's material by slot name. A piece's local frame (from Blender, default
-  FBX axes): origin on the surface, X = the anchor's up, Z = out of the surface, so the game places it
-  with FRotationMatrix::MakeFromXZ(Up, N).
+- Meshes: /Game/WWO/Flora/<Flora>/Kit/SM_<prefix>_<Piece>, static, one LOD, no Nanite, no collision
+  (cosmetic), vertices kept on the CPU, their one slot given the flora's material by slot name. A piece's
+  local frame (from Blender, default FBX axes): origin on the surface, X = the anchor's up, Z = out of the
+  surface, so the game places it with FRotationMatrix::MakeFromXZ(Up, N). Blender's Y comes in mirrored
+  (Unreal's Y = -Blender's); the log's bounds show it, to compare with kit.json's bounds_min/max_cm.
 - Writes Tools/import_graft_kit.log. Safe to rerun: each mesh is rebuilt in place.
 """
 import os
@@ -65,11 +67,12 @@ def mesh_options():
     meshes = p.get_editor_property("mesh_pipeline")
     meshes.set_editor_property("import_static_meshes", True)
     meshes.set_editor_property("import_skeletal_meshes", False)
-    for prop, value in (("combine_static_meshes", True), ("collision", False)):
-        try:  # names differ between engine versions; neither matters for the result
+    for prop, value in (("combine_static_meshes", True), ("collision", False), ("generate_collision", False),
+                        ("import_collision", False)):
+        try:  # names differ between engine versions; none matters for the result
             meshes.set_editor_property(prop, value)
-        except Exception as e:  # noqa: BLE001
-            log("mesh pipeline %s: %s" % (prop, e))
+        except Exception:  # noqa: BLE001
+            pass
     materials = p.get_editor_property("material_pipeline")
     materials.set_editor_property("import_materials", False)
     try:
@@ -104,6 +107,14 @@ def import_piece(file, mats):
     eal.duplicate_asset(mesh.get_path_name(), dest)
     eal.delete_directory(scratch)
     out = eal.load_asset(dest)
+    out.set_editor_property("allow_cpu_access", True)  # the game reads the vertices to build its meshes
+    try:
+        nanite = out.get_editor_property("nanite_settings")
+        nanite.set_editor_property("enabled", False)
+        out.set_editor_property("nanite_settings", nanite)
+    except Exception as e:  # noqa: BLE001
+        log("%s nanite: %s" % (name, e))
+    out.set_editor_property("body_setup", None)
     # The flora's material by slot name.
     slots, missing = [], []
     for slot in out.get_editor_property("static_materials"):
@@ -118,7 +129,10 @@ def import_piece(file, mats):
     eal.save_loaded_asset(out)
     got = [str(s.get_editor_property("material_interface").get_name()) if s.get_editor_property("material_interface") else None
            for s in eal.load_asset(dest).get_editor_property("static_materials")]
-    log("%s: %d slots %s, missing %s, bounds %s" % (name, len(slots), got, missing, out.get_bounds().box_extent))
+    box = out.get_bounding_box()
+    lo, hi = box.min, box.max
+    log("%s: %d slots %s, missing %s, LODs %d, %d triangles, bounds (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f) cm" % (
+        name, len(slots), got, missing, out.get_num_lods(), out.get_num_triangles(0), lo.x, lo.y, lo.z, hi.x, hi.y, hi.z))
     return out
 
 

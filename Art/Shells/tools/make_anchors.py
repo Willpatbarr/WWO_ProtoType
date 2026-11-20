@@ -8,6 +8,8 @@
 # Each part gets a temporary closed 'wrap' (the part plus the skeleton pieces on the same bones, voxelised,
 # closed over its gaps and smoothed: a shrink-wrap). Anchors are ray hits on the wrap; paths are shortest
 # lines over it. Space: the rig file's, in cm (x = the robot's left, -y = front, z = up), bind pose.
+# Each part's JSON also carries 'surface': the wrap itself, thinned to one point per SURFACE_CELL cm cube (with
+# its normal and bone), so the game can put things on the part between its anchors and paths (FWWOShellSurface).
 import bpy, bmesh, sys, os, json, math, heapq, importlib, re
 import numpy as np
 from mathutils import Vector
@@ -29,6 +31,7 @@ RENDERS = os.path.join(SHELLS, "renders", "anchors")
 os.makedirs(OUT, exist_ok=True); os.makedirs(RENDERS, exist_ok=True)
 WARN = []
 RELAX = 120          # string-pull iterations on the 1 cm path points
+SURFACE_CELL = 2.0   # cm: the thinned wrap written as 'surface'
 
 
 def log(*a): print("WWO", *a, flush=True)
@@ -459,6 +462,22 @@ def run():
     return parts, seam, results, wraps
 
 
+def surface(ws):
+    """The wraps thinned to one vertex per SURFACE_CELL cube (the one nearest its centre): (bones, rows)."""
+    bones, rows = [], []
+    for w in ws:
+        key = np.floor(w.V / SURFACE_CELL).astype(int)
+        off = np.linalg.norm(w.V / SURFACE_CELL - (key + 0.5), axis=1)
+        order = np.lexsort((off, key[:, 2], key[:, 1], key[:, 0]))
+        k = key[order]
+        first = np.ones(len(order), bool); first[1:] = np.any(k[1:] != k[:-1], axis=1)
+        for i in order[first]:
+            b = str(w.B[i])
+            if b not in bones: bones.append(b)
+            rows.append([round(float(x), 1) for x in w.V[i]] + [round(float(x), 3) for x in unit(w.N[i])] + [bones.index(b)])
+    return bones, rows
+
+
 # ---------- JSON ----------
 def r3(v): return [round(float(x), 3) for x in v]
 def r4(v): return [round(float(x), 4) for x in v]
@@ -477,13 +496,15 @@ def dump(obj, ind=0):
     return "[\n" + ",\n".join(pad + dump(x, ind + 1) for x in obj) + "\n" + " " * ind + "]"
 
 
-def write(name, slot, anchors, paths):
+def write(name, slot, anchors, paths, surf=None):
     doc = {"part": name, "shell": SHELL if slot != "Skeleton" else None, "slot": slot, "space": "blender_rig_cm",
            "anchors": {k: dict(p=r3(a["p"]), n=r4(a["n"]), up=r4(a["up"]), size=round(float(a["size"]), 2), bone=a["bone"])
                        for k, a in anchors.items()},
            "paths": {k: dict(closed=bool(p["closed"]), length=round(p["length"], 2), from_seam=p["from_seam"], to_seam=p["to_seam"],
                              points=[dict(p=r3(q["p"]), n=r4(q["n"]), bone=q["bone"]) for q in p["points"]])
                      for k, p in paths.items()}}
+    if surf:
+        doc["surface"] = {"cell": SURFACE_CELL, "bones": surf[0], "points": surf[1]}
     path = os.path.join(OUT, name + ".json")
     with open(path, "w") as f: f.write(dump(doc) + "\n")
     log("wrote", path, os.path.getsize(path) // 1024, "KB")
@@ -558,7 +579,7 @@ def render(parts, seam, results, wraps, show_wraps):
 if __name__ == "__main__":
     parts, seam, results, wraps = run()
     for slot, (A, Pa) in results.items():
-        write("SK_Shell%d_%s" % (SHELL, slot), slot, A, Pa)
+        write("SK_Shell%d_%s" % (SHELL, slot), slot, A, Pa, surface([wraps[p] for p, _ in PIECES[slot]]))
     if WHICH == "base":
         write("SK_RobotSkeleton", "Skeleton", seam, {})
     # seam joins in this file (the cross-shell check is check_anchors.py)

@@ -11,17 +11,22 @@
 // elbow, a knee, a shoulder, the spine) would open a gap there if each side were rigid on its bone, so a few cm
 // either side of the change are a joint section instead (Joints): one mesh in the model's component space whose
 // rings are posed every frame between the two bones' movements, blended along it (FWWOVineJoints::Update).
+//
+// VeilSpore uses the same meshes: its kit pieces (static meshes, Tools/import_graft_kit.py) copied in where the
+// recipe places them (KitPiece), and its mycelium, a net of thin strands grown over the surface along a line
+// or round a spot (Net), whose strands cross joints like a vine does. Both in its one atlas material (Fungus).
 
 #include "CoreMinimal.h"
 #include "ProceduralMeshComponent.h"
 
 class USkeletalMesh;
 class USkeletalMeshComponent;
+struct FWWOShellSurface;
 
 // One mesh's geometry, by material.
 struct FWWOVineMesh
 {
-	enum ESection { Bark, Core, Leaf, Crystal, Stem, NumSections };
+	enum ESection { Bark, Core, Leaf, Crystal, Stem, Fungus, NumSections };
 	struct FSection
 	{
 		TArray<FVector> V, N;
@@ -73,13 +78,30 @@ struct FWWOVineJoints
 	void Report() const; // logs the widest gaps the joint sections closed and their cost (on Stop; in the body test every 1000 updates)
 };
 
-// One leaf's geometry (a static mesh's, copied): along +X from its stalk's base, top +Z; Tris[0] the blade, [1] the stalk.
+// A static mesh's geometry, copied (its LOD 0). A leaf: along +X from its stalk's base, top +Z; Tris[0] the blade,
+// [1] the stalk (its VV_Stem slot). A kit piece: everything in Tris[0].
 struct FWWOLeafShape
 {
 	TArray<FVector> V, N, T;
 	TArray<FVector2D> UV;
 	TArray<int32> Tris[2];
-	float Length = 0.f;
+	float Length = 0.f; // its furthest +X
+	FBox Bounds = FBox(ForceInit);
+};
+
+// VeilSpore's mycelium (FWWOVineGraft::Net): a net of thin strands over the surface, knots every Cell cm or so,
+// joined to their neighbours (a beta-skeleton: an irregular net with holes of many sizes), thick in the middle
+// and thin at its edge, fine roots off the edge, a knob where three or more meet.
+struct FWWONetStyle
+{
+	FVector2D Width = FVector2D(5.f, 5.f); // cm either side of its line (its across, -/+); round a spot: X its radius
+	float Cell = 3.2f;                      // cm between knots, on average
+	FVector2D Strand = FVector2D(0.5f, 0.16f); // cm: a strand's radius in its middle, at its edge
+	float Clear = 0.05f;                    // cm: a strand's underside off the surface
+	FVector2D Taper = FVector2D(0.12f, 0.15f); // fractions of its line over which the width narrows to nothing
+	float Holes = 0.18f;                    // the share of knots left out (bigger holes here and there)
+	int32 Roots = 6;                        // fine roots off its edge
+	float Glow = 1.f;                       // how much it glows near the caps (the atlas's 'net' island: thickness x glow)
 };
 
 // A vine's line over the parts: points on the surface (reference pose, mesh space), the way out there, the bone
@@ -132,12 +154,24 @@ public:
 	// times round, on an oval Radii cm (X: toward Outward, Y: across), starting at Phase radians from Outward.
 	static void BoneWrap(const USkeletalMesh* Mesh, FName Bone, FName ToBone, float From, float To, float Turns, float Phase,
 		const FVector2D& Radii, const FVector& Outward, FWWOVineLine& Out);
+	// A static mesh's geometry (its LOD 0, which it must keep on the CPU), read once a run. Null if it has none.
+	static const FWWOLeafShape* MeshShape(const FString& ObjectPath);
+	// A kit piece rigid on Bone: Shape's vertices through Xf (its frame and scale in the mesh's reference pose), in Fungus.
+	void KitPiece(FName Bone, const FWWOLeafShape& Shape, const FTransform& Xf);
+	// Mycelium along Line (resampled every ~1 cm), Style.Width either side of it, over Surface; Sign -1 mirrors its
+	// across. Glow: points it glows near (the caps), with how far that reaches (cm).
+	void Net(const FWWOVineLine& Line, const FWWONetStyle& Style, const FWWOShellSurface& Surface, float Sign,
+		const TArray<FVector4>& Glow, int32 Seed);
+	// Mycelium round one spot (At, its normal N, on Bone), Style.Width.X cm across.
+	void NetPatch(FName Bone, const FVector& At, const FVector& N, const FWWONetStyle& Style, const FWWOShellSurface& Surface,
+		const TArray<FVector4>& Glow, int32 Seed);
 	// The line resampled every Step cm (per-point values carried along).
 	static FWWOVineLine Resample(const FWWOVineLine& In, float Step);
 
 	TMap<FName, FWWOVineMesh> Rigid; // by bone
 	TSharedPtr<FWWOVineJoints> Joints;
 	int32 Pieces = 0;
+	int32 KitTris = 0, NetTris = 0; // for the log
 
 private:
 	const USkeletalMesh* Mesh;
@@ -152,8 +186,16 @@ private:
 	void PlanJoints(const FWWOVineLine& Line, const TArray<FVector>& C);
 	// A tube through the stations' points Ring[i] (radius R[i], frame F1/F2 per station), into the rigid meshes and the
 	// joint section as each span's owner says. UV V runs VScale per cm along.
+	// RingUV: per point one UV for its whole ring (the net's lookup island) instead of round x along.
 	void Tube(FWWOVineMesh::ESection Section, const TArray<FVector>& Path, const TArray<float>& R, const TArray<FVector>& F1,
-		const TArray<FVector>& F2, int32 Sides, float VScale);
+		const TArray<FVector>& F2, int32 Sides, float VScale, const TArray<FVector2D>* RingUV = nullptr);
+	// One net's knots and strands (both in the mesh's reference pose), each point owned as Owner says.
+	// A knot: on the surface (P, N), its place in the net's own plane (Q: along x across, or round a spot), how
+	// near its edge (0 the middle, 1 the edge), the way out of the net there, and where along its line it is.
+	struct FNetKnot { FVector P, N, Out; FVector2D Q; float Edge = 0.f, Along = 0.f; FStationOwner Own; };
+	void NetBuild(const TArray<FNetKnot>& Knots, const FWWONetStyle& Style, const FWWOShellSurface& Surface,
+		const TArray<FVector4>& Glow, FRandomStream& R, const TFunctionRef<FStationOwner(float Along)> OwnerAt);
+	int32 FungusTris() const;
 	void Leaf(FName Bone, const FVector& At, const FVector& Dir, const FVector& Face, float Length, int32 Kind);
 	static const FWWOLeafShape* LeafShape(int32 Kind);
 	void Tendril(FName Bone, const FVector& At, const FVector& Out, float Length);

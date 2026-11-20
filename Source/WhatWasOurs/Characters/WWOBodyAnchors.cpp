@@ -1,7 +1,9 @@
 // The body's graft anchors (the worn shell parts' anchors and paths, Characters/WWOShellAnchors.h) and the
 // grafts placed from them: a flora's pieces from Config/GraftRecipes.json, built on whatever parts are worn
-// and placed again whenever a part is swapped: procedural bark plates and seed pods (FWWOGraftBuilder), and
-// VoltVine's vines along chains of paths with their leaves, tendrils and crystal pods (FWWOVineGraft).
+// and placed again whenever a part is swapped: procedural bark plates and seed pods (FWWOGraftBuilder),
+// VoltVine's vines along chains of paths with their leaves, tendrils and crystal pods (FWWOVineGraft), and
+// VeilSpore's kit pieces (static meshes: shelf fungi, its hood, caps) laid on anchors and along paths, with its
+// mycelium grown over the surface between them (FWWOVineGraft::KitPiece, Net).
 
 #include "Characters/WWOBodyComponent.h"
 #include "Characters/WWOShellAnchors.h"
@@ -155,6 +157,45 @@ namespace
 	bool IsVinePiece(const FString& Piece)
 	{
 		return Piece == TEXT("vine") || Piece == TEXT("bone_wrap") || Piece == TEXT("crystal") || Piece == TEXT("leaf_fan");
+	}
+
+	// A number or [a, b] (a number: both).
+	FVector2D NumOrPair(const TSharedPtr<FJsonObject>& O, const TCHAR* Field, const FVector2D& Default)
+	{
+		double V = 0.0;
+		if (O->TryGetNumberField(Field, V)) return FVector2D(V, V);
+		return Pair(O, Field, Default);
+	}
+
+	// VeilSpore's mycelium from its placement (FWWONetStyle).
+	FWWONetStyle NetStyle(const TSharedPtr<FJsonObject>& O)
+	{
+		FWWONetStyle St;
+		St.Width = NumOrPair(O, TEXT("width"), St.Width);
+		if (O->HasField(TEXT("size"))) St.Width = FVector2D(Num(O, TEXT("size"), 8.0));
+		St.Cell = FMath::Max(Num(O, TEXT("cell"), St.Cell), 1.5);
+		St.Strand = Pair(O, TEXT("strand"), St.Strand);
+		St.Clear = Num(O, TEXT("clear"), St.Clear);
+		St.Taper = Pair(O, TEXT("taper"), St.Taper);
+		St.Holes = FMath::Clamp(Num(O, TEXT("holes"), St.Holes), 0.0, 0.6);
+		St.Roots = int32(Num(O, TEXT("roots"), St.Roots));
+		St.Glow = Num(O, TEXT("glow"), St.Glow);
+		return St;
+	}
+
+	// The point on segment A-B nearest P.
+	FVector OnSegment(const FVector& P, const FVector& A, const FVector& B)
+	{
+		const FVector AB = B - A;
+		const double L2 = AB.SizeSquared();
+		return L2 < UE_SMALL_NUMBER ? A : A + AB * FMath::Clamp(FVector::DotProduct(P - A, AB) / L2, 0.0, 1.0);
+	}
+
+	// Up made square to N (any square direction if it runs along N).
+	FVector Tangent(const FVector& N, const FVector& Up)
+	{
+		FVector U = Up - N * FVector::DotProduct(Up, N);
+		return U.Normalize() ? U : FVector::CrossProduct(N, FMath::Abs(N.Z) < 0.9f ? FVector::UpVector : FVector::ForwardVector).GetSafeNormal();
 	}
 }
 
@@ -425,6 +466,191 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 				Pair(O, TEXT("size"), FVector2D(11.0, 14.0)), Num(O, TEXT("down"), 0.25));
 		}
 	};
+	// VeilSpore's pieces: static meshes from the flora's 'kit' folder, placed over the worn parts' surface (their
+	// wraps' samples and anchors, FWWOShellSurface), and its mycelium, grown once every cap is placed (it glows
+	// near them).
+	FString Kit;
+	R->TryGetStringField(TEXT("kit"), Kit);
+	TUniquePtr<FWWOShellSurface> Surface;
+	auto SurfaceNow = [&]() -> const FWWOShellSurface&
+	{
+		if (!Surface)
+		{
+			Surface = MakeUnique<FWWOShellSurface>();
+			for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+			{
+				const FWWOShellAnchorSet* Set = WornAnchors(Slot);
+				if (!Set) continue;
+				for (const FWWOShellSurface::FSample& P : Set->Surface) Surface->Add(P);
+				for (const TPair<FName, FWWOShellPoint>& It : Set->Anchors) Surface->Add(It.Value);
+			}
+			Surface->Finish();
+		}
+		return *Surface;
+	};
+	TArray<FVector4> Glow;           // each cap's gills (where, how far their light reaches the mycelium)
+	TArray<TFunction<void()>> Later; // the mycelium
+	int32 KeptOff = 0;               // pieces left out to keep the face clear
+	// One kit piece (or one per spot along a path), on one side.
+	auto PlaceMesh = [&](const TSharedPtr<FJsonObject>& O, const TFunctionRef<FString(const FString&)> Named, float Sign)
+	{
+		FString MeshName, AnchorName, PathName, UpMode;
+		O->TryGetStringField(TEXT("mesh"), MeshName);
+		const FWWOLeafShape* Shape = Kit.IsEmpty() ? nullptr : FWWOVineGraft::MeshShape(FString::Printf(TEXT("%s/%s.%s"), *Kit, *MeshName, *MeshName));
+		if (!Shape)
+		{
+			UE_LOG(LogWWO, Warning, TEXT("Graft recipes: no kit mesh '%s' in '%s'"), *MeshName, *Kit);
+			++Missing;
+			return;
+		}
+		// Where: an anchor, or along a path (every spacing_cm over 'range', or once at 'at').
+		TArray<FWWOShellPoint> Spots;
+		float SlideMax = 0.f, SizeScale = 1.f;
+		const bool bPath = !O->TryGetStringField(TEXT("anchor"), AnchorName);
+		if (!bPath)
+		{
+			const FWWOShellPoint* P = FindAnchorPoint(FName(*Named(AnchorName)));
+			if (!P) { ++Missing; return; }
+			Spots.Add(*P);
+			SlideMax = P->Size;
+			if (Flag(O, TEXT("scale_by_size"), false)) SizeScale = FMath::Clamp(P->Size / float(Num(O, TEXT("size_ref"), 5.0)), 0.6f, 1.6f);
+		}
+		else
+		{
+			O->TryGetStringField(TEXT("path"), PathName);
+			const FWWOShellPath* Path = FindPath(FName(*Named(PathName)));
+			if (!Path) { ++Missing; return; }
+			double At = 0.0;
+			const float Spacing = Num(O, TEXT("spacing_cm"), 8.0);
+			if (O->TryGetNumberField(TEXT("at"), At)) WWOShellAnchors::Sample(*Path, Mesh, 1.f, float(At), float(At), Spots);
+			else
+			{
+				const FVector Range = WWOConfig::Vec(O, TEXT("range"), FVector(0.0, 1.0, 0.0));
+				WWOShellAnchors::Sample(*Path, Mesh, Spacing, float(Range.X), float(Range.Y), Spots);
+			}
+			SlideMax = Spacing * 0.5f;
+		}
+		if (!O->TryGetStringField(TEXT("up"), UpMode)) UpMode = bPath ? TEXT("path") : TEXT("anchor");
+		const FVector Off = WWOConfig::Vec(O, TEXT("offset"));
+		const float Scale = Num(O, TEXT("scale"), 1.0) * SizeScale;
+		const FVector2D ScaleAlong = Pair(O, TEXT("scale_along"), FVector2D(1.0, 1.0));
+		const float Zig = Num(O, TEXT("zigzag_cm"), 0.0);
+		const float Pitch = Num(O, TEXT("pitch"), 0.0), Roll = Num(O, TEXT("roll"), 0.0);
+		const TSharedPtr<FJsonObject> Jit = Object(O, TEXT("jitter"));
+		const float JRoll = Jit ? Num(Jit, TEXT("roll"), 0.0) : 0.f, JPitch = Jit ? Num(Jit, TEXT("pitch"), 0.0) : 0.f;
+		const float JScale = Jit ? Num(Jit, TEXT("scale"), 0.0) : 0.f, JSlide = Jit ? Num(Jit, TEXT("slide_cm"), 0.0) : 0.f;
+		const int32 Seed = int32(Num(O, TEXT("seed"), 1.0));
+		const TSharedPtr<FJsonObject> Stack = Object(O, TEXT("stack"));
+		const int32 Count = Stack ? FMath::Clamp(int32(Num(Stack, TEXT("count"), 1.0)), 1, 8) : 1;
+		const float StepCm = Stack ? Num(Stack, TEXT("step_cm"), 4.0) : 0.f, Shrink = Stack ? Num(Stack, TEXT("shrink"), 0.8) : 1.f;
+		// keep_off: capsules (anchor 'from' to anchor 'to', 'radius' cm) no vertex may enter (the face); a piece
+		// that would is moved up to 'push' cm toward its own -X (its up reversed: the crown's back), else left out.
+		struct FCapsule { FVector A, B; float Radius, Push; };
+		TArray<FCapsule> Keep;
+		TArray<TSharedPtr<FJsonValue>> KeepList;
+		const TArray<TSharedPtr<FJsonValue>>* KeepArray = nullptr;
+		if (const TSharedPtr<FJsonObject> K = Object(O, TEXT("keep_off"))) KeepList.Add(MakeShared<FJsonValueObject>(K));
+		else if (O->TryGetArrayField(TEXT("keep_off"), KeepArray)) KeepList = *KeepArray;
+		for (const TSharedPtr<FJsonValue>& V : KeepList)
+		{
+			const TSharedPtr<FJsonObject> K = V->AsObject();
+			FString From, To;
+			if (!K.IsValid() || !K->TryGetStringField(TEXT("from"), From)) continue;
+			if (!K->TryGetStringField(TEXT("to"), To)) To = From;
+			const FWWOShellPoint* A = FindAnchorPoint(FName(*Named(From)));
+			const FWWOShellPoint* B = FindAnchorPoint(FName(*Named(To)));
+			if (A && B) Keep.Add({ A->RefP, B->RefP, float(Num(K, TEXT("radius"), 6.0)), float(Num(K, TEXT("push"), 0.0)) });
+		}
+		const bool bCap = !MeshName.Contains(TEXT("Mycelium")); // its gills light the mycelium round it
+		for (int32 i = 0; i < Spots.Num(); ++i)
+		{
+			// The same draws in the same order every time: the same loadout grows the same way on any robot.
+			FRandomStream Rs(Seed * 7919 + i * 131 + (Sign < 0.f ? 104729 : 0));
+			const float JR = Rs.FRandRange(-JRoll, JRoll), JP = Rs.FRandRange(-JPitch, JPitch), JS = Rs.FRandRange(-JScale, JScale);
+			const float SlideA = Rs.FRandRange(0.f, UE_TWO_PI), SlideD = FMath::Min(Rs.FRand() * JSlide, SlideMax);
+			const FWWOShellPoint& S = Spots[i];
+			FVector P = S.RefP, N = S.RefN;
+			FName Bone = S.Bone;
+			// Its +X: the anchor's up, the path's way (or back), or the robot's up laid into the surface.
+			const FVector UpWant = UpMode == TEXT("path_reverse") ? -S.RefUp
+				: UpMode == TEXT("world") && FMath::Abs(N.Z) < 0.9f ? FVector::UpVector : S.RefUp;
+			// Moved over the surface: the offset's up and across, the zigzag (across the path, alternately), the slide.
+			const FVector Across0 = FVector::CrossProduct(Tangent(N, UpWant), N);
+			const FVector PathAcross = FVector::CrossProduct(S.RefUp, N).GetSafeNormal();
+			const float ZigHere = (i % 2 ? -Zig : Zig) * Sign;
+			if (Off.Z != 0.0 || Off.Y != 0.0 || ZigHere != 0.f || SlideD > 0.05f)
+			{
+				const FWWOShellSurface& Sf = SurfaceNow();
+				FName Walked = Bone;
+				if (Off.Z != 0.0) Sf.Walk(P, N, Tangent(N, UpWant), float(Off.Z), &Walked);
+				if (Off.Y != 0.0) Sf.Walk(P, N, Across0, float(Off.Y) * Sign, &Walked);
+				if (ZigHere != 0.f) Sf.Walk(P, N, PathAcross, ZigHere, &Walked);
+				if (SlideD > 0.05f) Sf.Walk(P, N, Tangent(N, UpWant).RotateAngleAxisRad(SlideA, N), SlideD, &Walked);
+				if (FVector::Dist(P, S.RefP) > 0.5f) Bone = Walked;
+			}
+			const float F = Spots.Num() > 1 ? float(i) / (Spots.Num() - 1) : 0.f;
+			const float Sc = Scale * FMath::Lerp(float(ScaleAlong.X), float(ScaleAlong.Y), F) * (1.f + JS);
+			for (int32 c = 0; c < Count; ++c)
+			{
+				FVector Pc = P, Nc = N;
+				FName Bc = Bone;
+				if (c > 0) SurfaceNow().Walk(Pc, Nc, Tangent(Nc, UpWant), StepCm * c, &Bc);
+				const float ScC = Sc * FMath::Pow(Shrink, float(c));
+				// Built in its frame (X up, Z out), pitched about its Y (+: Z toward X, a shelf's rim up), rolled about Z.
+				auto Place = [&](const FVector& At, const FVector& Nn)
+				{
+					const FQuat Q = FRotationMatrix::MakeFromXZ(Tangent(Nn, UpWant), Nn).ToQuat()
+						* FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Roll + JR)) * FQuat(FVector::YAxisVector, FMath::DegreesToRadians(Pitch + JP));
+					return FTransform(Q, At + Nn * Off.X, FVector(ScC));
+				};
+				FTransform Xf = Place(Pc, Nc);
+				auto Clashes = [&](const FTransform& X) -> const FCapsule*
+				{
+					for (const FCapsule& K : Keep)
+					{
+						for (int32 v = 0; v < Shape->V.Num(); v += 3)
+						{
+							const FVector W = X.TransformPosition(Shape->V[v]);
+							if (FVector::DistSquared(W, OnSegment(W, K.A, K.B)) < K.Radius * K.Radius) return &K;
+						}
+					}
+					return nullptr;
+				};
+				bool bKeep = true;
+				if (const FCapsule* K = Clashes(Xf))
+				{
+					bKeep = false;
+					for (float Back = 1.f; Back <= K->Push; Back += 1.f)
+					{
+						FVector Pb = Pc, Nb = Nc;
+						SurfaceNow().Walk(Pb, Nb, -Tangent(Nc, UpWant), Back, &Bc);
+						Xf = Place(Pb, Nb);
+						if (!Clashes(Xf)) { bKeep = true; break; }
+					}
+				}
+				if (!bKeep) { ++KeptOff; continue; }
+				VinesNow().KitPiece(Bc, *Shape, Xf);
+				if (bCap) Glow.Add(FVector4(Xf.TransformPosition(Shape->Bounds.GetCenter()), FMath::Max(Shape->Bounds.GetExtent().GetMax() * ScC, 4.0)));
+			}
+		}
+	};
+	// VeilSpore's mycelium: along a chain of paths ('paths', as a vine's), or round an anchor; grown last.
+	auto PlaceNet = [&](const TSharedPtr<FJsonObject>& O, const TFunctionRef<FString(const FString&)> Named, float Sign)
+	{
+		const FWWONetStyle St = NetStyle(O);
+		const int32 Seed = int32(Num(O, TEXT("seed"), 1.0)) * 7919 + (Sign < 0.f ? 104729 : 0);
+		FString AnchorName;
+		if (O->TryGetStringField(TEXT("anchor"), AnchorName))
+		{
+			const FWWOShellPoint* P = FindAnchorPoint(FName(*Named(AnchorName)));
+			if (!P) { ++Missing; return; }
+			Later.Add([&, P, St, Seed]() { VinesNow().NetPatch(P->Bone, P->RefP, P->RefN, St, SurfaceNow(), Glow, Seed); });
+			return;
+		}
+		FWWOVineLine Line;
+		if (!VineLine(O, Named, Line)) { ++Missing; return; }
+		Later.Add([&, Line, St, Seed, Sign]() { VinesNow().Net(Line, St, SurfaceNow(), Sign, Glow, Seed); });
+	};
 	auto Section = [&](const FString& Name)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
@@ -447,6 +673,14 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 				if (IsVinePiece(Piece))
 				{
 					PlaceVine(O, Piece, Named, Side.Value);
+				}
+				else if (Piece == TEXT("mesh"))
+				{
+					PlaceMesh(O, Named, Side.Value);
+				}
+				else if (Piece == TEXT("mycelium"))
+				{
+					PlaceNet(O, Named, Side.Value);
 				}
 				else if (!AnchorName.IsEmpty())
 				{
@@ -474,6 +708,7 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 		Section(TEXT("grenade.") + AnchorGrenade.ToString()); // this grenade's own pieces
 	}
 	for (const FName& Id : AnchorIds) Section(Id.ToString());
+	for (const TFunction<void()>& Grow : Later) Grow();
 
 	// Each piece is hung on its bone: its vertices are in the mesh's space, so the bone's reference pose is
 	// undone (in that pose it sits exactly where it was built). NAME_None: on the model itself (the vines' joints).
@@ -498,7 +733,7 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 		It.Value->Build(C, C);
 		Hang(C, It.Key);
 	}
-	int32 VineTris = 0, JointTris = 0;
+	int32 VineTris = 0, JointTris = 0, KitTris = 0, NetTris = 0;
 	if (Vines)
 	{
 		for (TPair<FName, FWWOVineMesh>& It : Vines->Rigid)
@@ -520,9 +755,11 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 			JointTris = VineJoints->NumTris();
 		}
 		Pieces += Vines->Pieces;
+		KitTris = Vines->KitTris;
+		NetTris = Vines->NetTris;
 	}
-	UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts for %s (%s) on %s, %s, %s, %s: %d pieces in %d meshes, %d anchors or paths missing, vines %d triangles rigid + %d in %d joint stations, %.2f ms"),
+	UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts for %s (%s) on %s, %s, %s, %s: %d pieces in %d meshes, %d anchors or paths missing, %d kept off the face, vines %d triangles rigid + %d in %d joint stations (kit pieces %d, mycelium %d), %.2f ms"),
 		*GetOwner()->GetName(), *AnchorFlora.ToString(), *Key, *WornParts[ShellHead].ToString(), *WornParts[ShellCore].ToString(),
-		*WornParts[ShellArms].ToString(), *WornParts[ShellLegs].ToString(), Pieces, AnchorParts.Num(), Missing, VineTris, JointTris,
-		VineJoints ? VineJoints->Stations.Num() : 0, (FPlatformTime::Seconds() - Started) * 1000.0);
+		*WornParts[ShellArms].ToString(), *WornParts[ShellLegs].ToString(), Pieces, AnchorParts.Num(), Missing, KeptOff, VineTris, JointTris,
+		VineJoints ? VineJoints->Stations.Num() : 0, KitTris, NetTris, (FPlatformTime::Seconds() - Started) * 1000.0);
 }

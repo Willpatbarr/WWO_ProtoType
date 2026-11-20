@@ -4,7 +4,8 @@
 // are placed from, so a graft fits whatever parts a robot wears. The data is exported from Blender per
 // part (Art/Shells/tools/make_anchors.py, names in anchor_spec.py) to Config/ShellAnchors/<part>.json:
 // SK_Shell<n>_<Slot>.json for each part, SK_RobotSkeleton.json for the seams. Every part of a slot has
-// the same anchor and path names, so a recipe that names them fits every shell.
+// the same anchor and path names, so a recipe that names them fits every shell. Each part's file also carries
+// its surface ('surface': the skin its anchors and paths lie on, a point every ~2 cm), for placing things between them.
 //
 // The files are in "blender_rig_cm": the bind pose in centimetres, x = the robot's left, -y = its front,
 // z = up, feet at z = 0. Here each point is turned into the robot mesh's own space (FromRig) and then
@@ -34,6 +35,31 @@ struct FWWOShellPath
 	TArray<FWWOShellPoint> Points;
 };
 
+// The worn parts' surface (reference pose, mesh space), sampled by each part's 'surface' (its wrap, the skin its
+// anchors and paths lie on, thinned to a point every ~2 cm), for placing things away from any anchor: a point is
+// pulled onto the surface from its nearest samples (each sample's own tangent plane, weighted by nearness and by
+// how alike its normal is), and a walk steps over the surface in short hops, so a piece moved 6 cm round a limb
+// stays on it instead of leaving on a tangent.
+struct FWWOShellSurface
+{
+	struct FSample { FVector P, N; FName Bone; };
+	TArray<FSample> Samples;
+
+	void Add(const FWWOShellPoint& Point);
+	void Add(const FSample& Sample);
+	void Finish(); // after the last Add: the lookup grid
+	bool IsEmpty() const { return Samples.Num() == 0; }
+	// P onto the surface (N: the way out there, in: a hint of it; out: the surface's). False with no samples near.
+	bool Project(FVector& P, FVector& N, FName* OutBone = nullptr) const;
+	// From P (on the surface, N its normal) Dist cm over the surface toward Dir (made tangent at each hop).
+	void Walk(FVector& P, FVector& N, const FVector& Dir, float Dist, FName* OutBone = nullptr) const;
+
+private:
+	static constexpr float Cell = 4.f;
+	TMap<FIntVector, TArray<int32>> Grid;
+	FIntVector Key(const FVector& P) const { return FIntVector(FMath::FloorToInt(P.X / Cell), FMath::FloorToInt(P.Y / Cell), FMath::FloorToInt(P.Z / Cell)); }
+};
+
 // One part's anchors and paths (or the skeleton's seams), for one mesh's reference pose.
 struct FWWOShellAnchorSet
 {
@@ -41,6 +67,7 @@ struct FWWOShellAnchorSet
 	FString Slot;    // Head, Core, Arms, Legs, Skeleton
 	TMap<FName, FWWOShellPoint> Anchors;
 	TMap<FName, FWWOShellPath> Paths;
+	TArray<FWWOShellSurface::FSample> Surface; // the part's wrap, a point every ~2 cm (the file's 'surface')
 	const USkeletalMesh* RefMesh = nullptr;
 };
 

@@ -45,6 +45,8 @@ ANCHORS = {
         "waist_side_l": A("spine_01", 0.50, "outer", sided=True),        # the side of the waist
         "hip_front":    A("pelvis", 0.20, "front"),                      # the front of the pelvis, below the belt
         "hip_back":     A("pelvis", 0.20, "back"),                       # the back of the pelvis
+        "hip_side_l":   A("pelvis", 0.30, "outer", sided=True),          # the side of the pelvis, over the hip joint
+        "shoulder_blade_l": A("spine_02", 0.60, {"back": 1, "outer": 0.6}, sided=True),   # the left shoulder blade
     },
     "Arms": {
         "shoulder_top_l":   A("upperarm_l", 0.05, "up", sided=True, up="front"),       # top of the shoulder cap
@@ -65,6 +67,7 @@ ANCHORS = {
         "calf_back_l":    A("calf_l", 0.30, "back", perp=True, sided=True),            # the calf muscle
         "ankle_outer_l":  A("calf_l", 0.90, "outer", perp=True, sided=True),           # the outer ankle
         "foot_top_l":     A("foot_l", 0.55, {"up": 1, "front": 0.25}, sided=True),     # the top of the foot
+        "thigh_back_l":   A("thigh_l", 0.40, "back", perp=True, sided=True),           # the back of the thigh
     },
 }
 
@@ -79,6 +82,7 @@ SEAMS = {
     "seam_waist":      dict(bone="spine_01", n="front"),                 # inside Core: a reference only
     "seam_shoulder_l": dict(bone="upperarm_l", n="outer", off={"outer": 6.0}, sided=True),          # the shoulder's outside
     "seam_hip_l":      dict(bone="thigh_l", n="outer", off={"outer": 3.0, "up": 2.0}, sided=True),   # the hip's outside
+    "seam_neck_l":     dict(bone="neck_01", n="outer", off={"outer": 5.0, "up": 3.0}, sided=True),   # the side of the neck's base
 }
 
 
@@ -122,6 +126,8 @@ PATHS = {
     "Head": {
         "head_ring":  P(ring=dict(bone="head", t=0.76, n=8), closed=True, kind="ring"),   # round the head at brow height
         "head_crest": P(["head_front", "head_top", "head_back"]),                       # over the crown, front to back
+        # from over the ear down the side of the neck to its base (a hood's lower tiers); neck_to_collar carries on
+        "head_to_collar_l": P(["head_side_l", W("head", 0.10, "outer"), "@seam_neck_l"], sided=True, to_seam="seam_neck_l"),
     },
     "Core": {
         "waist_ring": P(ring=dict(bone="spine_01", t=0.5, n=8), closed=True, kind="ring"),   # round the waist
@@ -132,6 +138,8 @@ PATHS = {
                         "hip_back"]),          # down the spine (mid waypoints keep it on the centre line over back gear)
         "collar_to_shoulder_l": P(["collar_l", "@seam_shoulder_l"], sided=True, to_seam="seam_shoulder_l"),
         "waist_to_hip_l":       P(["waist_side_l", "@seam_hip_l"], sided=True, to_seam="seam_hip_l"),   # meets leg_line
+        "neck_to_collar_l":     P(["@seam_neck_l", "collar_l"], sided=True, from_seam="seam_neck_l"),   # head_to_collar's end, on
+        "chest_side_line_l":    P(["collar_l", "chest_side_l", "waist_side_l"], sided=True),   # collar, down the chest's side, the waist's side
         # sash_l's twin across the back: left shoulder, diagonally down the back, right hip.
         "sash_back_l": P(["collar_l", W("spine_02", 0.55, {"back": 1, "inner": 0.3}), W("spine_02", 0.25, {"back": 1, "inner": 0.8}),
                           W("spine_02", 0.04, {"back": 1, "inner": 1.4}), "waist_side_r"], sided=True),

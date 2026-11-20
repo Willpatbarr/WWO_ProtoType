@@ -136,8 +136,30 @@ const FWWOShellAnchorSet* WWOShellAnchors::Find(FName Part, const USkeletalMesh*
 			if (Path.Points.Num() >= 2) Set->Paths.Add(FName(*It.Key), MoveTemp(Path));
 		}
 	}
+	// The wrap's samples: [x, y, z, nx, ny, nz, bone index] rows, the bones listed once.
+	const TSharedPtr<FJsonObject>* Surface = nullptr;
+	if (Json->TryGetObjectField(TEXT("surface"), Surface))
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Bones = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+		TArray<FName> BoneNames;
+		if ((*Surface)->TryGetArrayField(TEXT("bones"), Bones)) for (const TSharedPtr<FJsonValue>& B : *Bones) BoneNames.Add(FName(*B->AsString()));
+		if ((*Surface)->TryGetArrayField(TEXT("points"), Rows))
+		{
+			Set->Surface.Reserve(Rows->Num());
+			for (const TSharedPtr<FJsonValue>& Row : *Rows)
+			{
+				const TArray<TSharedPtr<FJsonValue>>& V = Row->AsArray();
+				if (V.Num() < 7) continue;
+				const int32 B = int32(V[6]->AsNumber());
+				const FVector N = FromRig(FVector(V[3]->AsNumber(), V[4]->AsNumber(), V[5]->AsNumber())).GetSafeNormal();
+				if (!BoneNames.IsValidIndex(B) || N.IsZero()) continue;
+				Set->Surface.Add({ FromRig(FVector(V[0]->AsNumber(), V[1]->AsNumber(), V[2]->AsNumber())), N, BoneNames[B] });
+			}
+		}
+	}
 	if (Missing > 0) UE_LOG(LogWWO, Warning, TEXT("Shell anchors: %s: %d points name a bone %s lacks; left out"), *Part.ToString(), Missing, *Mesh->GetName());
-	UE_LOG(LogWWO, Display, TEXT("Shell anchors: %s: %d anchors, %d paths"), *Part.ToString(), Set->Anchors.Num(), Set->Paths.Num());
+	UE_LOG(LogWWO, Display, TEXT("Shell anchors: %s: %d anchors, %d paths, %d surface samples"), *Part.ToString(), Set->Anchors.Num(), Set->Paths.Num(), Set->Surface.Num());
 	return Cache.Add(Key, MoveTemp(Set)).Get();
 }
 
@@ -169,6 +191,80 @@ void WWOShellAnchors::Sample(const FWWOShellPath& Path, const USkeletalMesh* Mes
 	}
 }
 
+// --- FWWOShellSurface ----------------------------------------------------------------------------
+
+void FWWOShellSurface::Add(const FWWOShellPoint& Point)
+{
+	Samples.Add({ Point.RefP, Point.RefN, Point.Bone });
+}
+
+void FWWOShellSurface::Add(const FSample& Sample)
+{
+	Samples.Add(Sample);
+}
+
+void FWWOShellSurface::Finish()
+{
+	Grid.Reset();
+	for (int32 i = 0; i < Samples.Num(); ++i) Grid.FindOrAdd(Key(Samples[i].P)).Add(i);
+}
+
+bool FWWOShellSurface::Project(FVector& P, FVector& N, FName* OutBone) const
+{
+	// Each near sample's tangent plane says how far P is above the surface there; their weighted mean is
+	// taken off along their mean normal, three times over (the samples near the moved point change).
+	constexpr float Sigma = 1.6f;
+	bool bAny = false;
+	for (int32 Pass = 0; Pass < 3; ++Pass)
+	{
+		for (const float Reach : { 4.f, 10.f })
+		{
+			const int32 R = FMath::CeilToInt(Reach / Cell);
+			const FIntVector K = Key(P);
+			double W = 0.0, H = 0.0, Best = 0.0;
+			FVector Ns = FVector::ZeroVector;
+			for (int32 x = -R; x <= R; ++x) for (int32 y = -R; y <= R; ++y) for (int32 z = -R; z <= R; ++z)
+			{
+				const TArray<int32>* In = Grid.Find(K + FIntVector(x, y, z));
+				if (!In) continue;
+				for (const int32 i : *In)
+				{
+					const FSample& S = Samples[i];
+					const double D2 = FVector::DistSquared(S.P, P);
+					const double A = FVector::DotProduct(S.N, N);
+					if (D2 > Reach * Reach || A < 0.25) continue;
+					const double Wi = FMath::Exp(-D2 / (2.0 * Sigma * Sigma)) * FMath::Pow(A, 4.0) + 1e-9;
+					W += Wi;
+					H += Wi * FVector::DotProduct(P - S.P, S.N);
+					Ns += S.N * Wi;
+					if (Wi > Best) { Best = Wi; if (OutBone) *OutBone = S.Bone; }
+				}
+			}
+			if (W < 1e-8) continue;
+			const FVector Nm = Ns.GetSafeNormal(UE_SMALL_NUMBER, N);
+			P -= Nm * (H / W);
+			N = Nm;
+			bAny = true;
+			break;
+		}
+		if (!bAny) return false;
+	}
+	return true;
+}
+
+void FWWOShellSurface::Walk(FVector& P, FVector& N, const FVector& Dir, float Dist, FName* OutBone) const
+{
+	const int32 Hops = FMath::Max(1, FMath::CeilToInt(FMath::Abs(Dist) / 1.2f));
+	const float Step = Dist / Hops;
+	FVector D = Dir;
+	for (int32 i = 0; i < Hops; ++i)
+	{
+		D = (D - N * FVector::DotProduct(D, N)).GetSafeNormal(UE_SMALL_NUMBER, D);
+		P += D * Step;
+		Project(P, N, OutBone);
+	}
+}
+
 void WWOShellAnchors::Verify(const USkeletalMesh* Mesh)
 {
 	static bool bDone = false;
@@ -178,10 +274,12 @@ void WWOShellAnchors::Verify(const USkeletalMesh* Mesh)
 	const TSharedPtr<FJsonObject>* Seams = nullptr;
 	if (!Json.IsValid() || !Json->TryGetObjectField(TEXT("anchors"), Seams)) return;
 	// Each seam is its bone's head moved by a fixed amount (Art/Shells/tools/anchor_spec.py SEAMS, robot
-	// words: outer 6 cm at the shoulders; outer 3 and up 2 at the hips; none at the neck and waist), in rig cm.
+	// words: outer 6 cm at the shoulders; outer 3 and up 2 at the hips; outer 5 and up 3 at the neck's sides;
+	// none at the neck and waist), in rig cm.
 	const TMap<FString, FVector> Offsets = {
 		{ TEXT("seam_shoulder_l"), FVector(6, 0, 0) }, { TEXT("seam_shoulder_r"), FVector(-6, 0, 0) },
 		{ TEXT("seam_hip_l"), FVector(3, 0, 2) }, { TEXT("seam_hip_r"), FVector(-3, 0, 2) },
+		{ TEXT("seam_neck_l"), FVector(5, 0, 3) }, { TEXT("seam_neck_r"), FVector(-5, 0, 3) },
 	};
 	struct FGuess { const TCHAR* Name; TFunction<FVector(const FVector&)> Map; };
 	const FGuess Guesses[] = {
