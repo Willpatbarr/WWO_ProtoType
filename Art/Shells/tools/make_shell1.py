@@ -20,8 +20,14 @@ SHO, ELB, WRI = (0.232, 0.04, 1.528), (0.34, 0.04, 1.26), (0.449, 0.04, 0.992)
 HIP, KNEE, ANK = (0.12, 0.0, 1.032), (0.137, 0.022, 0.629), (0.157, 0.046, 0.166)
 
 
+# The skeleton's skull is always shown (skeleton_split.py; its top is at 188.3 cm). The head keeps its size and is
+# moved up whole by this much to hold it (Will, 2026-11-21: move it, don't make it taller). The neck stays.
+HEAD_UP = float(os.environ.get("HEAD_UP", "0.025"))
+
+
 def head():
     b, s = "head", "head"
+    first = len(K.PIECES)
     k, kw = 0.94 * 0.95, 0.94                   # head height and width against the first passes
     top = 1.615 + 0.28 * k
     h = Surf((0, -0.012, top), (0, -0.012, 1.60), [(r[0] * k,) + tuple(v * kw for v in r[1:5]) + tuple(r[5:]) for r in (
@@ -49,8 +55,10 @@ def head():
           nu=12, nv=8, lift=0.004, thick=0.006, edge=(0.2, 0.2, 0.003))
     patch("jaw", h, T([(8, 0.215), (60, 0.228)]), T([(10, 0.272), (66, 0.272)]), P, b, s,
           nu=16, nv=6, lift=0.003, thick=0.006, edge=(0.12, 0.25, 0.003), mirror=True)
-    for r, hh, role in ((0.039, 0.010, P), (0.029, 0.016, F), (0.018, 0.021, S), (0.008, 0.025, F)):
-        cyl("ear", (0.0855, 0.0, top - 0.158 * k), (1, 0, 0), r, hh, role, b, s, mirror=True, bevel=0.002)
+    # the ears sit over the skeleton's ear discs (centre y 1.2, z 177.95 cm; 3.65 cm radius out to 9.1, 3.05 to 10.1)
+    for r, hh, role in ((0.041, 0.012, P), (0.034, 0.019, F), (0.018, 0.024, S), (0.008, 0.028, F)):
+        cyl("ear", (0.0855, 0.012, 1.7795 - HEAD_UP), (1, 0, 0), r, hh, role, b, s, mirror=True, bevel=0.002)
+    K.raise_pieces(first, HEAD_UP)
     n = Surf((0, 0.022, 1.675), (0, 0.036, 1.56), [(0, 0.043, 0.043, 0.043, 0.043), (0.115, 0.05, 0.05, 0.048, 0.05)], pw=1.0)
     tube("neck", n, 0.0, 0.115, F, "neck_01", s, nt=4, nth=28)
     for t in (0.03, 0.055, 0.08):
@@ -63,7 +71,7 @@ def core():
     b = "spine_02"
     c = Form((0, 0.02, 1.60), (0, 0.02, 1.20), [
         (0.00, 0.100, 0.100, 0.078, 0.080, dict(c=0.5)),
-        (0.05, 0.180, 0.180, 0.112, 0.122),
+        (0.05, 0.180, 0.180, 0.134, 0.130),      # deep enough for the skeleton's chest block (y -11.7 and 14.5 at 155.6 cm)
         (0.13, 0.208, 0.208, 0.142, 0.140),
         (0.24, 0.180, 0.180, 0.128, 0.126),
         (0.32, 0.136, 0.136, 0.100, 0.100),
@@ -90,6 +98,13 @@ def core():
     for i, t in enumerate((0.275, 0.325)):
         patch("backrib%d" % i, c, [(284, t - 0.004), (330 - 4 * i, t - 0.02)], [(284, t + 0.036), (326 - 4 * i, t + 0.02)], S, b, s,
               nu=14, nv=4, lift=0.002, thick=0.01, edge=(0.12, 0.3, 0.004), mirror=True)
+    # the gorget: the skeleton's chest block rises to a ridge under the neck (164.5 cm) and carries a plate over
+    # each shoulder housing (159.3 cm, out to x 16.7); this sits 8 mm over both
+    hull("gorget", [(0.0, 0.035, 1.656), (0.0, 0.070, 1.652), (0.092, 0.036, 1.641), (0.092, 0.085, 1.637),
+                    (0.119, 0.040, 1.636), (0.118, 0.088, 1.629), (0.0, 0.100, 1.642), (0.0, -0.047, 1.621),
+                    (0.093, -0.046, 1.620), (0.115, -0.034, 1.612), (0.192, -0.016, 1.603), (0.192, 0.092, 1.603),
+                    (0.192, -0.016, 1.57), (0.192, 0.092, 1.57), (0.0, -0.128, 1.553), (0.075, -0.102, 1.546),
+                    (0.0, 0.158, 1.553), (0.10, 0.148, 1.548)], S, b, s, sym=True, bevel=0.004)
     ball("shoulder_ball", SHO, 0.052, F, "clavicle_l", s)
     for r, hh, role in ((0.046, 0.05, S), (0.034, 0.058, F), (0.02, 0.063, S)):
         cyl("shoulder_ring", (SHO[0] - 0.02, SHO[1], SHO[2] - 0.004), (0, 1, 0), r, hh, role, "clavicle_l", s)
@@ -137,10 +152,11 @@ def arms():
         (0.110, 0.064, 0.03, 0.073, 0.073),
         (0.155, 0.048, 0.03, 0.054, 0.054),
         (0.180, 0.026, 0.02, 0.028, 0.028)], out=(0.65, 0, 0.76), pw=1.0)
+    # lifted 1.4 cm to clear the skeleton's shoulder housing (its top is at 158.6 cm, out to x 26.9)
     patch("pauldron", pa, [(-96, 0.0), (96, 0.0)], [(-70, 0.178), (70, 0.178)], P, b, s,
-          nu=40, nv=20, thick=0.013, edge=(0.07, 0.07, 0.006))
+          nu=40, nv=20, lift=0.014, thick=0.013, edge=(0.07, 0.07, 0.006))
     patch("pauldron_ridge", pa, [(-9, 0.012), (9, 0.012)], [(-12, 0.15), (12, 0.15)], S, b, s,
-          nu=6, nv=16, lift=0.003, thick=0.006, edge=(0.3, 0.08, 0.003))
+          nu=6, nv=16, lift=0.017, thick=0.006, edge=(0.3, 0.08, 0.003))
     u = Form(SHO, ELB, [
         (0.030, 0.046, 0.044, 0.050, 0.050),
         (0.140, 0.058, 0.048, 0.060, 0.058),

@@ -62,6 +62,9 @@ def classify(body):
         # the upper arm's piston (rod, body, pin) and the small rods at the shoulder share the plates' material;
         # only the two long plates are armour (Will, 2026-11-20: parts of the piston were missing)
         elif b == "upperarm" and m == "06" and max(zs) - min(zs) < 15: where = "Skeleton"
+        # the shoulder caps hang off the collar bone, but they go with the arms (Will, 2026-11-21: worn with the
+        # base torso and another shell's arms, they covered that shell's shoulders)
+        elif b == "clavicle" and m == "13": where = "Arms"
         elif m in ARMOUR or m in NOT_SKELETON.get(b, ()): where = SLOT[b]
         else: where = "Skeleton"
         for f in fs: part[f.index] = where

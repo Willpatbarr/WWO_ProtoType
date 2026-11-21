@@ -309,6 +309,13 @@ def hull(name, pts, role, bone, slot, bevel=0.003, sym=False, **kw):
     return register(name, me, role, bone, slot, bevel=bevel, **kw)
 
 
+def raise_pieces(first, dz, bone="head"):
+    """Move every piece made since PIECES[first] on that bone up by dz (metres): a whole head, moved not resized."""
+    for o, b, slot, mirror in PIECES[first:]:
+        if b == bone:
+            for v in o.data.vertices: v.co.z += dz
+
+
 # ---------- finishing ----------
 def _baked(o, bone):
     dg = bpy.context.evaluated_depsgraph_get()

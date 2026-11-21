@@ -178,8 +178,14 @@ def recess(o, pts):
     except Exception: pass
 
 
+# The skeleton's skull is always shown (skeleton_split.py; its top is at 188.3 cm). The head keeps its size and is
+# moved up whole by this much to hold it (Will, 2026-11-21: move it, don't make it taller). The neck stays.
+HEAD_UP = float(os.environ.get("HEAD_UP", "0.025"))
+
+
 def head():
     b, s = "head", "head"
+    first = len(K.PIECES)
     # ---- one shell, to Will's side profile: a low rounded-flat top, the front dropping straight to a chin at
     # the front, a short flat jaw, then a straight diagonal up to the back of the head at goggle height
     Z0 = 1.878
@@ -209,7 +215,8 @@ def head():
     T = lambda z: Z0 - z
     # ---- the top of the head, from Will's sketch (reference/top_sketch.png): the old shell is now a dark core,
     # taken in under three pieces: a curved top plate, and a plate each side of two curved facets
-    tube("skull", h, T(1.845), T(1.750), S, b, s, nt=16, nth=64, lift=-0.012, bevel=0.0012)
+    tube("skull", h, T(1.845), T(1.750), S, b, s, nt=16, nth=64, lift=-0.008, bevel=0.0012)      # (was 12 mm in; the skeleton's skull has to stay inside it)
+    tube("skull_top", h, T(1.862), T(1.845), S, b, s, nt=8, nth=64, lift=-0.0105, bevel=0.0)      # the core carried up under the top plate, over the skeleton's skull
     # top plate: stations along the centre line (y, z) with the plate's half width and its side edge (y, z) there.
     # Hard edges at the stations; between them the plate bows out a little; across, it falls away to the edges.
     ST = [((-0.126, 1.787), 0.059, (-0.1028, 1.787), 0.002),
@@ -263,8 +270,8 @@ def head():
         cyl("lens", (x, yb - 0.001, ez), (0, 1, 0), r * 0.76, 0.002, "Glow", b, s, n=20, bevel=0.0)
         # the eye piece: one barrel of constant outside diameter from inside the head's face to the lip
         ring("eye_piece", (x, ez), r * 0.76, r + 0.010, HEAD_Y, yb - 0.017, P, b, s, bevel=0.002)
-    for r, hh, role in ((0.043, 0.010, P), (0.031, 0.016, F), (0.016, 0.021, S)):
-        cyl("temple", (0.096, 0.014, ez), (1, 0, 0), r, hh, role, b, s, n=12, mirror=True, bevel=0.002)
+    for r, hh, role in ((0.051, 0.010, P), (0.034, 0.016, F), (0.016, 0.021, S)):      # 5.1 cm: the skeleton's ear disc is 4.85
+        cyl("temple", (0.096 - (0.006 if role == P else 0), 0.012, 1.7795 - HEAD_UP), (1, 0, 0), r, hh + (0.006 if role == P else 0), role, b, s, n=12, mirror=True, bevel=0.002)      # over the skeleton's ear discs
     # ---- antenna and its cable: low on the back of the head, on the robot's right
     ax_, ay, az = -0.108, 0.078, 1.737 + GOGGLE_UP
     box("antenna_base", (ax_ - 0.016, ay - 0.024, az - 0.036), (ax_ + 0.012, ay + 0.024, az + 0.036), S, b, s)
@@ -275,6 +282,7 @@ def head():
     for i in range(3):
         rod("cable%d" % i, pts[i], pts[i + 1], 0.006, F, b, s)
         ball("cable_knuckle%d" % i, pts[i + 1], 0.0065, F, b, s)
+    K.raise_pieces(first, HEAD_UP)
     n = Surf((0, 0.022, 1.675), (0, 0.036, 1.56), [(0, 0.04, 0.04, 0.04, 0.04), (0.115, 0.048, 0.048, 0.046, 0.048)], pw=1.0)
     tube("neck", n, 0.0, 0.115, F, "neck_01", s, nt=4, nth=20)
     for t in (0.03, 0.06):
@@ -327,6 +335,13 @@ def core():
     for i, t in enumerate((0.275, 0.325)):
         patch("backrib%d" % i, c, [(228 + 5 * i, t), (312 - 5 * i, t)], [(232 + 5 * i, t + 0.04), (308 - 5 * i, t + 0.04)], S, b, s,
               nu=20, nv=4, lift=0.003, thick=0.011, edge=E)
+    # the gorget: the skeleton's chest block rises to a ridge under the neck (164.5 cm) and carries a plate over
+    # each shoulder housing (159.3 cm, out to x 16.7); this sits 8 mm over both
+    hull("gorget", [(0.0, 0.035, 1.656), (0.0, 0.070, 1.652), (0.092, 0.036, 1.641), (0.092, 0.085, 1.637),
+                    (0.119, 0.040, 1.636), (0.118, 0.088, 1.629), (0.0, 0.100, 1.642), (0.0, -0.047, 1.621),
+                    (0.093, -0.046, 1.620), (0.115, -0.034, 1.612), (0.176, -0.010, 1.603), (0.176, 0.088, 1.603),
+                    (0.176, -0.010, 1.57), (0.176, 0.088, 1.57), (0.0, -0.10, 1.57), (0.10, -0.085, 1.565),
+                    (0.0, 0.135, 1.575), (0.10, 0.125, 1.57)], S, b, s, sym=True, bevel=0.0)
     ball("shoulder_ball", SHO, 0.05, F, "clavicle_l", s)
     for r, hh, role in ((0.044, 0.026, S), (0.032, 0.032, F), (0.018, 0.036, S)):
         cyl("shoulder_ring", (SHO[0] - 0.012, SHO[1] - 0.012, SHO[2] - 0.004), (0, 1, 0), r, hh, role, "clavicle_l", s, n=12)
