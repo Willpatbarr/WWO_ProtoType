@@ -29,6 +29,12 @@ struct FWWOEquipped
 	// Mods per frame (weapon id), each slot -> mod, so every frame keeps its own setup. (The mods are the
 	// catalog's, kept alive there.)
 	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> Mods;
+	// The shell parts' colours: per slot (head, core, arms, legs: UWWOBodyComponent::EShellSlot's order) a primary,
+	// secondary and glow colour (sRGB), ShellSlots x ShellRoles long once any is set. Alpha 0 is "default": that part keeps
+	// its own material's colour (so an empty array is a robot exactly as imported).
+	static constexpr int32 ShellSlots = 4, ShellRoles = 3;
+	enum EShellRole { ShellPrimary, ShellSecondary, ShellGlow };
+	UPROPERTY() TArray<FColor> ShellColors;
 
 	// --- Reading ---
 	UWWOAbilityData* GetAbility(int32 Slot) const { return Abilities.IsValidIndex(Slot) ? Abilities[Slot].Get() : nullptr; }
@@ -38,6 +44,8 @@ struct FWWOEquipped
 	UWWOModData* GetMod(FName Slot) const;  // on the equipped weapon, or null
 	bool HasPerk(FName Perk) const;         // a mod with this perk is on the equipped weapon
 	TMap<FName, FName> ModIds(FName WeaponId) const;
+	FColor GetShellColor(int32 Slot, int32 Role) const; // alpha 0: the part's own
+	bool AnyShellColor() const;
 
 	// --- Changing (the subsystem announces the change) ---
 	void SwitchFlora(UWWOFloraData* Choice, const FWWOLoadoutCatalog& Catalog); // its first grenade and abilities, no traits
@@ -45,6 +53,8 @@ struct FWWOEquipped
 	bool ToggleTrait(UWWOTraitData* Choice);              // false: refused (slots full, another flora's)
 	bool SetMod(FName Slot, UWWOModData* Mod);            // null empties the slot; false: refused (no weapon, wrong frame or slot)
 	void SetModIds(FName WeaponId, const TMap<FName, FName>& Ids, const FWWOLoadoutCatalog& Catalog);
+	bool SetShellColor(int32 Slot, int32 Role, FColor Color); // Slot INDEX_NONE: every slot; alpha 0: default. False: nothing changed
+	void SetShellColors(const TArray<FColor>& Colors);       // from a save or the wire (only the first ShellSlots x ShellRoles)
 	UWWOWeaponData* CycledWeapon(int32 Step, const FWWOLoadoutCatalog& Catalog) const; // the unlocked weapon Step away, or null (fewer than two)
 	void FitFlora();                                       // drops a grenade, ability or trait that isn't this flora's
 	void FillFloraSlots(const FWWOLoadoutCatalog& Catalog); // an empty grenade or ability slot gets the flora's first free one

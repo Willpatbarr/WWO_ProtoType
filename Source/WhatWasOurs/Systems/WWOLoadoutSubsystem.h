@@ -73,6 +73,9 @@ public:
 	TArray<UWWOAbilityData*> AbilitiesForFlora() const { return Catalog.AbilitiesFor(Equipped.Flora); }
 	TArray<UWWOTraitData*> TraitsForFlora() const { return Catalog.TraitsFor(Equipped.Flora); }
 	TArray<UWWOFramePartData*> FramePartsFor(FName Slot) const { return Catalog.FramePartsFor(Slot); }
+	// The shell parts' colours (FWWOEquipped::ShellColors): Slot in UWWOBodyComponent::EShellSlot's order, Role
+	// FWWOEquipped::EShellRole; alpha 0 is "default" (the part's own colour).
+	FColor GetShellColor(int32 Slot, int32 Role) const { return Equipped.GetShellColor(Slot, Role); }
 
 	// Equipping: each change is announced (OnChanged) and saved later (FlushSave).
 	void EquipFlora(UWWOFloraData* Choice);
@@ -82,6 +85,10 @@ public:
 	void EquipFramePart(UWWOFramePartData* Part);
 	void EquipAbility(int32 Slot, UWWOAbilityData* Choice);
 	bool ToggleTrait(UWWOTraitData* Choice);
+	void SetShellColor(int32 Slot, int32 Role, FColor Color); // Slot INDEX_NONE: every slot; alpha 0: back to the part's own
+	// "head", "core", "arms", "legs" or "all" (INDEX_NONE); "primary", "secondary", "glow"; a hex colour ("C8452B", "#c8452b")
+	// or "default" (alpha 0). False if any doesn't parse.
+	static bool ParseShellColor(const FString& SlotText, const FString& RoleText, const FString& ColorText, int32& OutSlot, int32& OutRole, FColor& OutColor);
 
 	// --- Weapon mods (draft): every slot of a frame is open ---
 	static const TArray<FName>& ModSlots() { return FWWOModConfigs::ModSlots(); }

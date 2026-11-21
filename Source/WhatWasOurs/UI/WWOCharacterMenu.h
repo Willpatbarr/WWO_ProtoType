@@ -14,7 +14,8 @@
 // - Weapons: one screen, no scrolling: the weapons with a render of the selected gun under them
 //   (AWWOGunPreviewActor), the frame's stat bars and perks, its mod slots, and the saved configs
 //   (the hovered slot's mods take their place).
-// - Frame Parts: one screen too: a row per slot and the net effect.
+// - Frame Parts: one screen too: a row per slot, the shell colours (which part, which colour, a row of swatches)
+//   and the net effect.
 // Right: the character, rendered by a scene capture of a mannequin that follows the loadout,
 // framed like Godot's preview camera (45 degree vertical FOV, 4.4 m away, 1.1 m above the feet).
 // Circle / Esc closes a picker, then the tile, then the menu. Pauses the game.
@@ -187,4 +188,9 @@ private:
 	void UpdateModHover(float DeltaTime);
 	void UpdateStatBars(const class UWWOModData* PreviewMod, FName PreviewSlot, bool bPreview);
 	void BuildFrameRows();
+	// The Shell tab's colour picker (under the parts): which slot it paints (INDEX_NONE: all four) and which of the
+	// slot's colours (FWWOEquipped::EShellRole), then a row of swatches and Default.
+	int32 PaintTarget = INDEX_NONE;
+	int32 PaintRole = 0;
+	void BuildColourRows(class UWWOLoadoutSubsystem* L);
 };

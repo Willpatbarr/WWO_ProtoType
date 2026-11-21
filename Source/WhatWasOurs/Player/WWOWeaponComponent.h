@@ -262,6 +262,7 @@ private:
 	// shown, each solved every frame to reach where a first-person rifle pose holds the gun.
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> HandsMesh;
 	UPROPERTY() TObjectPtr<class USkeletalMeshComponent> HandsArmour; // the arms shell part over the hands mesh, if the robot wears parts
+	uint32 HandsArmourPaint = 0; // the body's ShellPaintSerial its colours were painted from
 	UPROPERTY() TObjectPtr<USkeletalMesh> HandsAsset;
 	UPROPERTY() TObjectPtr<UAnimSequence> HandsPose;
 	struct FHandsArm

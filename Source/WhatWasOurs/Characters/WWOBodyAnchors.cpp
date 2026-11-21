@@ -1531,8 +1531,8 @@ int32 UWWOBodyComponent::AnchorLevelNow() const
 {
 	if (ForcedLevel >= 0) return FMath::Min(ForcedLevel, NumGraftLevels - 1);
 	if (bFullDetailGrafts || !Model) return 0;
-	// The robot's own LOD (its skeleton's, which the shell parts follow): its screen size against SK_RobotSkeleton's
-	// LOD screen sizes, as the engine works it out for every skinned mesh.
+	// The robot's own LOD (its skeleton's, which the shell parts follow): the one UpdateRobotLod picked from its screen size
+	// against SK_RobotSkeleton's LOD screen sizes, with hysteresis, and forced on it.
 	return FMath::Clamp(Model->GetPredictedLODLevel(), 0, NumGraftLevels - 1);
 }
 

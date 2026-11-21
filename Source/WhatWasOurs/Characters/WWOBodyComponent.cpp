@@ -242,12 +242,15 @@ void UWWOBodyComponent::SetModel(FName Key)
 	UE_LOG(LogWWO, Verbose, TEXT("Body %s: model '%s' (driver %s)"), *GetOwner()->GetName(), *Key.ToString(), Driver ? TEXT("yes") : TEXT("none"));
 	if (!Driver || (Key == ActiveModel && (Model || Key.IsNone()))) return;
 	ClearAnchorGrafts(); // (pinned to the model about to go; RebuildShell places them on the new one)
+	StopRobotLod();
 	for (const TArray<TObjectPtr<USkeletalMeshComponent>>* List : { &ShellParts, &FpShellParts })
 	{
 		for (USkeletalMeshComponent* C : *List) if (C) C->DestroyComponent();
 	}
 	ShellParts.Reset();
 	FpShellParts.Reset();
+	ShellPartSlots.Reset();
+	FpShellPartSlots.Reset();
 	if (Model) Model->DestroyComponent();
 	Model = nullptr;
 	if (FpBody) FpBody->DestroyComponent();
@@ -325,6 +328,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	// detail levels). Attached to the mannequin it would take the mannequin's, which, hidden, never leaves LOD 0. (The
 	// menu's preview, seen only through its capture, keeps that: always in full.)
 	if (bShells && !bFullDetailGrafts) Model->bSyncAttachParentLOD = false;
+	// (Which LOD it shows is picked by UpdateRobotLod, registered once it's set up below.)
 	Model->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Model->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());
 	Model->AddTickPrerequisiteComponent(Driver); // the mannequin poses first, then the model copies it
@@ -355,9 +359,71 @@ void UWWOBodyComponent::SetModel(FName Key)
 	ApplyModelView();
 	UpdateModelExtras();
 	RefreshOverlay(); // a tint moves onto the new body
+	if (bShells && !bFullDetailGrafts)
+	{
+		RobotLod = 0;
+		RobotLodAt = 0.0;
+		RobotLodHandle = Model->RegisterOnBoneTransformsFinalizedDelegate(FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this, &UWWOBodyComponent::UpdateRobotLod));
+	}
 	// It copies the mannequin's pose now, not at its first tick (the menu preview may never tick it).
 	Model->TickAnimation(0.f, false);
 	Model->RefreshBoneTransforms();
+}
+
+namespace
+{
+	// The robot's LOD hysteresis (UpdateRobotLod): a step to a coarser LOD waits until it is this fraction past the switch's
+	// screen size, a step back to a finer one until it is this fraction past it the other way; and no step at all within
+	// RobotLodHold seconds of the last one. (A client saw a robot flip between LOD 1 and 2 every frame for 0.2 s near a switch.)
+	constexpr float RobotLodMargin = 0.1f;
+	constexpr double RobotLodHold = 0.5;
+}
+
+void UWWOBodyComponent::UpdateRobotLod()
+{
+	USkeletalMeshComponent* M = Model;
+	const USkeletalMesh* Mesh = M ? M->GetSkeletalMeshAsset() : nullptr;
+	if (!Mesh) return;
+	const int32 Num = Mesh->GetLODNum();
+	// What the engine would pick: the largest screen size any view saw the robot at last frame (MaxDistanceFactor is the
+	// squared screen radius, r.SkeletalMeshLODRadiusScale applied: FSkeletalMeshObject::UpdateMinDesiredLODLevel) against
+	// each LOD's screen size, plus r.SkeletalMeshLODBias. Not yet drawn (0): it stays where it is.
+	if (M->MaxDistanceFactor > 0.f && Num > 1)
+	{
+		const float Size = 2.f * FMath::Sqrt(M->MaxDistanceFactor);
+		static const IConsoleVariable* BiasVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SkeletalMeshLODBias"));
+		const int32 Bias = BiasVar ? BiasVar->GetInt() : 0;
+		auto LevelAt = [&](float Scale)
+		{
+			int32 Level = 0;
+			for (int32 i = Num - 1; i > 0; --i)
+			{
+				const FSkeletalMeshLODInfo* Info = Mesh->GetLODInfo(i);
+				if (Info && Size < Info->ScreenSize.GetValue() * Scale) { Level = i; break; }
+			}
+			return FMath::Clamp(Level + Bias, 0, Num - 1);
+		};
+		const int32 Coarser = LevelAt(1.f - RobotLodMargin); // past a switch by the margin (smaller on screen)
+		const int32 Finer = LevelAt(1.f + RobotLodMargin);   // past it by the margin the other way (larger)
+		const int32 Want = Coarser > RobotLod ? Coarser : (Finer < RobotLod ? Finer : RobotLod);
+		const double Now = FPlatformTime::Seconds();
+		if (Want != RobotLod && Now - RobotLodAt >= RobotLodHold)
+		{
+			RobotLod = Want;
+			RobotLodAt = Now;
+		}
+	}
+	// Its parts follow it (their leader). Only the rendered LOD is forced (through ILODSyncInterface, where it's public):
+	// streaming is left alone.
+	ILODSyncInterface* Sync = M;
+	if (Sync->GetForceRenderedLOD() != RobotLod) Sync->SetForceRenderedLOD(RobotLod);
+	UpdateAnchorLevel(); // and its anchor grafts' level follows the LOD it shows
+}
+
+void UWWOBodyComponent::StopRobotLod()
+{
+	if (Model && RobotLodHandle.IsValid()) Model->UnregisterOnBoneTransformsFinalizedDelegate(RobotLodHandle);
+	RobotLodHandle.Reset();
 }
 
 void UWWOBodyComponent::SetHighlight(float Alpha)
@@ -554,7 +620,7 @@ void UWWOBodyComponent::SetShellOverride(UWorld* World, const int32 Picks[NumShe
 	}
 }
 
-void UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
+bool UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
 {
 	const int32 Picks[NumShellSlots] = { Head, Core, Arms, Legs };
 	bool bChanged = false;
@@ -563,7 +629,9 @@ void UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
 		bChanged |= ShellPick[i] != Picks[i];
 		ShellPick[i] = Picks[i];
 	}
-	if (bChanged && HasShells()) RebuildShell();
+	if (!bChanged || !HasShells()) return false;
+	RebuildShell();
+	return true;
 }
 
 void UWWOBodyComponent::ShellFromLoadout(const UWWOLoadoutSubsystem* Loadout)
@@ -573,12 +641,110 @@ void UWWOBodyComponent::ShellFromLoadout(const UWWOLoadoutSubsystem* Loadout)
 	const TSharedPtr<FJsonObject>* Looks = nullptr;
 	if (Json.IsValid()) Json->TryGetObjectField(TEXT("shell_looks"), Looks);
 	int32 Picks[NumShellSlots] = { 0, 0, 0, 0 };
+	FColor Paint[NumShellSlots][NumShellRoles] = {};
 	for (int32 i = 0; i < NumShellSlots; ++i)
 	{
 		const UWWOFramePartData* Part = Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr;
 		if (Part && Looks) (*Looks)->TryGetNumberField(Part->Id.ToString(), Picks[i]);
+		for (int32 Role = 0; Role < NumShellRoles; ++Role) Paint[i][Role] = Loadout ? Loadout->GetShellColor(i, Role) : FColor(0, 0, 0, 0);
 	}
+	SetShellPaint(Paint); // (repaints the parts worn now; a rebuild below paints the new ones)
 	SetShell(Picks[0], Picks[1], Picks[2], Picks[3]);
+}
+
+void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumShellSlots][NumShellRoles])
+{
+	bool bChanged = false;
+	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+	{
+		for (int32 Role = 0; Role < NumShellRoles; ++Role)
+		{
+			bChanged |= ShellPaint[Slot][Role] != Paint[Slot][Role];
+			ShellPaint[Slot][Role] = Paint[Slot][Role];
+		}
+	}
+	if (!bChanged) return;
+	++ShellPaintSerial; // (the first-person hands' arms part repaints on this)
+	for (int32 i = 0; i < ShellParts.Num(); ++i) if (ShellPartSlots.IsValidIndex(i)) PaintShellPart(ShellParts[i], ShellPartSlots[i]);
+	for (int32 i = 0; i < FpShellParts.Num(); ++i) if (FpShellPartSlots.IsValidIndex(i)) PaintShellPart(FpShellParts[i], FpShellPartSlots[i]);
+}
+
+namespace
+{
+	// Which of a slot's colours a shell part's material takes (FWWOEquipped::EShellRole), from its name: a shell's
+	// MI_Shell<N>_<Role> or the base robot's MI_Robot_<Role> (Tools/import_shell_parts.py). INDEX_NONE: it keeps its own.
+	int32 ShellMaterialRole(const UMaterialInterface* M, bool& bOutLight)
+	{
+		bOutLight = false;
+		if (!M) return INDEX_NONE;
+		const FString Name = M->GetName();
+		int32 Cut = INDEX_NONE;
+		if (!Name.FindLastChar(TEXT('_'), Cut)) return INDEX_NONE;
+		const FString Role = Name.Mid(Cut + 1);
+		if (Role == TEXT("PrimaryLight")) { bOutLight = true; return 0; }
+		if (Role == TEXT("Primary") || Role == TEXT("Armour")) return 0;
+		if (Role == TEXT("Secondary") || Role == TEXT("Trim")) return 1;
+		if (Role == TEXT("Glow") || Role == TEXT("Visor")) return 2;
+		return INDEX_NONE; // Frame, Joint
+	}
+
+	// How much lighter a shell's PrimaryLight is than its Primary (their Color's mean), so a picked primary keeps that step.
+	float PrimaryLightRatio(const UMaterialInterface* Light)
+	{
+		static TMap<FString, float> Known;
+		const FString Path = Light->GetPathName();
+		if (const float* Found = Known.Find(Path)) return *Found;
+		float Ratio = 1.44f; // (0.052 / 0.036, import_shell_parts.py's)
+		FLinearColor L, P;
+		const UMaterialInterface* Primary = LoadObject<UMaterialInterface>(nullptr, *Path.Replace(TEXT("PrimaryLight"), TEXT("Primary")), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (Primary && Light->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Color")), L) && Primary->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Color")), P))
+		{
+			const float Base = P.R + P.G + P.B;
+			if (Base > KINDA_SMALL_NUMBER) Ratio = (L.R + L.G + L.B) / Base;
+		}
+		Known.Add(Path, Ratio);
+		return Ratio;
+	}
+}
+
+void UWWOBodyComponent::PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const
+{
+	const USkeletalMesh* Asset = Part ? Part->GetSkeletalMeshAsset() : nullptr;
+	if (!Asset || Slot < 0 || Slot >= NumShellSlots) return;
+	const TArray<FSkeletalMaterial>& Slots = Asset->GetMaterials();
+	for (int32 i = 0; i < Slots.Num(); ++i)
+	{
+		UMaterialInterface* Own = Slots[i].MaterialInterface;
+		bool bLight = false;
+		const int32 Role = ShellMaterialRole(Own, bLight);
+		const FColor Pick = Role == INDEX_NONE ? FColor(0, 0, 0, 0) : ShellPaint[Slot][Role];
+		if (Pick.A == 0)
+		{
+			if (Part->GetMaterial(i) != Own) Part->SetMaterial(i, Own); // default: the part's own
+			continue;
+		}
+		UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Part->GetMaterial(i));
+		if (!Mid || Mid->Parent != Own)
+		{
+			Mid = UMaterialInstanceDynamic::Create(Own, Part);
+			Part->SetMaterial(i, Mid);
+		}
+		const FLinearColor Color(Pick); // sRGB -> linear, as the materials' Color is
+		if (Role == 2)
+		{
+			// The glow: its base colour and its emission, at the strength it had (EmissiveColor's brightest channel; Glow,
+			// the multiplier, stays the shell's own).
+			FLinearColor Emissive = FLinearColor::White;
+			Own->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("EmissiveColor")), Emissive);
+			Mid->SetVectorParameterValue(TEXT("Color"), Color);
+			Mid->SetVectorParameterValue(TEXT("EmissiveColor"), Color * Emissive.GetMax());
+		}
+		else
+		{
+			const float Ratio = bLight ? PrimaryLightRatio(Own) : 1.f;
+			Mid->SetVectorParameterValue(TEXT("Color"), FLinearColor(FMath::Min(Color.R * Ratio, 1.f), FMath::Min(Color.G * Ratio, 1.f), FMath::Min(Color.B * Ratio, 1.f), 1.f));
+		}
+	}
 }
 
 USkeletalMesh* UWWOBodyComponent::ShellMesh(int32 Slot) const
@@ -618,6 +784,8 @@ void UWWOBodyComponent::RebuildShell()
 	}
 	ShellParts.Reset();
 	FpShellParts.Reset();
+	ShellPartSlots.Reset();
+	FpShellPartSlots.Reset();
 	for (FName& Part : WornParts) Part = NAME_None;
 	if (!HasShells())
 	{
@@ -635,7 +803,9 @@ void UWWOBodyComponent::RebuildShell()
 		ApplyShadowOnly(C); // your own: hidden from you, casting your shadow, as the model is
 		C->bCastHiddenShadow = bShadowOnly;
 		C->SetOverlayMaterial(Model->GetOverlayMaterial());
+		PaintShellPart(C, Slot);
 		ShellParts.Add(C);
+		ShellPartSlots.Add(Slot);
 		// Your own legs in first person (FpBody: the skeleton from the hide bone down) wear their parts too.
 		if (FpBody && (Slot == ShellLegs || Slot == ShellCore))
 		{
@@ -643,7 +813,9 @@ void UWWOBodyComponent::RebuildShell()
 			F->SetCastShadow(false);
 			F->SetOnlyOwnerSee(true);
 			for (const FName Bone : FpHideBones) F->HideBoneByName(Bone, PBO_None);
+			PaintShellPart(F, Slot);
 			FpShellParts.Add(F);
+			FpShellPartSlots.Add(Slot);
 		}
 	}
 	if (bAnchorGraftsLive) BuildAnchorGrafts(); // the new parts' anchors are elsewhere
@@ -664,6 +836,7 @@ void UWWOBodyComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this)) Loadout->OnChanged.Remove(LoadoutHandle);
 	ClearAnchorGrafts(); // (and a build on its way is not given to it)
+	StopRobotLod();
 	Super::EndPlay(Reason);
 }
 

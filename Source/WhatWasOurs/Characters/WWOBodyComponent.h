@@ -135,7 +135,18 @@ public:
 	// uncovered shows the skeleton.
 	enum EShellSlot { ShellHead, ShellCore, ShellArms, ShellLegs, NumShellSlots };
 	int32 ShellPick[NumShellSlots] = { 0, 0, 0, 0 };
-	void SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs);
+	bool SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs); // true: the parts were rebuilt
+	// Each slot's colours (FWWOEquipped::ShellColors: primary, secondary, glow; alpha 0 keeps the part's own), from the loadout
+	// (ShellFromLoadout). They're painted on every part this body draws (PaintShellPart), and by the first-person hands on
+	// the arms part over them, which repaint when ShellPaintSerial changes.
+	static constexpr int32 NumShellRoles = 3;
+	FColor ShellPaint[NumShellSlots][NumShellRoles] = {};
+	uint32 ShellPaintSerial = 0;
+	void SetShellPaint(const FColor (&Paint)[NumShellSlots][NumShellRoles]);
+	// Puts a slot's colours on a part (any skinned mesh showing a SK_Shell<n>_<Slot>): dynamic instances of its own materials
+	// with the colours swapped in (primary on Primary / PrimaryLight / Armour, secondary on Secondary / Trim, glow on Glow /
+	// Visor; Frame and Joint keep theirs); a default colour puts the part's own material back.
+	void PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const;
 	// Each slot wears the look of the frame part equipped in it (Config/CharacterModels.json "shell_looks":
 	// frame part id -> shell number; a part not listed there looks like the base robot).
 	void ShellFromLoadout(const class UWWOLoadoutSubsystem* Loadout);
@@ -220,6 +231,7 @@ private:
 	bool bShells = false;
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> ShellParts;   // on the model
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> FpShellParts; // on your own first-person legs
+	TArray<int32> ShellPartSlots, FpShellPartSlots; // the slot of each of those
 	void RebuildShell();
 	USkeletalMeshComponent* AddShellPart(USkeletalMeshComponent* Leader, USkeletalMesh* Asset);
 	FName WornParts[NumShellSlots]; // the part each slot shows (RebuildShell), whose anchors FindAnchor reads
@@ -248,6 +260,14 @@ private:
 	void UpdateAnchorLevel();
 	TWeakObjectPtr<USkeletalMeshComponent> AnchorLodModel;
 	FDelegateHandle AnchorLodHandle;
+	// The robot's own LOD (SK_RobotSkeleton's, which its shell parts follow as their leader, and its anchor grafts' level):
+	// picked here from its screen size with hysteresis and forced on it (UpdateRobotLod, after every pose update), so near a
+	// switch distance it can't flip back within RobotLodHold seconds or a RobotLodMargin of the switch's screen size.
+	int32 RobotLod = 0;
+	double RobotLodAt = 0.0; // when it last changed (FPlatformTime::Seconds)
+	FDelegateHandle RobotLodHandle;
+	void UpdateRobotLod();
+	void StopRobotLod();
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);

@@ -212,10 +212,19 @@ void UWWOWeaponComponent::UpdateHands()
 	}
 	if (HandsArmour)
 	{
+		bool bRepaint = false;
 		if (Armour && HandsArmour->GetSkeletalMeshAsset() != Armour)
 		{
+			HandsArmour->EmptyOverrideMaterials(); // (the last part's colours were for its own material slots)
 			HandsArmour->SetSkeletalMeshAsset(Armour);
 			HandsArmour->SetLeaderPoseComponent(HandsMesh, true);
+			bRepaint = true;
+		}
+		// Your arms' colours (the shell colour picker), as the body paints its own arms part.
+		if (Armour && (bRepaint || HandsArmourPaint != P->Body->ShellPaintSerial))
+		{
+			HandsArmourPaint = P->Body->ShellPaintSerial;
+			P->Body->PaintShellPart(HandsArmour, UWWOBodyComponent::ShellArms);
 		}
 		HandsArmour->SetVisibility(bShow && Armour != nullptr);
 	}

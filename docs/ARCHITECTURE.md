@@ -159,7 +159,10 @@ walks the table in its order (the HUD line's).
     assets and `Config/WeaponMods.json`), the picker lists, `FindById`, the enemies' data by kind
     (`EnemyData`) and the allies'.
   - `FWWOEquipped Equipped` (`WWOLoadoutEquipped.*`): flora, weapon, grenade, abilities, traits, frame
-    parts and each frame's mods; the equip rules; to and from the save and the wire.
+    parts and each frame's mods, the shell colours (`ShellColors`: per slot a primary, secondary and glow colour,
+    alpha 0 for the part's own; empty, and not written, while all are default); the equip rules; to and from
+    the save and the wire. The body paints them on every shell part it draws (`UWWOBodyComponent::PaintShellPart`:
+    dynamic instances of the part's own `M_WWO_Robot` instances), and the first-person hands on their arms part.
   - `WWOLoadoutStats` (`WWOLoadoutStats.*`): the stat maths and its tables, pure functions of an `FWWOEquipped`.
   - `FWWOModConfigs ModConfigs` (`WWOModConfigs.*`): saved weapon configs and the two weapon slots.
   - The saved and sent shapes, `UWWOLoadoutSave`, `FWWOModConfig`, `FWWONetLoadout`, are in
@@ -327,7 +330,7 @@ joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importin
   handles open / close, back, turning the preview, tick and the autotest hooks; one file per tab:
   `WWOCharacterMenuOverview.cpp` (Loadout: stat bars, Build notes, cards, the hover pickers),
   `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, the gun's render, mod slots, configs, the mod hover
-  and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp`. The editors' cards are one builder, `ItemCard` (an item's
+  and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp` (the shell parts, and the colour picker: `BuildColourRows`). The editors' cards are one builder, `ItemCard` (an item's
   badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. Both hover popups close through one
   `FWWOHoverPopup` timer. The Loadout tab's hover row (`OpenHoverPicker`) stays inside the window whatever the number of
   choices: one row while it fits, else it wraps into rows (weapon configs prefer five across, wider only as the height

@@ -7,10 +7,52 @@
 #include "Kismet/GameplayStatics.h"
 #include "Systems/WWOConfig.h"
 #include "Characters/WWOBodyComponent.h"
+#include "HAL/IConsoleManager.h"
+#include "WWOSwitches.h"
 
 namespace
 {
 	const TCHAR* SaveSlot = TEXT("Loadout");
+
+	// wwo.ShellColor <slot|all> <primary|secondary|glow> <hex|default>: your own loadout's shell colour, as the
+	// character menu's picker sets it (saved with the loadout).
+	FAutoConsoleCommandWithWorldAndArgs ShellColorCommand(TEXT("wwo.ShellColor"),
+		TEXT("wwo.ShellColor <head|core|arms|legs|all> <primary|secondary|glow> <hex|default>: your loadout's shell part colour (saved, as the character menu sets it)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(World);
+			int32 Slot = INDEX_NONE, Role = 0;
+			FColor Color;
+			if (!L || Args.Num() < 3 || !UWWOLoadoutSubsystem::ParseShellColor(Args[0], Args[1], Args[2], Slot, Role, Color))
+			{
+				UE_LOG(LogWWO, Warning, TEXT("wwo.ShellColor <head|core|arms|legs|all> <primary|secondary|glow> <hex|default>"));
+				return;
+			}
+			L->SetShellColor(Slot, Role, Color);
+		}));
+}
+
+bool UWWOLoadoutSubsystem::ParseShellColor(const FString& SlotText, const FString& RoleText, const FString& ColorText, int32& OutSlot, int32& OutRole, FColor& OutColor)
+{
+	static const TCHAR* const Slots[] = { TEXT("head"), TEXT("core"), TEXT("arms"), TEXT("legs") }; // UWWOBodyComponent::EShellSlot
+	static const TCHAR* const Roles[] = { TEXT("primary"), TEXT("secondary"), TEXT("glow") };       // FWWOEquipped::EShellRole
+	OutSlot = SlotText.Equals(TEXT("all"), ESearchCase::IgnoreCase) ? INDEX_NONE : -2;
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Slots); ++i) if (SlotText.Equals(Slots[i], ESearchCase::IgnoreCase)) OutSlot = i;
+	OutRole = INDEX_NONE;
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Roles); ++i) if (RoleText.Equals(Roles[i], ESearchCase::IgnoreCase)) OutRole = i;
+	if (OutSlot == -2 || OutRole == INDEX_NONE) return false;
+	if (ColorText.Equals(TEXT("default"), ESearchCase::IgnoreCase))
+	{
+		OutColor = FColor(0, 0, 0, 0);
+		return true;
+	}
+	FString Hex = ColorText;
+	Hex.RemoveFromStart(TEXT("#"));
+	if (Hex.Len() != 6) return false;
+	for (const TCHAR Ch : Hex) if (!FChar::IsHexDigit(Ch)) return false;
+	OutColor = FColor::FromHex(Hex);
+	OutColor.A = 255;
+	return true;
 }
 
 UWWOLoadoutSubsystem* UWWOLoadoutSubsystem::Get(const UObject* WorldContext)
@@ -49,6 +91,24 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 	if (!Equipped.Weapon && Catalog.Weapons.Num() > 0) Equipped.Weapon = Catalog.Weapons[0];
 	Equipped.FillFloraSlots(Catalog);
+	// -WWOShellColor=<slot>:<role>:<hex|default>[,...]: test colours for this run only (never written to the save).
+	FString ColorSwitch;
+	if (WWOSwitches::Value(TEXT("WWOShellColor="), ColorSwitch, false))
+	{
+		TArray<FString> Entries;
+		ColorSwitch.ParseIntoArray(Entries, TEXT(","));
+		for (const FString& Entry : Entries)
+		{
+			TArray<FString> Parts;
+			Entry.ParseIntoArray(Parts, TEXT(":"));
+			int32 Slot = INDEX_NONE, Role = 0;
+			FColor Color;
+			if (Parts.Num() == 3 && ParseShellColor(Parts[0], Parts[1], Parts[2], Slot, Role, Color)) Equipped.SetShellColor(Slot, Role, Color);
+			else UE_LOG(LogWWO, Warning, TEXT("-WWOShellColor: '%s' is not <head|core|arms|legs|all>:<primary|secondary|glow>:<hex|default>"), *Entry);
+		}
+		bNeverSave = true;
+		UE_LOG(LogWWO, Display, TEXT("Loadout: shell colours from -WWOShellColor=%s, in memory only; the saved file is not written this run"), *ColorSwitch);
+	}
 	UE_LOG(LogWWO, Log, TEXT("Loadout: %d weapons, %d grenades, %d abilities, %d frame parts, %d floras, %d traits, %d weapon mods, %d configs"),
 		Catalog.Weapons.Num(), Catalog.Grenades.Num(), Catalog.Abilities.Num(), Catalog.FrameParts.Num(), Catalog.Floras.Num(), Catalog.Traits.Num(),
 		Catalog.WeaponMods.Num(), ModConfigs.Configs.Num());
@@ -106,6 +166,11 @@ void UWWOLoadoutSubsystem::EquipAbility(int32 Slot, UWWOAbilityData* Choice)
 {
 	Equipped.SetAbility(Slot, Choice);
 	Changed();
+}
+
+void UWWOLoadoutSubsystem::SetShellColor(int32 Slot, int32 Role, FColor Color)
+{
+	if (Equipped.SetShellColor(Slot, Role, Color)) Changed();
 }
 
 bool UWWOLoadoutSubsystem::ToggleTrait(UWWOTraitData* Choice)
@@ -283,6 +348,7 @@ void UWWOLoadoutSubsystem::ApplyNet(const FWWONetLoadout& Net)
 	Data->Traits = Net.Traits;
 	for (int32 i = 0; i < FMath::Min(Net.FrameSlots.Num(), Net.FrameParts.Num()); ++i) Data->Frame.Add(Net.FrameSlots[i], Net.FrameParts[i]);
 	for (int32 i = 0; i < FMath::Min(Net.ModKeys.Num(), Net.ModIds.Num()); ++i) Data->WeaponMods.Add(Net.ModKeys[i], Net.ModIds[i]);
+	Data->ShellColors = Net.ShellColors; // (FromSave keeps only the first slots x roles)
 	ApplySave(Data);
 	// A loadout always has a flora (without one the one-flora-kit rule below would pass anything)
 	// and an unlocked gun.

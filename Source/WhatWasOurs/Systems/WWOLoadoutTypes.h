@@ -35,11 +35,13 @@ struct FWWONetLoadout
 	UPROPERTY() TArray<FName> FrameParts;
 	UPROPERTY() TArray<FName> ModKeys; // "weapon:slot", the equipped weapon's
 	UPROPERTY() TArray<FName> ModIds;
+	// The shell parts' colours (FWWOEquipped::ShellColors): empty while every one is the parts' own.
+	UPROPERTY() TArray<FColor> ShellColors;
 
 	bool operator==(const FWWONetLoadout& O) const
 	{
 		return Flora == O.Flora && Weapon == O.Weapon && Grenade == O.Grenade && Abilities == O.Abilities && Traits == O.Traits
-			&& FrameSlots == O.FrameSlots && FrameParts == O.FrameParts && ModKeys == O.ModKeys && ModIds == O.ModIds;
+			&& FrameSlots == O.FrameSlots && FrameParts == O.FrameParts && ModKeys == O.ModKeys && ModIds == O.ModIds && ShellColors == O.ShellColors;
 	}
 	bool operator!=(const FWWONetLoadout& O) const { return !(*this == O); }
 };
@@ -59,4 +61,5 @@ public:
 	UPROPERTY() TMap<FName, FName> WeaponMods; // slot -> mod id
 	UPROPERTY() TArray<FWWOModConfig> ModConfigs;
 	UPROPERTY() TArray<int32> WeaponSlots; // the saved config in each of the two weapon slots (-1 = none)
+	UPROPERTY() TArray<FColor> ShellColors; // FWWOEquipped::ShellColors; empty (and missing from older saves): the parts' own colours
 };

@@ -115,6 +115,7 @@ void AWWOCharacter::ShowLook()
 	FString Look = NetLook.Flora.ToString() + TEXT("|") + NetLook.Grenade.ToString();
 	for (const FName& Id : NetLook.Abilities) Look += TEXT("|") + Id.ToString();
 	for (const FName& Id : NetLook.FrameParts) Look += TEXT("|") + Id.ToString();
+	for (const FColor& C : NetLook.ShellColors) Look += TEXT("|") + (C.A > 0 ? C.ToHex().Left(6) : FString(TEXT("-"))); // the shell colours
 	if (NetLook.Flora.IsNone() || Look == ShownLook) return;
 	ShownLook = Look;
 	Body->FollowLoadout(false); // their flora's grafts and their shell's colors, from their loadout

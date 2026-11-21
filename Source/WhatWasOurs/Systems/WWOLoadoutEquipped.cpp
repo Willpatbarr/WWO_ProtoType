@@ -183,6 +183,7 @@ void FWWOEquipped::ToSave(UWWOLoadoutSave& Data) const
 			if (Pair.Value) Data.WeaponMods.Add(FName(OnFrame.Key.ToString() + TEXT(":") + Pair.Key.ToString()), Pair.Value->Id);
 		}
 	}
+	if (AnyShellColor()) Data.ShellColors = ShellColors; // (none set: not written, so the file is as it was before colours)
 }
 
 void FWWOEquipped::FromSave(const UWWOLoadoutSave& Data, const FWWOLoadoutCatalog& Catalog)
@@ -212,6 +213,7 @@ void FWWOEquipped::FromSave(const UWWOLoadoutSave& Data, const FWWOLoadoutCatalo
 		UWWOAbilityData* A = FWWOLoadoutCatalog::FindById(Catalog.Abilities, Data.Abilities[Slot]);
 		if (A && !Abilities.Contains(A)) Abilities[Slot] = A;
 	}
+	SetShellColors(Data.ShellColors);
 }
 
 FWWONetLoadout FWWOEquipped::ToNet() const
@@ -235,6 +237,7 @@ FWWONetLoadout FWWOEquipped::ToNet() const
 			Net.ModIds.Add(Pair.Value);
 		}
 	}
+	if (AnyShellColor()) Net.ShellColors = ShellColors;
 	return Net;
 }
 
@@ -248,4 +251,46 @@ void FWWOEquipped::Reset()
 	Traits.Reset();
 	Frame.Reset();
 	Mods.Reset();
+	ShellColors.Reset();
+}
+
+// --- Shell colours --------------------------------------------------------------------------
+
+FColor FWWOEquipped::GetShellColor(int32 Slot, int32 Role) const
+{
+	const int32 i = Slot * ShellRoles + Role;
+	return Slot >= 0 && Slot < ShellSlots && Role >= 0 && Role < ShellRoles && ShellColors.IsValidIndex(i) ? ShellColors[i] : FColor(0, 0, 0, 0);
+}
+
+bool FWWOEquipped::AnyShellColor() const
+{
+	for (const FColor& C : ShellColors) if (C.A > 0) return true;
+	return false;
+}
+
+bool FWWOEquipped::SetShellColor(int32 Slot, int32 Role, FColor Color)
+{
+	if (Role < 0 || Role >= ShellRoles || Slot >= ShellSlots || Slot < INDEX_NONE) return false;
+	Color.A = Color.A > 0 ? 255 : 0;
+	if (Color.A == 0) Color = FColor(0, 0, 0, 0);
+	bool bChanged = false;
+	for (int32 S = 0; S < ShellSlots; ++S)
+	{
+		if (Slot != INDEX_NONE && S != Slot) continue;
+		if (GetShellColor(S, Role) == Color) continue;
+		ShellColors.SetNumZeroed(ShellSlots * ShellRoles);
+		ShellColors[S * ShellRoles + Role] = Color;
+		bChanged = true;
+	}
+	if (!AnyShellColor()) ShellColors.Reset(); // all default again: as if never set
+	return bChanged;
+}
+
+void FWWOEquipped::SetShellColors(const TArray<FColor>& Colors)
+{
+	ShellColors.Reset();
+	for (int32 i = 0; i < FMath::Min(Colors.Num(), ShellSlots * ShellRoles); ++i)
+	{
+		SetShellColor(i / ShellRoles, i % ShellRoles, Colors[i]);
+	}
 }
