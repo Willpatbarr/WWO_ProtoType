@@ -20,20 +20,22 @@ SHO, ELB, WRI = (0.232, 0.04, 1.528), (0.34, 0.04, 1.26), (0.449, 0.04, 0.992)
 HIP, KNEE, ANK = (0.12, 0.0, 1.032), (0.137, 0.022, 0.629), (0.157, 0.046, 0.166)
 
 
+# The skeleton's skull is always shown (skeleton_split.py; its top is at 188.3 cm). The head keeps its size and is
+# moved up whole by this much to hold it (Will, 2026-11-21: move it, don't make it taller). The neck stays.
+HEAD_UP = float(os.environ.get("HEAD_UP", "0.025"))
+
+
 def head():
     b, s = "head", "head"
-    # The skeleton's skull and ear discs are always shown (skeleton_split.py), so the helmet has to hold them:
-    # the skull's top is at 188.3 cm, its forehead reaches 11.3 cm forward, the ear discs 10.1 cm out.
-    # (Before that rule the head was 0.89 of this height and 0.94 of this width.)
-    k, kw = 1.0, 1.0
+    first = len(K.PIECES)
+    k, kw = 0.94 * 0.95, 0.94                   # head height and width against the first passes
     top = 1.615 + 0.28 * k
     h = Surf((0, -0.012, top), (0, -0.012, 1.60), [(r[0] * k,) + tuple(v * kw for v in r[1:5]) + tuple(r[5:]) for r in (
-        (0.000, 0.030, 0.030, 0.032, 0.040),
-        (0.009, 0.054, 0.054, 0.064, 0.078),
-        (0.025, 0.070, 0.070, 0.088, 0.110),
-        (0.050, 0.081, 0.081, 0.102, 0.142),
-        (0.070, 0.086, 0.086, 0.107, 0.158),
-        (0.115, 0.092, 0.092, 0.114, 0.166),
+        (0.000, 0.018, 0.018, 0.018, 0.032),
+        (0.009, 0.040, 0.040, 0.044, 0.070),
+        (0.025, 0.060, 0.060, 0.066, 0.104),
+        (0.070, 0.085, 0.085, 0.099, 0.158),
+        (0.115, 0.092, 0.092, 0.110, 0.166),
         (0.155, 0.092, 0.092, 0.113, 0.136),
         (0.200, 0.092, 0.092, 0.110, 0.094, 0.8),
         # the jaw: the same width from the ears down to a flat underside; the back cuts in to the neck
@@ -55,7 +57,8 @@ def head():
           nu=16, nv=6, lift=0.003, thick=0.006, edge=(0.12, 0.25, 0.003), mirror=True)
     # the ears sit over the skeleton's ear discs (centre y 1.2, z 177.95 cm; 3.65 cm radius out to 9.1, 3.05 to 10.1)
     for r, hh, role in ((0.041, 0.012, P), (0.034, 0.019, F), (0.018, 0.024, S), (0.008, 0.028, F)):
-        cyl("ear", (0.0855, 0.012, 1.7795), (1, 0, 0), r, hh, role, b, s, mirror=True, bevel=0.002)
+        cyl("ear", (0.0855, 0.012, 1.7795 - HEAD_UP), (1, 0, 0), r, hh, role, b, s, mirror=True, bevel=0.002)
+    K.raise_pieces(first, HEAD_UP)
     n = Surf((0, 0.022, 1.675), (0, 0.036, 1.56), [(0, 0.043, 0.043, 0.043, 0.043), (0.115, 0.05, 0.05, 0.048, 0.05)], pw=1.0)
     tube("neck", n, 0.0, 0.115, F, "neck_01", s, nt=4, nth=28)
     for t in (0.03, 0.055, 0.08):
