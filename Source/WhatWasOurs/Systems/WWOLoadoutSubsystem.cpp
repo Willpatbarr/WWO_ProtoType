@@ -79,7 +79,11 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		LoadDefaultLoadout();
 	}
-	if (!Equipped.Flora && Catalog.Floras.Num() > 0) Equipped.Flora = Catalog.Floras[0];
+	if (!Equipped.Flora && Catalog.Floras.Num() > 0)
+	{
+		Equipped.Flora = Catalog.Floras[0];
+		Equipped.RestoreFloraSetup(Catalog); // the saved flora is gone: this one's own picks, if it has any
+	}
 	Equipped.FitFlora(); // drop a saved grenade/ability that isn't part of this flora
 	for (const FName& Slot : FrameSlots())
 	{
@@ -133,7 +137,7 @@ void UWWOLoadoutSubsystem::KeepBodyModelsLoaded()
 
 void UWWOLoadoutSubsystem::EquipFlora(UWWOFloraData* Choice)
 {
-	// Switching flora swaps in that flora's first grenade and abilities and clears traits.
+	// Each flora keeps its own grenade, abilities and traits; the first time on, its first grenade and abilities.
 	if (Choice == Equipped.Flora) return;
 	Equipped.SwitchFlora(Choice, Catalog);
 	Changed();
@@ -350,6 +354,7 @@ void UWWOLoadoutSubsystem::ApplyNet(const FWWONetLoadout& Net)
 	for (int32 i = 0; i < FMath::Min(Net.ModKeys.Num(), Net.ModIds.Num()); ++i) Data->WeaponMods.Add(Net.ModKeys[i], Net.ModIds[i]);
 	Data->ShellColors = Net.ShellColors; // (FromSave keeps only the first slots x roles)
 	ApplySave(Data);
+	Equipped.FloraSetups.Reset(); // a copy holds only what was sent: the active flora's
 	// A loadout always has a flora (without one the one-flora-kit rule below would pass anything)
 	// and an unlocked gun.
 	if (!Equipped.Flora && Catalog.Floras.Num() > 0) Equipped.Flora = Catalog.Floras[0];

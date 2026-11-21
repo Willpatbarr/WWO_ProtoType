@@ -403,6 +403,7 @@ void UWWOCharacterMenu::Rebuild()
 {
 	Content->ClearChildren();
 	ModRowsStart = nullptr;
+	PickerRowFirst = PickerRowEnd = INDEX_NONE;
 	if (Expanded == TEXT("Flora")) BuildFloraRows();
 	else if (Expanded == TEXT("Weapons")) BuildWeaponRows();
 	else if (Expanded == TEXT("Frame Parts")) BuildFrameRows();
@@ -510,9 +511,29 @@ void UWWOCharacterMenu::CloseOnClickAway(const FVector2D& ScreenPos)
 	else if (Expanded == TEXT("Flora") && !Picker.IsEmpty())
 	{
 		if (Preview && Preview->GetCachedGeometry().IsUnderLocation(ScreenPos)) return; // dragging turns the character
+		if (IsInFloraPicker(ScreenPos)) return;
 		Picker.Reset();
 		Refresh();
 	}
+}
+
+bool UWWOCharacterMenu::IsInFloraPicker(const FVector2D& ScreenPos) const
+{
+	// Read from the layout at the press, so hovering costs nothing. The rows' box as one panel: the gaps
+	// between cards and rows are inside it. Only what the scroll box shows of it counts.
+	if (PickerRowFirst == INDEX_NONE || !ExpandedScroll || !ExpandedScroll->GetCachedGeometry().IsUnderLocation(ScreenPos)) return false;
+	bool bAny = false;
+	FSlateRect Panel;
+	for (int32 i = PickerRowFirst; i < PickerRowEnd; ++i)
+	{
+		const UWidget* Row = Content->GetChildAt(i);
+		if (!Row) continue;
+		const FGeometry& G = Row->GetCachedGeometry();
+		const FSlateRect R = FSlateRect::FromPointAndExtent(G.GetAbsolutePosition(), G.GetAbsoluteSize());
+		Panel = bAny ? Panel.Expand(R) : R;
+		bAny = true;
+	}
+	return bAny && Panel.ContainsPoint(ScreenPos);
 }
 
 UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part, FName FrameSlot, bool bSmall) const

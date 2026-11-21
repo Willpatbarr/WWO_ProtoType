@@ -50,6 +50,9 @@ void UWWOCharacterMenu::BuildFloraRows()
 	auto Toggle = [WeakThis](const FString& Name) { return [WeakThis, Name] { if (WeakThis.IsValid()) WeakThis->TogglePicker(Name); }; };
 	// The card's edge while its picker is open: as if chosen, so you see which slot you are choosing for.
 	auto Open = [this](const FString& Name) { return Picker == Name; };
+	// Around the open picker's rows (CloseOnClickAway: a press inside them keeps it open).
+	auto PickerRowsStart = [this] { PickerRowFirst = Content->GetChildrenCount(); };
+	auto PickerRowsDone = [this] { PickerRowEnd = Content->GetChildrenCount(); };
 
 	// Flora
 	UWWOFloraData* Flora = L->GetFlora();
@@ -68,6 +71,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 	}
 	if (Picker == TEXT("flora"))
 	{
+		PickerRowsStart();
 		AddRowLabel(TEXT("Choose a flora (switches your grenade, abilities and ult)"));
 		TArray<UWidget*> Cards;
 		for (UWWOFloraData* Option : L->Catalog.Floras)
@@ -85,6 +89,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 		}
 		AddCardGrid(Cards, Wide);
 		if (Flora) Hint(Flora->Description);
+		PickerRowsDone();
 	}
 
 	// Abilities: grenade, ability 1, ability 2.
@@ -132,6 +137,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 	}
 	if (Picker == TEXT("grenade"))
 	{
+		PickerRowsStart();
 		AddRowLabel(TEXT("Choose a grenade"));
 		TArray<UWidget*> Cards;
 		for (UWWOGrenadeData* Option : L->GrenadesForFlora())
@@ -148,10 +154,12 @@ void UWWOCharacterMenu::BuildFloraRows()
 			Cards.Add(ItemCard(C, Pick([WL, Option] { if (WL.IsValid()) WL->EquipGrenade(Option); })));
 		}
 		AddCardGrid(Cards, Wide);
+		PickerRowsDone();
 	}
 	else if (Picker.StartsWith(TEXT("ability")))
 	{
 		const int32 SlotIndex = FCString::Atoi(*Picker.Mid(7));
+		PickerRowsStart();
 		AddRowLabel(FString::Printf(TEXT("Choose ability %d"), SlotIndex + 1));
 		TArray<UWidget*> Cards;
 		for (UWWOAbilityData* Option : L->AbilitiesForFlora())
@@ -171,6 +179,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 		AddCardGrid(Cards, Wide);
 		// The one in this slot (each choice's own is its tip).
 		if (const UWWOAbilityData* Current = L->GetAbility(SlotIndex)) Hint(FString::Printf(TEXT("%s: %s"), *Current->DisplayName, *Current->Description));
+		PickerRowsDone();
 	}
 
 	// Traits: the slots (equipped ones first), then the picker.
@@ -205,6 +214,7 @@ void UWWOCharacterMenu::BuildFloraRows()
 	}
 	if (Picker == TEXT("traits"))
 	{
+		PickerRowsStart();
 		AddRowLabel(FString::Printf(TEXT("Choose traits (click to equip or unequip, up to %d)"), UWWOLoadoutSubsystem::TraitSlots));
 		TArray<UWidget*> Cards;
 		const bool bFull = Equipped.Num() >= UWWOLoadoutSubsystem::TraitSlots;
@@ -226,5 +236,6 @@ void UWWOCharacterMenu::BuildFloraRows()
 			Cards.Add(B);
 		}
 		AddCardGrid(Cards, Wide);
+		PickerRowsDone();
 	}
 }

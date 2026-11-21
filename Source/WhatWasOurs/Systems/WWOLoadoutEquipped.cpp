@@ -69,11 +69,41 @@ TMap<FName, FName> FWWOEquipped::ModIds(FName WeaponId) const
 
 void FWWOEquipped::SwitchFlora(UWWOFloraData* Choice, const FWWOLoadoutCatalog& Catalog)
 {
+	if (Flora)
+	{
+		FWWOFloraSetup& Kept = FloraSetups.Add(Flora->Id);
+		Kept.Grenade = Grenade ? Grenade->Id : NAME_None;
+		for (const UWWOAbilityData* A : Abilities) Kept.Abilities.Add(A ? A->Id : NAME_None);
+		for (const UWWOTraitData* T : Traits) Kept.Traits.Add(T->Id);
+	}
 	Flora = Choice;
 	Grenade = nullptr;
 	Abilities.Init(nullptr, AbilitySlots);
 	Traits.Reset();
+	RestoreFloraSetup(Catalog);
 	FillFloraSlots(Catalog);
+}
+
+void FWWOEquipped::RestoreFloraSetup(const FWWOLoadoutCatalog& Catalog)
+{
+	FWWOFloraSetup Setup;
+	if (!Flora || !FloraSetups.RemoveAndCopyValue(Flora->Id, Setup)) return;
+	// The file may be older than the data: anything gone, locked, another flora's, repeated or over the limit is left off.
+	auto Fits = [this](const auto* Item) { return Item && Item->bUnlocked && Item->Flora == Flora->Id; };
+	UWWOGrenadeData* SavedGrenade = FWWOLoadoutCatalog::FindById(Catalog.Grenades, Setup.Grenade);
+	Grenade = Fits(SavedGrenade) ? SavedGrenade : nullptr;
+	Abilities.Init(nullptr, AbilitySlots);
+	for (int32 Slot = 0; Slot < FMath::Min(Setup.Abilities.Num(), AbilitySlots); ++Slot)
+	{
+		UWWOAbilityData* A = FWWOLoadoutCatalog::FindById(Catalog.Abilities, Setup.Abilities[Slot]);
+		if (Fits(A) && !Abilities.Contains(A)) Abilities[Slot] = A;
+	}
+	Traits.Reset();
+	for (const FName& Id : Setup.Traits)
+	{
+		UWWOTraitData* T = FWWOLoadoutCatalog::FindById(Catalog.Traits, Id);
+		if (Fits(T) && !Traits.Contains(T) && Traits.Num() < TraitSlots) Traits.Add(T);
+	}
 }
 
 void FWWOEquipped::SetAbility(int32 Slot, UWWOAbilityData* Choice)
@@ -184,6 +214,7 @@ void FWWOEquipped::ToSave(UWWOLoadoutSave& Data) const
 		}
 	}
 	if (AnyShellColor()) Data.ShellColors = ShellColors; // (none set: not written, so the file is as it was before colours)
+	Data.FloraSetups = FloraSetups; // (none yet: not written, so the file is as it was before per-flora setups)
 }
 
 void FWWOEquipped::FromSave(const UWWOLoadoutSave& Data, const FWWOLoadoutCatalog& Catalog)
@@ -214,6 +245,16 @@ void FWWOEquipped::FromSave(const UWWOLoadoutSave& Data, const FWWOLoadoutCatalo
 		if (A && !Abilities.Contains(A)) Abilities[Slot] = A;
 	}
 	SetShellColors(Data.ShellColors);
+	FloraSetups = Data.FloraSetups;
+	if (Flora) FloraSetups.Remove(Flora->Id); // the equipped flora's picks are the ones read above
+	else if (!Data.Flora.IsNone())
+	{
+		// A flora the game doesn't have now: its picks wait with the others rather than being lost.
+		FWWOFloraSetup& Kept = FloraSetups.Add(Data.Flora);
+		Kept.Grenade = Data.Grenade;
+		Kept.Abilities = Data.Abilities;
+		Kept.Traits = Data.Traits;
+	}
 }
 
 FWWONetLoadout FWWOEquipped::ToNet() const
@@ -252,6 +293,7 @@ void FWWOEquipped::Reset()
 	Frame.Reset();
 	Mods.Reset();
 	ShellColors.Reset();
+	FloraSetups.Reset();
 }
 
 // --- Shell colours --------------------------------------------------------------------------

@@ -95,6 +95,9 @@ private:
 	bool bBuilt = false;
 	FString Expanded;  // "", "Flora", "Weapons" or "Frame Parts"
 	FString Picker;    // "", "flora", "grenade", "ability0", "ability1" or "traits"
+	// The open Flora picker's rows in Content, [First, End): a press between its cards isn't a click away.
+	int32 PickerRowFirst = INDEX_NONE, PickerRowEnd = INDEX_NONE;
+	bool IsInFloraPicker(const FVector2D& ScreenPos) const;
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> TileSwitcher;
 	UPROPERTY() TObjectPtr<UScrollBox> ExpandedScroll;
 	UPROPERTY() TObjectPtr<UVerticalBox> Content;
