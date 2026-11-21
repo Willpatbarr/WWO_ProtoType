@@ -25,6 +25,7 @@ namespace
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Leaf.MI_VV_Leaf"), TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Crystal.MI_VV_Crystal"),
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Stem.MI_VV_Stem"),
 		TEXT("/Game/WWO/Flora/VeilSpore/Materials/MI_VS_Fungus.MI_VS_Fungus"), // VeilSpore's atlas (Tools/import_robot_grafts.py)
+		TEXT("/Game/WWO/Flora/IronBark/Materials/MI_IB_Kit.MI_IB_Kit"), // IronBark's kit atlas (Tools/import_graft_kit.py)
 		TEXT("M_WWO_GraftBark"), TEXT("M_WWO_GraftSeed"), TEXT("M_WWO_GraftVine") }; // FWWOGraftBuilder's (WWOFX::Material)
 
 	// VeilSpore's atlas (T_veilspore_atlas, ~/Documents/WWO_Flora/kit_veilspore/kit.json islands_uv, turned to Unreal's V
@@ -1129,7 +1130,7 @@ void FWWOVineGraft::Crystal(FName Bone, const FVector& At, const FVector& InOut,
 // --- VeilSpore: kit pieces and mycelium ----------------------------------------------------------
 
 void FWWOVineGraft::KitPiece(FName Bone, const FWWOLeafShape* const (&Shapes)[NumGraftLevels], const FWWOLeafShape* const (&SmallShapes)[NumGraftLevels],
-	const FTransform& Xf)
+	const FTransform& Xf, FWWOVineMesh::ESection Section)
 {
 	if (!Shapes[0]) return;
 	const float Across = float(Shapes[0]->Bounds.GetSize().GetMax() * Xf.GetScale3D().GetMax());
@@ -1137,7 +1138,7 @@ void FWWOVineGraft::KitPiece(FName Bone, const FWWOLeafShape* const (&Shapes)[Nu
 	{
 		if (Across < Detail[L].KitMin) continue; // too small to see that far
 		const FWWOLeafShape* Shape = Across < Detail[L].KitSmall && SmallShapes[L] ? SmallShapes[L] : Shapes[L] ? Shapes[L] : Shapes[0];
-		FWWOVineMesh::FSection& Sec = MeshOn(Bone, L).S[FWWOVineMesh::Fungus];
+		FWWOVineMesh::FSection& Sec = MeshOn(Bone, L).S[Section];
 		const int32 Base = Sec.V.Num();
 		for (int32 v = 0; v < Shape->V.Num(); ++v)
 		{

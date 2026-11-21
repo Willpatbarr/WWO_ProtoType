@@ -138,10 +138,57 @@ def import_piece(file, mats):
     return out
 
 
+def kit_atlas():
+    """A kit with its own atlas (WWO_KIT_ATLAS=<key>, e.g. ironbark_kit: <SRC>/textures/T_<key>_{BaseColor,Normal,ORM,
+    Emissive}.png) gets its textures imported and its material made here: MI_<WWO_KIT_MI> (e.g. IB_Kit) on M_WWO_Flora,
+    glow WWO_KIT_GLOW (default 3), base colour tint WWO_KIT_TINT ("r,g,b", default 1,1,1)."""
+    key, name = os.environ.get("WWO_KIT_ATLAS"), os.environ.get("WWO_KIT_MI")
+    if not key or not name:
+        return
+    root = "/Game/WWO/Flora/%s" % FLORA
+    mel = unreal.MaterialEditingLibrary
+    params = {}
+    for param, suffix in (("BaseColorTexture", "BaseColor"), ("ORMTexture", "ORM"), ("NormalTexture", "Normal"), ("EmissiveTexture", "Emissive")):
+        tname = "T_%s_%s" % (key, suffix)
+        task = unreal.AssetImportTask()
+        task.set_editor_property("filename", os.path.join(SRC, "textures", tname + ".png"))
+        task.set_editor_property("destination_path", root + "/Textures")
+        task.set_editor_property("destination_name", tname)
+        task.set_editor_property("automated", True)
+        task.set_editor_property("replace_existing", True)
+        task.set_editor_property("save", True)
+        tools.import_asset_tasks([task])
+        tex = eal.load_asset(root + "/Textures/" + tname)
+        if not tex:
+            log("texture %s failed to import" % tname)
+            continue
+        if suffix == "Normal":
+            tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+            tex.set_editor_property("srgb", False)
+            tex.set_editor_property("flip_green_channel", True)  # Blender's normal maps are OpenGL style
+        elif suffix == "ORM":
+            tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+            tex.set_editor_property("srgb", False)
+        eal.save_loaded_asset(tex)
+        params[param] = tex
+    folder, path = root + "/Materials", root + "/Materials/MI_" + name
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
+        "MI_" + name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    mi.set_editor_property("parent", eal.load_asset("/Game/WWO/Materials/M_WWO_Flora"))
+    for k, v in params.items():
+        mel.set_material_instance_texture_parameter_value(mi, k, v)
+    mel.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", float(os.environ.get("WWO_KIT_GLOW", "3.0")))
+    tint = [float(x) for x in os.environ.get("WWO_KIT_TINT", "1,1,1").split(",")]
+    mel.set_material_instance_vector_parameter_value(mi, "Tint", unreal.LinearColor(tint[0], tint[1], tint[2], 1.0))
+    eal.save_loaded_asset(mi)
+    log("kit atlas %s: %d textures, material %s" % (key, len(params), path))
+
+
 def main():
     if not os.path.isdir(SRC):
         log("FAILED: no folder %s" % SRC)
         return
+    kit_atlas()
     mats = {}
     for slot, path in MATERIALS.items():
         m = eal.load_asset(path) if eal.does_asset_exist(path) else None
