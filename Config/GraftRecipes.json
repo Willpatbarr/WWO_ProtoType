@@ -6,8 +6,8 @@
       "kit_section": "bark",
       "grenade": [
         {"piece": "mesh", "meshes": ["SM_IB_ScaleS_A", "SM_IB_ScaleS_B"], "path": "waist_ring", "spacing_cm": 3.2, "up": "world", "offset": [0.2, 0, 1], "jitter": {"roll": 7, "pitch": 3, "scale": 0.1, "slide_cm": 0.6}, "seed": 11},
-        {"piece": "seed_pod", "anchor": "hip_front", "seat": true, "offset": [0.3, 1.5, 1], "length": 9, "width": 3.4, "stalk": 2.5},
-        {"piece": "seed_pod", "anchor": "hip_front", "seat": true, "offset": [0.3, -2.5, 0], "length": 7.5, "width": 3, "stalk": 3.5}
+        {"piece": "seed_pod", "anchor": "waist_side_l", "seat": true, "offset": [0.3, -3, -2], "length": 8, "width": 3.1, "stalk": 3},
+        {"piece": "seed_pod", "anchor": "waist_side_l", "seat": true, "offset": [0.3, 2, -1], "length": 7, "width": 2.8, "stalk": 2.5}
       ],
       "extra_grenade": [
         {"piece": "mesh", "meshes": ["SM_IB_ScaleL_A", "SM_IB_ScaleL_B", "SM_IB_ScaleM_A", "SM_IB_ScaleM_B"], "anchor": "chest_front", "grid": {"cols": [4, 5, 6, 5, 4, 3, 2, 1], "step_up": 5.0, "step_across": 5.2, "crack": ["SM_IB_CrackL_A", "SM_IB_CrackL_B", "SM_IB_CrackL_C"]}, "offset": [0.2, 0, 0], "jitter": {"roll": 7, "pitch": 3, "scale": 0.1, "slide_cm": 0.6}, "seed": 21, "up": "world"},
