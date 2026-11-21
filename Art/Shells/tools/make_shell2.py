@@ -182,7 +182,9 @@ def head():
     b, s = "head", "head"
     # ---- one shell, to Will's side profile: a low rounded-flat top, the front dropping straight to a chin at
     # the front, a short flat jaw, then a straight diagonal up to the back of the head at goggle height
-    Z0 = 1.878
+    # The skeleton's skull is always shown (skeleton_split.py) and the top of the head has to hold it: its top is
+    # at 188.3 cm, 4.8 cm either side, and its forehead reaches y -10.3 at 184 cm. (The top was 187.8 before.)
+    Z0 = 1.898
     def sec(z, w, front, back, **o):            # front / back: how far the outline reaches (metres, +front, +back)
         cf = (front - back) / 2.0; d = (front + back) / 2.0
         return (Z0 - z, w, w, d, d, dict(cf=cf, **o))
@@ -190,12 +192,12 @@ def head():
         return Form((0, 0, Z0), (0, 0, 1.60), [
             # the top is a shallow curve from a slanted forehead back to a rounded back corner; each side
             # above the band is flat, in two planes
-            sec(1.878, 0.068 - inn, -0.010, 0.050),
-            sec(1.874, 0.069 - inn, 0.003, 0.070),
-            sec(1.872, 0.0695 - inn, 0.020, 0.076),
-            sec(1.862, 0.071 - inn, 0.058, 0.090),
-            sec(1.845, 0.074 - inn, 0.095, 0.101),
-            sec(1.831, 0.076 - inn, 0.1005, 0.108),
+            sec(1.898, 0.060 - inn, -0.040, 0.060),
+            sec(1.894, 0.068 - inn, 0.030, 0.075),
+            sec(1.888, 0.078 - inn, 0.068, 0.085),
+            sec(1.870, 0.081 - inn, 0.090, 0.092),
+            sec(1.846, 0.082 - inn, 0.107, 0.100),
+            sec(1.831, 0.083 - inn, 0.114, 0.108),
             sec(1.789, 0.092 - inn, 0.125, 0.130),          # widest from here down to the bottom of the goggle band
             sec(1.716, 0.092 - inn, 0.124, 0.130),         # full depth to the bottom of the goggle band
             # below the band the head is only a core: the two jaw structures sit over it
@@ -209,18 +211,30 @@ def head():
     T = lambda z: Z0 - z
     # ---- the top of the head, from Will's sketch (reference/top_sketch.png): the old shell is now a dark core,
     # taken in under three pieces: a curved top plate, and a plate each side of two curved facets
-    tube("skull", h, T(1.845), T(1.750), S, b, s, nt=16, nth=64, lift=-0.012, bevel=0.0012)
+    tube("skull", h, T(1.845), T(1.750), S, b, s, nt=16, nth=64, lift=-0.004, bevel=0.0012)      # (was 12 mm in; the skeleton's ear discs reach 7 cm out)
+    tube("skull_top", h, T(1.884), T(1.845), S, b, s, nt=8, nth=64, lift=-0.006, bevel=0.0)      # the core carried up under the top plate, over the skeleton's skull
     # top plate: stations along the centre line (y, z) with the plate's half width and its side edge (y, z) there.
     # Hard edges at the stations; between them the plate bows out a little; across, it falls away to the edges.
-    ST = [((-0.126, 1.787), 0.059, (-0.1028, 1.787), 0.002),
-          ((-0.104, 1.833), 0.054, (-0.086, 1.826), 0.0),
-          ((-0.0881, 1.8535), 0.051, (-0.0749, 1.8455), 0.004),
-          ((0.0498, 1.8857), 0.049, (0.0451, 1.8787), 0.002),
-          ((0.1004, 1.8519), 0.051, (0.0905, 1.844), 0.003),
+    ST_SKETCH = [((-0.126, 1.787), 0.059, (-0.1028, 1.787), 0.002),          # as traced from the sketch
+                 ((-0.104, 1.833), 0.054, (-0.086, 1.826), 0.0),
+                 ((-0.0881, 1.8535), 0.051, (-0.0749, 1.8455), 0.004),
+                 ((0.0498, 1.8857), 0.049, (0.0451, 1.8787), 0.002),
+                 ((0.1004, 1.8519), 0.051, (0.0905, 1.844), 0.003),
+                 ((0.1265, 1.7876), 0.056, (0.1154, 1.7876), 0.0)]
+    ST = [((-0.126, 1.787), 0.062, (-0.1028, 1.787), 0.002),                 # raised and widened over the skull
+          ((-0.116, 1.846), 0.064, (-0.098, 1.838), 0.0),
+          ((-0.080, 1.889), 0.064, (-0.068, 1.880), 0.004),
+          ((0.0498, 1.898), 0.062, (0.0451, 1.890), 0.002),
+          ((0.1004, 1.856), 0.058, (0.0905, 1.848), 0.003),
           ((0.1265, 1.7876), 0.056, (0.1154, 1.7876), 0.0)]
+    def edge_z(st, y):                           # the height of a top plate's side edge at y
+        e = [s_[2] for s_ in st]
+        return float(np.interp(y, [q[0] for q in e], [q[1] for q in e]))
+    def up(pts):                                 # a side plate's outline, stretched to stay under the raised top plate
+        return [(y, 1.787 + (z - 1.787) * (edge_z(ST, y) - 1.787) / max(edge_z(ST_SKETCH, y) - 1.787, 1e-4)) for y, z in pts]
     top_plate("top_plate", ST, "SketchSalmon" if SKETCH else PL, b, s)
     # side plates, on the head's own side surface. Outlines are (y, z) read off the side view.
-    Q = lambda pts: [(h.theta_at(Z0 - z, y), Z0 - z) for y, z in pts]
+    Q = lambda pts: [(h.theta_at(Z0 - z, y), Z0 - z) for y, z in up(pts)]
     patch("side_a", h, Q([(-0.0976, 1.7870), (-0.0903, 1.8113), (-0.0700, 1.8400), (-0.0351, 1.8560), (0.0128, 1.8660)]),
           Q([(-0.0728, 1.7870), (-0.0728, 1.8083), (-0.0613, 1.8272), (-0.0438, 1.8337), (0.0267, 1.8374)]),
           "SketchYellow" if SKETCH else PL, b, s, nu=36, nv=6, lift=0.001, thick=0.008, bevel=0.0, smooth=35.0, mirror=True)
@@ -263,8 +277,8 @@ def head():
         cyl("lens", (x, yb - 0.001, ez), (0, 1, 0), r * 0.76, 0.002, "Glow", b, s, n=20, bevel=0.0)
         # the eye piece: one barrel of constant outside diameter from inside the head's face to the lip
         ring("eye_piece", (x, ez), r * 0.76, r + 0.010, HEAD_Y, yb - 0.017, P, b, s, bevel=0.002)
-    for r, hh, role in ((0.043, 0.010, P), (0.031, 0.016, F), (0.016, 0.021, S)):
-        cyl("temple", (0.096, 0.014, ez), (1, 0, 0), r, hh, role, b, s, n=12, mirror=True, bevel=0.002)
+    for r, hh, role in ((0.051, 0.010, P), (0.034, 0.016, F), (0.016, 0.021, S)):      # 5.1 cm: the skeleton's ear disc is 4.85
+        cyl("temple", (0.096 - (0.006 if role == P else 0), 0.012, 1.7795), (1, 0, 0), r, hh + (0.006 if role == P else 0), role, b, s, n=12, mirror=True, bevel=0.002)      # over the skeleton's ear discs
     # ---- antenna and its cable: low on the back of the head, on the robot's right
     ax_, ay, az = -0.108, 0.078, 1.737 + GOGGLE_UP
     box("antenna_base", (ax_ - 0.016, ay - 0.024, az - 0.036), (ax_ + 0.012, ay + 0.024, az + 0.036), S, b, s)
@@ -327,6 +341,13 @@ def core():
     for i, t in enumerate((0.275, 0.325)):
         patch("backrib%d" % i, c, [(228 + 5 * i, t), (312 - 5 * i, t)], [(232 + 5 * i, t + 0.04), (308 - 5 * i, t + 0.04)], S, b, s,
               nu=20, nv=4, lift=0.003, thick=0.011, edge=E)
+    # the gorget: the skeleton's chest block rises to a ridge under the neck (164.5 cm) and carries a plate over
+    # each shoulder housing (159.3 cm, out to x 16.7); this sits 8 mm over both
+    hull("gorget", [(0.0, 0.035, 1.656), (0.0, 0.070, 1.652), (0.092, 0.036, 1.641), (0.092, 0.085, 1.637),
+                    (0.119, 0.040, 1.636), (0.118, 0.088, 1.629), (0.0, 0.100, 1.642), (0.0, -0.047, 1.621),
+                    (0.093, -0.046, 1.620), (0.115, -0.034, 1.612), (0.176, -0.010, 1.603), (0.176, 0.088, 1.603),
+                    (0.176, -0.010, 1.57), (0.176, 0.088, 1.57), (0.0, -0.10, 1.57), (0.10, -0.085, 1.565),
+                    (0.0, 0.135, 1.575), (0.10, 0.125, 1.57)], S, b, s, sym=True, bevel=0.0)
     ball("shoulder_ball", SHO, 0.05, F, "clavicle_l", s)
     for r, hh, role in ((0.044, 0.026, S), (0.032, 0.032, F), (0.018, 0.036, S)):
         cyl("shoulder_ring", (SHO[0] - 0.012, SHO[1] - 0.012, SHO[2] - 0.004), (0, 1, 0), r, hh, role, "clavicle_l", s, n=12)
