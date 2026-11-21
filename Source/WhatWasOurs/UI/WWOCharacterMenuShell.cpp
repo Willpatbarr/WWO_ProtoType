@@ -50,7 +50,12 @@ void UWWOCharacterMenu::BuildFrameRows()
 	}
 	BuildColourRows(L, Label);
 	Label(TEXT("Net effect"));
-	const TArray<FString> Lines = L->GroupSummary();
+	// Two stats a line: with all four changed, a line each would push the tab past one screen.
+	TArray<FString> Lines;
+	{
+		const TArray<FString> Each = L->GroupSummary();
+		for (int32 i = 0; i < Each.Num(); i += 2) Lines.Add(i + 1 < Each.Num() ? Each[i] + TEXT("        ") + Each[i + 1] : Each[i]);
+	}
 	UTextBlock* Net = WWOUI::Text(WidgetTree, Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), WWOUI::Type::Body, WWOUI::TextPrimary);
 	Content->AddChildToVerticalBox(Net)->SetPadding(FMargin(0, 8.f * K, 0, 0));
 }

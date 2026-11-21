@@ -1304,7 +1304,11 @@ private:
 		UStaticMesh* SM = NewObject<UStaticMesh>(Outer, MakeUniqueObjectName(Outer, UStaticMesh::StaticClass(), FName(*(TEXT("SM_AnchorGraft_") + Bone.ToString()))), RF_Transient);
 		SM->bSupportRayTracing = false;
 		TArray<FStaticMaterial> Slots;
-		for (const int32 s : Sections) Slots.Add(FStaticMaterial(Materials[s], SlotName(s), SlotName(s)));
+		for (const int32 s : Sections)
+		{
+			FStaticMaterial& Slot = Slots.Add_GetRef(FStaticMaterial(Materials[s], SlotName(s)));
+			Slot.UVChannelData = FMeshUVChannelInfo(1.f); // (a cooked game never works this out for a mesh made at run time, and asks for it)
+		}
 		SM->SetStaticMaterials(Slots);
 		UStaticMesh::FBuildMeshDescriptionsParams Params;
 		Params.bMarkPackageDirty = false;
