@@ -14,7 +14,7 @@
 // - Weapons: one screen, no scrolling: the weapons with a render of the selected gun under them
 //   (AWWOGunPreviewActor), the frame's stat bars and perks, its mod slots, and the saved configs
 //   (the hovered slot's mods take their place).
-// - Frame Parts: one screen too: a row per slot, the shell colours (which part, which colour, a row of swatches)
+// - Frame Parts: one screen too: a row per slot (each part's card with its picture, AWWOPartPictures), the shell colours (which part, which colour, a row of swatches)
 //   and the net effect.
 // Right: the character, rendered by a scene capture of a mannequin that follows the loadout,
 // framed like Godot's preview camera (45 degree vertical FOV, 4.4 m away, 1.1 m above the feet).
@@ -102,6 +102,12 @@ private:
 	UPROPERTY() TObjectPtr<AWWOPreviewActor> PreviewActor;
 	UPROPERTY() TObjectPtr<class AWWOGunPreviewActor> GunPreview; // the selected gun on the Weapon tab
 	FString GunKey; // the weapon and mods it was last built with
+	// The shell part pictures (the Loadout tab's part cards, the Shell tab's part cards), taken while the menu is open.
+	UPROPERTY() TObjectPtr<class AWWOPartPictures> PartPictures;
+	// Part's picture (in FrameSlot) in the loadout's colours for that slot; null if there is none to show.
+	class UMaterialInterface* PartPicture(const class UWWOFramePartData* Part, FName FrameSlot) const;
+	// A picture as a widget, at least Size (Godot pixels) and scaled to fit what it's given, its shape kept.
+	UWidget* PictureWidget(class UMaterialInterface* Mat, FVector2D Size);
 
 	void Build();
 	// The full-window layout: a header with the four tabs over a switcher. Loadout is the overview
@@ -192,5 +198,5 @@ private:
 	// slot's colours (FWWOEquipped::EShellRole), then a row of swatches and Default.
 	int32 PaintTarget = INDEX_NONE;
 	int32 PaintRole = 0;
-	void BuildColourRows(class UWWOLoadoutSubsystem* L);
+	void BuildColourRows(class UWWOLoadoutSubsystem* L, TFunctionRef<void(const FString&)> Label); // Label: the tab's section name
 };

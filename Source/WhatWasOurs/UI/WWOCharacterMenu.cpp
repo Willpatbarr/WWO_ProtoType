@@ -25,6 +25,10 @@
 #include "Components/ScaleBox.h"
 #include "UI/WWOMenuCursor.h"
 #include "UI/WWOGunPreviewActor.h"
+#include "UI/WWOPartPictures.h"
+#include "Materials/MaterialInterface.h"
+#include "Characters/WWOBodyComponent.h"
+#include "Data/WWOData.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -39,6 +43,7 @@ namespace
 	const TCHAR* const TabTiles[] = { TEXT(""), TEXT("Flora"), TEXT("Weapons"), TEXT("Frame Parts") };
 	const FVector PreviewSpot(0.f, 0.f, -50000.f); // far below the level
 	const FVector GunSpot(0.f, 6000.f, -50000.f);  // the gun's, beside it
+	const FVector PartsSpot(0.f, -6000.f, -50000.f); // the shell part pictures' stations, on the other side
 }
 
 // --- Menu ------------------------------------------------------------------------------------
@@ -112,12 +117,22 @@ UWidget* UWWOCharacterMenu::ItemCard(const FItemCard& Spec, TFunction<void()> Fn
 	// Hovered and pressed the edge goes white; a badge card keeps its fill, so the badge stays seamless.
 	Look.Hovered = WWOUI::RoundBrush(Badge ? Fill : WWO::Lightened(Fill, 0.06f), WWOUI::Corner, WWOUI::HoverEdge, EdgeWidth);
 	Look.Pressed = WWOUI::RoundBrush(Badge ? Fill : WWO::Lightened(Fill, 0.12f), WWOUI::Corner, FLinearColor::White, EdgeWidth);
-	Look.Padding = FMargin(Badge ? 8.f : 14.f, 8.f, 12.f, 8.f);
+	Look.Padding = FMargin(Badge || Spec.Picture ? 8.f : 14.f, 8.f, 12.f, 8.f);
 	Look.HAlign = HAlign_Fill;
 	Look.VAlign = VAlign_Center;
 
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
-	if (Badge)
+	if (Spec.Picture)
+	{
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
+		Box->SetWidthOverride(Spec.PictureSize.X * K);
+		Box->SetHeightOverride(Spec.PictureSize.Y * K);
+		Box->AddChild(PictureWidget(Spec.Picture, Spec.PictureSize));
+		UHorizontalBoxSlot* PictureSlot = Row->AddChildToHorizontalBox(Box);
+		PictureSlot->SetVerticalAlignment(VAlign_Center);
+		PictureSlot->SetPadding(FMargin(0, 0, 8.f * K, 0));
+	}
+	else if (Badge)
 	{
 		// The bare symbol (white on clear) on the card's own fill, which is the badge's edge shade: the
 		// badge's square would show as a faint seam against the rounded card.
@@ -246,6 +261,7 @@ void UWWOCharacterMenu::Open()
 		// The character, shown on every tab (one render target, two places it can sit).
 		PreviewActor = GetWorld()->SpawnActor<AWWOPreviewActor>(PreviewSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 		GunPreview = GetWorld()->SpawnActor<AWWOGunPreviewActor>(GunSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
+		PartPictures = GetWorld()->SpawnActor<AWWOPartPictures>(PartsSpot, FRotator::ZeroRotator, WWO::AlwaysSpawn());
 		auto MakePreview = [this, Tree]() -> UWidget*
 		{
 			UImage* Image = Tree->ConstructWidget<UImage>();
@@ -471,6 +487,32 @@ void UWWOCharacterMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	UpdateHoverPicker(InDeltaTime);
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	if (bOpen && Expanded == TEXT("Weapons")) UpdateModHover(InDeltaTime);
+	if (bOpen && PartPictures) PartPictures->Step(); // (lit by the preview's studio, which is on while the menu is open)
+}
+
+UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part, FName FrameSlot) const
+{
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
+	const int32 Slot = UWWOBodyComponent::ShellSlotOf(FrameSlot);
+	if (!PartPictures || !L || Slot == INDEX_NONE) return nullptr;
+	FColor Paint[3];
+	for (int32 Role = 0; Role < 3; ++Role) Paint[Role] = L->GetShellColor(Slot, Role);
+	return PartPictures->Picture(Part, Slot, Paint);
+}
+
+UWidget* UWWOCharacterMenu::PictureWidget(UMaterialInterface* Mat, FVector2D Size)
+{
+	UImage* Image = WidgetTree->ConstructWidget<UImage>();
+	FSlateBrush Brush;
+	Brush.SetResourceObject(Mat);
+	Brush.ImageSize = Size * K;
+	Image->SetBrush(Brush);
+	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UScaleBox* Fit = WidgetTree->ConstructWidget<UScaleBox>();
+	Fit->SetStretch(EStretch::ScaleToFit);
+	Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Fit->AddChild(Image);
+	return Fit;
 }
 
 // --- Autotest hooks -------------------------------------------------------------------------

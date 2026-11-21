@@ -577,6 +577,13 @@ namespace
 {
 	const TCHAR* const ShellSlotNames[UWWOBodyComponent::NumShellSlots] = { TEXT("Head"), TEXT("Core"), TEXT("Arms"), TEXT("Legs") };
 
+	// Shell Shell's part for Slot (SK_Shell<n>_<Slot>); null if it isn't imported.
+	USkeletalMesh* LoadShellPart(int32 Shell, int32 Slot)
+	{
+		const FString Name = FString::Printf(TEXT("SK_Shell%d_%s"), Shell, ShellSlotNames[Slot]);
+		return LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Shells/%s.%s"), *Name, *Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+
 	// "2" (every slot) or "2,1,0,2" / "2 1 0 2" (head, core, arms, legs); "-" or "off" leaves a slot to the body's own pick.
 	void ParseShellPicks(const TArray<FString>& Args, int32 Out[UWWOBodyComponent::NumShellSlots])
 	{
@@ -637,19 +644,31 @@ bool UWWOBodyComponent::SetShell(int32 Head, int32 Core, int32 Arms, int32 Legs)
 void UWWOBodyComponent::ShellFromLoadout(const UWWOLoadoutSubsystem* Loadout)
 {
 	static const FName Slots[NumShellSlots] = { "head", "core", "arms", "legs" };
-	const TSharedPtr<FJsonObject> Json = CharacterModels();
-	const TSharedPtr<FJsonObject>* Looks = nullptr;
-	if (Json.IsValid()) Json->TryGetObjectField(TEXT("shell_looks"), Looks);
 	int32 Picks[NumShellSlots] = { 0, 0, 0, 0 };
 	FColor Paint[NumShellSlots][NumShellRoles] = {};
 	for (int32 i = 0; i < NumShellSlots; ++i)
 	{
-		const UWWOFramePartData* Part = Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr;
-		if (Part && Looks) (*Looks)->TryGetNumberField(Part->Id.ToString(), Picks[i]);
+		Picks[i] = ShellLookOf(Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr);
 		for (int32 Role = 0; Role < NumShellRoles; ++Role) Paint[i][Role] = Loadout ? Loadout->GetShellColor(i, Role) : FColor(0, 0, 0, 0);
 	}
 	SetShellPaint(Paint); // (repaints the parts worn now; a rebuild below paints the new ones)
 	SetShell(Picks[0], Picks[1], Picks[2], Picks[3]);
+}
+
+int32 UWWOBodyComponent::ShellSlotOf(FName FrameSlot)
+{
+	static const FName Slots[NumShellSlots] = { "head", "core", "arms", "legs" };
+	for (int32 i = 0; i < NumShellSlots; ++i) if (Slots[i] == FrameSlot) return i;
+	return INDEX_NONE;
+}
+
+int32 UWWOBodyComponent::ShellLookOf(const UWWOFramePartData* Part)
+{
+	int32 Shell = 0;
+	const TSharedPtr<FJsonObject> Json = CharacterModels();
+	const TSharedPtr<FJsonObject>* Looks = nullptr;
+	if (Part && Json.IsValid() && Json->TryGetObjectField(TEXT("shell_looks"), Looks)) (*Looks)->TryGetNumberField(Part->Id.ToString(), Shell);
+	return Shell;
 }
 
 void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumShellSlots][NumShellRoles])
@@ -709,15 +728,20 @@ namespace
 
 void UWWOBodyComponent::PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const
 {
+	if (Slot >= 0 && Slot < NumShellSlots) PaintShellPartWith(Part, ShellPaint[Slot]);
+}
+
+void UWWOBodyComponent::PaintShellPartWith(USkeletalMeshComponent* Part, const FColor (&Paint)[NumShellRoles])
+{
 	const USkeletalMesh* Asset = Part ? Part->GetSkeletalMeshAsset() : nullptr;
-	if (!Asset || Slot < 0 || Slot >= NumShellSlots) return;
+	if (!Asset) return;
 	const TArray<FSkeletalMaterial>& Slots = Asset->GetMaterials();
 	for (int32 i = 0; i < Slots.Num(); ++i)
 	{
 		UMaterialInterface* Own = Slots[i].MaterialInterface;
 		bool bLight = false;
 		const int32 Role = ShellMaterialRole(Own, bLight);
-		const FColor Pick = Role == INDEX_NONE ? FColor(0, 0, 0, 0) : ShellPaint[Slot][Role];
+		const FColor Pick = Role == INDEX_NONE ? FColor(0, 0, 0, 0) : Paint[Role];
 		if (Pick.A == 0)
 		{
 			if (Part->GetMaterial(i) != Own) Part->SetMaterial(i, Own); // default: the part's own
@@ -755,9 +779,19 @@ USkeletalMesh* UWWOBodyComponent::ShellMesh(int32 Slot) const
 	// The picked shell's part; a shell that has none for this slot (or isn't imported) shows the base robot's.
 	for (const int32 Shell : { ShellOverride[Slot] >= 0 ? ShellOverride[Slot] : ShellPick[Slot], 0 })
 	{
-		const FString Name = FString::Printf(TEXT("SK_Shell%d_%s"), Shell, ShellSlotNames[Slot]);
-		USkeletalMesh* Asset = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Shells/%s.%s"), *Name, *Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		USkeletalMesh* Asset = LoadShellPart(Shell, Slot);
 		if (Asset && Asset->GetSkeleton() == Skeleton) return Asset;
+	}
+	return nullptr;
+}
+
+USkeletalMesh* UWWOBodyComponent::ShellMeshFor(const UWWOFramePartData* Part, int32 Slot)
+{
+	if (Slot < 0 || Slot >= NumShellSlots) return nullptr;
+	ReadShellSwitch();
+	for (const int32 Shell : { ShellOverride[Slot] >= 0 ? ShellOverride[Slot] : ShellLookOf(Part), 0 })
+	{
+		if (USkeletalMesh* Asset = LoadShellPart(Shell, Slot)) return Asset;
 	}
 	return nullptr;
 }

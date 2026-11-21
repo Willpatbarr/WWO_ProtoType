@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include "UI/WWOUI.h"
 
+class UMaterialInterface;
+
 namespace WWOCharacterMenuUI
 {
 	constexpr float K = WWOUI::K;
@@ -27,6 +29,8 @@ namespace WWOCharacterMenuUI
 		float MinHeight = 72.f;  // the card's least height (Godot pixels)
 		FString Tip;             // a hover tip
 		bool bCenter = false;    // words centred (a card with no badge)
+		UMaterialInterface* Picture = nullptr; // a picture at the card's left instead of a badge (a shell part's)
+		FVector2D PictureSize = FVector2D(66.f, 44.f); // its size (Godot pixels; AWWOPartPictures' 3:2)
 	};
 	// The gap between cards in a grid (Godot pixels): the grids' slot padding is half of it each side.
 	constexpr float CardGap = 12.f;

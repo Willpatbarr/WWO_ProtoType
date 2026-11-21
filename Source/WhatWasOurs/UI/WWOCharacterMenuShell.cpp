@@ -21,25 +21,35 @@ void UWWOCharacterMenu::BuildFrameRows()
 	if (!L) return;
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	// Each slot's parts as a row of cards on the editors' grid (ItemCard, AddCardGrid), under its name.
+	// Section names a little closer to what they name than on the other tabs: the parts' pictures make the cards
+	// taller and the tab must still fit.
+	auto Label = [this](const FString& Text)
+	{
+		AddRowLabel(Text);
+		if (Content->GetChildrenCount() > 1) Cast<UVerticalBoxSlot>(Content->GetChildAt(Content->GetChildrenCount() - 1)->Slot)->SetPadding(FMargin(0, 14.f * K, 0, 0));
+	};
+	// Each slot's parts as a row of cards on the editors' grid (ItemCard, AddCardGrid), under its name, each with
+	// its picture (AWWOPartPictures: the part alone, in this slot's colours).
 	for (const FName& FrameSlot : UWWOLoadoutSubsystem::FrameSlots())
 	{
-		AddRowLabel(FrameSlot.ToString());
+		Label(FrameSlot.ToString());
 		TArray<UWidget*> Cards;
 		for (UWWOFramePartData* Part : L->FramePartsFor(FrameSlot))
 		{
 			if (!Part->bUnlocked) continue;
 			FItemCard C;
 			C.Title = Part->DisplayName;
-			C.Sub = Part->Summary().Replace(TEXT("\n"), TEXT(" · "));
+			C.Sub = Part->Summary(); // (a stat a line: beside the picture there's room for one)
 			C.bOn = Part == L->GetFramePart(FrameSlot);
 			C.MinHeight = 64.f;
+			C.Picture = PartPicture(Part, FrameSlot);
+			C.PictureSize = FVector2D(60.f, 40.f);
 			Cards.Add(ItemCard(C, [WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
 		}
 		AddCardGrid(Cards, 4);
 	}
-	BuildColourRows(L);
-	AddRowLabel(TEXT("Net effect"));
+	BuildColourRows(L, Label);
+	Label(TEXT("Net effect"));
 	const TArray<FString> Lines = L->GroupSummary();
 	UTextBlock* Net = WWOUI::Text(WidgetTree, Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("No changes (all Standard parts)"), WWOUI::Type::Body, WWOUI::TextPrimary);
 	Content->AddChildToVerticalBox(Net)->SetPadding(FMargin(0, 8.f * K, 0, 0));
@@ -67,13 +77,13 @@ namespace
 	const TCHAR* const PaintRoles[] = { TEXT("Primary"), TEXT("Secondary"), TEXT("Glow") };                     // FWWOEquipped::EShellRole
 }
 
-void UWWOCharacterMenu::BuildColourRows(UWWOLoadoutSubsystem* L)
+void UWWOCharacterMenu::BuildColourRows(UWWOLoadoutSubsystem* L, TFunctionRef<void(const FString&)> Label)
 {
 	// Which part (All, Head, Core, Arms, Legs) and which of its colours, on one row; then the swatches and Default. The
 	// preview robot follows the loadout, so a click shows at once.
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
-	AddRowLabel(TEXT("Colours"));
+	Label(TEXT("Colours"));
 	const FLinearColor Off = WWOUI::CardColor, On = WWO::Lightened(WWOUI::CardColor, 0.12f);
 	const FLinearColor DimEdge(1.f, 1.f, 1.f, 0.2f);
 	UHorizontalBox* Picks = WidgetTree->ConstructWidget<UHorizontalBox>();

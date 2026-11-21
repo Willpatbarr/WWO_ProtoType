@@ -12,6 +12,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/ScrollBoxSlot.h"
 #include "Components/SizeBox.h"
+#include "Components/Spacer.h"
 #include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
@@ -386,8 +387,8 @@ void UWWOCharacterMenu::BuildOverview()
 		Right->AddChildToVerticalBox(Bar)->SetPadding(FMargin(0, 26.f * K, 0, 0));
 	}
 	// The four frame parts (the shell): a two by two grid of tall cards filling the rest of the column.
-	// Each card's upper area is kept clear for the part's picture (art to come); its words sit at the
-	// bottom: the slot, the part's name, what it changes.
+	// Each card's upper area shows the part's picture (AWWOPartPictures: the part alone, in your colours);
+	// its words sit at the bottom: the slot, the part's name, what it changes.
 	UUniformGridPanel* Parts = Tree->ConstructWidget<UUniformGridPanel>();
 	Parts->SetSlotPadding(FMargin(7.f * K));
 	static const TCHAR* const PartSlots[] = { TEXT("head"), TEXT("arms"), TEXT("core"), TEXT("legs") };
@@ -402,9 +403,20 @@ void UWWOCharacterMenu::BuildOverview()
 		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, PartSlots[i], WWOUI::Type::Caption, Dim, 220));
 		Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Part ? Part->DisplayName : TEXT("Standard"), WWOUI::Type::Small, FLinearColor::White, 160, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
 		if (Part) Words->AddChildToVerticalBox(WWOUI::Spaced(WidgetTree, Part->Summary().Replace(TEXT("\n"), TEXT(" ")), WWOUI::Type::Micro, Dim, 40, true))->SetPadding(FMargin(0, 6.f * K, 0, 0));
-		UOverlaySlot* WordsSlot = In->AddChildToOverlay(Words);
+		UVerticalBox* Stack = Tree->ConstructWidget<UVerticalBox>();
+		if (UMaterialInterface* Picture = PartPicture(Part, PartSlots[i]))
+		{
+			UVerticalBoxSlot* PictureSlot = Stack->AddChildToVerticalBox(PictureWidget(Picture, FVector2D(150.f, 100.f)));
+			PictureSlot->SetSize(WWOUI::Fill(1.f));
+			PictureSlot->SetHorizontalAlignment(HAlign_Center);
+			PictureSlot->SetVerticalAlignment(VAlign_Center);
+			PictureSlot->SetPadding(FMargin(0, 10.f * K, 0, 8.f * K)); // (clear of the corner's tick)
+		}
+		else Stack->AddChildToVerticalBox(Tree->ConstructWidget<USpacer>())->SetSize(WWOUI::Fill(1.f));
+		Stack->AddChildToVerticalBox(Words);
+		UOverlaySlot* WordsSlot = In->AddChildToOverlay(Stack);
 		WordsSlot->SetHorizontalAlignment(HAlign_Fill);
-		WordsSlot->SetVerticalAlignment(VAlign_Bottom);
+		WordsSlot->SetVerticalAlignment(VAlign_Fill);
 		UWidget* PartCard = Card(In, Open(TEXT("Frame Parts")), WWOUI::CardColor, WWOUI::CardEdgeStrong, WWOUI::BoxEdge, FMargin(18.f, 12.f));
 		HoverTiles.Add({ PartCard, FString(TEXT("part_")) + PartSlots[i] });
 		UUniformGridSlot* Cell = Parts->AddChildToUniformGrid(PartCard, i / 2, i % 2);

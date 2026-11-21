@@ -147,6 +147,15 @@ public:
 	// with the colours swapped in (primary on Primary / PrimaryLight / Armour, secondary on Secondary / Trim, glow on Glow /
 	// Visor; Frame and Joint keep theirs); a default colour puts the part's own material back.
 	void PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const;
+	// The same with the colours given (a slot's primary, secondary, glow): for a part on no body (the menu's part pictures).
+	static void PaintShellPartWith(USkeletalMeshComponent* Part, const FColor (&Paint)[NumShellRoles]);
+	// A frame slot's index here (head, core, arms, legs: EShellSlot, FWWOEquipped's shell colour order); INDEX_NONE if it is none.
+	static int32 ShellSlotOf(FName FrameSlot);
+	// The shell number a frame part looks like (shell_looks; 0, the base robot, if it isn't listed).
+	static int32 ShellLookOf(const class UWWOFramePartData* Part);
+	// The mesh a slot shows for that part on every robot now (the wwo.Shell override, else its look; the base robot's
+	// part if that shell has none): what a body wearing it shows. Null if none is imported.
+	static USkeletalMesh* ShellMeshFor(const class UWWOFramePartData* Part, int32 Slot);
 	// Each slot wears the look of the frame part equipped in it (Config/CharacterModels.json "shell_looks":
 	// frame part id -> shell number; a part not listed there looks like the base robot).
 	void ShellFromLoadout(const class UWWOLoadoutSubsystem* Loadout);
