@@ -2,7 +2,9 @@
 	"global/Walk / Sprint":
 	{
 		"WalkSpeed": 4,
-		"SprintSpeed": 9
+		"SprintSpeed": 9.5,
+		"GroundAccel": 110,
+		"GroundDecel": 80
 	},
 	"global/Camera":
 	{
@@ -59,7 +61,8 @@
 	{
 		"CrouchSpeed": 2.5,
 		"SlideSpeed": 22,
-		"SlideDistance": 9.5
+		"SlideDistance": 9.5,
+		"SlideSteer": 60
 	},
 	"global/Melee":
 	{
@@ -350,7 +353,7 @@
 		"AdsTilt": 0.25,
 		"AdsVignette": 0.30000001192092896,
 		"ScopeOverlay": 0,
-		"SightHeight": 0.5,
+		"SightHeight": 0,
 		"SemiAuto": 0,
 		"FireRate": 140,
 		"Burst": 1,
@@ -559,9 +562,9 @@
 		"ScopeOverlay": 0,
 		"SightHeight": 0.70000028610229492,
 		"SemiAuto": 0,
-		"FireRate": 160,
+		"FireRate": 165,
 		"Burst": 3,
-		"BurstRate": 820,
+		"BurstRate": 830,
 		"Damage": 15,
 		"CritMultiplier": 2,
 		"FireRange": 105,
@@ -883,17 +886,17 @@
 	},
 	"grenade/snare_mine":
 	{
-		"Damage": 80,
-		"BlastRadius": 4,
+		"Damage": 90,
+		"BlastRadius": 4.7000002861022949,
 		"ThrowDistanceMult": 1,
 		"RechargeMult": 1,
 		"FuseMult": 1,
 		"Bounce": 0,
-		"ArmTime": 0.60000002384185791,
-		"TriggerRadius": 2.5,
-		"MineLife": 25,
-		"SlowAmount": 0.5,
-		"SlowTime": 3
+		"ArmTime": 0.30000001192092896,
+		"TriggerRadius": 3,
+		"MineLife": 20,
+		"SlowAmount": 0.60000002384185791,
+		"SlowTime": 5
 	},
 	"grenade/spore_pool":
 	{
