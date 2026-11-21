@@ -162,6 +162,76 @@ namespace
 		const AWWOCharacter* C = Cast<AWWOCharacter>(St.Mover.Get());
 		return C ? Cast<AWWOBotController>(C->GetController()) : nullptr;
 	}
+
+	// --- The player's own locomotion (move.player.*): a script of phases driven by what the player does.
+	// A step sees the state the last move left; Move and Hold reach the next move, Press the one after.
+	struct FPlayerRun
+	{
+		int32 Phase = 0;
+		int32 At = -1;       // the tick the current phase started
+		int32 SlideAt = -1;  // the first tick seen sliding
+		bool bWasSliding = false;
+		float Dist = 0.f;    // m, along the moves made in a slide
+		FVector Last = FVector::ZeroVector;
+		FString Heading;     // the last heading seen (deg from facing)
+		int32 Count = 0;
+	};
+
+	float PlayerSpeedOf(const AWWOCharacter* P)
+	{
+		const FVector V = P->GetVelocity();
+		return FVector2D(V.X, V.Y).Size() / WWO::M;
+	}
+
+	// A horizontal direction as degrees from where the player faces (positive: to its right).
+	FString HeadingFromFacing(const AWWOCharacter* P, const FVector& Dir)
+	{
+		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Dir.Y, Dir.X));
+		return Deg(FMath::FindDeltaAngleDegrees(P->GetActorRotation().Yaw, Yaw));
+	}
+
+	float SprintTopOf(const AWWOCharacter* P) { return P->M("sprint_speed", P->SprintSpeed) * P->MoveIn.SpeedScale; }
+	bool AtSprintTop(const AWWOCharacter* P) { return P->MoveState.bSprinting && PlayerSpeedOf(P) >= SprintTopOf(P) - 0.01f; }
+
+	// Phase 0 of most player runs: from rest, stick forward and sprint until at full sprint speed.
+	// 1 when there (St.At is then this tick), 0 while getting there, -1 when it never got there (recorded).
+	int32 SprintUp(FWWORegress& R, FPlayerRun& St, int32 Tick)
+	{
+		AWWOCharacter* P = R.Player();
+		if (Tick == 0)
+		{
+			R.Move(FVector2D(0.f, 1.f));
+			R.Press(EWWOAction::Sprint);
+			return 0;
+		}
+		if (AtSprintTop(P))
+		{
+			R.Record(TEXT("sprint_up_ticks"), Tick);
+			St.At = Tick;
+			return 1;
+		}
+		if (Tick < 120) return 0;
+		R.RecordBool(TEXT("sprint_up_failed"), true);
+		return -1;
+	}
+
+	FWWORegressScenario MakePlayerRun(const TCHAR* Name, TFunction<bool(FWWORegress&, AWWOCharacter&, FPlayerRun&, int32)> Step)
+	{
+		FWWORegressScenario S;
+		S.Name = Name;
+		TSharedRef<FPlayerRun> St = MakeShared<FPlayerRun>();
+		S.Setup = [St](FWWORegress& R) { *St = FPlayerRun(); };
+		S.Step = [St, Step](FWWORegress& R, int32 Tick)
+		{
+			AWWOCharacter* P = R.Player();
+			if (!P) return true;
+			if (!Step(R, *P, *St, Tick)) return false;
+			R.Move(FVector2D::ZeroVector);
+			R.Hold(EWWOAction::Crouch, false);
+			return true;
+		};
+		return S;
+	}
 }
 
 void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOLoadoutSubsystem& L)
@@ -662,4 +732,253 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		};
 		Out.Add(S);
 	}
+
+	// --- (f) The player's own locomotion (SimulateMove): ground momentum, slide heading, breaking out ---
+	// Speeds m/s, headings degrees from the player's facing (positive: to the right), distances m.
+	// Ground momentum: from rest to walk speed, letting go to a stop, a full sprint flipped straight back.
+	Out.Add(MakePlayerRun(TEXT("move.player.accel"), [](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
+	{
+		const float V = PlayerSpeedOf(&P);
+		const float Walk = P.M("walk_speed", P.WalkSpeed) * P.MoveIn.SpeedScale;
+		switch (St.Phase)
+		{
+		case 0:
+			if (Tick == 0) { R.Move(FVector2D(0.f, 1.f)); return false; }
+			if (Tick == 1 || Tick == 3 || Tick == 6) R.Record(FString::Printf(TEXT("speed_t%d"), Tick), Deg(V));
+			if (St.SlideAt < 0 && V >= Walk - 0.001f) { St.SlideAt = Tick; R.Record(TEXT("walk_tick"), Tick); }
+			if (Tick >= 10 && (St.SlideAt >= 0 || Tick >= 60))
+			{
+				if (St.SlideAt < 0) R.Record(TEXT("walk_tick"), -1);
+				R.Record(TEXT("walk_speed"), Deg(V));
+				R.Move(FVector2D::ZeroVector);
+				St.Phase = 1; St.At = Tick;
+			}
+			return false;
+		case 1:
+			if (V < 0.001f || Tick - St.At >= 120)
+			{
+				R.Record(TEXT("stop_ticks"), V < 0.001f ? Tick - St.At : -1);
+				R.Move(FVector2D(0.f, 1.f));
+				R.Press(EWWOAction::Sprint);
+				St.Phase = 2; St.At = Tick;
+			}
+			return false;
+		case 2:
+			if (AtSprintTop(&P) || Tick - St.At >= 180)
+			{
+				R.Record(TEXT("sprint_ticks"), AtSprintTop(&P) ? Tick - St.At : -1);
+				R.Record(TEXT("sprint_speed"), Deg(V));
+				R.Move(FVector2D(0.f, -1.f));
+				St.Phase = 3; St.At = Tick;
+			}
+			return false;
+		default:
+		{
+			const FVector Vel = P.GetVelocity();
+			const bool bBack = (FVector(Vel.X, Vel.Y, 0.f) | P.GetActorForwardVector()) < 0.f;
+			if (bBack && St.Count++ == 0) { R.Record(TEXT("back_dir_ticks"), Tick - St.At); }
+			const bool bThere = bBack && V >= SprintTopOf(&P) - 0.01f;
+			if (!bThere && Tick - St.At < 180) return false;
+			R.Record(TEXT("back_ticks"), bThere ? Tick - St.At : -1);
+			R.Record(TEXT("back_speed"), Deg(V));
+			R.Record(TEXT("back_heading"), HeadingFromFacing(&P, Vel));
+			R.RecordBool(TEXT("back_sprinting"), P.MoveState.bSprinting);
+			return true;
+		}
+		}
+	}));
+
+	// Shared by the ground slides: while in phase 1 after the crouch, follow the slide. Returns true when
+	// it ended (or never started), having recorded sliding, the first and last slide heading, ticks, distance.
+	auto FollowSlide = [](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick) -> bool
+	{
+		const bool bSliding = P.MoveState.bSliding;
+		const FVector Loc = P.GetActorLocation();
+		if (bSliding || St.bWasSliding) St.Dist += FVector2D(Loc.X - St.Last.X, Loc.Y - St.Last.Y).Size() / WWO::M;
+		St.Last = Loc;
+		if (bSliding)
+		{
+			St.Heading = HeadingFromFacing(&P, P.MoveState.SlideDir);
+			if (St.SlideAt < 0)
+			{
+				St.SlideAt = Tick;
+				R.RecordBool(TEXT("sliding"), true);
+				R.Record(TEXT("slide_tick"), Tick - St.At);
+				R.Record(TEXT("heading_start"), St.Heading);
+			}
+		}
+		const bool bEnded = !bSliding && St.bWasSliding;
+		St.bWasSliding = bSliding;
+		if (bEnded)
+		{
+			R.Record(TEXT("heading_end"), St.Heading);
+			R.Record(TEXT("slide_ticks"), Tick - St.SlideAt);
+			R.Record(TEXT("distance"), Deg(St.Dist));
+			return true;
+		}
+		if (St.SlideAt < 0 && Tick - St.At > 30) { R.RecordBool(TEXT("sliding"), false); return true; }
+		if (Tick - St.At > 400) { R.RecordBool(TEXT("slide_never_ended"), true); return true; }
+		return false;
+	};
+
+	// At full sprint, one tick: the stick to pure right and crouch. The slide goes where you were going
+	// (forward), then the stick steers it right at SlideSteer.
+	Out.Add(MakePlayerRun(TEXT("move.player.slide_ground"), [FollowSlide](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
+	{
+		if (St.Phase == 0)
+		{
+			const int32 Up = SprintUp(R, St, Tick);
+			if (Up < 0) return true;
+			if (Up == 0) return false;
+			R.Move(FVector2D(1.f, 0.f));
+			R.Hold(EWWOAction::Crouch, true);
+			St.Last = P.GetActorLocation();
+			St.Phase = 1;
+			return false;
+		}
+		if (Tick == St.At + 1) R.Hold(EWWOAction::Crouch, false); // a tap
+		return FollowSlide(R, P, St, Tick);
+	}));
+
+	// A sprint jump, the stick pure right in the air and a crouch tap (a slide queued for the landing):
+	// the slide takes the flight path's heading.
+	Out.Add(MakePlayerRun(TEXT("move.player.slide_land"), [](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
+	{
+		const bool bFloor = P.GetCharacterMovement()->IsMovingOnGround();
+		switch (St.Phase)
+		{
+		case 0:
+		{
+			const int32 Up = SprintUp(R, St, Tick);
+			if (Up < 0) return true;
+			if (Up == 1) { R.Press(EWWOAction::Jump); St.Phase = 1; }
+			return false;
+		}
+		case 1:
+			if (bFloor)
+			{
+				if (Tick - St.At < 20) return false;
+				R.RecordBool(TEXT("airborne"), false);
+				return true;
+			}
+			R.Move(FVector2D(1.f, 0.f));
+			R.Hold(EWWOAction::Crouch, true);
+			St.Heading = HeadingFromFacing(&P, P.GetVelocity());
+			St.Phase = 2; St.At = Tick;
+			return false;
+		case 2:
+			if (Tick == St.At + 1) R.Hold(EWWOAction::Crouch, false);
+			if (!bFloor)
+			{
+				St.Heading = HeadingFromFacing(&P, P.GetVelocity());
+				if (Tick - St.At < 300) return false;
+			}
+			R.Record(TEXT("air_ticks"), Tick - St.At);
+			R.Record(TEXT("air_heading_last"), St.Heading);
+			St.Phase = 3; St.At = Tick;
+			[[fallthrough]];
+		default:
+			if (P.MoveState.bSliding)
+			{
+				R.RecordBool(TEXT("slid"), true);
+				R.Record(TEXT("slide_after_ticks"), Tick - St.At);
+				R.Record(TEXT("slide_heading"), HeadingFromFacing(&P, P.MoveState.SlideDir));
+				return true;
+			}
+			if (Tick - St.At < 20) return false;
+			R.RecordBool(TEXT("slid"), false);
+			return true;
+		}
+	}));
+
+	// Slide from a full sprint (stick forward), then 10 ticks in press Sprint: out of the slide into a sprint,
+	// with the lockout; 20 ticks after the break (the lockout still running) a crouch tap just crouches.
+	Out.Add(MakePlayerRun(TEXT("move.player.slide_break_sprint"), [](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
+	{
+		const float V = PlayerSpeedOf(&P);
+		switch (St.Phase)
+		{
+		case 0:
+		{
+			const int32 Up = SprintUp(R, St, Tick);
+			if (Up < 0) return true;
+			if (Up == 1) { R.Hold(EWWOAction::Crouch, true); St.Phase = 1; }
+			return false;
+		}
+		case 1:
+			if (Tick == St.At + 1) R.Hold(EWWOAction::Crouch, false);
+			if (P.MoveState.bSliding && St.SlideAt < 0) St.SlideAt = Tick;
+			if (St.SlideAt < 0)
+			{
+				if (Tick - St.At < 30) return false;
+				R.RecordBool(TEXT("slide_started"), false);
+				return true;
+			}
+			if (Tick == St.SlideAt + 10) { R.Press(EWWOAction::Sprint); St.Phase = 2; St.At = Tick; }
+			return false;
+		case 2:
+			if (P.MoveState.bSliding && Tick - St.At < 4) return false;
+			R.Record(TEXT("break_ticks"), Tick - St.At);
+			R.RecordBool(TEXT("sliding"), P.MoveState.bSliding);
+			R.RecordBool(TEXT("sprinting"), P.MoveState.bSprinting);
+			R.Record(TEXT("lockout"), Deg(P.MoveState.SlideLockout));
+			R.Record(TEXT("speed"), Deg(V));
+			St.Phase = 3; St.At = Tick;
+			return false;
+		case 3:
+			if (Tick == St.At + 10) R.Record(TEXT("speed_10"), Deg(V));
+			if (Tick < St.At + 20) return false;
+			R.Record(TEXT("speed_20"), Deg(V));
+			R.Record(TEXT("lockout_at_crouch"), Deg(P.MoveState.SlideLockout));
+			R.Hold(EWWOAction::Crouch, true);
+			St.Phase = 4; St.At = Tick;
+			return false;
+		default:
+			R.RecordBool(TEXT("crouch.sliding"), P.MoveState.bSliding);
+			R.RecordBool(TEXT("crouch.crouching"), P.MoveState.bCrouching);
+			R.RecordBool(TEXT("crouch.toggled"), P.MoveState.bCrouchToggled);
+			return true;
+		}
+	}));
+
+	// Slide from a full sprint, then 10 ticks in a fresh crouch press: the slide ends there, crouched.
+	Out.Add(MakePlayerRun(TEXT("move.player.slide_break_crouch"), [](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
+	{
+		const float V = PlayerSpeedOf(&P);
+		switch (St.Phase)
+		{
+		case 0:
+		{
+			const int32 Up = SprintUp(R, St, Tick);
+			if (Up < 0) return true;
+			if (Up == 1) { R.Hold(EWWOAction::Crouch, true); St.Phase = 1; }
+			return false;
+		}
+		case 1:
+			if (Tick == St.At + 1) R.Hold(EWWOAction::Crouch, false);
+			if (P.MoveState.bSliding && St.SlideAt < 0) St.SlideAt = Tick;
+			if (St.SlideAt < 0)
+			{
+				if (Tick - St.At < 30) return false;
+				R.RecordBool(TEXT("slide_started"), false);
+				return true;
+			}
+			if (Tick == St.SlideAt + 10) { R.Hold(EWWOAction::Crouch, true); St.Phase = 2; St.At = Tick; }
+			return false;
+		default:
+			if (Tick == St.At + 1)
+			{
+				R.RecordBool(TEXT("sliding"), P.MoveState.bSliding);
+				R.RecordBool(TEXT("crouching"), P.MoveState.bCrouching);
+				R.RecordBool(TEXT("toggled"), P.MoveState.bCrouchToggled);
+				R.Record(TEXT("lockout"), Deg(P.MoveState.SlideLockout));
+				R.Record(TEXT("speed"), Deg(V));
+				R.Hold(EWWOAction::Crouch, false);
+			}
+			if (Tick < St.At + 30) return false;
+			R.Record(TEXT("speed_30"), Deg(V));
+			R.RecordBool(TEXT("crouching_30"), P.MoveState.bCrouching);
+			return true;
+		}
+	}));
 }

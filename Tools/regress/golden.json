@@ -11955,6 +11955,62 @@
     "t360.pitch": "0.0000",
     "t360.yaw": "117.3932"
   },
+  "move.player.accel": {
+    "back_dir_ticks": "7",
+    "back_heading": "-180.0000",
+    "back_speed": "9.0000",
+    "back_sprinting": "1",
+    "back_ticks": "14",
+    "speed_t1": "1.3333",
+    "speed_t3": "4.0000",
+    "speed_t6": "4.0000",
+    "sprint_speed": "9.0000",
+    "sprint_ticks": "7",
+    "stop_ticks": "3",
+    "walk_speed": "4.0000",
+    "walk_tick": "3"
+  },
+  "move.player.slide_break_crouch": {
+    "crouching": "1",
+    "crouching_30": "1",
+    "lockout": "0.5922",
+    "sliding": "0",
+    "speed": "16.0568",
+    "speed_30": "2.5000",
+    "sprint_up_ticks": "7",
+    "toggled": "1"
+  },
+  "move.player.slide_break_sprint": {
+    "break_ticks": "2",
+    "crouch.crouching": "1",
+    "crouch.sliding": "0",
+    "crouch.toggled": "1",
+    "lockout": "0.5588",
+    "lockout_at_crouch": "0.2255",
+    "sliding": "0",
+    "speed": "15.6377",
+    "speed_10": "9.0000",
+    "speed_20": "9.0000",
+    "sprint_up_ticks": "7",
+    "sprinting": "1"
+  },
+  "move.player.slide_ground": {
+    "distance": "9.3579",
+    "heading_end": "45.9999",
+    "heading_start": "1.0000",
+    "slide_tick": "1",
+    "slide_ticks": "46",
+    "sliding": "1",
+    "sprint_up_ticks": "7"
+  },
+  "move.player.slide_land": {
+    "air_heading_last": "28.6750",
+    "air_ticks": "55",
+    "slid": "1",
+    "slide_after_ticks": "0",
+    "slide_heading": "29.3685",
+    "sprint_up_ticks": "7"
+  },
   "move.soldier.corner": {
     "health": "325",
     "path_partial": "0",

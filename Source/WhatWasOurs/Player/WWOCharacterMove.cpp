@@ -68,6 +68,9 @@ namespace
 		{ &AWWOCharacter::CoyoteTime,     nullptr,                0.f,   0.6f },
 		{ &AWWOCharacter::MantleReach,    nullptr,                0.f,   7.f },
 		{ &AWWOCharacter::MantleTime,     nullptr,                0.05f, 2.f },
+		{ &AWWOCharacter::GroundAccel,    nullptr,                5.f,   600.f },
+		{ &AWWOCharacter::GroundDecel,    nullptr,                5.f,   600.f },
+		{ &AWWOCharacter::SlideSteer,     nullptr,                0.f,   360.f },
 	};
 	constexpr int32 MoveStatCount = UE_ARRAY_COUNT(MoveStatTable);
 }
@@ -223,6 +226,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 	if (Health->bDead)
 	{
 		WishVelocity = FVector::ZeroVector;
+		MoveState.GroundVel = FVector2D::ZeroVector;
 		return;
 	}
 	if (MoveIn.Pressed & MoveLaunch) ApplyLaunch(MoveIn.Push);
@@ -233,6 +237,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 		MoveState.bSliding = false;
 		UpdateAir(DeltaSeconds);
 		WishVelocity = FVector::ZeroVector;
+		MoveState.GroundVel = FVector2D::ZeroVector;
 		return;
 	}
 	const FVector2D Input = MoveIn.Move;
@@ -242,6 +247,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 	{
 		if (MoveState.bLungeFlight) EndLungeFlight();
 		UpdateMantle(DeltaSeconds);
+		MoveState.GroundVel = FVector2D::ZeroVector; // you come over the top from a standstill
 		return;
 	}
 
@@ -258,6 +264,7 @@ void AWWOCharacter::SimulateMove(float DeltaSeconds)
 		// Flying at the velocity the lunging machine sent (CalcVelocity uses LungeVelocity).
 		if (!MoveState.bLungeFlight) MoveState.bSprinting = MoveState.bSliding = false; // a lunge ends a sprint or slide, on both machines' copies of the move
 		MoveState.bLungeFlight = true;
+		MoveState.GroundVel = FVector2D::ZeroVector; // a lunge ends at a dead stop
 		LungeVelocity = MoveIn.Push;
 		if (Move->MovementMode != MOVE_Flying) Move->SetMovementMode(MOVE_Flying);
 	}
@@ -276,9 +283,9 @@ void FWWOMoveState::Serialize(FArchive& Ar)
 	Ar << More;
 	bLungeFlight = More & 1;
 	uint8 Jumps = (uint8)FMath::Clamp(JumpsUsed, 0, 255); // one byte on the wire
-	Ar << Jumps << TakeoffSpeed << SlideSpeedNow << LaunchTime << AirTime << SinceLanded << MantleT;
+	Ar << Jumps << TakeoffSpeed << SlideSpeedNow << LaunchTime << AirTime << SinceLanded << MantleT << SlideLockout;
 	JumpsUsed = Jumps;
-	Ar << SlideDir << MantleFrom << MantleTo;
+	Ar << SlideDir << MantleFrom << MantleTo << GroundVel;
 }
 
 void FWWOMoveInput::Serialize(FArchive& Ar)
@@ -313,9 +320,9 @@ void FWWOMoveInput::Quantize()
 FString FWWOMoveState::ToString() const
 {
 	// Every field, in Serialize's order after the flags.
-	return FString::Printf(TEXT("sprint %d crouch %d slide %d toggled %d queued %d held %d landsprint %d mantle %d lunge %d jumps %d takeoff %.2f slidespeed %.2f launch %.2f air %.2f landed %.2f mantlet %.2f slidedir %s mantle from %s to %s"),
+	return FString::Printf(TEXT("sprint %d crouch %d slide %d toggled %d queued %d held %d landsprint %d mantle %d lunge %d jumps %d takeoff %.2f slidespeed %.2f launch %.2f air %.2f landed %.2f mantlet %.2f lockout %.2f slidedir %s mantle from %s to %s groundvel %s"),
 		bSprinting, bCrouching, bSliding, bCrouchToggled, bSlideQueued, bCrouchWasHeld, bLandedSprinting, bMantling, bLungeFlight, JumpsUsed,
-		TakeoffSpeed, SlideSpeedNow, LaunchTime, AirTime, SinceLanded, MantleT, *SlideDir.ToCompactString(), *MantleFrom.ToCompactString(), *MantleTo.ToCompactString());
+		TakeoffSpeed, SlideSpeedNow, LaunchTime, AirTime, SinceLanded, MantleT, SlideLockout, *SlideDir.ToCompactString(), *MantleFrom.ToCompactString(), *MantleTo.ToCompactString(), *GroundVel.ToString());
 }
 
 TArray<float> AWWOCharacter::LocalMoveStats() const
@@ -364,10 +371,12 @@ void AWWOCharacter::ServerSetMoveStats_Implementation(const TArray<float>& V)
 void AWWOCharacter::UpdateSprint(const FVector2D& Input)
 {
 	// Press once to sprint; it stays on until you stop moving or crouch. Aiming and firing
-	// stop a sprint and block starting one. Sprinting from a crouch stands you up.
+	// stop a sprint and block starting one. Sprinting from a crouch stands you up, and sprinting
+	// in a slide breaks out of it (while the stick is pushed: there is nowhere to sprint otherwise).
 	const bool bAiming = MoveIn.Held & MoveAim, bFiring = MoveIn.Held & MoveFire;
-	if ((MoveIn.Pressed & MoveSprint) && !MoveState.bSliding && !bAiming && !bFiring)
+	if ((MoveIn.Pressed & MoveSprint) && !bAiming && !bFiring && (!MoveState.bSliding || Input.Size() >= 0.1f))
 	{
+		if (MoveState.bSliding) BreakSlide();
 		MoveState.bSprinting = true;
 		MoveState.bCrouchToggled = false;
 	}
@@ -390,12 +399,16 @@ void AWWOCharacter::UpdateCrouchAndSlide(const FVector& WishDir, float DeltaSeco
 
 	// Tapping crouch while sprinting on the ground starts a slide. From a sprint jump,
 	// crouch in the air queues a slide for landing, and crouch just after landing slides.
+	// Tapping crouch in a slide ends it there, crouched. After breaking out of a slide early, the
+	// next ground slide waits until that one would have ended (SlideLockout), so slide, break out,
+	// slide again is no faster than sliding; crouch just crouches until then.
 	MoveState.SinceLanded += DeltaSeconds;
+	MoveState.SlideLockout = FMath::Max(MoveState.SlideLockout - DeltaSeconds, 0.f);
 	if (bCrouchStarted)
 	{
 		const bool bCanSlide = M("slide_speed", SlideSpeed) > M("crouch_speed", CrouchSpeed);
 		const bool bJustLanded = MoveState.SinceLanded <= LandSlideWindow && MoveState.bLandedSprinting;
-		if (bCanSlide && IsOnFloor() && (MoveState.bSprinting || bJustLanded) && !MoveState.bSliding)
+		if (bCanSlide && MoveState.SlideLockout <= 0.f && IsOnFloor() && (MoveState.bSprinting || bJustLanded) && !MoveState.bSliding)
 		{
 			StartSlide(WishDir);
 		}
@@ -403,7 +416,12 @@ void AWWOCharacter::UpdateCrouchAndSlide(const FVector& WishDir, float DeltaSeco
 		{
 			MoveState.bSlideQueued = !MoveState.bSlideQueued; // tap again in the air to cancel
 		}
-		else if (!MoveState.bSliding)
+		else if (MoveState.bSliding)
+		{
+			BreakSlide();
+			MoveState.bCrouchToggled = true;
+		}
+		else
 		{
 			MoveState.bCrouchToggled = !MoveState.bCrouchToggled;
 		}
@@ -427,11 +445,27 @@ void AWWOCharacter::StartSlide(const FVector& WishDir)
 {
 	MoveState.bSliding = true;
 	MoveState.bSlideQueued = false;
+	// A slide goes the way you are travelling (your real velocity: after a jump that is your flight
+	// path, along a wall it is the wall), not the way the stick points at that instant. Only from
+	// a near standstill does the stick, then your facing, pick it. The stick steers it after (SlideSteer).
 	const FVector Moving(GetVelocity().X, GetVelocity().Y, 0.f);
-	MoveState.SlideDir = !WishDir.IsNearlyZero() ? WishDir : (Moving.Size() > 50.f ? Moving.GetSafeNormal() : GetActorForwardVector());
+	MoveState.SlideDir = Moving.Size() > 1.f * WWO::M ? Moving.GetSafeNormal() : (!WishDir.IsNearlyZero() ? WishDir : GetActorForwardVector());
 	MoveState.SlideSpeedNow = M("slide_speed", SlideSpeed);
 	MoveState.bCrouching = true;
 	MoveState.bSprinting = false;
+}
+
+float AWWOCharacter::SlideDecel() const
+{
+	const float Start = M("slide_speed", SlideSpeed);
+	const float End = M("crouch_speed", CrouchSpeed);
+	return FMath::Max((Start * Start - End * End) / (2.f * M("slide_distance", SlideDistance)), 0.01f);
+}
+
+void AWWOCharacter::BreakSlide()
+{
+	MoveState.SlideLockout = FMath::Max(MoveState.SlideSpeedNow - M("crouch_speed", CrouchSpeed), 0.f) / SlideDecel();
+	MoveState.bSliding = false;
 }
 
 void AWWOCharacter::Launch(const FVector& NewVelocityCm)
@@ -526,11 +560,18 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float
 	if (MoveState.bSliding)
 	{
 		// Constant slow-down chosen so the slide covers exactly SlideDistance.
-		const float Start = M("slide_speed", SlideSpeed);
 		const float End = M("crouch_speed", CrouchSpeed);
-		const float Decel = (Start * Start - End * End) / (2.f * M("slide_distance", SlideDistance));
-		MoveState.SlideSpeedNow = WWO::MoveToward(MoveState.SlideSpeedNow, End, Decel * DeltaSeconds);
+		MoveState.SlideSpeedNow = WWO::MoveToward(MoveState.SlideSpeedNow, End, SlideDecel() * DeltaSeconds);
+		// The stick (so the camera too, with the stick held) turns the slide, slowly. Pulling back doesn't.
+		if (SlideSteer > 0.f && !WishDir.IsNearlyZero() && (WishDir | MoveState.SlideDir) > -0.5f)
+		{
+			const float Now = FMath::Atan2(MoveState.SlideDir.Y, MoveState.SlideDir.X);
+			const float Step = FMath::DegreesToRadians(SlideSteer) * DeltaSeconds;
+			const float Yaw = Now + FMath::Clamp(FMath::FindDeltaAngleRadians(Now, FMath::Atan2(WishDir.Y, WishDir.X)), -Step, Step);
+			MoveState.SlideDir = FVector(FMath::Cos(Yaw), FMath::Sin(Yaw), 0.f);
+		}
 		WishVelocity = MoveState.SlideDir * MoveState.SlideSpeedNow * WWO::M;
+		MoveState.GroundVel = FVector2D(WishVelocity.X, WishVelocity.Y) / WWO::M;
 		if (MoveState.SlideSpeedNow <= End) MoveState.bSliding = false;
 		return;
 	}
@@ -549,18 +590,17 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float
 			H = WWO::MoveToward2D(H, FVector2D(WishDir.X, WishDir.Y) * Speed, M("air_control", AirControl) * DeltaSeconds);
 		}
 		WishVelocity = FVector(H.X, H.Y, 0.f) * WWO::M;
+		MoveState.GroundVel = H; // landing carries on from here
 		return;
 	}
-	if (!WishDir.IsNearlyZero())
-	{
-		WishVelocity = WishDir * Speed * WWO::M;
-	}
-	else
-	{
-		// Godot stops by Speed a physics frame (60 a second): the same rate per second here, whatever the frame rate.
-		const float Step = Speed * 60.f * DeltaSeconds;
-		WishVelocity = FVector(WWO::MoveToward(V.X, 0.f, Step), WWO::MoveToward(V.Y, 0.f, Step), 0.f) * WWO::M;
-	}
+	// On the ground, a little momentum: the velocity the rules asked for last move (GroundVel, not
+	// the real one: a wall or a slope would eat it every move) heads for the stick's at GroundAccel,
+	// or for a stop at GroundDecel. Coming out of a slide or a landing faster than you can run, you
+	// slow to your speed the same way.
+	const bool bPushing = !WishDir.IsNearlyZero();
+	const FVector2D Target = bPushing ? FVector2D(WishDir.X, WishDir.Y) * Speed : FVector2D::ZeroVector;
+	MoveState.GroundVel = WWO::MoveToward2D(MoveState.GroundVel, Target, (bPushing ? GroundAccel : GroundDecel) * DeltaSeconds);
+	WishVelocity = FVector(MoveState.GroundVel.X, MoveState.GroundVel.Y, 0.f) * WWO::M;
 }
 
 void AWWOCharacter::Landed(const FHitResult& Hit)

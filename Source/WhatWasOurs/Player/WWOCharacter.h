@@ -81,11 +81,13 @@ struct FWWOMoveState
 	int32 JumpsUsed = 0;          // a byte on the wire
 	float TakeoffSpeed = 0.f;     // m/s, keeps sprint/slide momentum while airborne
 	float SlideSpeedNow = 0.f;    // m/s
+	float SlideLockout = 0.f;     // s left before a slide you broke out of early would have ended: no new ground slide until then
 	float LaunchTime = 0.f;
 	float AirTime = 0.f;
 	float SinceLanded = 99.f;
 	float MantleT = 0.f;
 	FVector SlideDir = FVector::ForwardVector;
+	FVector2D GroundVel = FVector2D::ZeroVector; // m/s, the horizontal velocity the rules asked for last move (ground momentum eases from it)
 	FVector MantleFrom = FVector::ZeroVector;
 	FVector MantleTo = FVector::ZeroVector;
 	void Serialize(FArchive& Ar);
@@ -192,9 +194,14 @@ public:
 	// Movement (sent to the host through MoveStatTable, WWOCharacterMove.cpp).
 	UPROPERTY(EditAnywhere, Category = "Walk") float WalkSpeed = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Walk") float SprintSpeed = 10.f;
+	// Ground momentum: how fast your velocity moves toward where the stick points, and to a stop
+	// when you let go (m/s each second; high = instant, as it was before momentum).
+	UPROPERTY(EditAnywhere, Category = "Walk") float GroundAccel = 80.f;
+	UPROPERTY(EditAnywhere, Category = "Walk") float GroundDecel = 80.f;
 	UPROPERTY(EditAnywhere, Category = "Crouch") float CrouchSpeed = 2.5f;
 	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideSpeed = 22.f;   // speed at the start of a slide
 	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideDistance = 9.5f; // meters before slowing to crouch speed
+	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideSteer = 60.f;    // degrees a second a slide turns toward the stick (0 = locked)
 	UPROPERTY(EditAnywhere, Category = "Jump") float JumpHeight1 = 2.f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float JumpHeight2 = 2.3f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float AscentGravity = 20.f;
@@ -289,6 +296,8 @@ private:
 	void UpdateCrouchAndSlide(const FVector& WishDir, float DeltaSeconds);
 	bool HasSprintMomentum() const;
 	void StartSlide(const FVector& WishDir);
+	void BreakSlide();           // end a slide early (into a sprint or a crouch); sets the slide lockout
+	float SlideDecel() const;    // m/s each second, so a full slide covers exactly SlideDistance
 	void UpdateAir(float DeltaSeconds);
 	void HandleJump(const FVector& WishDir);
 	void ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float DeltaSeconds);

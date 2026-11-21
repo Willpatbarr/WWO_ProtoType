@@ -190,5 +190,7 @@ void AWWOCharacter::ClearStatusEffects()
 	MoveState.bMantling = false;
 	MoveState.bSliding = false;
 	MoveState.bSprinting = false;
+	MoveState.SlideLockout = 0.f;
+	MoveState.GroundVel = FVector2D::ZeroVector;
 	ResetRecoil();
 }
