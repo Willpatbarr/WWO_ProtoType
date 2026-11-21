@@ -55,7 +55,7 @@ SHELL_ROLES = {
 SHELL_GLOW = {
     "1": dict(Color=(0.8, 0.82, 0.85), Roughness=0.3, Metallic=0.0, EmissiveColor=(0.9, 0.95, 1.0), Glow=14.0, **PLAIN),
     "2": dict(Color=(0.5, 1.0, 0.05), Roughness=0.3, Metallic=0.0, EmissiveColor=(0.22, 1.0, 0.0), Glow=8.0, **PLAIN),
-    "3": dict(Color=(0.0, 0.0, 0.0), Roughness=0.3, Metallic=0.0, EmissiveColor=(1.0, 0.33, 0.0), Glow=2.0, **PLAIN),
+    "3": dict(Color=(0.0, 0.0, 0.0), Roughness=0.3, Metallic=0.0, EmissiveColor=(1.0, 0.33, 0.0), Glow=12.0, **PLAIN)   # (its Blender strength, 1.3, read as barely lit in the game),
 }
 # A shell's own colours for a role, over SHELL_ROLES (as its make_shell<N>.py overrides shell_kit.ROLES).
 SHELL_OWN = {

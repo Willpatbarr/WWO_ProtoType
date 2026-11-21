@@ -70,6 +70,7 @@ namespace
 		{ TEXT("Rust"), TEXT("C8622A") }, { TEXT("Ochre"), TEXT("D9A93A") }, { TEXT("Olive"), TEXT("6B7436") },
 		{ TEXT("Green"), TEXT("2F8F4E") }, { TEXT("Teal"), TEXT("2A8C8C") }, { TEXT("Blue"), TEXT("2D5FB8") },
 		{ TEXT("Navy"), TEXT("263A66") }, { TEXT("Violet"), TEXT("6A3F9E") }, { TEXT("Rose"), TEXT("C25A86") },
+		{ TEXT("Tan"), TEXT("DFC7A2") }, { TEXT("Brown"), TEXT("957955") }, // shell 3's own primary and secondary
 	};
 	const FSwatch GlowSwatches[] = {
 		{ TEXT("White"), TEXT("F2F6FF") }, { TEXT("Ice"), TEXT("9FD8FF") }, { TEXT("Cyan"), TEXT("30E0FF") },

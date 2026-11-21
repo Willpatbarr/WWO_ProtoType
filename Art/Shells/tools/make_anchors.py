@@ -469,6 +469,9 @@ def find_obstacles(w, PV, PT, spec):
             continue
         perp = np.linalg.norm((C - c) - np.outer(s, ax), axis=1)
         rad = float(perp.max()) + spec["pad"]
+        if rad > spec.get("max_radius", 1e9):
+            log(w.name, "obstacle left out: a %.1f cm clump of radius %.1f is a plate, not a protrusion" % (s.max() - s.min(), rad))
+            continue
         # the end nearer the rest of the part runs on toward it by 'out', so the capsule reaches what it stands on
         on = lambda q: O[tuple(np.clip(np.floor((q - lo) / vox).astype(int), 0, np.array(O.shape) - 1))]
         ka = min(range(0, 40), key=lambda t: 0 if on(a - ax * t * 0.5) else 1)

@@ -195,7 +195,9 @@ VOLUMES = {"Head": {"face": dict(kind="face", facing=0.6, lo=2.0, hi=-1.0, pad=1
 # from the rest, in clumps at least 'min_len' cm long, each as a capsule (radius 'pad' cm more than the clump's).
 # Only for the slots in 'slots'. EXTRA: hand-made ones per part, {part: {name: dict(a=[x, y, z], b=[x, y, z],
 # radius=cm, bone=name)}} (rig cm), for anything detection misses.
-OBSTACLES = dict(thick=4.0, out=1.5, min_len=3.0, pad=0.6, slots=("Head",))
+# 'max_radius': a clump wider than this is no antenna but a thin plate of the part itself (shell 3's mask is one
+# thin sheet: it came out as a single 11 cm capsule round the whole head, which kept every piece off it).
+OBSTACLES = dict(thick=4.0, out=1.5, min_len=3.0, pad=0.6, max_radius=4.0, slots=("Head",))
 OBSTACLES_EXTRA = {}
 
 # The wrap: voxel size, how wide a gap it closes (cm), and smoothing.
