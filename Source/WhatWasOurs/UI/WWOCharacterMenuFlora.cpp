@@ -124,7 +124,8 @@ void UWWOCharacterMenu::BuildFloraRows()
 			else
 			{
 				C.Title = TEXT("Empty");
-				Cards.Add(ItemCard(C, [] {})); // an empty slot does nothing
+				// An empty slot has nothing to choose: like a click on the page, it closes an open picker.
+				Cards.Add(ItemCard(C, [WeakThis] { if (WeakThis.IsValid() && !WeakThis->Picker.IsEmpty()) WeakThis->TogglePicker(WeakThis->Picker); }));
 			}
 		}
 		AddCardGrid(Cards, Wide);

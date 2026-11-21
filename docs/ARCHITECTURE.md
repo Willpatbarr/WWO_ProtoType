@@ -329,10 +329,10 @@ joint, visor) from `Tools/create_robot_materials.py` (rerun it after re-importin
 - **Character menu** (`UI/WWOCharacterMenu.*`): `WWOCharacterMenu.cpp` builds the frame and tabs and
   handles open / close, back, turning the preview, tick and the autotest hooks; one file per tab:
   `WWOCharacterMenuOverview.cpp` (Loadout: stat bars, Build notes, cards, the hover pickers),
-  `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, the gun's render, mod slots, configs, the mod hover
+  `WWOCharacterMenuFlora.cpp`, `WWOCharacterMenuWeapon.cpp` (weapons, the gun's render, mod slots (a click opens one), configs, the mod preview
   and the weapon stat-bar maths), `WWOCharacterMenuShell.cpp` (the shell parts, and the colour picker: `BuildColourRows`). The editors' cards are one builder, `ItemCard` (an item's
-  badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. Both hover popups close through one
-  `FWWOHoverPopup` timer. The Loadout tab's hover row (`OpenHoverPicker`) stays inside the window whatever the number of
+  badge, its name over a line of detail), laid out on equal columns by `AddCardGrid`. The Loadout tab's hover row closes through the
+  `FWWOHoverPopup` timer; the Weapon tab's mod lists and the Flora tab's pickers open and close on clicks. The Loadout tab's hover row (`OpenHoverPicker`) stays inside the window whatever the number of
   choices: one row while it fits, else it wraps into rows (weapon configs prefer five across, wider only as the height
   needs), goes over the tile when there is more room above, and scrolls (wheel, right stick) only when rows as wide as
   the window are still too tall; names too long for a choice end in "..." (the tip has them whole).

@@ -486,8 +486,33 @@ void UWWOCharacterMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	UpdateTurn(InDeltaTime);
 	UpdateHoverPicker(InDeltaTime);
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	if (bOpen && Expanded == TEXT("Weapons")) UpdateModHover(InDeltaTime);
+	if (bOpen && Expanded == TEXT("Weapons")) UpdateModPreview();
 	if (bOpen && PartPictures) PartPictures->Step(); // (lit by the preview's studio, which is on while the menu is open)
+}
+
+FReply UWWOCharacterMenu::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	// Cards are buttons and keep their presses, so this is a press on the page around them (a mouse
+	// click or the controller's Cross, which FWWOMenuCursor sends as one). Left unhandled as before.
+	const FReply Reply = Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	if (bOpen && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) CloseOnClickAway(InMouseEvent.GetScreenSpacePosition());
+	return Reply;
+}
+
+void UWWOCharacterMenu::CloseOnClickAway(const FVector2D& ScreenPos)
+{
+	if (Expanded == TEXT("Weapons") && !OpenSlot.IsNone())
+	{
+		if (PopupPanel && PopupPanel->GetCachedGeometry().IsUnderLocation(ScreenPos)) return;
+		OpenSlot = NAME_None;
+		Refresh();
+	}
+	else if (Expanded == TEXT("Flora") && !Picker.IsEmpty())
+	{
+		if (Preview && Preview->GetCachedGeometry().IsUnderLocation(ScreenPos)) return; // dragging turns the character
+		Picker.Reset();
+		Refresh();
+	}
 }
 
 UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part, FName FrameSlot, bool bSmall) const
