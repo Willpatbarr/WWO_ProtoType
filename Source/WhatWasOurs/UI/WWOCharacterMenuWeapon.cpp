@@ -31,7 +31,7 @@ void UWWOCharacterMenu::BuildWeaponRows()
 {
 	// The whole Weapon tab on one screen, no scrolling: four columns across the full width.
 	// Weapons | the frame's stat bars, perks under them | its six mod slots | saved configs, or
-	// the hovered slot's mods in their place (BuildModRows fills the last three).
+	// the clicked slot's mods in their place (BuildModRows fills the last three).
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	if (!L || !L->GetWeapon()) return;
 	UWidgetTree* Tree = WidgetTree;
@@ -54,7 +54,7 @@ void UWWOCharacterMenu::BuildWeaponRows()
 		C.Sub = FString::Printf(TEXT("%d rpm %s · %s · %d rds"), FMath::RoundToInt(Option->RoundsPerMinute()), *Fire, *Dmg, FMath::RoundToInt(Option->MagazineSize));
 		C.bOn = Option == L->GetWeapon();
 		C.MinHeight = 54.f;
-		Guns->AddChildToVerticalBox(ItemCard(C, [WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) WeakThis->Refresh(); }))
+		Guns->AddChildToVerticalBox(ItemCard(C, [WeakThis, WL, Option] { if (WL.IsValid()) WL->EquipWeapon(Option); if (WeakThis.IsValid()) { WeakThis->OpenSlot = NAME_None; WeakThis->Refresh(); } }))
 			->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
 	if (GunPreview && GunPreview->Target)
@@ -85,7 +85,7 @@ void UWWOCharacterMenu::BuildWeaponRows()
 		WellBox->SetHeightOverride((AWWOGunPreviewActor::Size.Y + 2.f * WWOUI::BoxEdge) * K);
 		WellBox->AddChild(Well);
 		Guns->AddChildToVerticalBox(WellBox)->SetPadding(FMargin(0, 8.f * K, 0, 0));
-		// Rebuilt only when the gun or its mods change (this page is rebuilt on every hover of a slot).
+		// Rebuilt only when the gun or its mods change (this page is also rebuilt when a slot opens or closes).
 		FString Key = L->GetWeapon()->Id.ToString();
 		for (const FName& ModSlot : UWWOLoadoutSubsystem::ModSlots()) if (const UWWOModData* Mod = L->GetMod(ModSlot)) Key += TEXT("|") + Mod->Id.ToString();
 		if (Key != GunKey)
@@ -168,8 +168,8 @@ namespace
 void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 {
 	// Draft weapon mods: the stat bars with the equipped perks under them, every slot at once, and
-	// the saved configs. While the cursor is over a slot, that slot's mods take the configs' place
-	// (see UpdateModHover).
+	// the saved configs. While a slot is open (clicked), its mods take the configs' place
+	// (see ToggleModSlot, UpdateModPreview).
 	UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	SlotButtons.Reset();
 	PopupButtons.Reset();
@@ -229,7 +229,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		C.bOn = OpenSlot == ModSlot;
 		C.bMark = false;
 		C.MinHeight = ModSlotHeight - 8.f;
-		UWidget* W = ItemCard(C, [WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->OpenModSlot(ModSlot); });
+		UWidget* W = ItemCard(C, [WeakThis, ModSlot] { if (WeakThis.IsValid()) WeakThis->ToggleModSlot(ModSlot); });
 		if (USizeBox* Box = Cast<USizeBox>(W)) SlotButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), ModSlot });
 		Slots->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 	}
@@ -256,7 +256,7 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 			C.Sub = Mod ? Mod->Summary() : FString(TEXT("No changes"));
 			C.bOn = Mod == Current;
 			C.MinHeight = 64.f;
-			UWidget* W = ItemCard(C, [WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) WeakThis->Refresh(); });
+			UWidget* W = ItemCard(C, [WeakThis, WL, ThisSlot, Mod] { if (WL.IsValid()) WL->EquipMod(ThisSlot, Mod); if (WeakThis.IsValid()) { WeakThis->OpenSlot = NAME_None; WeakThis->Refresh(); } });
 			if (USizeBox* Box = Cast<USizeBox>(W)) PopupButtons.Add({ Cast<UButton>(Box->GetChildAt(0)), Mod });
 			List->AddChildToVerticalBox(W)->SetPadding(FMargin(0, 0, 0, 8.f * K));
 		}
@@ -303,11 +303,9 @@ void UWWOCharacterMenu::BuildModRows(UHorizontalBox* Columns)
 		Cast<AWWOPlayerController>(GetOwningPlayer()) ? *Cast<AWWOPlayerController>(GetOwningPlayer())->BindHint("next_config") : TEXT("the swap key")), WWOUI::Type::Caption, WWOUI::TextFaint, 80, true))->SetPadding(FMargin(0, 8.f * K, 0, 0));
 }
 
-void UWWOCharacterMenu::OpenModSlot(FName ModSlot)
+void UWWOCharacterMenu::ToggleModSlot(FName ModSlot)
 {
-	if (OpenSlot == ModSlot) return;
-	OpenSlot = ModSlot;
-	ModClose.Reset();
+	OpenSlot = OpenSlot == ModSlot ? FName(NAME_None) : ModSlot;
 	Refresh();
 }
 
@@ -372,31 +370,9 @@ void UWWOCharacterMenu::UpdateStatBars(const UWWOModData* PreviewMod, FName Prev
 	}
 }
 
-void UWWOCharacterMenu::UpdateModHover(float DeltaTime)
+void UWWOCharacterMenu::UpdateModPreview()
 {
-	// Hovering a slot opens its popup; the popup stays while the cursor is on it or a slot, and
-	// closes a moment after it leaves both. Hovering a mod in the popup previews it on the bars.
-	bool bOnSlot = false;
-	for (const auto& Pair : SlotButtons)
-	{
-		if (Pair.Key.IsValid() && Pair.Key->IsHovered() && AutoTestPreview.IsNone())
-		{
-			bOnSlot = true;
-			if (Pair.Value != OpenSlot)
-			{
-				OpenModSlot(Pair.Value);
-				return; // rebuilt
-			}
-		}
-	}
-	const bool bOnPopup = PopupPanel && PopupPanel->IsHovered();
-	// (The autotest's preview holds it open.)
-	if (ModClose.ShouldClose(!OpenSlot.IsNone() && AutoTestPreview.IsNone(), bOnSlot || bOnPopup, DeltaTime))
-	{
-		OpenSlot = NAME_None;
-		Refresh();
-		return;
-	}
+	// Hovering a mod in the open slot's list previews it on the bars (painted, so nothing is rebuilt).
 	const UWWOModData* Hovered = nullptr;
 	bool bPreview = false;
 	for (const auto& Pair : PopupButtons)

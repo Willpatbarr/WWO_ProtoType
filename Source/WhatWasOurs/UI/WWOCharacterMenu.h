@@ -13,7 +13,7 @@
 //   Clicking a slot opens a picker row; picking an ability in the other slot swaps them.
 // - Weapons: one screen, no scrolling: the weapons with a render of the selected gun under them
 //   (AWWOGunPreviewActor), the frame's stat bars and perks, its mod slots, and the saved configs
-//   (the hovered slot's mods take their place).
+//   (the clicked slot's mods take their place; hovering one of them previews it on the bars).
 // - Frame Parts: one screen too: a row per slot (each part's card with its picture, AWWOPartPictures), the shell colours (which part, which colour, a row of swatches)
 //   and the net effect.
 // Right: the character, rendered by a scene capture of a mannequin that follows the loadout,
@@ -34,9 +34,8 @@ class UButton;
 class UImage;
 namespace WWOCharacterMenuUI { struct FItemCard; }
 
-// The "hover opens it, leaving closes it a moment later" timer both of the menu's hover popups use
-// (the Loadout tab's row of choices, the Weapon tab's mod list). The caller decides when one opens;
-// this says when an open one closes: after CloseAfter seconds with the cursor on neither the
+// The "hover opens it, leaving closes it a moment later" timer of the Loadout tab's row of choices.
+// The caller decides when one opens; this says when an open one closes: after CloseAfter seconds with the cursor on neither the
 // thing that opened it nor the popup.
 struct FWWOHoverPopup
 {
@@ -67,6 +66,8 @@ class WHATWASOURS_API UWWOCharacterMenu : public UUserWidget
 public:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	// A press that no card took (the page itself): closes the open mod list or picker.
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
@@ -94,6 +95,9 @@ private:
 	bool bBuilt = false;
 	FString Expanded;  // "", "Flora", "Weapons" or "Frame Parts"
 	FString Picker;    // "", "flora", "grenade", "ability0", "ability1" or "traits"
+	// The open Flora picker's rows in Content, [First, End): a press between its cards isn't a click away.
+	int32 PickerRowFirst = INDEX_NONE, PickerRowEnd = INDEX_NONE;
+	bool IsInFloraPicker(const FVector2D& ScreenPos) const;
 	UPROPERTY() TObjectPtr<UWidgetSwitcher> TileSwitcher;
 	UPROPERTY() TObjectPtr<UScrollBox> ExpandedScroll;
 	UPROPERTY() TObjectPtr<UVerticalBox> Content;
@@ -174,7 +178,7 @@ private:
 	void BuildFloraRows();
 	void BuildWeaponRows();
 	void BuildModRows(UHorizontalBox* Columns);
-	// Weapon mods (draft): the open slot's popup and the hover preview on the stat bars.
+	// Weapon mods (draft): the clicked slot's popup and the hover preview on the stat bars.
 	static constexpr float ModSlotHeight = 82.f; // Godot pixels per slot, padding included
 	// The Weapon tab's four columns (Godot pixels; with their gaps they fit the 1464 the panel has
 	// at 16:9): weapons, stat bars and perks, mod slots, configs or the open slot's mods.
@@ -184,14 +188,14 @@ private:
 	static constexpr float SideColumn = 440.f;
 	static constexpr float ConfigListHeight = 540.f; // the config list scrolls inside this, the page never
 	FName OpenSlot;
-	FWWOHoverPopup ModClose{ 0.35f }; // the open slot's mods close this long after the cursor leaves them and the slots
 	FName AutoTestPreview; // set by the autotest: a mod id to preview as if hovered
 	UPROPERTY() TObjectPtr<class UWWOStatBars> StatBars;
 	UPROPERTY() TObjectPtr<UWidget> PopupPanel;
 	TArray<TPair<TWeakObjectPtr<UButton>, FName>> SlotButtons;
 	TArray<TPair<TWeakObjectPtr<UButton>, TWeakObjectPtr<class UWWOModData>>> PopupButtons;
-	void OpenModSlot(FName ModSlot);
-	void UpdateModHover(float DeltaTime);
+	void ToggleModSlot(FName ModSlot); // a slot's click: opens it, closes it if open, or switches to it
+	void UpdateModPreview(); // each frame: the mod under the cursor on the bars; never rebuilds the page
+	void CloseOnClickAway(const FVector2D& ScreenPos);
 	void UpdateStatBars(const class UWWOModData* PreviewMod, FName PreviewSlot, bool bPreview);
 	void BuildFrameRows();
 	// The Shell tab's colour picker (under the parts): which slot it paints (INDEX_NONE: all four) and which of the

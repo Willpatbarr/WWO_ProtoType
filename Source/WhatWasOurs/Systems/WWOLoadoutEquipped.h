@@ -35,6 +35,9 @@ struct FWWOEquipped
 	static constexpr int32 ShellSlots = 4, ShellRoles = 3;
 	enum EShellRole { ShellPrimary, ShellSecondary, ShellGlow };
 	UPROPERTY() TArray<FColor> ShellColors;
+	// Every flora but the equipped one: its picks, waiting to be put back (SwitchFlora). Only ever saved: never
+	// sent, and nothing reads it for stats or kit, so a stored setup grants nothing.
+	TMap<FName, FWWOFloraSetup> FloraSetups;
 
 	// --- Reading ---
 	UWWOAbilityData* GetAbility(int32 Slot) const { return Abilities.IsValidIndex(Slot) ? Abilities[Slot].Get() : nullptr; }
@@ -48,7 +51,8 @@ struct FWWOEquipped
 	bool AnyShellColor() const;
 
 	// --- Changing (the subsystem announces the change) ---
-	void SwitchFlora(UWWOFloraData* Choice, const FWWOLoadoutCatalog& Catalog); // its first grenade and abilities, no traits
+	void SwitchFlora(UWWOFloraData* Choice, const FWWOLoadoutCatalog& Catalog); // keeps this flora's picks, puts on Choice's (first time: its first grenade and abilities, no traits)
+	void RestoreFloraSetup(const FWWOLoadoutCatalog& Catalog); // the equipped flora's stored picks, if any, minus any no longer valid
 	void SetAbility(int32 Slot, UWWOAbilityData* Choice); // already in the other slot: the two swap
 	bool ToggleTrait(UWWOTraitData* Choice);              // false: refused (slots full, another flora's)
 	bool SetMod(FName Slot, UWWOModData* Mod);            // null empties the slot; false: refused (no weapon, wrong frame or slot)

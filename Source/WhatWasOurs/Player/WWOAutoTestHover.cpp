@@ -11,7 +11,7 @@
 //     row down if it scrolls, walks to the last choice (the row must stay open all the way) and
 //     clicks it; the slot then holds that config (90_hover_<n>_weapon0_last).
 // Then the Weapon tab: it fits, the config list lies inside the window, each mod slot's list opens
-// inside it (91_hover_<n>_weapon_tab, 91_hover_mods_<slot>); at 40 the config list is wheeled to its
+// inside it when clicked (91_hover_<n>_weapon_tab, 91_hover_mods_<slot>); at 40 the config list is wheeled to its
 // end (91_hover_<n>_configs_end). Lines `AutoTest hover: ... ok|FAIL`.
 
 #include "Player/WWOAutoTest.h"
@@ -338,6 +338,16 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 			if (N != Counts[0] || !Slots.IsValidIndex(HoverTile)) { Next(30); break; }
 			MoveMouse(Slots[HoverTile].GetCenter());
 		}
+		Next(26);
+		break;
+	case 26: // a slot opens on a click
+		if (HoverClock < 0.15f) break;
+		Click(true);
+		Next(27);
+		break;
+	case 27:
+		if (HoverClock < 0.05f) break;
+		Click(false);
 		Next(25);
 		break;
 	case 25:
@@ -347,7 +357,7 @@ void FWWOAutoTest::UpdateAutoHoverTest(float DeltaTime)
 			TArray<FSlateRect> Slots;
 			const bool bOpen = Menu->AutoTestModRects(Panel, Slots);
 			const FString SlotName = UWWOLoadoutSubsystem::ModSlots().IsValidIndex(HoverTile) ? UWWOLoadoutSubsystem::ModSlots()[HoverTile].ToString() : FString(TEXT("?"));
-			Check(bOpen && Inside(Panel, View), FString::Printf(TEXT("hovering the %s slot opens its mods inside the window (%s)"), *SlotName, bOpen ? *RectText(Panel) : TEXT("not open")));
+			Check(bOpen && Inside(Panel, View), FString::Printf(TEXT("clicking the %s slot opens its mods inside the window (%s)"), *SlotName, bOpen ? *RectText(Panel) : TEXT("not open")));
 			Check(Menu->ScrollOverflow() < 1.f, FString::Printf(TEXT("the Weapon tab with the %s mods open fits (%.0f to scroll)"), *SlotName, Menu->ScrollOverflow()));
 			Shot(*FString::Printf(TEXT("91_hover_mods_%s"), *SlotName));
 		}

@@ -19,6 +19,18 @@ struct FWWOModConfig
 	UPROPERTY() TMap<FName, FName> Mods; // slot -> mod id
 };
 
+// One flora's own picks, as ids, kept while another flora is equipped. Ids rather than assets so a pick
+// the game no longer has stays in the file and is only dropped when that flora is put on.
+USTRUCT()
+struct FWWOFloraSetup
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FName Grenade;
+	UPROPERTY() TArray<FName> Abilities; // by slot (None = empty)
+	UPROPERTY() TArray<FName> Traits;
+};
+
 // A player's loadout as ids, for the host (online: a joiner sends it, the host keeps a copy of the
 // loadout system for that player; see UWWOLoadoutSubsystem::Get). Maps are parallel arrays.
 USTRUCT()
@@ -62,4 +74,7 @@ public:
 	UPROPERTY() TArray<FWWOModConfig> ModConfigs;
 	UPROPERTY() TArray<int32> WeaponSlots; // the saved config in each of the two weapon slots (-1 = none)
 	UPROPERTY() TArray<FColor> ShellColors; // FWWOEquipped::ShellColors; empty (and missing from older saves): the parts' own colours
+	// The floras that are not equipped, by flora id. The equipped flora's picks stay in Grenade, Abilities and
+	// Traits above, so a save from before this field is simply "that flora's setup, no others yet". Empty: not written.
+	UPROPERTY() TMap<FName, FWWOFloraSetup> FloraSetups;
 };
