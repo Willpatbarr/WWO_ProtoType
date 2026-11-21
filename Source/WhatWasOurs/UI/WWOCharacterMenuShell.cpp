@@ -42,7 +42,7 @@ void UWWOCharacterMenu::BuildFrameRows()
 			C.Sub = Part->Summary(); // (a stat a line: beside the picture there's room for one)
 			C.bOn = Part == L->GetFramePart(FrameSlot);
 			C.MinHeight = 64.f;
-			C.Picture = PartPicture(Part, FrameSlot);
+			C.Picture = PartPicture(Part, FrameSlot, true);
 			C.PictureSize = FVector2D(60.f, 40.f);
 			Cards.Add(ItemCard(C, [WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
 		}

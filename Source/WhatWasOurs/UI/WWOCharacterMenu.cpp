@@ -490,14 +490,14 @@ void UWWOCharacterMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	if (bOpen && PartPictures) PartPictures->Step(); // (lit by the preview's studio, which is on while the menu is open)
 }
 
-UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part, FName FrameSlot) const
+UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part, FName FrameSlot, bool bSmall) const
 {
 	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(this);
 	const int32 Slot = UWWOBodyComponent::ShellSlotOf(FrameSlot);
 	if (!PartPictures || !L || Slot == INDEX_NONE) return nullptr;
 	FColor Paint[3];
 	for (int32 Role = 0; Role < 3; ++Role) Paint[Role] = L->GetShellColor(Slot, Role);
-	return PartPictures->Picture(Part, Slot, Paint);
+	return PartPictures->Picture(Part, Slot, Paint, bSmall);
 }
 
 UWidget* UWWOCharacterMenu::PictureWidget(UMaterialInterface* Mat, FVector2D Size)

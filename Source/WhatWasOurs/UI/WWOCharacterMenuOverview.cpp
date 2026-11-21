@@ -406,11 +406,12 @@ void UWWOCharacterMenu::BuildOverview()
 		UVerticalBox* Stack = Tree->ConstructWidget<UVerticalBox>();
 		if (UMaterialInterface* Picture = PartPicture(Part, PartSlots[i]))
 		{
+			// As large as the space above the words lets it be (the picture keeps its shape), clear of the corner's tick.
 			UVerticalBoxSlot* PictureSlot = Stack->AddChildToVerticalBox(PictureWidget(Picture, FVector2D(150.f, 100.f)));
 			PictureSlot->SetSize(WWOUI::Fill(1.f));
-			PictureSlot->SetHorizontalAlignment(HAlign_Center);
-			PictureSlot->SetVerticalAlignment(VAlign_Center);
-			PictureSlot->SetPadding(FMargin(0, 10.f * K, 0, 8.f * K)); // (clear of the corner's tick)
+			PictureSlot->SetHorizontalAlignment(HAlign_Fill);
+			PictureSlot->SetVerticalAlignment(VAlign_Fill);
+			PictureSlot->SetPadding(FMargin(14.f * K, 8.f * K, 14.f * K, 6.f * K));
 		}
 		else Stack->AddChildToVerticalBox(Tree->ConstructWidget<USpacer>())->SetSize(WWOUI::Fill(1.f));
 		Stack->AddChildToVerticalBox(Words);

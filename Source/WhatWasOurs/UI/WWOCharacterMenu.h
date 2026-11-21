@@ -105,7 +105,7 @@ private:
 	// The shell part pictures (the Loadout tab's part cards, the Shell tab's part cards), taken while the menu is open.
 	UPROPERTY() TObjectPtr<class AWWOPartPictures> PartPictures;
 	// Part's picture (in FrameSlot) in the loadout's colours for that slot; null if there is none to show.
-	class UMaterialInterface* PartPicture(const class UWWOFramePartData* Part, FName FrameSlot) const;
+	class UMaterialInterface* PartPicture(const class UWWOFramePartData* Part, FName FrameSlot, bool bSmall = false) const; // bSmall: the Shell tab's
 	// A picture as a widget, at least Size (Godot pixels) and scaled to fit what it's given, its shape kept.
 	UWidget* PictureWidget(class UMaterialInterface* Mat, FVector2D Size);
 
