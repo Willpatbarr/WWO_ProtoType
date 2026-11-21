@@ -14,6 +14,7 @@
 #include "Characters/WWOBodyAnimInstance.h"
 #include "Animation/AnimSequence.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkinnedAssetCommon.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Characters/WWOModelAnimInstance.h"
@@ -33,6 +34,21 @@ namespace
 
 	// Config/CharacterModels.json, read and parsed once a run (every body that spawns asks): retune with a restart.
 	TSharedPtr<FJsonObject> CharacterModels() { return WWOConfig::LoadCached(TEXT("CharacterModels.json")); }
+
+	// "shell_lod_screen_sizes": the screen size at which each of SK_RobotSkeleton's LODs starts, set on the loaded mesh
+	// before a robot shows it (the import's own, 1 / 0.5 / 0.25, put LOD 1 at about 3 m). The robot picks its LOD from
+	// these; its shell parts follow it, and so do its anchor grafts' detail levels. LOD 0 stays at 1.
+	void ApplyShellLodSizes(USkeletalMesh* Bare)
+	{
+		const TSharedPtr<FJsonObject> Json = CharacterModels();
+		const TArray<TSharedPtr<FJsonValue>>* Sizes = nullptr;
+		if (!Bare || !Json.IsValid() || !Json->TryGetArrayField(TEXT("shell_lod_screen_sizes"), Sizes)) return;
+		for (int32 i = 1; i < FMath::Min(Sizes->Num(), Bare->GetLODNum()); ++i)
+		{
+			const float Size = (float)(*Sizes)[i]->AsNumber();
+			if (FSkeletalMeshLODInfo* Info = Bare->GetLODInfo(i); Info && Size > 0.f && Info->ScreenSize.Default != Size) Info->ScreenSize.Default = Size;
+		}
+	}
 
 	// One entry of its "models".
 	TSharedPtr<FJsonObject> ModelConfig(FName Key)
@@ -246,7 +262,7 @@ void UWWOBodyComponent::SetModel(FName Key)
 	if (Asset && Config->TryGetBoolField(TEXT("shells"), bShells) && bShells)
 	{
 		USkeletalMesh* Bare = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/WWO/Characters/RobotFrame/Shells/SK_RobotSkeleton.SK_RobotSkeleton"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		if (Bare && Bare->GetSkeleton() == Asset->GetSkeleton()) Asset = Bare;
+		if (Bare && Bare->GetSkeleton() == Asset->GetSkeleton()) { ApplyShellLodSizes(Bare); Asset = Bare; }
 		else
 		{
 			bShells = false;
@@ -304,10 +320,10 @@ void UWWOBodyComponent::SetModel(FName Key)
 	Model->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Model->LightingChannels = Driver->LightingChannels; // the menu preview has its own lights
 	Model->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
-	// A robot of shell parts picks its own LOD from its own screen size (SK_RobotSkeleton's three, made at import; the
-	// parts follow it as their leader, and so do its anchor grafts' detail levels). Attached to the mannequin it would
-	// take the mannequin's, which, hidden, never leaves LOD 0. (The menu's preview, seen only through its capture, keeps
-	// that: always in full.)
+	// A robot of shell parts picks its own LOD from its own screen size (SK_RobotSkeleton's three, made at import, starting
+	// at CharacterModels.json's shell_lod_screen_sizes; the parts follow it as their leader, and so do its anchor grafts'
+	// detail levels). Attached to the mannequin it would take the mannequin's, which, hidden, never leaves LOD 0. (The
+	// menu's preview, seen only through its capture, keeps that: always in full.)
 	if (bShells && !bFullDetailGrafts) Model->bSyncAttachParentLOD = false;
 	Model->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Model->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());

@@ -26,9 +26,12 @@
 #include "WWOTypes.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Components/StaticMeshComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkinnedAssetCommon.h"
 #include "HAL/IConsoleManager.h"
@@ -1311,6 +1314,9 @@ private:
 		TArray<const FMeshDescription*> Ptrs;
 		for (const FMeshDescription& MD : Levels) Ptrs.Add(&MD);
 		SM->BuildFromMeshDescriptions(Ptrs, Params);
+		// No collision: the build gives every mesh a body setup that would cook its triangles (complex collision) when asked,
+		// and their CPU copy isn't kept, which warned once per mesh. Simple-as-complex with no simple shapes: nothing to cook.
+		if (UBodySetup* Body = SM->GetBodySetup()) Body->CollisionTraceFlag = CTF_UseSimpleAsComplex;
 		return SM;
 	}
 
@@ -1536,7 +1542,11 @@ void UWWOBodyComponent::UpdateAnchorLevel()
 	if (Level == AnchorLevel) return;
 	if (++AnchorLevelSwitches <= 12)
 	{
-		UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts level %d -> %d (robot LOD %d)"), *GetOwner()->GetName(), AnchorLevel, Level, Model ? Model->GetPredictedLODLevel() : -1);
+		// (How far the camera is, and its field of view: to check where the switches fall.)
+		const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const APlayerCameraManager* Cam = PC ? PC->PlayerCameraManager.Get() : nullptr;
+		UE_LOG(LogWWO, Log, TEXT("Body %s: anchor grafts level %d -> %d (robot LOD %d) at %.1f m from the camera (field of view %.0f)"), *GetOwner()->GetName(), AnchorLevel, Level,
+			Model ? Model->GetPredictedLODLevel() : -1, Cam ? FVector::Dist(Cam->GetCameraLocation(), Model ? Model->Bounds.Origin : GetOwner()->GetActorLocation()) / WWO::M : -1.f, Cam ? Cam->GetFOVAngle() : 0.f);
 	}
 	AnchorLevel = Level;
 	for (const TWeakObjectPtr<UPrimitiveComponent>& Part : AnchorParts)
@@ -1595,7 +1605,21 @@ void UWWOBodyComponent::ApplyAnchorGrafts(const FWWOAnchorGraftResult& Result, i
 		FString Sizes;
 		for (int32 i = 0; i < Mesh->GetLODNum(); ++i) if (const FSkeletalMeshLODInfo* Info = Mesh->GetLODInfo(i)) Sizes += FString::Printf(TEXT(" %.3f"), Info->ScreenSize.Default);
 		const IConsoleVariable* Bias = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SkeletalMeshLODBias"));
-		UE_LOG(LogWWO, Log, TEXT("Anchor grafts follow %s's LODs, which start at screen sizes%s (r.SkeletalMeshLODBias %d)"), *Mesh->GetName(), *Sizes, Bias ? Bias->GetInt() : 0);
+		// The engine's screen size is the bounding sphere's diameter over the distance, times max(1, aspect) / tan(fov / 2) / 2
+		// (the projection's larger scale): each LOD's distance on a 16:9 screen at 90 degrees and at the camera's field of view.
+		const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const float CamFov = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetFOVAngle() : 90.f;
+		const float Radius = Model->Bounds.SphereRadius;
+		FString Dists;
+		for (const float Fov : { 90.f, CamFov })
+		{
+			const float Multiple = 0.5f * (16.f / 9.f) / FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(Fov, 5.f, 170.f) * 0.5f));
+			Dists += FString::Printf(TEXT("%sat %.0f degrees"), Dists.IsEmpty() ? TEXT("") : TEXT("; "), Fov);
+			for (int32 i = 1; i < Mesh->GetLODNum(); ++i) if (const FSkeletalMeshLODInfo* Info = Mesh->GetLODInfo(i); Info && Info->ScreenSize.Default > 0.f)
+				Dists += FString::Printf(TEXT(" LOD %d from %.1f m"), i, 2.f * Multiple * Radius / Info->ScreenSize.Default / WWO::M);
+		}
+		UE_LOG(LogWWO, Log, TEXT("Anchor grafts follow %s's LODs, which start at screen sizes%s (r.SkeletalMeshLODBias %d): with its bounds' radius of %.0f cm, on 16:9 %s"),
+			*Mesh->GetName(), *Sizes, Bias ? Bias->GetInt() : 0, Radius, *Dists);
 	}
 	// Following the robot's LOD: checked after every pose update (as cheap as reading a number).
 	AnchorLodModel = Model;
