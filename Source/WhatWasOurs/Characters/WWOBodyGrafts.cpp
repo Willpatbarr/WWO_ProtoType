@@ -88,17 +88,22 @@ void UWWOBodyComponent::AttachModel(FName GodotBone, const TCHAR* MeshName, cons
 
 void UWWOBodyComponent::RebuildGrafts()
 {
-	// show_loadout: the frame part colors, then the flora grafts.
+	// show_loadout: the frame part colors, then the flora grafts. Anchor grafts stay on until the new ones are ready
+	// (taken off below if this loadout has none).
 	for (UPrimitiveComponent* C : Grafts)
 	{
-		if (C) C->DestroyComponent();
+		if (C && !AnchorParts.Contains(C)) C->DestroyComponent();
 	}
 	Grafts.Reset();
-	AnchorParts.Reset(); // (they were in Grafts)
+	for (const TWeakObjectPtr<UPrimitiveComponent>& Part : AnchorParts) if (Part.IsValid()) Grafts.Add(Part.Get());
 	bAnchorGraftsLive = false;
 	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
 	USkeletalMeshComponent* Mesh = GetMesh();
-	if (!Loadout || !Mesh) return;
+	if (!Loadout || !Mesh)
+	{
+		ClearAnchorGrafts();
+		return;
+	}
 	// A body following the loadout shows its flora's character model.
 	if (bFollowsLoadout && Loadout->GetFlora()) SetModel(Loadout->GetFlora()->Id);
 
@@ -149,6 +154,7 @@ void UWWOBodyComponent::RebuildGrafts()
 		BuildAnchorGrafts();
 		return;
 	}
+	ClearAnchorGrafts();
 
 	const FVector Hips = GodotBonePoint("pelvis");
 	if (FloraId == WWOIds::Flora::VoltVine)

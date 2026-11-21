@@ -18,6 +18,7 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 
 namespace
 {
@@ -123,6 +124,16 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 			Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close"), k, GraftLoadouts[k].Name));
 		}
 		if (Crossed(At + 1.2f)) { Turn(150.f); Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close_back"), k, GraftLoadouts[k].Name)); }
+		// -WWOGraftsLevels: the same close view at the anchor grafts' two farther detail levels (wwo.AnchorGraftLevel).
+		if (WWOSwitches::Has(TEXT("WWOGraftsLevels")))
+		{
+			IConsoleVariable* Level = IConsoleManager::Get().FindConsoleVariable(TEXT("wwo.AnchorGraftLevel"));
+			if (Level && Crossed(At + 0.75f)) Level->Set(1);
+			if (Crossed(At + 0.9f)) Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close_L1"), k, GraftLoadouts[k].Name));
+			if (Level && Crossed(At + 0.93f)) Level->Set(2);
+			if (Crossed(At + 1.07f)) Shot(*FString::Printf(TEXT("35_grafts_%d_%s_close_L2"), k, GraftLoadouts[k].Name));
+			if (Level && Crossed(At + 1.1f)) Level->Set(-1);
+		}
 	}
 	const float EndAt = CloseAt + 0.5f + NumGraftLoadouts * CloseEvery + 0.3f;
 	if (AutoGraftClock < EndAt) return false;

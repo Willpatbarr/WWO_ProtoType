@@ -8,6 +8,8 @@ Run headless from the project folder (after Tools/import_robot_grafts.py has mad
 - Meshes: /Game/WWO/Characters/RobotFrame/Grafts/Pieces/SM_VV_Leaf<NN>, one LOD, no collision, their vertices kept
   on the CPU (allow_cpu_access: the game reads them to build its meshes).
 - Materials by slot name, the fitted grafts' own: VV_Leaf (MI_VV_Leaf, the shared leaf sheet), VV_Stem (MI_VV_Stem).
+- Run Tools/make_graft_piece_lods.py after this: it gives the meshes the LODs the anchor grafts' farther detail
+  levels copy (this script rebuilds them with one LOD).
 Safe to rerun: everything is rebuilt in place. WWO_PIECES_SRC: another folder of exports.
 """
 import os

@@ -4,15 +4,19 @@
 #include "Engine/SkeletalMesh.h"
 #include "ReferenceSkeleton.h"
 #include "UObject/ObjectKey.h"
+#include "Misc/ScopeLock.h"
 
 namespace
 {
-	// Each mesh's reference pose in its own space, by bone index.
+	// Each mesh's reference pose in its own space, by bone index. Read from the anchor grafts' build threads too:
+	// made under the lock, never changed after.
+	FCriticalSection RefPoseLock;
 	const TArray<FTransform>& RefPose(const USkeletalMesh* Mesh)
 	{
-		static TMap<FObjectKey, TArray<FTransform>> Cache;
-		if (const TArray<FTransform>* Found = Cache.Find(FObjectKey(Mesh))) return *Found;
-		TArray<FTransform>& CS = Cache.Add(FObjectKey(Mesh));
+		static TMap<FObjectKey, TSharedPtr<TArray<FTransform>>> Cache;
+		FScopeLock Lock(&RefPoseLock);
+		if (const TSharedPtr<TArray<FTransform>>* Found = Cache.Find(FObjectKey(Mesh))) return **Found;
+		TArray<FTransform>& CS = *Cache.Add(FObjectKey(Mesh), MakeShared<TArray<FTransform>>());
 		if (!Mesh) return CS;
 		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
 		const TArray<FTransform>& Local = Ref.GetRefBonePose();
@@ -64,6 +68,9 @@ FWWOShellPoint WWOShellAnchors::MakePoint(const USkeletalMesh* Mesh, FName Bone,
 
 const FWWOShellAnchorSet* WWOShellAnchors::Find(FName Part, const USkeletalMesh* Mesh)
 {
+	// (Also from the anchor grafts' build threads: a part's file is read there the first time it is worn.)
+	static FCriticalSection Lock;
+	FScopeLock Locked(&Lock);
 	static TMap<FString, TUniquePtr<FWWOShellAnchorSet>> Cache;
 	if (Part.IsNone() || !Mesh) return nullptr;
 	const FString Key = Part.ToString() + TEXT("|") + Mesh->GetPathName();

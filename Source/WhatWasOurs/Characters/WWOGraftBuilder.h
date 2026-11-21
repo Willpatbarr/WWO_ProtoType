@@ -14,6 +14,8 @@
 
 class UProceduralMeshComponent;
 class UObject;
+struct FWWOVineMesh;
+struct FProcMeshTangent;
 
 class FWWOGraftBuilder
 {
@@ -33,6 +35,9 @@ public:
 	FLinearColor VineColor;      // stalks and thorns
 	FLinearColor VineGlow = FLinearColor(0, 0, 0, 0); // if A > 0, the stalks glow faintly this color (A = strength)
 	float Unit;
+	// Tessellation (the anchor grafts' detail levels, FWWOGraftDetail; these defaults are the full ones).
+	int32 PlateRows = 6, PlateCols = 5, PodSides = 9, PodRings = 9, TubeSides = 5;
+	bool bPodStalk = true;
 
 	// --- VineGraft ---
 	TArray<FVector> Wrap(const FVector& A, const FVector& B, float Radius, float Turns, float Phase = 0.f, float Thickness = 0.009f);
@@ -56,6 +61,9 @@ public:
 	bool IsEmpty() const;
 	// Fills the mesh with one section per surface used, each with its material.
 	void Build(UProceduralMeshComponent* Mesh, UObject* Outer) const;
+	// Adds the bark, seed and vine surfaces (all the anchor grafts use) to Out's Graft* sections, in plain materials
+	// (no pod color or vine glow: the anchor grafts set neither).
+	void BakeInto(FWWOVineMesh& Out) const;
 
 	// Godot's a.cross(b) for the same physical vectors in Unreal's axes.
 	static FVector GCross(const FVector& A, const FVector& B) { return FVector::CrossProduct(B, A); }
@@ -78,4 +86,6 @@ private:
 	void Tri(ESurface S, const FVector& A, const FVector& B, const FVector& C);
 	void TriUV(ESurface S, const FVector* P, const FVector2D* UV, const FVector2D* UV2 = nullptr);
 	static FColor Raw(const FLinearColor& C); // a color as raw bytes (Godot reads vertex colors as they are)
+	// One surface's vertices (less Origin), triangles in Unreal's order, normals (smoothed where it is) and tangents.
+	void Bake(int32 Surface, TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FProcMeshTangent>& Tangents) const;
 };

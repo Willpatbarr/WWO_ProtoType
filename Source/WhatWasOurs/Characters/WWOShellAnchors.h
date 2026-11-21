@@ -115,6 +115,7 @@ namespace WWOShellAnchors
 
 	// Config/ShellAnchors/<Part>.json made for Mesh's reference pose (bones looked up in it), read and
 	// converted once a run. Null when there is no such file. Points whose bone the mesh lacks are left out (logged).
+	// Safe from any thread (the anchor grafts read a part's file on their build thread); a set, once made, never changes.
 	const FWWOShellAnchorSet* Find(FName Part, const USkeletalMesh* Mesh);
 
 	// The reference pose of a bone in the mesh's own space (cached per mesh). Identity for an unknown bone.

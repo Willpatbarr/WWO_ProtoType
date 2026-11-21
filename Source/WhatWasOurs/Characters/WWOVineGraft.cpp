@@ -5,6 +5,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Engine/StaticMesh.h"
 #include "StaticMeshResources.h"
+#include "FX/WWOFX.h"
+#include "Misc/ScopeLock.h"
 #include "WhatWasOurs.h"
 #include "WWOSwitches.h"
 
@@ -22,7 +24,8 @@ namespace
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Bark.MI_VV_Bark"), TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Core.MI_VV_Core"),
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Leaf.MI_VV_Leaf"), TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Crystal.MI_VV_Crystal"),
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Stem.MI_VV_Stem"),
-		TEXT("/Game/WWO/Flora/VeilSpore/Materials/MI_VS_Fungus.MI_VS_Fungus") }; // VeilSpore's atlas (Tools/import_robot_grafts.py)
+		TEXT("/Game/WWO/Flora/VeilSpore/Materials/MI_VS_Fungus.MI_VS_Fungus"), // VeilSpore's atlas (Tools/import_robot_grafts.py)
+		TEXT("M_WWO_GraftBark"), TEXT("M_WWO_GraftSeed"), TEXT("M_WWO_GraftVine") }; // FWWOGraftBuilder's (WWOFX::Material)
 
 	// VeilSpore's atlas (T_veilspore_atlas, ~/Documents/WWO_Flora/kit_veilspore/kit.json islands_uv, turned to Unreal's V
 	// down): 'net', the mycelium's lookup: U thin (violet) to thick (pale lavender), V glowing (top) to not.
@@ -30,6 +33,8 @@ namespace
 
 	constexpr int32 JointHalf = 4;   // stations (~5 cm) either side of a change of bone posed between the two
 	constexpr int32 MinRun = 4;      // a stretch on one bone shorter than this joins its neighbour
+	constexpr int32 NumShapeLods = 4; // the copied pieces' LODs (Tools/make_graft_piece_lods.py)
+	constexpr int32 LeafCard = 4;    // FWWOGraftDetail::LeafLod: a flat card instead of a mesh LOD
 
 	float Smooth(float A, float B, float X)
 	{
@@ -74,27 +79,28 @@ namespace
 		}
 	}
 
-	// A static mesh's LOD 0 as a shape (it must keep its vertices on the CPU: allow_cpu_access on import).
-	TOptional<FWWOLeafShape> ReadShape(const FString& Path)
+	// A static mesh's LOD as a shape (it must keep its vertices on the CPU: allow_cpu_access on import). A mesh with
+	// fewer LODs gives its last.
+	TSharedPtr<FWWOLeafShape> ReadShape(const UStaticMesh* SM, const FString& Path, int32 Lod)
 	{
-		const UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
 		const FStaticMeshRenderData* RD = SM ? SM->GetRenderData() : nullptr;
-		if (!RD || RD->LODResources.Num() == 0 || RD->LODResources[0].VertexBuffers.PositionVertexBuffer.GetNumVertices() == 0)
+		if (RD) Lod = FMath::Clamp(Lod, 0, RD->LODResources.Num() - 1);
+		if (!RD || RD->LODResources.Num() == 0 || RD->LODResources[Lod].VertexBuffers.PositionVertexBuffer.GetNumVertices() == 0)
 		{
-			UE_LOG(LogWWO, Warning, TEXT("Vine grafts: no mesh (or no CPU copy of it) %s"), *Path);
-			return {};
+			UE_LOG(LogWWO, Warning, TEXT("Vine grafts: no mesh (or no CPU copy of it) %s LOD %d"), *Path, Lod);
+			return nullptr;
 		}
-		const FStaticMeshLODResources& LOD = RD->LODResources[0];
+		const FStaticMeshLODResources& LOD = RD->LODResources[Lod];
 		const FStaticMeshVertexBuffers& VB = LOD.VertexBuffers;
-		FWWOLeafShape Shape;
+		TSharedPtr<FWWOLeafShape> Shape = MakeShared<FWWOLeafShape>();
 		for (uint32 v = 0; v < VB.PositionVertexBuffer.GetNumVertices(); ++v)
 		{
-			Shape.V.Add(FVector(VB.PositionVertexBuffer.VertexPosition(v)));
-			Shape.N.Add(FVector(FVector3f(VB.StaticMeshVertexBuffer.VertexTangentZ(v))));
-			Shape.T.Add(FVector(FVector3f(VB.StaticMeshVertexBuffer.VertexTangentX(v))));
-			Shape.UV.Add(FVector2D(VB.StaticMeshVertexBuffer.GetVertexUV(v, 0)));
-			Shape.Length = FMath::Max(Shape.Length, float(Shape.V.Last().X));
-			Shape.Bounds += Shape.V.Last();
+			Shape->V.Add(FVector(VB.PositionVertexBuffer.VertexPosition(v)));
+			Shape->N.Add(FVector(FVector3f(VB.StaticMeshVertexBuffer.VertexTangentZ(v))));
+			Shape->T.Add(FVector(FVector3f(VB.StaticMeshVertexBuffer.VertexTangentX(v))));
+			Shape->UV.Add(FVector2D(VB.StaticMeshVertexBuffer.GetVertexUV(v, 0)));
+			Shape->Length = FMath::Max(Shape->Length, float(Shape->V.Last().X));
+			Shape->Bounds += Shape->V.Last();
 		}
 		TArray<uint32> Indices;
 		LOD.IndexBuffer.GetCopy(Indices);
@@ -102,27 +108,55 @@ namespace
 		{
 			const TArray<FStaticMaterial>& Mats = SM->GetStaticMaterials();
 			const bool bStem = Mats.IsValidIndex(Sec.MaterialIndex) && Mats[Sec.MaterialIndex].MaterialSlotName == FName(TEXT("VV_Stem"));
-			for (uint32 k = Sec.FirstIndex; k < Sec.FirstIndex + Sec.NumTriangles * 3 && int32(k) < Indices.Num(); ++k) Shape.Tris[bStem ? 1 : 0].Add(int32(Indices[k]));
+			for (uint32 k = Sec.FirstIndex; k < Sec.FirstIndex + Sec.NumTriangles * 3 && int32(k) < Indices.Num(); ++k) Shape->Tris[bStem ? 1 : 0].Add(int32(Indices[k]));
 		}
-		if (Shape.Tris[0].Num() == 0) return {};
+		if (Shape->Tris[0].Num() == 0) return nullptr;
 		return Shape;
 	}
 
-	// The leaves' geometry (SM_VV_Leaf01-06 minus the young 05, Tools/import_vine_pieces.py), read once a run.
-	TArray<TOptional<FWWOLeafShape>>& LeafShapes()
+	// A leaf as a flat card (the farthest level): a diamond from its stalk's base to its tip, as wide as the leaf
+	// (its two triangles in the blade's section), in one color: the leaf's own UV half way between its middle and its
+	// edge (its corners' own UVs are on the glowing midrib and the rim: a card of those reads cyan).
+	TSharedPtr<FWWOLeafShape> LeafCardOf(const FWWOLeafShape& Leaf)
 	{
-		static TArray<TOptional<FWWOLeafShape>> Shapes;
-		if (Shapes.Num() == 0)
+		int32 Base = 0, Tip = 0, Left = 0, Right = 0;
+		FVector Middle = FVector::ZeroVector;
+		for (int32 v = 0; v < Leaf.V.Num(); ++v)
 		{
-			for (const TCHAR* N : { TEXT("01"), TEXT("02"), TEXT("03"), TEXT("04"), TEXT("06") })
-			{
-				TOptional<FWWOLeafShape> Shape = ReadShape(FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Grafts/Pieces/SM_VV_Leaf%s.SM_VV_Leaf%s"), N, N));
-				if (Shape.IsSet() && Shape->Length <= 1.f) Shape.Reset();
-				Shapes.Add(MoveTemp(Shape));
-			}
+			if (Leaf.V[v].X < Leaf.V[Base].X) Base = v;
+			if (Leaf.V[v].X > Leaf.V[Tip].X) Tip = v;
+			if (Leaf.V[v].Y > Leaf.V[Left].Y) Left = v;
+			if (Leaf.V[v].Y < Leaf.V[Right].Y) Right = v;
+			Middle += Leaf.V[v];
 		}
-		return Shapes;
+		Middle /= FMath::Max(Leaf.V.Num(), 1);
+		const FVector Blade = FMath::Lerp(Middle, Leaf.V[Left], 0.5f);
+		int32 Colour = 0;
+		for (int32 v = 0; v < Leaf.V.Num(); ++v) if (FVector::DistSquared(Leaf.V[v], Blade) < FVector::DistSquared(Leaf.V[Colour], Blade)) Colour = v;
+		TSharedPtr<FWWOLeafShape> Card = MakeShared<FWWOLeafShape>();
+		for (const int32 v : { Base, Left, Tip, Right })
+		{
+			Card->V.Add(Leaf.V[v]);
+			Card->N.Add(FVector(0.f, 0.f, 1.f));
+			Card->T.Add(FVector(1.f, 0.f, 0.f));
+			Card->UV.Add(Leaf.UV[Colour]);
+			Card->Bounds += Leaf.V[v];
+		}
+		Card->Length = Leaf.Length;
+		// (Unreal's draw order, as the meshes' own: its front faces +Z.)
+		Card->Tris[0] = { 0, 2, 1, 0, 3, 2 };
+		const FVector Face = FVector::CrossProduct(Card->V[1] - Card->V[0], Card->V[2] - Card->V[0]);
+		if (Face.Z > 0.f) Card->Tris[0] = { 0, 1, 2, 0, 2, 3 };
+		return Card;
 	}
+
+	// The copied shapes, read once a run, by path and LOD (and the leaves'), on the build threads, from meshes the game
+	// thread has loaded (FWWOAnchorGraftCache); never changed once read.
+	FCriticalSection ShapesLock;
+	TMap<FString, TSharedPtr<FWWOLeafShape>> ShapeCache; // "path|lod"
+	TArray<TSharedPtr<FWWOLeafShape>> LeafCache;      // kind x (LODs 0-3, the card)
+	bool bLeavesRead = false;
+	const TCHAR* LeafNames[] = { TEXT("01"), TEXT("02"), TEXT("03"), TEXT("04"), TEXT("06") }; // (SM_VV_Leaf05, the young one, left out)
 
 	// A triangle whose front face is the side (B - A) x (C - A) points to (Unreal draws (P2 - P0) x (P1 - P0)).
 	void Tri(TArray<int32>& Tris, int32 A, int32 B, int32 C)
@@ -133,12 +167,86 @@ namespace
 	}
 }
 
+// --- Detail levels -------------------------------------------------------------------------------
+
+FWWOGraftDetail FWWOGraftDetail::Default(int32 Level)
+{
+	FWWOGraftDetail D;
+	if (Level <= 0)
+	{
+		// Close: as built before levels, but a ring every other station (2.4 cm: the strands' twist and the line's bends
+		// stay round), the reduced leaf mesh (~30%) on a lighter shoot and stalk, the small pieces' rings halved, the
+		// mycelium's too (its thin strands three-sided), and the kit's small pieces (under 9 cm across) from their ~30% mesh.
+		D.Step = 2; D.CoreStep = 4;
+		D.LeafLod = 1;
+		D.TwigSides = 5; D.TwigStep = 2;
+		D.PetioleSides = 3; D.PetioleStep = 6;
+		D.SmallStep = 2;
+		D.KitSmall = 9.f; D.KitSmallLod = 1;
+		D.NetThinSides = 3; D.NetStep = 2; D.KnobSides = 4; D.KnobRings = 3;
+		return D;
+	}
+	if (Level == 1)
+	{
+		// ~25%: four-sided strands every fourth station, 70% of the leaves from their ~14% mesh on a bare shoot, coarser
+		// pieces, the kit's ~30% meshes, a thinner mycelium without its knobs.
+		D.StrandSides = 4; D.CoreSides = 3; D.WindSides = 3; D.Step = 4; D.CoreStep = 6;
+		D.LeafLod = 2; D.LeafKeep = 0.7f; D.TwigSides = 3; D.TwigStep = 4; D.PetioleSides = 0;
+		D.SmallSides = 3; D.SmallStep = 4;
+		D.CrystalRings = 5; D.CrystalAround = 6;
+		D.KitLod = 1;
+		D.NetSides = 3; D.NetThinSides = 3; D.NetStep = 3; D.KnobSides = 0;
+		D.PlateRows = 3; D.PlateCols = 2; D.PodSides = 6; D.PodRings = 5;
+		return D;
+	}
+	// ~5%: one rope tube, under half the leaves as flat cards, no small pieces, the kit's pieces over 12 cm from their
+	// ~4% meshes, only the mycelium's thick strands.
+	D.bStrands = false; D.RopeSides = 4; D.Step = 4;
+	D.LeafLod = LeafCard; D.LeafKeep = 0.45f; D.TwigSides = 0; D.PetioleSides = 0;
+	D.bSmall = false;
+	D.CrystalRings = 3; D.CrystalAround = 4;
+	D.KitLod = 3; D.KitMin = 12.f;
+	D.NetSides = 3; D.NetThinSides = 3; D.NetStep = 4; D.NetMinRadius = 0.45f; D.KnobSides = 0;
+	D.PlateRows = 2; D.PlateCols = 1; D.PodSides = 4; D.PodRings = 3; D.bPodStalk = false;
+	return D;
+}
+
 // --- FWWOVineMesh --------------------------------------------------------------------------------
 
-const FWWOLeafShape* FWWOVineGraft::LeafShape(int32 Kind)
+const FWWOLeafShape* FWWOVineGraft::LeafShape(int32 Kind, int32 Lod)
 {
-	TArray<TOptional<FWWOLeafShape>>& Shapes = LeafShapes();
-	return Shapes.IsValidIndex(Kind) && Shapes[Kind].IsSet() ? &Shapes[Kind].GetValue() : nullptr;
+	{
+		FScopeLock Lock(&ShapesLock);
+		if (!bLeavesRead) return nullptr;
+	}
+	const int32 i = Kind * (NumShapeLods + 1) + FMath::Clamp(Lod, 0, NumShapeLods);
+	return LeafCache.IsValidIndex(i) ? LeafCache[i].Get() : nullptr;
+}
+
+TArray<FString> FWWOVineGraft::LeafPaths()
+{
+	TArray<FString> Out;
+	for (const TCHAR* N : LeafNames) Out.Add(FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Grafts/Pieces/SM_VV_Leaf%s.SM_VV_Leaf%s"), N, N));
+	return Out;
+}
+
+void FWWOVineGraft::ReadLeaves(TConstArrayView<const UStaticMesh*> Meshes)
+{
+	FScopeLock Lock(&ShapesLock);
+	if (bLeavesRead) return;
+	bLeavesRead = true;
+	const TArray<FString> Paths = LeafPaths();
+	for (int32 k = 0; k < Paths.Num(); ++k)
+	{
+		const UStaticMesh* SM = Meshes.IsValidIndex(k) ? Meshes[k] : nullptr;
+		for (int32 Lod = 0; Lod < NumShapeLods; ++Lod)
+		{
+			TSharedPtr<FWWOLeafShape> Shape = SM ? ReadShape(SM, Paths[k], Lod) : nullptr;
+			if (Shape && Shape->Length <= 1.f) Shape.Reset();
+			LeafCache.Add(Shape);
+		}
+		LeafCache.Add(LeafCache[LeafCache.Num() - NumShapeLods] ? LeafCardOf(*LeafCache[LeafCache.Num() - NumShapeLods]) : nullptr);
+	}
 }
 
 bool FWWOVineMesh::IsEmpty() const
@@ -154,49 +262,59 @@ int32 FWWOVineMesh::NumTris() const
 	return N;
 }
 
+FString FWWOVineMesh::MaterialPath(ESection Section)
+{
+	if (Section >= GraftBark) return FString::Printf(TEXT("/Game/WWO/Materials/%s.%s"), MaterialPaths[Section], MaterialPaths[Section]); // (as WWOFX::Material)
+	return MaterialPaths[Section];
+}
+
 UMaterialInterface* FWWOVineMesh::Material(ESection Section)
 {
+	if (Section >= GraftBark) return WWOFX::Material(MaterialPaths[Section]);
 	return LoadObject<UMaterialInterface>(nullptr, MaterialPaths[Section]);
 }
 
-const FWWOLeafShape* FWWOVineGraft::MeshShape(const FString& ObjectPath)
+void FWWOVineGraft::ReadMesh(const FString& ObjectPath, const UStaticMesh* Mesh)
 {
-	static TMap<FString, TOptional<FWWOLeafShape>> Shapes;
-	if (!Shapes.Contains(ObjectPath)) Shapes.Add(ObjectPath, ReadShape(ObjectPath));
-	const TOptional<FWWOLeafShape>& Found = Shapes[ObjectPath];
-	return Found.IsSet() ? &Found.GetValue() : nullptr;
+	FScopeLock Lock(&ShapesLock);
+	if (ShapeCache.Contains(ObjectPath + TEXT("|0"))) return;
+	for (int32 Lod = 0; Lod < NumShapeLods; ++Lod) ShapeCache.Add(FString::Printf(TEXT("%s|%d"), *ObjectPath, Lod), Mesh ? ReadShape(Mesh, ObjectPath, Lod) : nullptr);
 }
 
-void FWWOVineMesh::Build(UProceduralMeshComponent* Mesh) const
+const FWWOLeafShape* FWWOVineGraft::MeshShape(const FString& ObjectPath, int32 Lod)
 {
-	int32 Index = 0;
-	for (int32 s = 0; s < NumSections; ++s)
-	{
-		const FSection& Sec = S[s];
-		if (Sec.Tris.Num() == 0) continue;
-		Mesh->CreateMeshSection(Index, Sec.V, Sec.Tris, Sec.N, Sec.UV, TArray<FColor>(), Sec.T, false);
-		Mesh->SetMaterial(Index, Material(ESection(s)));
-		++Index;
-	}
+	FScopeLock Lock(&ShapesLock);
+	const TSharedPtr<FWWOLeafShape>* Found = ShapeCache.Find(FString::Printf(TEXT("%s|%d"), *ObjectPath, FMath::Clamp(Lod, 0, NumShapeLods - 1)));
+	return Found ? Found->Get() : nullptr;
 }
 
 // --- FWWOVineJoints ------------------------------------------------------------------------------
 
-int32 FWWOVineJoints::NumTris() const
+FWWOVineJoints::FWWOVineJoints(const FWWOVineJoints& Other)
+	: Pairs(Other.Pairs), Stations(Other.Stations), Level(Other.Level)
+{
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		for (int32 s = 0; s < FWWOVineMesh::NumSections; ++s) S[L][s] = Other.S[L][s];
+	}
+}
+
+int32 FWWOVineJoints::NumTris(int32 InLevel) const
 {
 	int32 N = 0;
-	for (const FSection& Sec : S) N += Sec.Tris.Num() / 3;
+	for (const FSection& Sec : S[FMath::Clamp(InLevel, 0, NumGraftLevels - 1)]) N += Sec.Tris.Num() / 3;
 	return N;
 }
 
-void FWWOVineJoints::Start(UProceduralMeshComponent* C, USkeletalMeshComponent* InModel)
+void FWWOVineJoints::CreateSections()
 {
-	Comp = C;
-	Model = InModel;
+	UProceduralMeshComponent* C = Comp.Get();
+	if (!C) return;
+	C->ClearAllMeshSections();
 	SectionOf.Reset();
 	for (int32 s = 0; s < FWWOVineMesh::NumSections; ++s)
 	{
-		FSection& Sec = S[s];
+		FSection& Sec = S[Level][s];
 		if (Sec.Tris.Num() == 0) continue;
 		Sec.V = Sec.RefV;
 		Sec.N = Sec.RefN;
@@ -205,11 +323,31 @@ void FWWOVineJoints::Start(UProceduralMeshComponent* C, USkeletalMeshComponent* 
 		C->SetMaterial(SectionOf.Num(), FWWOVineMesh::Material(FWWOVineMesh::ESection(s)));
 		SectionOf.Add(s);
 	}
+}
+
+void FWWOVineJoints::Start(UProceduralMeshComponent* C, USkeletalMeshComponent* InModel, int32 InLevel)
+{
+	Comp = C;
+	Model = InModel;
+	Level = FMath::Clamp(InLevel, 0, NumGraftLevels - 1);
+	CreateSections();
 	if (InModel)
 	{
 		Handle = InModel->RegisterOnBoneTransformsFinalizedDelegate(FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateRaw(this, &FWWOVineJoints::Update));
 	}
 	Update();
+}
+
+void FWWOVineJoints::SetLevel(int32 InLevel)
+{
+	InLevel = FMath::Clamp(InLevel, 0, NumGraftLevels - 1);
+	if (InLevel == Level) return;
+	Level = InLevel;
+	CreateSections();
+	const int32 Was = Updates;
+	Updates = 0; // (posed now, even if not drawn lately)
+	Update();
+	Updates += Was;
 }
 
 void FWWOVineJoints::Report() const
@@ -272,7 +410,7 @@ void FWWOVineJoints::Update()
 	}
 	for (int32 k = 0; k < SectionOf.Num(); ++k)
 	{
-		FSection& Sec = S[SectionOf[k]];
+		FSection& Sec = S[Level][SectionOf[k]];
 		for (int32 v = 0; v < Sec.RefV.Num(); ++v)
 		{
 			const int32 i = Sec.Station[v];
@@ -356,9 +494,21 @@ void FWWOVineGraft::BoneWrap(const USkeletalMesh* InMesh, FName Bone, FName ToBo
 
 // --- FWWOVineGraft -------------------------------------------------------------------------------
 
-FWWOVineGraft::FWWOVineGraft(const USkeletalMesh* InMesh, FRandomStream& InRandom, bool bInJoints)
+FWWOVineGraft::FWWOVineGraft(const USkeletalMesh* InMesh, FRandomStream& InRandom, bool bInJoints, const FWWOGraftDetail (&InDetail)[NumGraftLevels])
 	: Joints(MakeShared<FWWOVineJoints>()), Mesh(InMesh), Random(InRandom), bJoints(bInJoints)
 {
+	for (int32 L = 0; L < NumGraftLevels; ++L) Detail[L] = InDetail[L];
+}
+
+FWWOVineGraft::FRings FWWOVineGraft::SmallRings(int32 Sides0) const
+{
+	FRings R;
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		R.Sides[L] = Detail[L].bSmall ? FMath::Min(Sides0, Detail[L].SmallSides) : 0;
+		R.Step[L] = Detail[L].SmallStep;
+	}
+	return R;
 }
 
 FName FWWOVineGraft::BoneAt(int32 Station) const
@@ -424,7 +574,7 @@ void FWWOVineGraft::PlanJoints(const FWWOVineLine& Line, const TArray<FVector>& 
 }
 
 void FWWOVineGraft::Tube(FWWOVineMesh::ESection Section, const TArray<FVector>& Path, const TArray<float>& R, const TArray<FVector>& F1,
-	const TArray<FVector>& F2, int32 Sides, float VScale, const TArray<FVector2D>* RingUV)
+	const TArray<FVector>& F2, const FRings& Rings, float VScale, const TArray<FVector2D>* RingUV)
 {
 	const int32 Num = Path.Num();
 	if (Num < 2) return;
@@ -432,88 +582,117 @@ void FWWOVineGraft::Tube(FWWOVineMesh::ESection Section, const TArray<FVector>& 
 	At.Add(0.f);
 	for (int32 i = 1; i < Num; ++i) At.Add(At.Last() + FVector::Dist(Path[i - 1], Path[i]));
 	// Each span (i, i + 1) is in the joint section when both its stations are in the same one, else rigid on a bone.
-	auto SpanJoint = [&](int32 i) { return Owners[i].Pair != INDEX_NONE && Owners[i].Pair == Owners[i + 1].Pair; };
-	auto SpanBone = [&](int32 i) { return Owners[i].Pair == INDEX_NONE || Owners[i + 1].Pair != INDEX_NONE ? Owners[i].Bone : Owners[i + 1].Bone; };
-	int32 Start = 0;
-	while (Start < Num - 1)
+	TArray<bool> SpanJoint;
+	TArray<FName> SpanBone;
+	for (int32 i = 0; i + 1 < Num; ++i)
 	{
-		const bool bJoint = SpanJoint(Start);
-		const FName Bone = SpanBone(Start);
-		int32 End = Start + 1;
-		while (End < Num - 1 && SpanJoint(End) == bJoint && (bJoint || SpanBone(End) == Bone)) ++End;
-		// Rings Start..End into one mesh.
-		TArray<FVector>* V;
-		TArray<FVector>* Nm;
-		TArray<FVector2D>* UV;
-		TArray<FProcMeshTangent>* Tg;
-		TArray<int32>* Tris;
-		TArray<int32>* Station = nullptr;
-		if (bJoint)
+		SpanJoint.Add(Owners[i].Pair != INDEX_NONE && Owners[i].Pair == Owners[i + 1].Pair);
+		SpanBone.Add(Owners[i].Pair == INDEX_NONE || Owners[i + 1].Pair != INDEX_NONE ? Owners[i].Bone : Owners[i + 1].Bone);
+	}
+	auto Same = [&](int32 a, int32 b) { return SpanJoint[a] == SpanJoint[b] && (SpanJoint[a] || SpanBone[a] == SpanBone[b]); };
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		const int32 Sides = Rings.Sides[L];
+		if (Sides < 3) continue;
+		// The rings this level keeps: every Step-th station, the ends, and every station where a span changes owner (so
+		// each kept span lies wholly in one owner's mesh).
+		const int32 Step = FMath::Max(Rings.Step[L], 1);
+		TArray<int32> Keep;
+		for (int32 i = 0; i < Num; ++i)
 		{
-			FWWOVineJoints::FSection& Sec = Joints->S[Section];
-			V = &Sec.RefV; Nm = &Sec.RefN; UV = &Sec.UV; Tg = &Sec.RefT; Tris = &Sec.Tris; Station = &Sec.Station;
+			if (i == 0 || i == Num - 1 || i % Step == 0 || (i + 1 < Num && !Same(i, i - 1))) Keep.Add(i);
 		}
-		else
+		int32 k = 0;
+		while (k + 1 < Keep.Num())
 		{
-			FWWOVineMesh::FSection& Sec = MeshOn(Bone).S[Section];
-			V = &Sec.V; Nm = &Sec.N; UV = &Sec.UV; Tg = &Sec.T; Tris = &Sec.Tris;
-		}
-		const int32 Base = V->Num();
-		for (int32 i = Start; i <= End; ++i)
-		{
-			for (int32 j = 0; j <= Sides; ++j)
+			const int32 First = Keep[k];
+			int32 e = k + 1;
+			while (e + 1 < Keep.Num() && Same(Keep[e], First)) ++e;
+			// Rings Keep[k..e] into one mesh.
+			const bool bJoint = SpanJoint[First];
+			TArray<FVector>* V;
+			TArray<FVector>* Nm;
+			TArray<FVector2D>* UV;
+			TArray<FProcMeshTangent>* Tg;
+			TArray<int32>* Tris;
+			TArray<int32>* Station = nullptr;
+			if (bJoint)
 			{
-				const float A = UE_TWO_PI * j / Sides;
-				const FVector Dir = F1[i] * FMath::Cos(A) + F2[i] * FMath::Sin(A);
-				V->Add(Path[i] + Dir * R[i]);
-				Nm->Add(Dir);
-				UV->Add(RingUV ? (*RingUV)[i] : FVector2D(float(j) / Sides, At[i] * VScale));
-				Tg->Add(FProcMeshTangent(-F1[i] * FMath::Sin(A) + F2[i] * FMath::Cos(A), false));
-				if (Station) Station->Add(StationIds[i]);
+				FWWOVineJoints::FSection& Sec = Joints->S[L][Section];
+				V = &Sec.RefV; Nm = &Sec.RefN; UV = &Sec.UV; Tg = &Sec.RefT; Tris = &Sec.Tris; Station = &Sec.Station;
 			}
-		}
-		for (int32 i = 0; i < End - Start; ++i)
-		{
-			for (int32 j = 0; j < Sides; ++j)
+			else
 			{
-				const int32 A = Base + i * (Sides + 1) + j, B = A + 1, D = A + Sides + 1, C = D + 1;
-				Tri(*Tris, A, B, D);
-				Tri(*Tris, B, C, D);
+				FWWOVineMesh::FSection& Sec = MeshOn(SpanBone[First], L).S[Section];
+				V = &Sec.V; Nm = &Sec.N; UV = &Sec.UV; Tg = &Sec.T; Tris = &Sec.Tris;
 			}
+			const int32 Base = V->Num();
+			for (int32 q = k; q <= e; ++q)
+			{
+				const int32 i = Keep[q];
+				for (int32 j = 0; j <= Sides; ++j)
+				{
+					const float A = UE_TWO_PI * j / Sides;
+					const FVector Dir = F1[i] * FMath::Cos(A) + F2[i] * FMath::Sin(A);
+					V->Add(Path[i] + Dir * R[i]);
+					Nm->Add(Dir);
+					UV->Add(RingUV ? (*RingUV)[i] : FVector2D(float(j) / Sides, At[i] * VScale));
+					Tg->Add(FProcMeshTangent(-F1[i] * FMath::Sin(A) + F2[i] * FMath::Cos(A), false));
+					if (Station) Station->Add(StationIds[i]);
+				}
+			}
+			for (int32 i = 0; i < e - k; ++i)
+			{
+				for (int32 j = 0; j < Sides; ++j)
+				{
+					const int32 A = Base + i * (Sides + 1) + j, B = A + 1, D = A + Sides + 1, C = D + 1;
+					Tri(*Tris, A, B, D);
+					Tri(*Tris, B, C, D);
+				}
+			}
+			k = e;
 		}
-		Start = End;
 	}
 }
 
-void FWWOVineGraft::Strip(FName Bone, FWWOVineMesh::ESection Section, const TArray<FVector>& Path, const TArray<float>& R, int32 Sides)
+void FWWOVineGraft::Strip(FName Bone, FWWOVineMesh::ESection Section, const TArray<FVector>& Path, const TArray<float>& R, const FRings& Rings)
 {
 	// A small tube (a tendril, a cradle, a thorn's arc) all on one bone.
 	if (Path.Num() < 2) return;
 	TArray<FVector> F1, F2;
 	Frames(Path, Unit(FVector::CrossProduct(Path.Last() - Path[0], Up), Front), F1, F2);
-	FWWOVineMesh::FSection& Sec = MeshOn(Bone).S[Section];
-	const int32 Base = Sec.V.Num();
-	float At = 0.f;
-	for (int32 i = 0; i < Path.Num(); ++i)
+	TArray<float> At;
+	At.Add(0.f);
+	for (int32 i = 1; i < Path.Num(); ++i) At.Add(At.Last() + FVector::Dist(Path[i - 1], Path[i]));
+	for (int32 L = 0; L < NumGraftLevels; ++L)
 	{
-		if (i) At += FVector::Dist(Path[i - 1], Path[i]);
-		for (int32 j = 0; j <= Sides; ++j)
+		const int32 Sides = Rings.Sides[L];
+		if (Sides < 3) continue;
+		const int32 Step = FMath::Max(Rings.Step[L], 1);
+		TArray<int32> Keep;
+		for (int32 i = 0; i < Path.Num(); ++i) if (i % Step == 0 || i == Path.Num() - 1) Keep.Add(i);
+		FWWOVineMesh::FSection& Sec = MeshOn(Bone, L).S[Section];
+		const int32 Base = Sec.V.Num();
+		for (const int32 i : Keep)
 		{
-			const float A = UE_TWO_PI * j / Sides;
-			const FVector Dir = F1[i] * FMath::Cos(A) + F2[i] * FMath::Sin(A);
-			Sec.V.Add(Path[i] + Dir * R[i]);
-			Sec.N.Add(Dir);
-			Sec.UV.Add(FVector2D(float(j) / Sides, At * 0.4f));
-			Sec.T.Add(FProcMeshTangent(-F1[i] * FMath::Sin(A) + F2[i] * FMath::Cos(A), false));
+			for (int32 j = 0; j <= Sides; ++j)
+			{
+				const float A = UE_TWO_PI * j / Sides;
+				const FVector Dir = F1[i] * FMath::Cos(A) + F2[i] * FMath::Sin(A);
+				Sec.V.Add(Path[i] + Dir * R[i]);
+				Sec.N.Add(Dir);
+				Sec.UV.Add(FVector2D(float(j) / Sides, At[i] * 0.4f));
+				Sec.T.Add(FProcMeshTangent(-F1[i] * FMath::Sin(A) + F2[i] * FMath::Cos(A), false));
+			}
 		}
-	}
-	for (int32 i = 0; i + 1 < Path.Num(); ++i)
-	{
-		for (int32 j = 0; j < Sides; ++j)
+		for (int32 i = 0; i + 1 < Keep.Num(); ++i)
 		{
-			const int32 A = Base + i * (Sides + 1) + j, B = A + 1, D = A + Sides + 1, C = D + 1;
-			Tri(Sec.Tris, A, B, D);
-			Tri(Sec.Tris, B, C, D);
+			for (int32 j = 0; j < Sides; ++j)
+			{
+				const int32 A = Base + i * (Sides + 1) + j, B = A + 1, D = A + Sides + 1, C = D + 1;
+				Tri(Sec.Tris, A, B, D);
+				Tri(Sec.Tris, B, C, D);
+			}
 		}
 	}
 }
@@ -571,6 +750,20 @@ void FWWOVineGraft::Vine(const FWWOVineLine& Line, const FWWOVineStyle& Style)
 	{
 		Taper.Add((0.15f + 0.85f * Smooth(0.f, Style.Taper.X, U[i])) * (0.05f + 0.95f * (1.f - Smooth(1.f - Style.Taper.Y, 1.f, U[i]))));
 	}
+	// Per level: the strands, the core and the winding strand where it draws strands, else one rope tube.
+	FRings StrandRings, CoreRings, WindRings, RopeRings;
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		const FWWOGraftDetail& D = Detail[L];
+		StrandRings.Sides[L] = D.bStrands ? D.StrandSides : 0;
+		StrandRings.Step[L] = D.Step;
+		CoreRings.Sides[L] = D.bStrands && Style.bCore ? D.CoreSides : 0;
+		CoreRings.Step[L] = D.CoreStep;
+		WindRings.Sides[L] = D.bStrands ? D.WindSides : 0;
+		WindRings.Step[L] = D.Step;
+		RopeRings.Sides[L] = D.bStrands ? 0 : D.RopeSides;
+		RopeRings.Step[L] = D.Step;
+	}
 	// The strands, twisting round the middle.
 	const float Phase = Random.FRand() * UE_TWO_PI;
 	for (int32 k = 0; k < Style.Strands; ++k)
@@ -585,13 +778,18 @@ void FWWOVineGraft::Vine(const FWWOVineLine& Line, const FWWOVineStyle& Style)
 			Path.Add(C[i] + (F1[i] * FMath::Cos(A) + F2[i] * FMath::Sin(A)) * R0[i] * Wob * Sink);
 			Rr.Add(R0[i] * 1.05f * (1.f + 0.07f * FMath::Sin(9.f * U[i] + 1.7f * k)) * Taper[i]);
 		}
-		Tube(FWWOVineMesh::Bark, Path, Rr, F1, F2, 6, 1.f / (UE_TWO_PI * Style.Radius));
+		Tube(FWWOVineMesh::Bark, Path, Rr, F1, F2, StrandRings, 1.f / (UE_TWO_PI * Style.Radius));
+	}
+	{
+		TArray<float> Rope;
+		for (int32 i = 0; i < Num; ++i) Rope.Add(R0[i] * 1.8f * Taper[i]);
+		Tube(FWWOVineMesh::Bark, C, Rope, F1, F2, RopeRings, 1.f / (UE_TWO_PI * Style.Radius));
 	}
 	if (Style.bCore)
 	{
 		TArray<float> Rc;
 		for (int32 i = 0; i < Num; ++i) Rc.Add(R0[i] * 0.62f * (0.2f + 0.8f * FMath::Pow(FMath::Sin(UE_PI * U[i]), 0.3f)));
-		Tube(FWWOVineMesh::Core, C, Rc, F1, F2, 5, 0.05f);
+		Tube(FWWOVineMesh::Core, C, Rc, F1, F2, CoreRings, 0.05f);
 	}
 	Pieces += Style.Strands + (Style.bCore ? 1 : 0);
 	// A thinner rope weaving over this one: on top of it where it crosses, beside it between.
@@ -622,7 +820,7 @@ void FWWOVineGraft::Vine(const FWWOVineLine& Line, const FWWOVineStyle& Style)
 				Path.Add(W[i] + (G1[i] * FMath::Cos(A) + G2[i] * FMath::Sin(A)) * Rw[i] * 0.8f);
 				Rr.Add(Rw[i]);
 			}
-			Tube(FWWOVineMesh::Bark, Path, Rr, G1, G2, 5, 1.f / (UE_TWO_PI * Style.Radius));
+			Tube(FWWOVineMesh::Bark, Path, Rr, G1, G2, WindRings, 1.f / (UE_TWO_PI * Style.Radius));
 		}
 		++Pieces;
 		if (Style.ThornEvery > 0.f) // thorns sticking out of it, hooked a little along it
@@ -701,8 +899,20 @@ void FWWOVineGraft::Leaf(FName Bone, const FVector& At, const FVector& Dir, cons
 	// One of the fitted grafts' whole leaves (SM_VV_Leaf, Kind 0-4: leaves 01-04 and 06), Length cm from its
 	// stalk to its tip, pointing along Dir with its top toward Face. It leaves the vine on a short green shoot,
 	// nearly as thick as a strand where it joins, that turns into its thin stalk (make_voltvine_grafts leaf()).
-	const FWWOLeafShape* Shape = LeafShape(Kind);
-	if (!Shape) return;
+	// Each level draws it from that level's LOD of the leaf mesh, sized by the full one's length.
+	const FWWOLeafShape* Full = LeafShape(Kind, 0);
+	if (!Full) return;
+	// Which levels keep it: a fixed draw per leaf (not from Random: every level sees the same placements), under each
+	// level's share, so a farther level keeps a subset of a nearer one's.
+	const uint32 Hash = (++LeafSerial) * 2654435761u;
+	const float Draw = float((Hash >> 8) % 10000u) / 10000.f;
+	bool bKeep[NumGraftLevels];
+	++Leaves;
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		bKeep[L] = Draw < Detail[L].LeafKeep;
+		LeavesKept[L] += bKeep[L] ? 1 : 0;
+	}
 	const FVector D = Unit(Dir), Fo = Unit(Face);
 	const FVector Root = At - Fo * 0.6f - D * 0.3f, Knee = At + Fo * 1.6f + D * 2.2f, Mid = At + Fo * 1.4f + D * 0.6f;
 	TArray<FVector> Twig;
@@ -713,7 +923,15 @@ void FWWOVineGraft::Leaf(FName Bone, const FVector& At, const FVector& Dir, cons
 		Twig.Add(Root * FMath::Square(1.f - T) + Mid * 2.f * (1.f - T) * T + Knee * T * T);
 		R.Add(0.36f + 0.74f * FMath::Pow(1.f - T, 1.6f));
 	}
-	Strip(Bone, FWWOVineMesh::Stem, Twig, R, 6);
+	FRings TwigRings, PetioleRings;
+	for (int32 L = 0; L < NumGraftLevels; ++L)
+	{
+		TwigRings.Sides[L] = bKeep[L] ? Detail[L].TwigSides : 0;
+		TwigRings.Step[L] = Detail[L].TwigStep;
+		PetioleRings.Sides[L] = bKeep[L] ? Detail[L].PetioleSides : 0;
+		PetioleRings.Step[L] = Detail[L].PetioleStep;
+	}
+	Strip(Bone, FWWOVineMesh::Stem, Twig, R, TwigRings);
 	const FVector End = Knee + D * Length * 0.15f * 0.6f + Fo * Length * 0.15f * 0.12f;
 	{
 		const FVector A = Knee - D * 0.3f, Out = Unit(D + Fo * 0.5f);
@@ -727,24 +945,30 @@ void FWWOVineGraft::Leaf(FName Bone, const FVector& At, const FVector& Dir, cons
 			Pet.Add(A * S * S * S + P1 * 3.f * S * S * T + P2 * 3.f * S * T * T + End * T * T * T);
 			Rp.Add(0.21f * (1.f - 0.35f * T) * (1.f + 0.9f * (1.f - Smooth(0.f, 0.2f, T))));
 		}
-		Strip(Bone, FWWOVineMesh::Stem, Pet, Rp, 4);
+		Strip(Bone, FWWOVineMesh::Stem, Pet, Rp, PetioleRings);
 	}
 	// The leaf itself: its stalk's base at End, along D, top toward Face turned a little about D.
 	const FVector Top = Fo.RotateAngleAxisRad(Gauss(Random, 0.2f), D);
 	const FMatrix M = FRotationMatrix::MakeFromXZ(D, Top);
-	const float Scale = Length / Shape->Length;
-	for (int32 s = 0; s < 2; ++s)
+	const float Scale = Length / Full->Length;
+	for (int32 L = 0; L < NumGraftLevels; ++L)
 	{
-		FWWOVineMesh::FSection& Sec = MeshOn(Bone).S[s == 0 ? FWWOVineMesh::Leaf : FWWOVineMesh::Stem];
-		const int32 Base = Sec.V.Num();
-		for (int32 v = 0; v < Shape->V.Num(); ++v)
+		const FWWOLeafShape* Shape = bKeep[L] ? LeafShape(Kind, Detail[L].LeafLod) : nullptr;
+		if (!Shape) continue;
+		for (int32 s = 0; s < 2; ++s)
 		{
-			Sec.V.Add(End + M.TransformVector(Shape->V[v] * Scale));
-			Sec.N.Add(M.TransformVector(Shape->N[v]));
-			Sec.T.Add(FProcMeshTangent(M.TransformVector(Shape->T[v]), false));
-			Sec.UV.Add(Shape->UV[v]);
+			if (Shape->Tris[s].Num() == 0) continue;
+			FWWOVineMesh::FSection& Sec = MeshOn(Bone, L).S[s == 0 ? FWWOVineMesh::Leaf : FWWOVineMesh::Stem];
+			const int32 Base = Sec.V.Num();
+			for (int32 v = 0; v < Shape->V.Num(); ++v)
+			{
+				Sec.V.Add(End + M.TransformVector(Shape->V[v] * Scale));
+				Sec.N.Add(M.TransformVector(Shape->N[v]));
+				Sec.T.Add(FProcMeshTangent(M.TransformVector(Shape->T[v]), false));
+				Sec.UV.Add(Shape->UV[v]);
+			}
+			for (const int32 Index : Shape->Tris[s]) Sec.Tris.Add(Base + Index);
 		}
-		for (const int32 Index : Shape->Tris[s]) Sec.Tris.Add(Base + Index);
 	}
 	++Pieces;
 }
@@ -783,7 +1007,7 @@ void FWWOVineGraft::Tendril(FName Bone, const FVector& At, const FVector& InOut,
 		Path.Add(P);
 		R.Add(0.22f * (1.f - 0.8f * S) + 0.03f);
 	}
-	Strip(Bone, FWWOVineMesh::Stem, Path, R, 5);
+	Strip(Bone, FWWOVineMesh::Stem, Path, R, SmallRings(5));
 	++Pieces;
 }
 
@@ -797,7 +1021,9 @@ void FWWOVineGraft::Cone(FName Bone, const FVector& At, const FVector& Dir, floa
 		Path.Add(At + Dir * Length * S);
 		R.Add(Radius * (1.f - S) + 0.02f);
 	}
-	Strip(Bone, FWWOVineMesh::Bark, Path, R, 5);
+	FRings Rings = SmallRings(5);
+	for (int32& Step : Rings.Step) Step = 1; // (only 4 rings: all of them)
+	Strip(Bone, FWWOVineMesh::Bark, Path, R, Rings);
 	++Pieces;
 }
 
@@ -805,64 +1031,67 @@ void FWWOVineGraft::Crystal(FName Bone, const FVector& At, const FVector& InOut,
 {
 	// The fitted bulb: an almond-shaped crystal (pointed both ends, flattened front to back, flat facets, glowing
 	// from inside) lying down along the surface, pushed out a little, two thin vines curling round it, and an arc
-	// of charge off it.
+	// of charge off it. Each level with its own rings round it.
 	const FVector Out = Unit(InOut);
 	const float L = Scale * 30.f;
 	const FVector Axis = Unit(-Up + Out * 0.15f + FVector::CrossProduct(Out, Up) * Gauss(Random, 0.25f), -Front);
 	const FVector Center = At + Out * (L * 0.18f + 0.4f) + Axis * L * 0.28f;
 	const FVector Face = Unit(Out - Axis * FVector::DotProduct(Out, Axis));
 	const FVector Side = Unit(FVector::CrossProduct(Axis, Face));
-	constexpr int32 Rings = 9, Around = 10;
 	const float Rm = L * 0.31f;
-	// The rings (and the two tips), then flat-shaded triangles.
-	TArray<FVector> P;
-	TArray<FVector2D> UV;
-	P.Add(Center - Axis * L * 0.5f);
-	UV.Add(FVector2D(0.5f, 0.f));
-	for (int32 i = 1; i < Rings; ++i)
+	for (int32 Level = 0; Level < NumGraftLevels; ++Level)
 	{
-		const float T = float(i) / Rings, Rr = Rm * FMath::Pow(FMath::Sin(UE_PI * T), 0.8f);
-		for (int32 j = 0; j <= Around; ++j)
+		const int32 Rings = FMath::Max(Detail[Level].CrystalRings, 3), Around = FMath::Max(Detail[Level].CrystalAround, 3);
+		// The rings (and the two tips), then flat-shaded triangles.
+		TArray<FVector> P;
+		TArray<FVector2D> UV;
+		P.Add(Center - Axis * L * 0.5f);
+		UV.Add(FVector2D(0.5f, 0.f));
+		for (int32 i = 1; i < Rings; ++i)
 		{
-			const float A = UE_TWO_PI * j / Around + (i % 2 ? UE_PI / Around : 0.f);
-			const float X = FMath::Cos(A), Y = FMath::Sin(A) * 0.68f;
-			P.Add(Center + Axis * L * (T - 0.5f) + (Side * X + Face * Y) * Rr);
-			UV.Add(FVector2D(0.5f + 0.5f * X * Rr / Rm * 0.75f, T));
+			const float T = float(i) / Rings, Rr = Rm * FMath::Pow(FMath::Sin(UE_PI * T), 0.8f);
+			for (int32 j = 0; j <= Around; ++j)
+			{
+				const float A = UE_TWO_PI * j / Around + (i % 2 ? UE_PI / Around : 0.f);
+				const float X = FMath::Cos(A), Y = FMath::Sin(A) * 0.68f;
+				P.Add(Center + Axis * L * (T - 0.5f) + (Side * X + Face * Y) * Rr);
+				UV.Add(FVector2D(0.5f + 0.5f * X * Rr / Rm * 0.75f, T));
+			}
 		}
-	}
-	P.Add(Center + Axis * L * 0.5f);
-	UV.Add(FVector2D(0.5f, 1.f));
-	const int32 S = Around + 1, Top = P.Num() - 1;
-	TArray<FIntVector> Faces;
-	for (int32 j = 0; j < Around; ++j) Faces.Add(FIntVector(0, 1 + j + 1, 1 + j));
-	for (int32 i = 0; i < Rings - 2; ++i)
-	{
-		const int32 A0 = 1 + i * S, B0 = A0 + S;
-		for (int32 j = 0; j < Around; ++j)
+		P.Add(Center + Axis * L * 0.5f);
+		UV.Add(FVector2D(0.5f, 1.f));
+		const int32 S = Around + 1, Top = P.Num() - 1;
+		TArray<FIntVector> Faces;
+		for (int32 j = 0; j < Around; ++j) Faces.Add(FIntVector(0, 1 + j + 1, 1 + j));
+		for (int32 i = 0; i < Rings - 2; ++i)
 		{
-			Faces.Add(FIntVector(A0 + j, A0 + j + 1, B0 + j + 1));
-			Faces.Add(FIntVector(A0 + j, B0 + j + 1, B0 + j));
+			const int32 A0 = 1 + i * S, B0 = A0 + S;
+			for (int32 j = 0; j < Around; ++j)
+			{
+				Faces.Add(FIntVector(A0 + j, A0 + j + 1, B0 + j + 1));
+				Faces.Add(FIntVector(A0 + j, B0 + j + 1, B0 + j));
+			}
 		}
-	}
-	const int32 Last = 1 + (Rings - 2) * S;
-	for (int32 j = 0; j < Around; ++j) Faces.Add(FIntVector(Last + j, Last + j + 1, Top));
-	FWWOVineMesh::FSection& Sec = MeshOn(Bone).S[FWWOVineMesh::Crystal];
-	for (const FIntVector& F : Faces)
-	{
-		FVector Nf = FVector::CrossProduct(P[F.Y] - P[F.X], P[F.Z] - P[F.X]).GetSafeNormal();
-		const FVector Mid = (P[F.X] + P[F.Y] + P[F.Z]) / 3.f;
-		const bool bFlip = FVector::DotProduct(Nf, Mid - Center) < 0.f; // whichever way round, facing out
-		if (bFlip) Nf = -Nf;
-		const int32 Base = Sec.V.Num();
-		for (const int32 k : { F.X, F.Y, F.Z })
+		const int32 Last = 1 + (Rings - 2) * S;
+		for (int32 j = 0; j < Around; ++j) Faces.Add(FIntVector(Last + j, Last + j + 1, Top));
+		FWWOVineMesh::FSection& Sec = MeshOn(Bone, Level).S[FWWOVineMesh::Crystal];
+		for (const FIntVector& F : Faces)
 		{
-			Sec.V.Add(P[k]);
-			Sec.N.Add(Nf);
-			Sec.UV.Add(FVector2D(FMath::Lerp(CrystalIsland.U0, CrystalIsland.U1, UV[k].X), FMath::Lerp(CrystalIsland.V1, CrystalIsland.V0, UV[k].Y)));
-			Sec.T.Add(FProcMeshTangent(Side, false));
+			FVector Nf = FVector::CrossProduct(P[F.Y] - P[F.X], P[F.Z] - P[F.X]).GetSafeNormal();
+			const FVector Mid = (P[F.X] + P[F.Y] + P[F.Z]) / 3.f;
+			const bool bFlip = FVector::DotProduct(Nf, Mid - Center) < 0.f; // whichever way round, facing out
+			if (bFlip) Nf = -Nf;
+			const int32 Base = Sec.V.Num();
+			for (const int32 k : { F.X, F.Y, F.Z })
+			{
+				Sec.V.Add(P[k]);
+				Sec.N.Add(Nf);
+				Sec.UV.Add(FVector2D(FMath::Lerp(CrystalIsland.U0, CrystalIsland.U1, UV[k].X), FMath::Lerp(CrystalIsland.V1, CrystalIsland.V0, UV[k].Y)));
+				Sec.T.Add(FProcMeshTangent(Side, false));
+			}
+			if (bFlip) Tri(Sec.Tris, Base, Base + 2, Base + 1);
+			else Tri(Sec.Tris, Base, Base + 1, Base + 2);
 		}
-		if (bFlip) Tri(Sec.Tris, Base, Base + 2, Base + 1);
-		else Tri(Sec.Tris, Base, Base + 1, Base + 2);
 	}
 	// The cradle: two thin vines from the stem round its sides.
 	for (const float Sgn : { -1.f, 1.f })
@@ -877,7 +1106,7 @@ void FWWOVineGraft::Crystal(FName Bone, const FVector& At, const FVector& InOut,
 			Path.Add(Center + Axis * L * (Q - 0.5f) * 1.05f + Side * Sgn * L * 0.3f * FMath::Sin(A) * 1.1f + Out * L * 0.12f * FMath::Sin(A * 2.f) - Out * 0.2f);
 			R.Add(0.22f * FMath::Sqrt(Scale / 0.4f) * (1.f - 0.6f * Q));
 		}
-		Strip(Bone, FWWOVineMesh::Bark, Path, R, 5);
+		Strip(Bone, FWWOVineMesh::Bark, Path, R, SmallRings(5));
 	}
 	if (Scale > 0.2f && Random.FRand() < 0.7f) // an arc of charge
 	{
@@ -890,33 +1119,43 @@ void FWWOVineGraft::Crystal(FName Bone, const FVector& At, const FVector& InOut,
 			Path.Add(A0 + (A1 - A0) * (q / 7.f) + ((q > 0 && q < 7) ? Gauss3(Random, L * 0.05f) : FVector::ZeroVector));
 			R.Add(0.09f);
 		}
-		Strip(Bone, FWWOVineMesh::Core, Path, R, 4);
+		FRings Rings = SmallRings(4);
+		for (int32 Lv = 1; Lv < NumGraftLevels; ++Lv) Rings.Sides[Lv] = 0; // (a hair-thin arc: only up close)
+		Strip(Bone, FWWOVineMesh::Core, Path, R, Rings);
 	}
 	++Pieces;
 }
 
 // --- VeilSpore: kit pieces and mycelium ----------------------------------------------------------
 
-void FWWOVineGraft::KitPiece(FName Bone, const FWWOLeafShape& Shape, const FTransform& Xf)
+void FWWOVineGraft::KitPiece(FName Bone, const FWWOLeafShape* const (&Shapes)[NumGraftLevels], const FWWOLeafShape* const (&SmallShapes)[NumGraftLevels],
+	const FTransform& Xf)
 {
-	FWWOVineMesh::FSection& Sec = MeshOn(Bone).S[FWWOVineMesh::Fungus];
-	const int32 Base = Sec.V.Num();
-	for (int32 v = 0; v < Shape.V.Num(); ++v)
+	if (!Shapes[0]) return;
+	const float Across = float(Shapes[0]->Bounds.GetSize().GetMax() * Xf.GetScale3D().GetMax());
+	for (int32 L = 0; L < NumGraftLevels; ++L)
 	{
-		Sec.V.Add(Xf.TransformPosition(Shape.V[v]));
-		Sec.N.Add(Xf.TransformVectorNoScale(Shape.N[v]));
-		Sec.T.Add(FProcMeshTangent(Xf.TransformVectorNoScale(Shape.T[v]), false));
-		Sec.UV.Add(Shape.UV[v]);
+		if (Across < Detail[L].KitMin) continue; // too small to see that far
+		const FWWOLeafShape* Shape = Across < Detail[L].KitSmall && SmallShapes[L] ? SmallShapes[L] : Shapes[L] ? Shapes[L] : Shapes[0];
+		FWWOVineMesh::FSection& Sec = MeshOn(Bone, L).S[FWWOVineMesh::Fungus];
+		const int32 Base = Sec.V.Num();
+		for (int32 v = 0; v < Shape->V.Num(); ++v)
+		{
+			Sec.V.Add(Xf.TransformPosition(Shape->V[v]));
+			Sec.N.Add(Xf.TransformVectorNoScale(Shape->N[v]));
+			Sec.T.Add(FProcMeshTangent(Xf.TransformVectorNoScale(Shape->T[v]), false));
+			Sec.UV.Add(Shape->UV[v]);
+		}
+		for (const TArray<int32>& Tris : Shape->Tris) for (const int32 Index : Tris) Sec.Tris.Add(Base + Index);
+		KitTris[L] += (Shape->Tris[0].Num() + Shape->Tris[1].Num()) / 3;
 	}
-	for (const TArray<int32>& Tris : Shape.Tris) for (const int32 Index : Tris) Sec.Tris.Add(Base + Index);
-	KitTris += (Shape.Tris[0].Num() + Shape.Tris[1].Num()) / 3;
 	++Pieces;
 }
 
-int32 FWWOVineGraft::FungusTris() const
+int32 FWWOVineGraft::FungusTris(int32 L) const
 {
-	int32 N = Joints->S[FWWOVineMesh::Fungus].Tris.Num() / 3;
-	for (const TPair<FName, FWWOVineMesh>& It : Rigid) N += It.Value.S[FWWOVineMesh::Fungus].Tris.Num() / 3;
+	int32 N = Joints->S[L][FWWOVineMesh::Fungus].Tris.Num() / 3;
+	for (const TPair<FName, FWWOVineMeshLevels>& It : Rigid) N += It.Value.L[L].S[FWWOVineMesh::Fungus].Tris.Num() / 3;
 	return N;
 }
 
@@ -1011,7 +1250,8 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 	const TArray<FNetKnot>& Knots = Blocked ? Kept : AllKnots;
 	const int32 Num = Knots.Num();
 	if (Num < 2) return;
-	const int32 Before = FungusTris();
+	int32 Before[NumGraftLevels];
+	for (int32 L = 0; L < NumGraftLevels; ++L) Before[L] = FungusTris(L);
 	// The strands: a beta-skeleton over the knots in the net's own plane (an edge stays when no other knot is in
 	// the lune between its ends; 1.45: between the Gabriel graph and the relative neighbourhood graph, the
 	// fitted lattice's 1.55), so the net is connected and its holes come in many sizes.
@@ -1061,7 +1301,7 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 		return FVector2D(FMath::Lerp(NetIsland.U0, NetIsland.U1, 0.05f + 0.9f * Th), FMath::Lerp(NetIsland.V1, NetIsland.V0, G));
 	};
 	// One strand through points on the surface: lifted off it by its own radius, rigid on bones or posed between two.
-	auto Strand = [&](const TArray<FVector>& Pts, const TArray<FVector>& Ns, const TArray<float>& Rad, const TArray<FStationOwner>& Own)
+	auto Strand = [&](const TArray<FVector>& Pts, const TArray<FVector>& Ns, const TArray<float>& Rad, const TArray<FStationOwner>& Own, bool bRoot)
 	{
 		const int32 M = Pts.Num();
 		if (M < 2) return;
@@ -1079,7 +1319,15 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 		Owners = Own;
 		StationIds.Init(INDEX_NONE, M);
 		for (int32 i = 0; i < M; ++i) if (Own[i].Pair != INDEX_NONE) StationIds[i] = Joints->Stations.Add({ C[i], Own[i].W, Own[i].Pair });
-		Tube(FWWOVineMesh::Fungus, C, Rad, F1, F2, Widest > 0.3f ? 5 : 4, 0.f, &UV);
+		// Per level: thick strands rounder than thin ones; the farthest leaves the thinnest out.
+		FRings Rings;
+		for (int32 L = 0; L < NumGraftLevels; ++L)
+		{
+			const FWWOGraftDetail& D = Detail[L];
+			Rings.Sides[L] = Widest < D.NetMinRadius || (bRoot && !D.bSmall) ? 0 : Widest > 0.3f ? D.NetSides : D.NetThinSides;
+			Rings.Step[L] = D.NetStep;
+		}
+		Tube(FWWOVineMesh::Fungus, C, Rad, F1, F2, Rings, 0.f, &UV);
 	};
 	for (const FIntPoint& E : Edges)
 	{
@@ -1103,7 +1351,7 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 			Rad.Add(FMath::Lerp(KnotR[E.X], KnotR[E.Y], T) * (1.f - 0.28f * FMath::Sin(UE_PI * T))); // full at the knots: fused joins
 			Own.Add(OwnerAt(FMath::Lerp(A.Along, B.Along, T)));
 		}
-		Strand(Pts, Ns, Rad, Own);
+		Strand(Pts, Ns, Rad, Own, false);
 	}
 	// A knob where three or more strands meet (the fitted lattice's fused joins): a flattened ball.
 	for (int32 i = 0; i < Num; ++i)
@@ -1116,36 +1364,40 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 		const FVector2D UV = UVAt(K.P, Rb);
 		const bool bJoint = K.Own.Pair != INDEX_NONE;
 		const int32 Station = bJoint ? Joints->Stations.Add({ C, K.Own.W, K.Own.Pair }) : INDEX_NONE;
-		FWWOVineJoints::FSection& JS = Joints->S[FWWOVineMesh::Fungus];
-		FWWOVineMesh::FSection& RS = MeshOn(K.Own.Bone).S[FWWOVineMesh::Fungus];
-		TArray<FVector>& V = bJoint ? JS.RefV : RS.V;
-		TArray<FVector>& Nm = bJoint ? JS.RefN : RS.N;
-		TArray<FVector2D>& UVs = bJoint ? JS.UV : RS.UV;
-		TArray<FProcMeshTangent>& Tg = bJoint ? JS.RefT : RS.T;
-		TArray<int32>& Tris = bJoint ? JS.Tris : RS.Tris;
-		constexpr int32 Around = 6, Rings = 4;
-		const int32 Base = V.Num();
-		for (int32 r = 0; r <= Rings; ++r)
+		for (int32 L = 0; L < NumGraftLevels; ++L)
 		{
-			const float Phi = UE_PI * r / Rings - UE_HALF_PI;
-			for (int32 j = 0; j <= Around; ++j)
+			const int32 Around = Detail[L].KnobSides, Rings = Detail[L].KnobRings;
+			if (Around < 3 || Rings < 2) continue;
+			FWWOVineJoints::FSection& JS = Joints->S[L][FWWOVineMesh::Fungus];
+			FWWOVineMesh::FSection& RS = MeshOn(K.Own.Bone, L).S[FWWOVineMesh::Fungus];
+			TArray<FVector>& V = bJoint ? JS.RefV : RS.V;
+			TArray<FVector>& Nm = bJoint ? JS.RefN : RS.N;
+			TArray<FVector2D>& UVs = bJoint ? JS.UV : RS.UV;
+			TArray<FProcMeshTangent>& Tg = bJoint ? JS.RefT : RS.T;
+			TArray<int32>& Tris = bJoint ? JS.Tris : RS.Tris;
+			const int32 Base = V.Num();
+			for (int32 r = 0; r <= Rings; ++r)
 			{
-				const float A = UE_TWO_PI * j / Around;
-				const FVector Dir = E1 * FMath::Cos(A) + E2 * FMath::Sin(A);
-				V.Add(C + Dir * Rb * FMath::Cos(Phi) + K.N * Rb * 0.6f * FMath::Sin(Phi));
-				Nm.Add(Unit(Dir * FMath::Cos(Phi) + K.N * FMath::Sin(Phi) / 0.6f, K.N));
-				UVs.Add(UV);
-				Tg.Add(FProcMeshTangent(-E1 * FMath::Sin(A) + E2 * FMath::Cos(A), false));
-				if (bJoint) JS.Station.Add(Station);
+				const float Phi = UE_PI * r / Rings - UE_HALF_PI;
+				for (int32 j = 0; j <= Around; ++j)
+				{
+					const float A = UE_TWO_PI * j / Around;
+					const FVector Dir = E1 * FMath::Cos(A) + E2 * FMath::Sin(A);
+					V.Add(C + Dir * Rb * FMath::Cos(Phi) + K.N * Rb * 0.6f * FMath::Sin(Phi));
+					Nm.Add(Unit(Dir * FMath::Cos(Phi) + K.N * FMath::Sin(Phi) / 0.6f, K.N));
+					UVs.Add(UV);
+					Tg.Add(FProcMeshTangent(-E1 * FMath::Sin(A) + E2 * FMath::Cos(A), false));
+					if (bJoint) JS.Station.Add(Station);
+				}
 			}
-		}
-		for (int32 r = 0; r < Rings; ++r)
-		{
-			for (int32 j = 0; j < Around; ++j)
+			for (int32 r = 0; r < Rings; ++r)
 			{
-				const int32 A = Base + r * (Around + 1) + j, B = A + 1, D = A + Around + 1, Cc = D + 1;
-				Tri(Tris, A, B, D);
-				Tri(Tris, B, Cc, D);
+				for (int32 j = 0; j < Around; ++j)
+				{
+					const int32 A = Base + r * (Around + 1) + j, B = A + 1, D = A + Around + 1, Cc = D + 1;
+					Tri(Tris, A, B, D);
+					Tri(Tris, B, Cc, D);
+				}
 			}
 		}
 	}
@@ -1173,8 +1425,8 @@ void FWWOVineGraft::NetBuild(const TArray<FNetKnot>& AllKnots, const FWWONetStyl
 			Rad.Add(FMath::Lerp(R0, 0.05f, float(s) / Steps));
 			Own.Add(K.Own);
 		}
-		Strand(Pts, Ns, Rad, Own);
+		Strand(Pts, Ns, Rad, Own, true);
 	}
-	NetTris += FungusTris() - Before;
+	for (int32 L = 0; L < NumGraftLevels; ++L) NetTris[L] += FungusTris(L) - Before[L];
 	++Pieces;
 }

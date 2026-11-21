@@ -1,4 +1,5 @@
 #include "Characters/WWOGraftBuilder.h"
+#include "Characters/WWOVineGraft.h"
 #include "FX/WWOFX.h"
 #include "WWOTypes.h"
 #include "ProceduralMeshComponent.h"
@@ -95,8 +96,8 @@ TArray<FVector> FWWOGraftBuilder::Loop(const FVector& Center, const FVector& Axi
 
 void FWWOGraftBuilder::Tube(const TArray<FVector>& Path, float Thickness, bool bTaper)
 {
-	// A round stalk along a path (5 sides), thinning out at the ends when bTaper.
-	constexpr int32 Sides = 5;
+	// A round stalk along a path (TubeSides, 5), thinning out at the ends when bTaper.
+	const int32 Sides = FMath::Max(TubeSides, 3);
 	if (Path.Num() < 2) return;
 	FVector Normal = FVector::ZeroVector;
 	TArray<TArray<FVector>> Rings;
@@ -272,7 +273,7 @@ void FWWOGraftBuilder::Plate(const FVector& Center, const FVector& Out, const FV
 	const FVector D = Along.GetSafeNormal();
 	const FVector N = (Out - D * FVector::DotProduct(Out, D)).GetSafeNormal();
 	const FVector Across = GCross(N, D).GetSafeNormal();
-	constexpr int32 Rows = 6, Cols = 5;
+	const int32 Rows = FMath::Max(PlateRows, 1), Cols = FMath::Max(PlateCols, 1);
 	const float SeedValue = Random.FRand();
 	TArray<FVector> Outer, Inner;
 	TArray<FVector2D> UV, UV2;
@@ -369,8 +370,8 @@ void FWWOGraftBuilder::SeedPod(const FVector& Top, float Length, float Width, fl
 	const FQuat Lean = FQuat::FindBetweenNormals(Down, H);
 	const FVector Start = Top + H * Stalk * Unit;
 	// Godot's little (0.004, 0, 0.003) kink, in Unreal's axes.
-	Tube({ Top, FMath::Lerp(Top, Start, 0.5f) + Lean.RotateVector(FVector(-0.003f, 0.004f, 0.f)) * Unit, Start - H * 0.005f * Unit }, 0.005f, false);
-	constexpr int32 Sides = 9, NumRings = 9;
+	if (bPodStalk) Tube({ Top, FMath::Lerp(Top, Start, 0.5f) + Lean.RotateVector(FVector(-0.003f, 0.004f, 0.f)) * Unit, Start - H * 0.005f * Unit }, 0.005f, false);
+	const int32 Sides = FMath::Max(PodSides, 3), NumRings = FMath::Max(PodRings, 2);
 	TArray<TArray<FVector>> Rings;
 	for (int32 r = 0; r <= NumRings; ++r)
 	{
@@ -496,67 +497,73 @@ bool FWWOGraftBuilder::IsEmpty() const
 	return true;
 }
 
+void FWWOGraftBuilder::Bake(int32 s, TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FProcMeshTangent>& Tangents) const
+{
+	const FSurface& Surf = Surfaces[s];
+	const int32 Num = Surf.Positions.Num();
+	Vertices.SetNumUninitialized(Num);
+	Normals.SetNumZeroed(Num);
+	Triangles.SetNumUninitialized(Num);
+	Tangents.SetNum(Num);
+	TMap<FIntVector, FVector> Smooth; // summed face normals by (rounded) position
+	auto Key = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X * 100.f), FMath::RoundToInt(P.Y * 100.f), FMath::RoundToInt(P.Z * 100.f)); };
+	for (int32 i = 0; i < Num; i += 3)
+	{
+		const FVector& A = Surf.Positions[i];
+		const FVector& B = Surf.Positions[i + 1];
+		const FVector& C = Surf.Positions[i + 2];
+		// Godot stores front faces clockwise; mirrored into Unreal's axes the same face's normal
+		// is (B - A) x (C - A), and Unreal draws the face whose normal is (P2 - P0) x (P1 - P0),
+		// so the indices go A, C, B.
+		const FVector Face = FVector::CrossProduct(B - A, C - A);
+		for (int32 k = 0; k < 3; ++k)
+		{
+			Vertices[i + k] = Surf.Positions[i + k] - Origin;
+			Normals[i + k] = Face.GetSafeNormal();
+			if (Surf.bSmooth) Smooth.FindOrAdd(Key(Surf.Positions[i + k])) += Face;
+		}
+		Triangles[i] = i;
+		Triangles[i + 1] = i + 2;
+		Triangles[i + 2] = i + 1;
+		// The tangent (along U) for the bark's normal map.
+		const FVector2D& UA = Surf.UV0[i];
+		const FVector2D DU1 = Surf.UV0[i + 1] - UA, DU2 = Surf.UV0[i + 2] - UA;
+		const float Det = DU1.X * DU2.Y - DU2.X * DU1.Y;
+		if (FMath::Abs(Det) > SMALL_NUMBER)
+		{
+			const FVector E1 = B - A, E2 = C - A;
+			const FVector TX = ((E1 * DU2.Y - E2 * DU1.Y) / Det);
+			const FVector TY = ((E2 * DU1.X - E1 * DU2.X) / Det);
+			const FVector N = Face.GetSafeNormal();
+			const FVector TanX = (TX - N * FVector::DotProduct(TX, N)).GetSafeNormal();
+			const bool bFlip = FVector::DotProduct(FVector::CrossProduct(N, TanX), TY) < 0.f;
+			for (int32 k = 0; k < 3; ++k) Tangents[i + k] = FProcMeshTangent(TanX, bFlip);
+		}
+	}
+	if (Surf.bSmooth)
+	{
+		for (int32 i = 0; i < Num; ++i)
+		{
+			if (const FVector* Sum = Smooth.Find(Key(Surf.Positions[i])))
+			{
+				const FVector N = Sum->GetSafeNormal();
+				if (!N.IsZero()) Normals[i] = N;
+			}
+		}
+	}
+}
+
 void FWWOGraftBuilder::Build(UProceduralMeshComponent* Mesh, UObject* Outer) const
 {
 	int32 Section = 0;
 	for (int32 s = 0; s < NumSurfaces; ++s)
 	{
 		const FSurface& Surf = Surfaces[s];
-		const int32 Num = Surf.Positions.Num();
-		if (Num == 0) continue;
+		if (Surf.Positions.Num() == 0) continue;
 		TArray<FVector> Vertices, Normals;
 		TArray<int32> Triangles;
 		TArray<FProcMeshTangent> Tangents;
-		Vertices.SetNumUninitialized(Num);
-		Normals.SetNumZeroed(Num);
-		Triangles.SetNumUninitialized(Num);
-		Tangents.SetNum(Num);
-		TMap<FIntVector, FVector> Smooth; // summed face normals by (rounded) position
-		auto Key = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X * 100.f), FMath::RoundToInt(P.Y * 100.f), FMath::RoundToInt(P.Z * 100.f)); };
-		for (int32 i = 0; i < Num; i += 3)
-		{
-			const FVector& A = Surf.Positions[i];
-			const FVector& B = Surf.Positions[i + 1];
-			const FVector& C = Surf.Positions[i + 2];
-			// Godot stores front faces clockwise; mirrored into Unreal's axes the same face's normal
-			// is (B - A) x (C - A), and Unreal draws the face whose normal is (P2 - P0) x (P1 - P0),
-			// so the indices go A, C, B.
-			const FVector Face = FVector::CrossProduct(B - A, C - A);
-			for (int32 k = 0; k < 3; ++k)
-			{
-				Vertices[i + k] = Surf.Positions[i + k] - Origin;
-				Normals[i + k] = Face.GetSafeNormal();
-				if (Surf.bSmooth) Smooth.FindOrAdd(Key(Surf.Positions[i + k])) += Face;
-			}
-			Triangles[i] = i;
-			Triangles[i + 1] = i + 2;
-			Triangles[i + 2] = i + 1;
-			// The tangent (along U) for the bark's normal map.
-			const FVector2D& UA = Surf.UV0[i];
-			const FVector2D DU1 = Surf.UV0[i + 1] - UA, DU2 = Surf.UV0[i + 2] - UA;
-			const float Det = DU1.X * DU2.Y - DU2.X * DU1.Y;
-			if (FMath::Abs(Det) > SMALL_NUMBER)
-			{
-				const FVector E1 = B - A, E2 = C - A;
-				const FVector TX = ((E1 * DU2.Y - E2 * DU1.Y) / Det);
-				const FVector TY = ((E2 * DU1.X - E1 * DU2.X) / Det);
-				const FVector N = Face.GetSafeNormal();
-				const FVector TanX = (TX - N * FVector::DotProduct(TX, N)).GetSafeNormal();
-				const bool bFlip = FVector::DotProduct(FVector::CrossProduct(N, TanX), TY) < 0.f;
-				for (int32 k = 0; k < 3; ++k) Tangents[i + k] = FProcMeshTangent(TanX, bFlip);
-			}
-		}
-		if (Surf.bSmooth)
-		{
-			for (int32 i = 0; i < Num; ++i)
-			{
-				if (const FVector* Sum = Smooth.Find(Key(Surf.Positions[i])))
-				{
-					const FVector N = Sum->GetSafeNormal();
-					if (!N.IsZero()) Normals[i] = N;
-				}
-			}
-		}
+		Bake(s, Vertices, Triangles, Normals, Tangents);
 		Mesh->CreateMeshSection(Section, Vertices, Triangles, Normals, Surf.UV0, Surf.UV1, TArray<FVector2D>(), TArray<FVector2D>(), Surf.Colors, Tangents, false);
 		UMaterialInstanceDynamic* Mat = UMaterialInstanceDynamic::Create(WWOFX::Material(SurfaceMaterials[s]), Outer);
 		if (s == Pod || s == Gill) Mat->SetVectorParameterValue("Color", PodColor);
@@ -567,5 +574,28 @@ void FWWOGraftBuilder::Build(UProceduralMeshComponent* Mesh, UObject* Outer) con
 		}
 		Mesh->SetMaterial(Section, Mat);
 		++Section;
+	}
+}
+
+void FWWOGraftBuilder::BakeInto(FWWOVineMesh& Out) const
+{
+	const TPair<ESurface, FWWOVineMesh::ESection> Map[] = { { Bark, FWWOVineMesh::GraftBark }, { Seed, FWWOVineMesh::GraftSeed }, { Vine, FWWOVineMesh::GraftVine } };
+	for (const TPair<ESurface, FWWOVineMesh::ESection>& M : Map)
+	{
+		const FSurface& Surf = Surfaces[M.Key];
+		if (Surf.Positions.Num() == 0) continue;
+		TArray<FVector> Vertices, Normals;
+		TArray<int32> Triangles;
+		TArray<FProcMeshTangent> Tangents;
+		Bake(M.Key, Vertices, Triangles, Normals, Tangents);
+		FWWOVineMesh::FSection& Sec = Out.S[M.Value];
+		const int32 Base = Sec.V.Num();
+		Sec.V.Append(Vertices);
+		Sec.N.Append(Normals);
+		Sec.T.Append(Tangents);
+		Sec.UV.Append(Surf.UV0);
+		Sec.UV1.Append(Surf.UV1);
+		Sec.C.Append(Surf.Colors);
+		for (const int32 i : Triangles) Sec.Tris.Add(Base + i);
 	}
 }

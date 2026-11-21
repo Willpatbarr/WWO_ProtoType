@@ -29,6 +29,7 @@ struct FWWOShellPoint;
 struct FWWOShellPath;
 struct FWWOShellAnchorSet;
 struct FWWOVineJoints;
+struct FWWOAnchorGraftResult;
 class UMaterialInstanceDynamic;
 class UAnimSequence;
 class UWWOBodyAnimInstance;
@@ -231,8 +232,22 @@ private:
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> AnchorParts; // (also in Grafts)
 	TSharedPtr<FWWOVineJoints> VineJoints; // VoltVine's vines where they pass between bones, posed every frame (WWOVineGraft.h)
 	bool UseAnchorGrafts(FName FloraId) const;
+	// Asks for them (built off the game thread, or shared with a robot wearing the same: FWWOAnchorGraftCache); the ones
+	// shown stay until ApplyAnchorGrafts puts the new ones on. ClearAnchorGrafts takes them off and drops a pending ask.
 	void BuildAnchorGrafts();
 	void ClearAnchorGrafts();
+	void DestroyAnchorParts();
+	friend class FWWOAnchorGraftCache;
+	void ApplyAnchorGrafts(const FWWOAnchorGraftResult& Result, int32 Request, const FString& How);
+	int32 AnchorRequest = 0;   // the latest ask; a build that arrives for an older one is dropped
+	double AnchorAskedMs = 0.0; // (the log: what asking cost this frame)
+	// Their detail level (0 closest .. 2 farthest): the robot's own LOD, which the shell parts follow too, checked after
+	// every pose update (UpdateAnchorLevel); the menu's preview always 0; wwo.AnchorGraftLevel forces one.
+	int32 AnchorLevel = 0, AnchorLevelSwitches = 0;
+	int32 AnchorLevelNow() const;
+	void UpdateAnchorLevel();
+	TWeakObjectPtr<USkeletalMeshComponent> AnchorLodModel;
+	FDelegateHandle AnchorLodHandle;
 
 	FLinearColor Region(int32 Index) const { return bRegionColors ? RegionColors[Index] : BodyColor; }
 	void SetTints(const FLinearColor& Toward, float Amount);

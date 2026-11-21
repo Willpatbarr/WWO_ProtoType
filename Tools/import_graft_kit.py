@@ -23,6 +23,8 @@ Run headless from the project folder:
   surface, so the game places it with FRotationMatrix::MakeFromXZ(Up, N). Blender's Y comes in mirrored
   (Unreal's Y = -Blender's); the log's bounds show it, to compare with kit.json's bounds_min/max_cm.
 - Writes Tools/import_graft_kit.log. Safe to rerun: each mesh is rebuilt in place.
+- Run Tools/make_graft_piece_lods.py after this: it gives the meshes the LODs the anchor grafts' farther detail
+  levels copy (this script rebuilds them with one LOD).
 """
 import os
 

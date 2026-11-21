@@ -304,6 +304,11 @@ void UWWOBodyComponent::SetModel(FName Key)
 	Model->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Model->LightingChannels = Driver->LightingChannels; // the menu preview has its own lights
 	Model->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	// A robot of shell parts picks its own LOD from its own screen size (SK_RobotSkeleton's three, made at import; the
+	// parts follow it as their leader, and so do its anchor grafts' detail levels). Attached to the mannequin it would
+	// take the mannequin's, which, hidden, never leaves LOD 0. (The menu's preview, seen only through its capture, keeps
+	// that: always in full.)
+	if (bShells && !bFullDetailGrafts) Model->bSyncAttachParentLOD = false;
 	Model->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Model->SetAnimInstanceClass(UWWOModelAnimInstance::StaticClass());
 	Model->AddTickPrerequisiteComponent(Driver); // the mannequin poses first, then the model copies it
@@ -642,6 +647,7 @@ void UWWOBodyComponent::ApplyShadowOnly(UPrimitiveComponent* C) const
 void UWWOBodyComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this)) Loadout->OnChanged.Remove(LoadoutHandle);
+	ClearAnchorGrafts(); // (and a build on its way is not given to it)
 	Super::EndPlay(Reason);
 }
 
