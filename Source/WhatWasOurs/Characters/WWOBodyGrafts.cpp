@@ -161,12 +161,13 @@ void UWWOBodyComponent::RebuildGrafts()
 	{
 		if (!ModelGrafts(FloraId, F)) VoltGrafts(F, GrenadeColor);
 	}
-	else if (Grenade && FloraId != WWOIds::Flora::VeilSpore && FloraId != WWOIds::Flora::IronBark)
+	else if (Grenade && FloraId != WWOIds::Flora::VeilSpore && FloraId != WWOIds::Flora::IronBark && FloraId != WWOIds::Flora::DawnLotus) // (those three have their own grenade models)
 	{
 		AttachBall("pelvis", Hips + F.Right * 0.17f * F.U + F.Forward * 0.04f * F.U, GrenadeRadius, GrenadeColor);
 	}
 	if (FloraId == WWOIds::Flora::VeilSpore && !ModelGrafts(FloraId, F)) SporeGrafts(F);
 	if (FloraId == WWOIds::Flora::IronBark && !ModelGrafts(FloraId, F)) BarkGrafts(F);
+	if (FloraId == WWOIds::Flora::DawnLotus) ModelGrafts(FloraId, F); // (the meshes fit the base robot; no anchor recipe yet)
 	// Seedburst: the flora's own model of it where it has one (IronBark's SK_IB_Seedburst, a cluster of
 	// pods added by ModelGrafts), else three seeds in a row along the belt.
 	const bool bSeedModel = Grafts.ContainsByPredicate([](const UPrimitiveComponent* C)
@@ -371,7 +372,8 @@ bool UWWOBodyComponent::ModelGrafts(FName FloraId, const FWWOGraftFrame& F)
 	if (!Model || !bModelGrafts) return false;
 	const TCHAR* Prefix = FloraId == WWOIds::Flora::VoltVine ? TEXT("SK_VV_")
 		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SK_VS_")
-		: FloraId == WWOIds::Flora::IronBark ? TEXT("SK_IB_") : nullptr;
+		: FloraId == WWOIds::Flora::IronBark ? TEXT("SK_IB_")
+		: FloraId == WWOIds::Flora::DawnLotus ? TEXT("SK_DL_") : nullptr;
 	if (!Prefix) return false;
 	auto Title = [](FName Id)
 	{
@@ -383,7 +385,8 @@ bool UWWOBodyComponent::ModelGrafts(FName FloraId, const FWWOGraftFrame& F)
 	};
 	// Does this model have this flora's grafts at all? (The first piece every loadout has decides.)
 	const FString Probe = FString(Prefix) + (FloraId == WWOIds::Flora::VoltVine ? TEXT("Belt")
-		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SporeFogDamage") : TEXT("ExtraGrenade"));
+		: FloraId == WWOIds::Flora::VeilSpore ? TEXT("SporeFogDamage")
+		: FloraId == WWOIds::Flora::DawnLotus ? TEXT("FullBloom") : TEXT("ExtraGrenade"));
 	if (!LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/WWO/Characters/RobotFrame/Grafts/%s.%s"), *Probe, *Probe), nullptr, LOAD_NoWarn | LOAD_Quiet))
 	{
 		return false;
@@ -395,6 +398,11 @@ bool UWWOBodyComponent::ModelGrafts(FName FloraId, const FWWOGraftFrame& F)
 			AddModelGraft(TEXT("SK_VV_Belt"));
 			const int32 Count = F.Grenade == WWOIds::Grenade::ShockPool ? 2 : (F.Grenade == WWOIds::Grenade::SnareMine ? 3 : 1);
 			AddModelGraft(FString::Printf(TEXT("SK_VV_HipBulbs%d"), Count));
+		}
+		else if (FloraId == WWOIds::Flora::DawnLotus)
+		{
+			// (Named in the art for what the grenade was called then: Bloom Pool is its healing pool.)
+			AddModelGraft(FString(Prefix) + TEXT("Grenade") + (F.Grenade == WWOIds::Grenade::BloomPool ? FString(TEXT("HealingPool")) : Title(F.Grenade)));
 		}
 		else
 		{

@@ -26,6 +26,7 @@ namespace
 		TEXT("/Game/WWO/Flora/VoltVine/Materials/MI_VV_Stem.MI_VV_Stem"),
 		TEXT("/Game/WWO/Flora/VeilSpore/Materials/MI_VS_Fungus.MI_VS_Fungus"), // VeilSpore's atlas (Tools/import_robot_grafts.py)
 		TEXT("/Game/WWO/Flora/IronBark/Materials/MI_IB_Kit.MI_IB_Kit"), // IronBark's kit atlas (Tools/import_graft_kit.py)
+		TEXT("/Game/WWO/Flora/DawnLotus/Materials/MI_DL_Kit.MI_DL_Kit"), // DawnLotus's kit atlas (the same import)
 		TEXT("M_WWO_GraftBark"), TEXT("M_WWO_GraftSeed"), TEXT("M_WWO_GraftVine") }; // FWWOGraftBuilder's (WWOFX::Material)
 
 	// VeilSpore's atlas (T_veilspore_atlas, ~/Documents/WWO_Flora/kit_veilspore/kit.json islands_uv, turned to Unreal's V

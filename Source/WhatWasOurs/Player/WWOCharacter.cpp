@@ -10,6 +10,7 @@
 #include "Player/WWOCharacter.h"
 #include "WhatWasOurs.h"
 #include "Player/WWOCharacterPrivate.h"
+#include "Flora/WWODawnLotus.h"
 #include "WWOTypes.h"
 #include "Engine/World.h"
 #include "Player/WWOProf.h"
@@ -92,6 +93,7 @@ AWWOCharacter::AWWOCharacter(const FObjectInitializer& ObjectInitializer)
 	Grenades = CreateDefaultSubobject<UWWOGrenadeComponent>(TEXT("Grenades"));
 	Ult = CreateDefaultSubobject<UWWOUltComponent>(TEXT("Ult"));
 	Body = CreateDefaultSubobject<UWWOBodyComponent>(TEXT("Body"));
+	DawnLotus = CreateDefaultSubobject<UWWODawnLotusComponent>(TEXT("DawnLotus"));
 	Body->BodyColor = FLinearColor(0.3f, 0.42f, 0.55f); // steel blue
 
 	Tags.Add("Player");

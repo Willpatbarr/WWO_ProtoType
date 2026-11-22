@@ -54,6 +54,11 @@ void AWWOCharacter::ServerActivateUlt_Implementation()
 	UE_LOG(LogWWO, Display, TEXT("NetUlt from %s: %s"), *GetName(), *WWOKit::RefusalText(EWWOKit::Ult, bCast ? EWWOKitRefusal::None : EWWOKitRefusal::NotReady));
 }
 
+void AWWOCharacter::ServerUltAim_Implementation(FVector_NetQuantizeNormal Aim)
+{
+	NetAim = FVector(Aim).GetSafeNormal(UE_SMALL_NUMBER, GetActorForwardVector()); // this copy's camera has no pitch
+}
+
 void AWWOCharacter::ServerSetRevive_Implementation(bool bHolding)
 {
 	Health->bWantsRevive = bHolding;

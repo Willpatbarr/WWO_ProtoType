@@ -133,6 +133,19 @@ void UWWOHealthComponent::TakeDamage(float Amount, bool bMelee)
 	if (Health <= 0.f) Die();
 }
 
+FWWOHealthRestored UWWOHealthComponent::Heal(float Amount)
+{
+	FWWOHealthRestored Done;
+	if (!IsHost() || bDead || Amount <= 0.f) return Done;
+	const float ToHealth = FMath::Clamp(MaxHealth() - Health, 0.f, Amount);
+	const float ToShield = FMath::Clamp(MaxShield() - Shield, 0.f, Amount - ToHealth);
+	Health += ToHealth;
+	Shield += ToShield;
+	Done.Restored = ToHealth + ToShield;
+	Done.Overheal = Amount - Done.Restored;
+	return Done;
+}
+
 void UWWOHealthComponent::DamageCameFrom(const FVector& From)
 {
 	AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());

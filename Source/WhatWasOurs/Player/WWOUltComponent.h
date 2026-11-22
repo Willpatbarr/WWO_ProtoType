@@ -8,6 +8,7 @@
 //   you're invisible to enemies and hit harder in melee whenever you're inside spore fog.
 // - Entrench (IronBark): the same quick flash as roots burst up around you; you're rooted (can
 //   still look and shoot), can't be hurt, and your grenade recharges much faster.
+// - Beam (DawnLotus, placeholder form): the orb charges between the hands, then one forward beam, its damage scaled by the Nectar it spends.
 // You can't move, look, shoot or take damage while it plays. Charges over ChargeTime.
 
 #include "CoreMinimal.h"
@@ -49,6 +50,7 @@ public:
 
 	float Charge = 1.f; // start full so it's easy to test
 	bool bActive = false;
+	FVector AimAtCast = FVector::ForwardVector; // on the machine controlling it: where the reticle pointed as it was cast (the Beam)
 
 	bool IsReady() const { return Charge >= 1.f; }
 	bool CanActivate() const;
@@ -65,6 +67,8 @@ private:
 
 	EWWOUltKind Kind = EWWOUltKind::Blast; // the flora's (UWWOFloraData::Ult), set as it starts
 	float Clock = 0.f;
+	float Windup = 0.4f; // this cast's charge time (Blast: WindupTime; Beam: its own)
+	bool IsCharged() const { return Kind == EWWOUltKind::Blast || Kind == EWWOUltKind::Beam; } // the orb between the hands, then the release
 	float Blend = 0.25f;
 	float ExplodeAt = 0.f;
 	float CastAt = 0.f;

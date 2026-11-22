@@ -16,6 +16,7 @@
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
 #include "WWOIds.h"
+#include "Flora/WWODawnLotus.h"
 
 using namespace WWOSettingsUI;
 
@@ -95,6 +96,49 @@ void UWWOSettingsMenu::RegisterSections(AWWOCharacter* P)
 	RegisterAbilitySections(P);
 	RegisterTraitSections(P);
 	RegisterGrenadeSections(P);
+	// DawnLotus: every number of the flora on one page (the class default object: one set for the game).
+	UWWODawnLotusTuning* D = GetMutableDefault<UWWODawnLotusTuning>();
+	AddGlobal(TEXT("DawnLotus"), {
+		Header(TEXT("Pollination")),
+		Row(D, "PollinationGrenadeEnergy", TEXT("Grenade energy per teammate healed"), 0.f, 1.f, 0.01f, Percent()),
+		Row(D, "PollinationBloomEnergy", TEXT("Full Bloom energy per teammate healed"), 0.f, 1.f, 0.01f, Percent()),
+		Row(D, "PollinationCooldown", TEXT("Once per teammate every (s)"), 0.f, 30.f, 0.5f),
+		Header(TEXT("Full Bloom")),
+		Row(D, "FullBloomPool", TEXT("Healing split among teammates"), 0.f, 1000.f, 5.f),
+		Row(D, "FullBloomRadius", TEXT("Circle radius (m)"), 1.f, 30.f, 0.5f),
+		Row(D, "FullBloomCooldown", TEXT("Recharge time (s)"), 1.f, 180.f, 1.f),
+		Header(TEXT("Petalfall")),
+		Row(D, "PetalfallDamage", TEXT("Damage dealt per burst"), 10.f, 2000.f, 10.f),
+		Row(D, "PetalfallHeal", TEXT("Heal per teammate"), 0.f, 300.f, 1.f),
+		Row(D, "PetalfallRadius", TEXT("Burst radius (m)"), 1.f, 30.f, 0.5f),
+		Header(TEXT("Bloom Pool grenade")),
+		Row(D, "BloomPoolHealPerSecond", TEXT("Healing per second"), 0.f, 200.f, 1.f),
+		Row(D, "BloomPoolTime", TEXT("Pool time (s)"), 0.5f, 30.f, 0.5f),
+		Row(D, "BloomPoolRadius", TEXT("Pool radius (m)"), 0.5f, 15.f, 0.25f),
+		Row(D, "BloomPoolRecharge", TEXT("Recharge (x global)"), 0.25f, 4.f, 0.05f),
+		Header(TEXT("Solar Burst grenade")),
+		Row(D, "SolarBurstDamage", TEXT("Damage (center)"), 1.f, 500.f, 1.f),
+		Row(D, "SolarBurstRadius", TEXT("Blast radius (m)"), 0.5f, 12.f, 0.1f),
+		Row(D, "SolarBurstRecharge", TEXT("Recharge (x global)"), 0.25f, 4.f, 0.05f),
+		Header(TEXT("Reveille grenade")),
+		Row(D, "ReveilleDamage", TEXT("Damage to enemies (center)"), 0.f, 200.f, 1.f),
+		Row(D, "ReveilleRadius", TEXT("Blast radius (m)"), 0.5f, 12.f, 0.1f),
+		Row(D, "ReveilleEnergy", TEXT("Ability energy"), 0.f, 1.f, 0.01f, Percent()),
+		Row(D, "ReveilleHandling", TEXT("Handling (x faster)"), 1.f, 3.f, 0.05f),
+		Row(D, "ReveilleHandlingTime", TEXT("Handling time (s)"), 0.5f, 30.f, 0.5f),
+		Row(D, "ReveilleRecharge", TEXT("Recharge (x global)"), 0.25f, 4.f, 0.05f),
+		Header(TEXT("Nectar and the ult")),
+		Row(D, "NectarMax", TEXT("Nectar cap"), 1.f, 500.f, 1.f),
+		Row(D, "NectarPerHeal", TEXT("Nectar per point healed"), 0.f, 2.f, 0.01f),
+		Row(D, "NectarOverhealScale", TEXT("An overhealed point counts"), 0.f, 1.f, 0.05f, Percent()),
+		Row(D, "BeamBaseDamage", TEXT("Ult base damage"), 0.f, 2000.f, 5.f),
+		Row(D, "BeamDamageAtFullNectar", TEXT("Extra ult damage at full Nectar"), 0.f, 3000.f, 10.f),
+		Row(D, "BeamRange", TEXT("Ult range (m)"), 5.f, 200.f, 1.f),
+		Row(D, "BeamRadius", TEXT("Ult beam width (m off the line)"), 0.f, 3.f, 0.05f),
+		Row(D, "BeamWindup", TEXT("Ult charge time (s)"), 0.25f, 2.f, 0.05f),
+		Row(D, "GroundGrenadeSafetyFuse", TEXT("Bloom Pool / Reveille safety fuse (s)"), 1.f, 20.f, 0.5f),
+		Row(D, "DawnLitTime", TEXT("HUD box lit for (s)"), 0.1f, 3.f, 0.05f),
+	});
 }
 
 void UWWOSettingsMenu::AddGlobal(const FString& Title, TArray<FWWOSettingRow> Rows, TArray<FWWOMenuButton> Buttons)
@@ -667,6 +711,13 @@ void UWWOSettingsMenu::RegisterGrenadeSections(AWWOCharacter* P)
 		FWWOSettingSection S;
 		S.Key = TEXT("grenade/") + Gr->Id.ToString();
 		S.Title = Gr->DisplayName;
+		if (Gr->Flora == WWOIds::Flora::DawnLotus)
+		{
+			S.Rows.Add(Header(TEXT("Damage, radius and recharge are on the DawnLotus page")));
+			S.Rows.Add(Row(Gr, "Bounce", TEXT("Bounciness"), 0.f, 1.f, 0.05f));
+			Sections.Add(MoveTemp(S));
+			continue;
+		}
 		TWeakObjectPtr<UWWOGrenadeComponent> WeakTh = Th;
 		S.Rows = {
 			Header(TEXT("Blast")),

@@ -12,6 +12,7 @@
 #include "WhatWasOurs.h"
 #include "WWOIds.h"
 #include "Player/WWOAbilities.h"
+#include "Flora/WWODawnLotus.h"
 
 UWWOAbilityComponent::UWWOAbilityComponent()
 {
@@ -80,7 +81,7 @@ void UWWOAbilityComponent::UpdateAbilities(float DeltaSeconds)
 			continue;
 		}
 		if (!A || A->Kind != EWWOAbilityKind::Active) continue;
-		const float Recharged = FMath::Min(Charge(A) + DeltaSeconds / FMath::Max(A->Cooldown, 0.1f), 1.f);
+		const float Recharged = FMath::Min(Charge(A) + DeltaSeconds / FMath::Max(WWODawnLotus::AbilityCooldown(*A), 0.1f), 1.f);
 		FWWOAbilityState& S = State(A->Id);
 		S.Charge = Recharged;
 		S.ActiveLeft = FMath::Max(S.ActiveLeft - DeltaSeconds, 0.f);
@@ -144,6 +145,20 @@ bool UWWOAbilityComponent::ActivateAbility(UWWOAbilityData* A, float Ready)
 	UWWOSound::PlayFor(GetOwner(), "ability");
 	if (const FWWOAbility* E = WWOAbility::Find(A->Id); E && E->OnActivate) E->OnActivate(*this, *A);
 	return true;
+}
+
+void UWWOAbilityComponent::AddEnergy(float Amount, FName Id)
+{
+	const UWWOLoadoutSubsystem* Loadout = UWWOLoadoutSubsystem::Get(this);
+	if (!Loadout) return;
+	for (int32 Slot = 0; Slot < UWWOLoadoutSubsystem::AbilitySlots; ++Slot)
+	{
+		const UWWOAbilityData* A = Loadout->GetAbility(Slot);
+		if (!A || (!Id.IsNone() && A->Id != Id)) continue;
+		if (A->Kind != EWWOAbilityKind::Active && A->Kind != EWWOAbilityKind::Charged) continue;
+		FWWOAbilityState& S = State(A->Id);
+		if (!S.bArmed) S.Charge = FMath::Min(WWOAbility::ChargeOf(*A, &S) + Amount, 1.f);
+	}
 }
 
 float UWWOAbilityComponent::Charge(const UWWOAbilityData* A) const

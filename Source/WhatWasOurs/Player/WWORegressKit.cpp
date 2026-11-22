@@ -3,6 +3,7 @@
 // flora effects (pools, fog, patches, poison, chain lightning, walls) on each kind of victim.
 
 #include "Player/WWORegress.h"
+#include "WWOIds.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOWeaponComponent.h"
 #include "Player/WWOHealthComponent.h"
@@ -199,7 +200,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// 5 cm for the scenario), so it settles on the point and goes off as it would anywhere.
 	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
 	{
-		if (!G) continue;
+		if (!G || G->Flora == WWOIds::Flora::DawnLotus) continue;
 		const FName Id = G->Id, Flora = G->Flora;
 		const float Radius = G->BlastRadius;
 		// The Poison Spike lying still only counts a body within reach of it as a touch: 0.6 m from an
@@ -306,7 +307,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// it); what it did by 8 s.
 	for (const UWWOAbilityData* A : L.Catalog.Abilities)
 	{
-		if (!A) continue;
+		if (!A || A->Flora == WWOIds::Flora::DawnLotus) continue;
 		const FName Id = A->Id, Flora = A->Flora;
 		const bool bActive = A->Kind == EWWOAbilityKind::Active;
 		FWWORegressScenario S;
@@ -388,7 +389,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	// other-team and a same-team player at 5 m ---
 	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
-		if (!F) continue;
+		if (!F || F->Id == WWOIds::Flora::DawnLotus) continue;
 		const FName Flora = F->Id;
 		for (const bool bPvP : { false, true })
 		{
@@ -463,7 +464,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	TArray<FEffect> Effects;
 	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
-		if (!F) continue;
+		if (!F || F->Id == WWOIds::Flora::DawnLotus) continue;
 		const FName Flavor = F->Id;
 		Effects.Add({ FString::Printf(TEXT("pool_%s"), *Flavor.ToString()), [Flavor](FWWORegress& R, const FVector& At)
 		{
@@ -604,7 +605,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	}
 	for (const UWWOAbilityData* A : L.Catalog.Abilities)
 	{
-		if (!A) continue;
+		if (!A || A->Flora == WWOIds::Flora::DawnLotus) continue;
 		const FName Id = A->Id, Flora = A->Flora;
 		const bool bCharged = A->Kind == EWWOAbilityKind::Charged;
 		FWWORegressScenario S;
@@ -666,7 +667,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	}
 	for (const UWWOFloraData* F : L.Catalog.Floras)
 	{
-		if (!F) continue;
+		if (!F || F->Id == WWOIds::Flora::DawnLotus) continue;
 		const FName Flora = F->Id;
 		FWWORegressScenario S;
 		S.Name = FString::Printf(TEXT("kit.host.ult.%s"), *Flora.ToString());
@@ -889,7 +890,7 @@ void FWWORegress::AddKitScenarios(TArray<FWWORegressScenario>& Out, const UWWOLo
 	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && T->Effect == "impact_fuse") { Impact = T; break; }
 	for (const UWWOGrenadeData* G : L.Catalog.Grenades)
 	{
-		if (!G) continue;
+		if (!G || G->Flora == WWOIds::Flora::DawnLotus) continue;
 		const FName Id = G->Id, Flora = G->Flora;
 		const bool bFizzles = G->Kind == EWWOGrenadeKind::Spike || G->Kind == EWWOGrenadeKind::Tripmine;
 		for (const bool bImpact : { true, false })

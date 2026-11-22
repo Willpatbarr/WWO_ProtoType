@@ -13,6 +13,8 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Flora/WWOSporeFog.h"
 #include "Flora/WWOFloraEffects.h"
+#include "Flora/WWODawnLotus.h"
+#include "WWOIds.h"
 #include "Player/WWOGrenadeComponent.h"
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
@@ -205,6 +207,7 @@ int32 UWWOHUDWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geo, c
 	PaintRadar(F);
 	PaintAmmo(F);
 	PaintAbilities(F);
+	PaintDawnLotus(F);
 	PaintVitals(F);
 	PaintDamageSpikes(F);
 	PaintOverlays(F);
@@ -859,12 +862,72 @@ void UWWOHUDWidget::PaintAbilities(const FWWOHUDFrame& F) const
 		const FVector2D UltBox(UltSide, UltSide);
 		const FVector2D UltPos = Pos - FVector2D(0.f, UltSide - 64.f); // same bottom line as the rest
 		// The flora's own symbol (its badge), filling like the grenade's; the plain colour box without one.
-		UTexture2D* UltBadge = Loadout->GetFlora() ? WWOUI::SymbolTexture("Flora", Loadout->GetFlora()->Id, true) : nullptr;
+		UTexture2D* UltBadge = Loadout->GetFlora() ? WWOUI::SymbolTexture(Loadout->GetFlora()->Id == WWOIds::Flora::DawnLotus ? "Ult" : "Flora", Loadout->GetFlora()->Id, true) : nullptr;
 		if (UltBadge) SymbolChargeBox(P, UltPos, UltBox, UltBadge, Pl->Ult->Charge);
 		else ChargeBox(P, UltPos, UltBox, UltColor, Pl->Ult->Charge);
 		if (Pl->Ult->IsReady() && !Pl->Ult->bActive)
 		{
 			KitRing(P, UltPos, UltBox, FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin(Now * 8.0)));
+		}
+	}
+}
+
+void UWWOHUDWidget::PaintDawnLotus(const FWWOHUDFrame& F) const
+{
+	const FWWOPainter& P = F.P;
+	const AWWOCharacter* Pl = F.Pl;
+	const UWWODawnLotusComponent* D = Pl->DawnLotus;
+	const FVector2D Size = F.Size;
+	const double Now = Pl->GetWorld()->GetTimeSeconds();
+	const FLinearColor Gold(1.f, 0.74f, 0.25f), Pale(1.f, 0.9f, 0.6f), HealGreen(0.45f, 1.f, 0.55f);
+	auto ScreenEdge = [&](const FLinearColor& C, float Thick)
+	{
+		P.Box(FVector2D(0, 0), FVector2D(Size.X, Thick), C);
+		P.Box(FVector2D(0, Size.Y - Thick), FVector2D(Size.X, Thick), C);
+		P.Box(FVector2D(0, Thick), FVector2D(Thick, Size.Y - Thick * 2.f), C);
+		P.Box(FVector2D(Size.X - Thick, Thick), FVector2D(Thick, Size.Y - Thick * 2.f), C);
+	};
+	// A teammate healed you (any flora): the screen's edge pulses green.
+	if (const float Age = (float)(Now - D->HealedAt); Age >= 0.f && Age < 0.5f) ScreenEdge(WWO::WithAlpha(HealGreen, 0.4f * (1.f - Age / 0.5f)), 9.f);
+	if (!F.Loadout || !F.Loadout->GetFlora() || F.Loadout->GetFlora()->Id != WWOIds::Flora::DawnLotus) return;
+
+	// Nectar: a bar just over the kit row (bottom left), as wide as the row, ending above the ult.
+	const UWWODawnLotusTuning& T = WWODawnLotus::T();
+	const float Fill = FMath::Clamp(D->Nectar / FMath::Max(T.NectarMax, 1.f), 0.f, 1.f);
+	const bool bFull = Fill >= 0.999f;
+	const FVector2D Bar(64.f * (UWWOLoadoutSubsystem::AbilitySlots + 1) + 8.f * (UWWOLoadoutSubsystem::AbilitySlots + 1) + 80.f, 12.f);
+	const FVector2D BarAt(40.f, Size.Y - 40.f - 80.f - 8.f - Bar.Y);
+	const float Beat = bFull ? 0.65f + 0.35f * FMath::Sin((float)Now * 6.f) : 0.f;
+	P.Text(TEXT("Nectar"), BarAt + FVector2D(0.f, -4.f), Type::Small, Pale, 0.f, 1.f, EWeight::SemiBold);
+	P.Text(FString::Printf(TEXT("+%d"), FMath::RoundToInt(D->UltBonus)), BarAt + FVector2D(Bar.X, -3.f), Type::Body, D->UltBonus >= 1.f ? Gold : FLinearColor(1, 1, 1, 0.55f), 1.f, 1.f, EWeight::SemiBold);
+	RoundBar(P, BarAt, Bar, Fill, bFull ? FMath::Lerp(Gold, Pale, Beat) : Gold, FLinearColor(0, 0, 0, 0.62f));
+	FWWOPainter OverBar = P; // the notches sit above the fill
+	++OverBar.Layer;
+	for (const float Tick : { 0.25f, 0.5f, 0.75f }) OverBar.Box(BarAt + FVector2D(Bar.X * Tick - 1.f, 0.f), FVector2D(2.f, Bar.Y), FLinearColor(0.03f, 0.03f, 0.04f, 0.7f));
+
+	// Your heal landed: a green cross round the reticle and how much.
+	if (const float Age = (float)(Now - D->HealMarkAt); Age >= 0.f && Age < 0.8f)
+	{
+		const float A = 1.f - FMath::Square(Age / 0.8f);
+		const float Grow = 12.f + 7.f * FMath::Min(Age / 0.12f, 1.f);
+		const FLinearColor C = WWO::WithAlpha(HealGreen, A);
+		for (const FVector2D Dir : { FVector2D(1, 0), FVector2D(-1, 0), FVector2D(0, 1), FVector2D(0, -1) }) P.Line(F.AimAt + Dir * Grow, F.AimAt + Dir * (Grow + 11.f), C, 3.f);
+		P.Text(FString::Printf(TEXT("+%d"), FMath::RoundToInt(D->HealMarkAmount)), F.AimAt + FVector2D(30.f, 14.f), Type::Heading, C, 0.f, 0.f, EWeight::SemiBold);
+	}
+	// Petalfall went off: a soft gold border flashes in round the screen and fades (rings of falling alpha).
+	if (const float Age = (float)(Now - D->PetalFlashAt); Age >= 0.f && Age < 0.7f)
+	{
+		const float A = Age < 0.05f ? Age / 0.05f : FMath::Square(1.f - (Age - 0.05f) / 0.65f);
+		const int32 Rings = 18;
+		const float Step = 5.f;
+		for (int32 i = 0; i < Rings; ++i)
+		{
+			const float In = i * Step;
+			const FLinearColor C = WWO::WithAlpha(Gold, 0.75f * A * FMath::Square(1.f - (float)i / Rings));
+			P.Box(FVector2D(In, In), FVector2D(Size.X - In * 2.f, Step), C);
+			P.Box(FVector2D(In, Size.Y - In - Step), FVector2D(Size.X - In * 2.f, Step), C);
+			P.Box(FVector2D(In, In + Step), FVector2D(Step, Size.Y - (In + Step) * 2.f), C);
+			P.Box(FVector2D(Size.X - In - Step, In + Step), FVector2D(Step, Size.Y - (In + Step) * 2.f), C);
 		}
 	}
 }

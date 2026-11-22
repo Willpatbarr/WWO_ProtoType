@@ -183,9 +183,9 @@ namespace WWOUI
 UTexture2D* SymbolTexture(FName Kind, FName Id, bool bBadge)
 {
 	// T_<Kind>_<Name>[_Badge]: the id in title case (Tools/import_symbols.py), the floras' as they're written.
-	static const TMap<FName, FString> FloraNames = { { "voltvine", TEXT("VoltVine") }, { "veilspore", TEXT("VeilSpore") }, { "ironbark", TEXT("IronBark") } };
+	static const TMap<FName, FString> FloraNames = { { "voltvine", TEXT("VoltVine") }, { "veilspore", TEXT("VeilSpore") }, { "ironbark", TEXT("IronBark") }, { "dawnlotus", TEXT("DawnLotus") } };
 	FString Name;
-	if (Kind == "Flora")
+	if (Kind == "Flora" || Kind == "Ult") // (T_Ult_<Flora>: a flora whose ult has its own symbol)
 	{
 		const FString* Found = FloraNames.Find(Id);
 		if (!Found) return nullptr;

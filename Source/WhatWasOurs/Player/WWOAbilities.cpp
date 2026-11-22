@@ -5,6 +5,7 @@
 #include "Player/WWOCharacter.h"
 #include "Weapons/WWOGrenade.h"
 #include "Flora/WWOSporeFog.h"
+#include "Flora/WWODawnLotus.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -121,6 +122,24 @@ TConstArrayView<FWWOAbility> WWOAbility::Table()
 		{ // Seedburst (triggered): your grenade bursts into seeds (AWWOGrenade::Burst).
 			.Id = WWOIds::Ability::Seedburst,
 			.Lit = [](const FWWOAbilityState& S) { return S.Live > 0; },
+		},
+		{ // Pollination (triggered): healing a teammate gives grenade and Full Bloom energy (UWWODawnLotusComponent::OnHealed).
+			.Id = WWOIds::Ability::Pollination,
+			.Tick = [](FWWOAbilityState& S, float DeltaSeconds) { S.LitLeft = FMath::Max(S.LitLeft - DeltaSeconds, 0.f); },
+			.Lit = [](const FWWOAbilityState& S) { return S.LitLeft > 0.f; },
+		},
+		{ // Full Bloom (active): a fixed pool of healing split among teammates in a circle (the host's).
+			.Id = WWOIds::Ability::FullBloom,
+			.OnActivate = [](UWWOAbilityComponent& K, const UWWOAbilityData&)
+			{
+				AWWOCharacter* P = Cast<AWWOCharacter>(K.GetOwner());
+				if (P && P->HasAuthority()) WWODawnLotus::FullBloom(*P);
+			},
+		},
+		{ // Petalfall (triggered): dealing enough damage releases a healing burst (UWWODawnLotusComponent::OnDamageDealt).
+			.Id = WWOIds::Ability::Petalfall,
+			.Tick = [](FWWOAbilityState& S, float DeltaSeconds) { S.LitLeft = FMath::Max(S.LitLeft - DeltaSeconds, 0.f); },
+			.Lit = [](const FWWOAbilityState& S) { return S.LitLeft > 0.f; },
 		},
 	};
 	return Abilities;

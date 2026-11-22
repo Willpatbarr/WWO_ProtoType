@@ -19,7 +19,9 @@ import os
 import unreal
 
 FOLDERS = ["/Game/WWO/Characters/RobotFrame/Grafts/Pieces", "/Game/WWO/Flora"]
-PREFIXES = ("SM_VV_Leaf", "SM_VS_", "SM_IB_")
+PREFIXES = ("SM_VV_Leaf", "SM_VS_", "SM_IB_", "SM_DL_")
+if os.environ.get("WWO_LOD_PREFIXES"):  # only these meshes (e.g. SM_DL_), leaving the other floras' assets alone
+    PREFIXES = tuple(os.environ["WWO_LOD_PREFIXES"].split(","))
 PERCENT = [1.0, 0.30, 0.10, 0.04]   # LOD 0 (kept), then 1-3
 SCREEN = [1.0, 0.5, 0.25, 0.1]      # (only if one is ever drawn as it is)
 eal = unreal.EditorAssetLibrary

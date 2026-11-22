@@ -135,6 +135,451 @@
         { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "shoulder_blade_l", "up": "world", "offset": [0, -4, 3], "scale": 0.9, "pitch": 15, "jitter": {"roll": 15}, "seed": 71 },
         { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "thigh_back_r", "up": "world", "offset": [0, 3.5, -5], "scale": 0.85, "pitch": 18, "jitter": {"roll": 15}, "seed": 72 }
       ]
+    },
+"dawnlotus": {
+  "_comment": "DawnLotus from kit pieces (~/Documents/WWO_Flora/tools/make_dawnlotus_kit.py), after the v4 grafts. Pollination: a lotus and fan on each shoulder. Full Bloom: a tasset on each outer hip, one small lotus on the right. Petalfall: petals along each outer forearm, a small bloom and vine on each calf. Each grenade: its own sprig on the outer right thigh.",
+  "kit": "/Game/WWO/Flora/DawnLotus/Kit",
+  "kit_section": "dawn",
+  "pollination": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -0.7,
+        -3.2,
+        4.5
+      ],
+      "roll": -62,
+      "pitch": -8,
+      "scale": 0.95
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -0.7,
+        3.2,
+        4.5
+      ],
+      "roll": 62,
+      "pitch": -8,
+      "scale": 0.95
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -0.7,
+        3.2,
+        4.5
+      ],
+      "roll": 62,
+      "pitch": -3,
+      "scale": 0.95
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -0.7,
+        -3.2,
+        4.5
+      ],
+      "roll": -62,
+      "pitch": -3,
+      "scale": 0.95
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -0.7,
+        -1.8,
+        4.5
+      ],
+      "roll": -32,
+      "scale": 0.88
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -0.7,
+        1.8,
+        4.5
+      ],
+      "roll": 32,
+      "scale": 0.88
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -1.0,
+        1.8,
+        4.5
+      ],
+      "roll": 32,
+      "scale": 0.88
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -1.0,
+        -1.8,
+        4.5
+      ],
+      "roll": -32,
+      "scale": 0.88
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -0.7,
+        0,
+        4.5
+      ],
+      "pitch": -1,
+      "scale": 0.92
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -0.7,
+        0,
+        4.5
+      ],
+      "pitch": -1,
+      "scale": 0.92
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_LotusL",
+      "anchor": "shoulder_outer_l",
+      "offset": [
+        -1.3,
+        0.0,
+        5.0
+      ],
+      "pitch": -3,
+      "scale": 0.82
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_LotusL",
+      "anchor": "shoulder_outer_r",
+      "offset": [
+        -1.3,
+        -0.0,
+        5.0
+      ],
+      "pitch": -3,
+      "scale": 0.82
     }
+  ],
+  "full_bloom": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "thigh_outer_l",
+      "offset": [
+        -1.0,
+        -3.0,
+        11.0
+      ],
+      "roll": -22,
+      "pitch": 1,
+      "scale": 0.82
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.0,
+        3.0,
+        11.0
+      ],
+      "roll": 22,
+      "pitch": 1,
+      "scale": 0.82
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "thigh_outer_l",
+      "offset": [
+        -0.7,
+        3.0,
+        11.0
+      ],
+      "roll": 22,
+      "pitch": -4,
+      "scale": 0.82
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateM",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -0.7,
+        -3.0,
+        11.0
+      ],
+      "roll": -22,
+      "pitch": -4,
+      "scale": 0.82
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "thigh_outer_l",
+      "offset": [
+        -1.0,
+        0,
+        11.0
+      ],
+      "pitch": -5,
+      "scale": 0.74
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateL",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.0,
+        0,
+        11.0
+      ],
+      "pitch": -5,
+      "scale": 0.74
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_LotusS",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.3,
+        0.0,
+        11.5
+      ],
+      "pitch": -1
+    }
+  ],
+  "petalfall": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_l",
+      "offset": [
+        -0.7,
+        -2.1,
+        -5.5
+      ],
+      "roll": 196,
+      "pitch": -5
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_r",
+      "offset": [
+        -0.7,
+        2.1,
+        -5.5
+      ],
+      "roll": -196,
+      "pitch": -5
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_l",
+      "offset": [
+        -0.7,
+        2.1,
+        -5.5
+      ],
+      "roll": 164,
+      "pitch": -10
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_r",
+      "offset": [
+        -0.7,
+        -2.1,
+        -5.5
+      ],
+      "roll": -164,
+      "pitch": -10
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_l",
+      "offset": [
+        -0.7,
+        0,
+        -5.5
+      ],
+      "roll": 180,
+      "pitch": -5,
+      "scale": 1.14
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_PlateS",
+      "anchor": "forearm_outer_r",
+      "offset": [
+        -0.7,
+        0,
+        -5.5
+      ],
+      "roll": -180,
+      "pitch": -5,
+      "scale": 1.14
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_LotusM",
+      "anchor": "shin_outer_l",
+      "offset": [
+        -1.0,
+        0.0,
+        2.0
+      ],
+      "pitch": 4
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_LotusM",
+      "anchor": "shin_outer_r",
+      "offset": [
+        -1.0,
+        -0.0,
+        2.0
+      ],
+      "pitch": 4
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_VineSeg",
+      "path": "leg_line_{s}",
+      "range": [
+        0.6,
+        0.71
+      ],
+      "spacing_cm": 3.4,
+      "up": "path",
+      "offset": [
+        -0.45,
+        0,
+        0
+      ],
+      "scale_along": [
+        0.65,
+        0.95
+      ]
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_VineSeg",
+      "path": "leg_line_{s}",
+      "range": [
+        0.72,
+        0.82
+      ],
+      "spacing_cm": 3.4,
+      "up": "path",
+      "offset": [
+        -0.45,
+        0,
+        0
+      ],
+      "scale_along": [
+        0.92,
+        0.6
+      ]
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_Twig",
+      "anchor": "shin_outer_l",
+      "offset": [
+        -1.0,
+        -3.0,
+        8.5
+      ],
+      "roll": 30,
+      "pitch": -5
+    },
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_Twig",
+      "anchor": "shin_outer_r",
+      "offset": [
+        -1.0,
+        3.0,
+        8.5
+      ],
+      "roll": -30,
+      "pitch": -5
+    }
+  ],
+  "grenade.bloom_pool": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_SprigPool",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.0,
+        0.0,
+        -9.0
+      ],
+      "pitch": -10
+    }
+  ],
+  "grenade.solar_burst": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_SprigBurst",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.0,
+        0.0,
+        -9.0
+      ],
+      "pitch": -10
+    }
+  ],
+  "grenade.reveille": [
+    {
+      "piece": "mesh",
+      "mesh": "SM_DL_SprigReveille",
+      "anchor": "thigh_outer_r",
+      "offset": [
+        -1.0,
+        0.0,
+        -9.0
+      ],
+      "pitch": -5
+    }
+  ]
+}
   }
 }

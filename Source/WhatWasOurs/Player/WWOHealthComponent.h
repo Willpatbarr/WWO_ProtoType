@@ -17,6 +17,9 @@
 DECLARE_MULTICAST_DELEGATE_OneParam(FWWOOnDamaged, float);
 DECLARE_MULTICAST_DELEGATE(FWWOOnDied);
 
+// What a heal did: restored (health, then shield) and the part that had nothing to fill.
+struct FWWOHealthRestored { float Restored = 0.f; float Overheal = 0.f; };
+
 UCLASS(ClassGroup = (WWO))
 class WHATWASOURS_API UWWOHealthComponent : public UActorComponent
 {
@@ -65,6 +68,7 @@ public:
 	float MaxHealth() const;
 	float MaxShield() const;
 	void TakeDamage(float Amount, bool bMelee = false); // bMelee: a bite, punch or slam
+	FWWOHealthRestored Heal(float Amount); // host: health first, then shield; nothing while down
 	// Where damage came from, for the HUD's direction markers. The host calls DamageCameFrom next to
 	// the damage; it reaches the machine of the player who was hit, which keeps the marks.
 	struct FDamageMark { FVector From; double Time; };

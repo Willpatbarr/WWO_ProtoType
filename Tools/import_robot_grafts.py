@@ -6,6 +6,7 @@ Floras (WWO_GRAFT_FLORAS, default all, e.g. "veilspore"):
   voltvine   ~/Documents/WWO_Flora/grafts            SK_VV_*.fbx and textures/*.png
   veilspore  ~/Documents/WWO_Flora/grafts_veilspore  SK_VS_*.fbx and textures/*.png
   ironbark   ~/Documents/WWO_Flora/grafts_ironbark   SK_IB_*.fbx and textures/*.png
+  dawnlotus  ~/Documents/WWO_Flora/grafts_dawnlotus_v4  SK_DL_*.fbx and textures/*.png (DL4_Petal: M_WWO_GraftPetal; DL4_Vine: M_WWO_GraftFlat)
 
 Run headless from the project folder:
   UnrealEditor-Cmd WhatWasOurs.uproject -run=pythonscript -script=<abs path>/Tools/import_robot_grafts.py -unattended -nullrhi
@@ -61,6 +62,7 @@ FLORAS = {
     "voltvine": dict(src="~/Documents/WWO_Flora/grafts", prefix="SK_VV_", root="/Game/WWO/Flora/VoltVine"),
     "veilspore": dict(src="~/Documents/WWO_Flora/grafts_veilspore", prefix="SK_VS_", root="/Game/WWO/Flora/VeilSpore"),
     "ironbark": dict(src="~/Documents/WWO_Flora/grafts_ironbark", prefix="SK_IB_", root="/Game/WWO/Flora/IronBark"),
+    "dawnlotus": dict(src="~/Documents/WWO_Flora/grafts_dawnlotus_v4", prefix="SK_DL_", root="/Game/WWO/Flora/DawnLotus"),
 }
 
 
@@ -99,6 +101,9 @@ def import_texture(src, root, file):
         tex.set_editor_property("flip_green_channel", True)  # Blender's normal maps are OpenGL style
     elif name.endswith("_ORM"):
         tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+        tex.set_editor_property("srgb", False)
+    elif name.endswith("_Opacity"):
+        tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_GRAYSCALE)
         tex.set_editor_property("srgb", False)
     # The atlases carry every graft of a flora (a hero character on the menu): full 2K. The rest 1K.
     tex.set_editor_property("max_texture_size", 2048 if "_atlas_" in name else 1024)
@@ -286,6 +291,46 @@ def ironbark_materials(root, textures, flat):
                                 {"EmissiveStrength": ATLAS_GLOW["ironbark"]}, {"Tint": IB_TINT})}
 
 
+def make_petal(textures):
+    # DawnLotus's petals: see-through, two-sided, glowing from the base and the rim (the v4 review's look).
+    path = MATS + "/M_WWO_GraftPetal"
+    if eal.does_asset_exist(path):
+        m = eal.load_asset(path)
+        mel.delete_all_material_expressions(m)
+    else:
+        m = tools.create_asset("M_WWO_GraftPetal", MATS, unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    m.set_editor_property("two_sided", True)
+    m.set_editor_property("used_with_skeletal_mesh", True)
+    m.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE)
+
+    def tex(name, x, y, sampler):
+        e = mel.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
+        e.set_editor_property("parameter_name", name)
+        e.set_editor_property("texture", textures[name])  # a texture parameter with no default doesn't compile
+        e.set_editor_property("sampler_type", sampler)
+        return e
+    base = tex("BaseColorTexture", -1000, -300, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    glow = tex("EmissiveTexture", -1000, 0, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    opacity = tex("OpacityTexture", -1000, 550, unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE)
+    mel.connect_material_property(base, "RGB", MP.MP_BASE_COLOR)
+    mel.connect_material_property(multiply(m, glow, "RGB", scalar_param(m, "EmissiveStrength", 1.4, -800, 180), "", -350, 60), "", MP.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(multiply(m, opacity, "R", scalar_param(m, "OpacityScale", 1.0, -800, 720), "", -350, 550), "", MP.MP_OPACITY)
+    mel.connect_material_property(scalar_param(m, "Roughness", 0.32, -600, 300), "", MP.MP_ROUGHNESS)
+    mel.layout_material_expressions(m)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
+def dawnlotus_materials(root, textures, flat):
+    petal = {param: textures["T_dawnlotus_petal_%s" % suffix]
+             for param, suffix in (("BaseColorTexture", "BaseColor"), ("EmissiveTexture", "Emissive"), ("OpacityTexture", "Opacity"))}
+    out = {"DL4_Petal": instance(root, "DL4_Petal", make_petal(petal), petal, {"EmissiveStrength": 1.4})}
+    out.update(flat_instances(root, flat, {"DL4_Vine": ((0.80, 0.42, 0.08), (1.0, 0.56, 0.14), 3.4, 0.3)}))
+    return out
+
+
 def voltvine_materials(root, textures, flat, glass):
     flora = for_skeletal(MATS + "/M_WWO_Flora")
     leaf = for_skeletal(MATS + "/M_WWO_FloraLeaf")
@@ -390,8 +435,11 @@ def main():
     if not skeleton:
         log("FAILED: no robot skeleton at %s" % SKELETAL)
         return
-    flat, glass = make_flat(), make_glass()
     wanted = [f.strip() for f in os.environ.get("WWO_GRAFT_FLORAS", ",".join(FLORAS)).split(",") if f.strip()]
+    if wanted == ["dawnlotus"]:  # only its own assets: the shared materials are left as they are
+        flat, glass = eal.load_asset(MATS + "/M_WWO_GraftFlat"), None
+    else:
+        flat, glass = make_flat(), make_glass()
     for flora in wanted:
         cfg = FLORAS[flora]
         # WWO_GRAFT_SRC_<FLORA>: another folder of exports for that flora (a trial build), e.g. WWO_GRAFT_SRC_VOLTVINE.
@@ -407,6 +455,8 @@ def main():
             materials = voltvine_materials(cfg["root"], textures, flat, glass)
         elif flora == "veilspore":
             materials = veilspore_materials(cfg["root"], textures, flat)
+        elif flora == "dawnlotus":
+            materials = dawnlotus_materials(cfg["root"], textures, flat)
         else:
             materials = ironbark_materials(cfg["root"], textures, flat)
         log("%s: %d textures, %d materials" % (flora, len(textures), len(materials)))

@@ -326,9 +326,9 @@ def pascal_to_snake(name):
 
 
 ENUMS = {
-    "kind_grenade": {"explosive": "EXPLOSIVE", "pool": "POOL", "spike": "SPIKE", "tripmine": "TRIPMINE", "wall": "WALL", "blind": "BLIND"},
+    "kind_grenade": {"explosive": "EXPLOSIVE", "pool": "POOL", "spike": "SPIKE", "tripmine": "TRIPMINE", "wall": "WALL", "blind": "BLIND", "heal_pool": "HEAL_POOL", "reveille": "REVEILLE"},
     "kind_ability": {"passive": "PASSIVE", "active": "ACTIVE", "triggered": "TRIGGERED", "charged": "CHARGED"},
-    "ult": {"blast": "BLAST", "veil": "VEIL", "entrench": "ENTRENCH"},
+    "ult": {"blast": "BLAST", "veil": "VEIL", "entrench": "ENTRENCH", "beam": "BEAM"},
 }
 OPS = [unreal.WWOStatOp.FLAT, unreal.WWOStatOp.PERCENT_ADD, unreal.WWOStatOp.MULTIPLY]
 

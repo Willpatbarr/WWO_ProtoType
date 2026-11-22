@@ -97,6 +97,7 @@ private:
 	void PaintRadar(const FWWOHUDFrame& F) const;         // top left
 	void PaintAmmo(const FWWOHUDFrame& F) const;          // weapon name, perks, count, reload bar (bottom right), config toast
 	void PaintAbilities(const FWWOHUDFrame& F) const;     // grenade, ability and ult boxes (bottom left)
+	void PaintDawnLotus(const FWWOHUDFrame& F) const;     // DawnLotus: the Nectar bar, heal marker, Petalfall flash
 	void PaintVitals(const FWWOHUDFrame& F) const;        // shield and health bars, status chips (top center)
 	void PaintDamageSpikes(const FWWOHUDFrame& F) const;  // where damage came from
 	void PaintOverlays(const FWWOHUDFrame& F) const;      // blind, damage flash, down / dead screens, revive prompt

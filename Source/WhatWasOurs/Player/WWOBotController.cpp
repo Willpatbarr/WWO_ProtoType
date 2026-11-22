@@ -143,7 +143,10 @@ void AWWOBotController::GiveKit(AWWOCharacter* Me)
 		TArray<FName> Floras, Nades, Powers, Weapons;
 		for (const UWWOFloraData* F : Base->Catalog.Floras) if (F && F->bUnlocked) Floras.Add(F->Id);
 		if (Floras.Num() == 0) return;
-		Kit.Flora = Floras[FMath::RandRange(0, Floras.Num() - 1)];
+		// DawnLotus isn't in the random pick yet (its kit is a first pass; only -WWOBotFlora gives it to a bot).
+		TArray<FName> Pickable = Floras;
+		Pickable.Remove(WWOIds::Flora::DawnLotus);
+		Kit.Flora = Pickable[FMath::RandRange(0, Pickable.Num() - 1)];
 		// -WWOBotFlora=<id>: every bot is that flora (performance tests comparing the floras' models).
 		if (FString Forced; WWOSwitches::Value(TEXT("WWOBotFlora="), Forced) && Floras.Contains(FName(*Forced))) Kit.Flora = FName(*Forced);
 		for (const UWWOGrenadeData* G : Base->Catalog.Grenades) if (G && G->bUnlocked && G->Flora == Kit.Flora) Nades.Add(G->Id);
@@ -252,6 +255,7 @@ void AWWOBotController::UseKit(AWWOCharacter* Me, AWWOCharacter* Target, float D
 		{
 		case EWWOUltKind::Veil: bUse = HealthLeft < 0.5f; break;                 // vanish when it's going badly
 		case EWWOUltKind::Entrench: bUse = HealthLeft < 0.5f && bInRange; break; // can't be hurt, can still shoot
+		case EWWOUltKind::Beam: bUse = bInRange && OffDeg < 3.f; break;          // a line: only when it's on them
 		default: bUse = Dist < FMath::Min(Me->Ult->BlastRadius * 0.6f, 8.f); break; // the blast is centered on it
 		}
 		if (bUse)

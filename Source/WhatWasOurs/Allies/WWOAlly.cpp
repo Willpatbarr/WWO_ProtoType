@@ -76,6 +76,16 @@ void AWWOAlly::TakeAllyDamage(float Amount, bool bMelee)
 	if (Health <= 0.f) GoDown();
 }
 
+float AWWOAlly::Heal(float Amount)
+{
+	if (!HasAuthority() || bDown || Amount <= 0.f) return 0.f;
+	const float ToHealth = FMath::Clamp(D()->MaxHealth - Health, 0.f, Amount);
+	const float ToShield = FMath::Clamp(D()->MaxShield - Shield, 0.f, Amount - ToHealth);
+	Health += ToHealth;
+	Shield += ToShield;
+	return ToHealth + ToShield;
+}
+
 void AWWOAlly::RestoreShield(float Amount)
 {
 	// Shield Share: an explosion of yours refilled this teammate's shields.

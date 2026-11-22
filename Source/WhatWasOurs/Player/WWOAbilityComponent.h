@@ -44,6 +44,8 @@ public:
 	UWWOAbilityData* ConsumeStaticCharge();
 	float IncomingMeleeMultiplier() const;
 	float ExtraCharges() const;
+	// Energy into the equipped abilities that charge (Id: only that one). An armed Static Charge takes none.
+	void AddEnergy(float Amount, FName Id = NAME_None);
 	void FillCharges() { for (TPair<FName, FWWOAbilityState>& S : States) if (S.Value.Charge.IsSet()) S.Value.Charge = 1.f; } // everything ready again (-WWOBotsBusy)
 	UWWOAbilityData* ThornfistActive() const;
 	float MeleeMultiplier() const;

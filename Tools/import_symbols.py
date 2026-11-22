@@ -2,7 +2,7 @@
 # as UI textures, 512 x 512:
 #   /Game/WWO/Textures/UI/T_<Kind>_<Name>        the symbol alone, white on clear
 #   /Game/WWO/Textures/UI/T_<Kind>_<Name>_Badge  the symbol over a dark shade of its colour
-# <Kind> Flora, Grenade, Ability or Trait; <Name> the id in title case (volt_grenade: VoltGrenade; the floras' as they're
+# <Kind> Flora, Ult, Grenade, Ability or Trait; <Name> the id in title case (volt_grenade: VoltGrenade; the floras' as they're
 # written: VoltVine, VeilSpore, IronBark). WWOUI::SymbolTexture / MakeSymbol load them by kind and id.
 #   UnrealEditor-Cmd <uproject> -run=pythonscript -script=<full path>/Tools/import_symbols.py
 import os
@@ -12,11 +12,13 @@ import unreal
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI = os.path.join(HERE, "art", "ui")
 DEST = "/Game/WWO/Textures/UI"
-FLORA_NAMES = {"voltvine": "VoltVine", "veilspore": "VeilSpore", "ironbark": "IronBark"}
+FLORA_NAMES = {"voltvine": "VoltVine", "veilspore": "VeilSpore", "ironbark": "IronBark", "dawnlotus": "DawnLotus"}
+# WWO_SYMBOL_MATCH: only the files whose name matches this regular expression (the rest are left alone).
+MATCH = os.environ.get("WWO_SYMBOL_MATCH", "")
 
 
 def title(kind, item):
-    if kind == "flora":
+    if kind in ("flora", "ult"):
         return FLORA_NAMES[item]
     return "".join(part.capitalize() for part in item.split("_"))
 
@@ -24,8 +26,8 @@ def title(kind, item):
 def main():
     tasks, names = [], []
     for name in sorted(os.listdir(UI)):
-        m = re.match(r"(flora|grenade|ability|trait)_(.+)_(symbol|badge)\.png$", name)
-        if not m:
+        m = re.match(r"(flora|ult|grenade|ability|trait)_(.+)_(symbol|badge)\.png$", name)
+        if not m or (MATCH and not re.search(MATCH, name)):
             continue
         kind, item, part = m.groups()
         t = unreal.AssetImportTask()

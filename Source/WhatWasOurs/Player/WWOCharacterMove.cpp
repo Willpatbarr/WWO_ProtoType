@@ -4,6 +4,7 @@
 // launch, mantle), the move state and input on the wire, and the move stats (MoveStatTable, M()).
 // SimulateMove reads only MoveIn and MoveState (AGENTS.md rule 5).
 
+#include "Flora/WWODawnLotus.h"
 #include "Player/WWOCharacter.h"
 #include "WhatWasOurs.h"
 #include "Player/WWOCharacterPrivate.h"
@@ -87,7 +88,8 @@ float AWWOCharacter::M(FName Stat, float Base) const
 	}();
 	if (bNetStats && Sent.Contains(Stat)) return Base;
 	const UWWOLoadoutSubsystem* Loadout = GetLoadout();
-	return Loadout ? Loadout->Apply(Stat, Base) : Base;
+	const float Value = Loadout ? Loadout->Apply(Stat, Base) : Base;
+	return DawnLotus && DawnLotus->IsHandlingUp() ? WWODawnLotus::WithHandling(Stat, Value) : Value; // Reveille
 }
 
 FVector2D AWWOCharacter::MoveInput() const

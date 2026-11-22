@@ -67,7 +67,7 @@ struct FWWOGraftDetail
 // with a second UV set and vertex colors (their materials read both).
 struct FWWOVineMesh
 {
-	enum ESection { Bark, Core, Leaf, Crystal, Stem, Fungus, KitBark, GraftBark, GraftSeed, GraftVine, NumSections };
+	enum ESection { Bark, Core, Leaf, Crystal, Stem, Fungus, KitBark, KitDawn, GraftBark, GraftSeed, GraftVine, NumSections };
 	struct FSection
 	{
 		TArray<FVector> V, N;
@@ -218,7 +218,7 @@ public:
 	static void ReadLeaves(TConstArrayView<const UStaticMesh*> Meshes);
 	static TArray<FString> LeafPaths();
 	// A kit piece rigid on Bone: Shapes' vertices (one per level: its KitLod; SmallShapes: its KitSmallLod) through Xf
-	// (its frame and scale in the mesh's reference pose), in Section (Fungus, or KitBark: IronBark's kit atlas). Left out of a level where it is smaller than KitMin.
+	// (its frame and scale in the mesh's reference pose), in Section (Fungus, KitBark: IronBark's kit atlas, or KitDawn: DawnLotus's). Left out of a level where it is smaller than KitMin.
 	void KitPiece(FName Bone, const FWWOLeafShape* const (&Shapes)[NumGraftLevels], const FWWOLeafShape* const (&SmallShapes)[NumGraftLevels],
 		const FTransform& Xf, FWWOVineMesh::ESection Section = FWWOVineMesh::Fungus);
 	// Mycelium along Line (resampled every ~1 cm), Style.Width either side of it, over Surface; Sign -1 mirrors its

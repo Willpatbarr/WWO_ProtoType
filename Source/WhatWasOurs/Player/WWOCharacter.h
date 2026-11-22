@@ -25,6 +25,7 @@ class UWWOAbilityComponent;
 class UWWOGrenadeComponent;
 class UWWOUltComponent;
 class UWWOBodyComponent;
+class UWWODawnLotusComponent;
 class AWWOPlayerController;
 class UWWOLoadoutSubsystem;
 class UWWOWeaponData;
@@ -170,6 +171,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWWOGrenadeComponent> Grenades;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWWOUltComponent> Ult;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWWOBodyComponent> Body; // grafts and part colors on the body mesh
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWWODawnLotusComponent> DawnLotus; // Nectar, Reveille's boost (Flora/WWODawnLotus.h)
 
 	// --- Tunables (Settings menu). Settings rows and saved settings find these by property name: don't rename them. ---
 	// Camera and controls.
@@ -445,6 +447,7 @@ public:
 	UFUNCTION(Client, Reliable) void ClientKitRefused(uint8 What, int32 Slot);
 	FVector NetAim = FVector::ForwardVector; // host: where a joiner was looking when it last used an ability
 	UFUNCTION(Server, Reliable) void ServerActivateUlt();
+	UFUNCTION(Server, Reliable) void ServerUltAim(FVector_NetQuantizeNormal Aim); // sent just before it: where a joiner's ult points (NetAim)
 	// Holding the Revive key anywhere, alive: the host's view of it, for things you hold a key at
 	// (FootRace's levers). Set on the host from its own input or a joiner's ServerSetUse.
 	bool bHoldingUse = false;

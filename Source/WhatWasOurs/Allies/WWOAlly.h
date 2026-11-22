@@ -37,6 +37,7 @@ public:
 
 	void TakeAllyDamage(float Amount, bool bMelee = false);
 	void RestoreShield(float Amount); // Shield Share
+	float Heal(float Amount);         // host: health, then shield; returns what it restored (nothing while down)
 	void ResetAlly();
 	FString StatusText() const;
 

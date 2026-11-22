@@ -15,6 +15,7 @@ namespace WWOIds
 		inline const FName VoltVine(TEXT("voltvine"));
 		inline const FName VeilSpore(TEXT("veilspore"));
 		inline const FName IronBark(TEXT("ironbark"));
+		inline const FName DawnLotus(TEXT("dawnlotus"));
 	}
 
 	// Abilities (UWWOAbilityData::Id). Their behaviour: WWOAbility::Table() (Player/WWOAbilities.cpp).
@@ -31,6 +32,9 @@ namespace WWOIds
 		inline const FName ShieldShare(TEXT("shield_share"));
 		inline const FName ExtraGrenade(TEXT("extra_grenade"));
 		inline const FName Seedburst(TEXT("seedburst"));
+		inline const FName Pollination(TEXT("pollination"));
+		inline const FName FullBloom(TEXT("full_bloom"));
+		inline const FName Petalfall(TEXT("petalfall"));
 	}
 
 	// Weapon perks (a mod's Perk in Config/WeaponMods.json). Their behaviour: WWOPerk::Table().
@@ -82,5 +86,8 @@ namespace WWOIds
 		inline const FName WallGrenade(TEXT("wall_grenade"));
 		inline const FName IronGrenade(TEXT("iron_grenade"));
 		inline const FName BlindingGrenade(TEXT("blinding_grenade"));
+		inline const FName BloomPool(TEXT("bloom_pool"));
+		inline const FName SolarBurst(TEXT("solar_burst"));
+		inline const FName Reveille(TEXT("reveille"));
 	}
 }

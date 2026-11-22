@@ -12,6 +12,7 @@
 #include "Weapons/WWOGrenade.h"
 #include "Flora/WWOSporeFog.h"
 #include "Flora/WWOFloraEffects.h"
+#include "Flora/WWODawnLotus.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -57,6 +58,7 @@ bool UWWOUltComponent::CanActivate() const
 bool UWWOUltComponent::ActivateUlt()
 {
 	if (!CanActivate()) return false;
+	if (const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner()); P->IsLocallyControlled()) AimAtCast = P->AimForward(); // before bUlting changes what that means
 	Charge = 0.f;
 	bActive = true;
 	Begin();
@@ -95,6 +97,8 @@ void UWWOUltComponent::Begin()
 	const UWWOFloraData* Flora = Loadout ? Loadout->GetFlora() : nullptr;
 	Kind = Flora ? Flora->Ult : EWWOUltKind::Blast;
 	Color = Loadout && Loadout->GetGrenade() ? Loadout->GetGrenade()->Color : FLinearColor(1.f, 0.6f, 0.2f);
+	if (Kind == EWWOUltKind::Beam && Flora) Color = Flora->Color;
+	Windup = Kind == EWWOUltKind::Beam ? WWODawnLotus::T().BeamWindup : WindupTime;
 	P->bUlting = true;
 	P->Weapon->Interrupt(); // the gun isn't updated during an ult: nothing half-done waits for its end
 	UCharacterMovementComponent* Move = P->GetCharacterMovement();
@@ -116,17 +120,17 @@ void UWWOUltComponent::Begin()
 		P->Camera->Deactivate();
 		UltCamera->Activate();
 	}
-	if (Kind == EWWOUltKind::Blast)
+	if (IsCharged())
 	{
 		Blend = CameraBlend;
-		CastAt = FMath::Max(WindupTime - CastLead, Blend);
-		ExplodeAt = FMath::Max(WindupTime, Blend + CastLead);
+		CastAt = FMath::Max(Windup - CastLead, Blend);
+		ExplodeAt = FMath::Max(Windup, Blend + CastLead);
 		FinishAt = ExplodeAt + HoldTime;
 		// Godot: Spell_Simple_Enter as the camera glides out, then Spell_Simple_Idle once the
 		// enter has played out (or right before the cast), then Spell_Simple_Shoot.
 		P->Body->Play("Spell_Simple_Enter", 1.f, 0.1f);
 		const float EnterLeft = FMath::Max(P->Body->AnimLength("Spell_Simple_Enter") - Blend, 0.f);
-		ChargeAt = Blend + FMath::Min(EnterLeft, FMath::Max(WindupTime - Blend - CastLead, 0.f));
+		ChargeAt = Blend + FMath::Min(EnterLeft, FMath::Max(Windup - Blend - CastLead, 0.f));
 		// The orb that grows between your hands.
 		Orb = WWOFX::AddShape(P, nullptr, WWOFX::Sphere(), TEXT("M_WWO_Solid"), Color, 4.f);
 		Orb->SetUsingAbsoluteLocation(true);
@@ -201,6 +205,20 @@ void UWWOUltComponent::Release()
 		AWWOEntrenchRoots::Spawn(GetWorld(), P, EntrenchTime); // on this machine (looks only)
 		if (bHost && GetNetMode() == NM_ListenServer) P->MulticastEntrenchRoots(EntrenchTime); // and on the others
 		break;
+	case EWWOUltKind::Beam: // the host's: its damage, and the Nectar it spends
+	{
+		// From the orb, the moment the cast releases it.
+		const FVector Muzzle = Orb ? Orb->GetComponentLocation() : P->GetActorLocation();
+		if (Orb)
+		{
+			if (OrbLight) OrbLight->DestroyComponent();
+			Orb->DestroyComponent();
+			Orb = nullptr;
+			OrbLight = nullptr;
+		}
+		if (bHost) WWODawnLotus::FireBeam(*P, P->IsLocallyControlled() ? AimAtCast : P->NetAim, Muzzle, Color);
+		break;
+	}
 	}
 }
 
@@ -259,7 +277,11 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 			: (PC && P->IsLocallyControlled() && (PC->WasJustPressed(EWWOAction::Ult) || PC->ConsumeChord(EWWOChord::Ult))); // F, or L1 + R1
 		if (bPressed && ActivateUlt())
 		{
-			if (GetNetMode() == NM_Client) P->ServerActivateUlt(); // the host runs it too (the blast, fog or roots are its)
+			if (GetNetMode() == NM_Client)
+			{
+				P->ServerUltAim(AimAtCast); // reliable and in order: there before the ult
+				P->ServerActivateUlt(); // the host runs it too (the blast, fog, roots or beam are its)
+			}
 		}
 		return;
 	}
@@ -267,15 +289,15 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	if (Orb)
 	{
 		PlaceOrb();
-		const float Grow = FMath::Clamp(Clock / FMath::Max(WindupTime - CastLead, 0.1f), 0.f, 1.f);
+		const float Grow = FMath::Clamp(Clock / FMath::Max(Windup - CastLead, 0.1f), 0.f, 1.f);
 		Orb->SetWorldScale3D(FVector(FMath::Max(OrbSize * WWO::M * Grow / 50.f, 0.01f)));
 	}
-	if (Kind == EWWOUltKind::Blast && !bCharging && !bCast && Clock >= ChargeAt && ChargeAt < CastAt)
+	if (IsCharged() && !bCharging && !bCast && Clock >= ChargeAt && ChargeAt < CastAt)
 	{
 		bCharging = true;
 		P->Body->Play("Spell_Simple_Idle", 1.f, 0.1f);
 	}
-	if (Kind == EWWOUltKind::Blast && !bCast && Clock >= CastAt)
+	if (IsCharged() && !bCast && Clock >= CastAt)
 	{
 		bCast = true;
 		P->Body->Play("Spell_Simple_Shoot", 1.f, 0.1f);
@@ -298,7 +320,7 @@ void UWWOUltComponent::UpdateUlt(float DeltaSeconds)
 	{
 		bGlidingBack = true;
 		GlideFrom = UltCamera->GetComponentTransform();
-		P->Body->Play("Idle", 1.f, Kind == EWWOUltKind::Blast ? 0.3f : 0.2f);
+		P->Body->Play("Idle", 1.f, IsCharged() ? 0.3f : 0.2f);
 	}
 	const float Back = (Clock - FinishAt) / FMath::Max(Blend, 0.01f);
 	const FTransform To = FirstPersonTransform();

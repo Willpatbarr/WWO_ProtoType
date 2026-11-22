@@ -146,6 +146,8 @@ enum class EWWOGrenadeKind : uint8
 	Tripmine,  // sticks where it lands, arms, blows up (slowing enemies) when one comes close
 	Wall,      // blows up and raises a wall facing you
 	Blind,     // blows up and blinds enemies
+	HealPool,  // leaves a pool that heals teammates (DawnLotus)
+	Reveille,  // one blast: teammates caught get energy, handling and a full magazine (DawnLotus)
 };
 
 UENUM(BlueprintType)
@@ -163,6 +165,7 @@ enum class EWWOUltKind : uint8
 	Blast,    // a massive grenade explosion centered on you
 	Veil,     // invisible to enemies (and stronger melee) while in spore fog
 	Entrench, // rooted, invulnerable, faster grenades
+	Beam,     // one forward beam, its damage scaled by Nectar (DawnLotus; placeholder form)
 };
 
 // The actions the game polls each frame (see AWWOPlayerController).

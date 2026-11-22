@@ -8,6 +8,7 @@
 // them back, so the saved format is checked against a real file. Nothing is written to disk.
 
 #include "Player/WWORegress.h"
+#include "WWOIds.h"
 #include "Player/WWOCharacter.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
@@ -120,7 +121,7 @@ namespace
 		for (const TCHAR* Extra : { TEXT("shield_regen"), TEXT("melee_damage"), TEXT("grenade_recharge"), TEXT("range"), TEXT("recoil_side"),
 			TEXT("recoil_up"), TEXT("magazine_size"), TEXT("ads_move_speed"), TEXT("sway"), TEXT("zoom"), TEXT("damage"), TEXT("fire_rate"),
 			TEXT("crit_multiplier"), TEXT("pellet_spread"), TEXT("hip_spread"), TEXT("not_a_stat") }) Stats.AddUnique(FName(Extra));
-		for (const UWWOTraitData* T : L.Catalog.Traits) if (T) for (const FWWOStatModifier& M : T->Mods) Stats.AddUnique(M.Stat);
+		for (const UWWOTraitData* T : L.Catalog.Traits) if (T && T->Flora != WWOIds::Flora::DawnLotus) for (const FWWOStatModifier& M : T->Mods) Stats.AddUnique(M.Stat);
 		for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod) for (const FWWOStatModifier& M : Mod->Mods) Stats.AddUnique(M.Stat);
 		return Stats;
 	}
@@ -130,7 +131,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 {
 	const TArray<FName> Stats = AllStats(L);
 	TArray<FName> Effects, Perks;
-	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && !T->Effect.IsNone()) Effects.AddUnique(T->Effect);
+	for (const UWWOTraitData* T : L.Catalog.Traits) if (T && !T->Effect.IsNone() && T->Flora != WWOIds::Flora::DawnLotus) Effects.AddUnique(T->Effect);
 	for (const UWWOModData* Mod : L.Catalog.WeaponMods) if (Mod && !Mod->Perk.IsNone()) Perks.AddUnique(Mod->Perk);
 	Effects.AddUnique("not_an_effect");
 	Perks.AddUnique("not_a_perk");
@@ -258,7 +259,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 	Add(TEXT("bare"), [](FWWORegress&, UWWOLoadoutSubsystem*) {});
 	for (UWWOFloraData* F : L.Catalog.Floras)
 	{
-		if (!F) continue;
+		if (!F || F->Id == WWOIds::Flora::DawnLotus) continue;
 		Add(TEXT("flora.") + F->Id.ToString(), [PutFlora, F](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutFlora(Lo, F); });
 		Add(TEXT("traits.") + F->Id.ToString(), [PutFlora, PutTraits, F](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutFlora(Lo, F); PutTraits(Lo); });
 	}
@@ -272,8 +273,8 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 		Add(TEXT("mods.") + W->Id.ToString() + TEXT(".first"), [PutMods, W](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutMods(Lo, W, false); });
 		Add(TEXT("mods.") + W->Id.ToString() + TEXT(".last"), [PutMods, W](FWWORegress&, UWWOLoadoutSubsystem* Lo) { PutMods(Lo, W, true); });
 	}
-	// Everything at once: the last flora's kit and traits, the last frame parts, mods in every slot.
-	UWWOFloraData* LastFlora = L.Catalog.Floras.Num() > 0 ? L.Catalog.Floras.Last().Get() : nullptr;
+	// Everything at once: IronBark's kit and traits (pinned: new floras don't move this scenario), the last frame parts, mods in every slot.
+	UWWOFloraData* LastFlora = FWWOLoadoutCatalog::FindById(L.Catalog.Floras, WWOIds::Flora::IronBark);
 	Add(TEXT("everything"), [PutFlora, PutTraits, PutFrame, PutMods, LastFlora, FirstModded](FWWORegress&, UWWOLoadoutSubsystem* Lo)
 	{
 		if (LastFlora) PutFlora(Lo, LastFlora);
@@ -372,7 +373,7 @@ void FWWORegress::AddLoadoutScenarios(TArray<FWWORegressScenario>& Out, const UW
 			RecordEquipped(R, Lo, TEXT("b."));
 			// Traits: up to the slots, then refused; another flora's refused; one taken off.
 			TArray<FString> Toggles;
-			for (UWWOTraitData* T : Lo->Catalog.Traits) Toggles.Add(FString::FromInt(Lo->ToggleTrait(T) ? 1 : 0));
+			for (UWWOTraitData* T : Lo->Catalog.Traits) if (T->Flora != WWOIds::Flora::DawnLotus) Toggles.Add(FString::FromInt(Lo->ToggleTrait(T) ? 1 : 0));
 			R.Record(TEXT("c.toggles"), FString::Join(Toggles, TEXT("")));
 			RecordEquipped(R, Lo, TEXT("c."));
 			if (Lo->EquippedTraits().Num() > 0) R.RecordBool(TEXT("d.untoggle"), Lo->ToggleTrait(Lo->EquippedTraits()[0]));

@@ -847,9 +847,9 @@ namespace
 		// near them).
 		FString Kit, KitSectionName;
 		R->TryGetStringField(TEXT("kit"), Kit);
-		// kit_section: the material the kit's pieces are drawn in: 'fungus' (VeilSpore's atlas, the default) or 'bark' (IronBark's kit atlas).
+		// kit_section: the material the kit's pieces are drawn in: 'fungus' (VeilSpore's atlas, the default), 'bark' (IronBark's kit atlas) or 'dawn' (DawnLotus's).
 		R->TryGetStringField(TEXT("kit_section"), KitSectionName);
-		const FWWOVineMesh::ESection KitSection = KitSectionName == TEXT("bark") ? FWWOVineMesh::KitBark : FWWOVineMesh::Fungus;
+		const FWWOVineMesh::ESection KitSection = KitSectionName == TEXT("bark") ? FWWOVineMesh::KitBark : KitSectionName == TEXT("dawn") ? FWWOVineMesh::KitDawn : FWWOVineMesh::Fungus;
 		TArray<FVector4> Glow;           // each cap's gills (where, how far their light reaches the mycelium)
 		TArray<TFunction<void()>> Later; // the mycelium
 		int32 KeptOff = 0;               // pieces left out to keep the face clear
@@ -1220,7 +1220,7 @@ namespace
 		Out->WorkMs = (FPlatformTime::Seconds() - Started) * 1000.0;
 		// Per level: all its triangles, by material (bark, core, leaf, crystal, stem, fungus, plates, pods, stalks).
 		static const TCHAR* SectionNames[FWWOVineMesh::NumSections] = { TEXT("bark"), TEXT("core"), TEXT("leaf"), TEXT("crystal"), TEXT("stem"),
-			TEXT("fungus"), TEXT("scales"), TEXT("plates"), TEXT("pods"), TEXT("stalks") };
+			TEXT("fungus"), TEXT("scales"), TEXT("dawn"), TEXT("plates"), TEXT("pods"), TEXT("stalks") };
 		FString Levels;
 		for (int32 L = 0; L < NumGraftLevels; ++L)
 		{

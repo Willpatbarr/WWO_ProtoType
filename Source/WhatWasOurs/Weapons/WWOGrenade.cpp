@@ -8,6 +8,7 @@
 #include "Enemies/WWOEnemy.h"
 #include "Allies/WWOAlly.h"
 #include "Flora/WWOFloraEffects.h"
+#include "Flora/WWODawnLotus.h"
 #include "FX/WWOFX.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Systems/WWOWorldSubsystem.h"
@@ -136,7 +137,7 @@ void AWWOGrenade::Setup(AActor* InThrower)
 	if (R && R->Life)
 	{
 		LifeLimit = R->Life(*Spec.Data); // no fuse: it waits for a target
-		bFuseIsFizzle = true;
+		bFuseIsFizzle = !R->bLifeExplodes;
 	}
 	else
 	{
@@ -284,6 +285,7 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 		UE_LOG(LogWWO, Log, TEXT("Grenade %s: first touched %s %.1f m from the hand after %.2f s, %.1f m/s in, %.1f m/s out"), *Spec.Data->Id.ToString(),
 			Other ? *Other->GetName() : TEXT("-"), FVector::Dist(GetActorLocation(), ReleasedAt) / WWO::M, Age, ImpactVelocity.Size() / WWO::M, Movement->Velocity.Size() / WWO::M);
 	}
+	TouchNormal = Hit.ImpactNormal;
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Other);
 	if (Target && !UWWOWorldSubsystem::CanHurt(this, Other)) Target = nullptr; // a teammate: just something to bounce off
 	if (const FWWOGrenadeKindRules* R = Rules(); R && R->OnTouch && R->OnTouch(*this, Other, Target)) return;
@@ -319,6 +321,19 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 			Sparks->Start();
 		}
 	}
+}
+
+bool AWWOGrenade::GroundTouch(const AActor* Other)
+{
+	constexpr float WalkableZ = 0.7f; // about 45 degrees, as the characters' floors
+	if (TouchNormal.Z < WalkableZ || Cast<APawn>(Other) || Cast<IWWOTargetable>(Other)) return false; // a wall or a body: it deflects
+	Explode();
+	return true;
+}
+
+void AWWOGrenade::FallCheck()
+{
+	if (GetActorLocation().Z < UWWOHealthComponent::MapKillHeight(GetWorld())) Fizzle();
 }
 
 void AWWOGrenade::Stick()
@@ -442,6 +457,7 @@ void AWWOGrenade::Explode()
 	Q.SightFrom = Center + FVector(0, 0, 5.f);
 	UWWOWorldSubsystem::Get(this)->ForEachTargetInRadius(Q, [&](const FWWOAreaHit& Hit)
 	{
+		if (Spec.Damage <= 0.f) return false; // a blast that only heals: nobody marked with a 0
 		const float Dealt = Spec.Damage * FMath::Lerp(1.f, EdgeDamage, Hit.Distance / (Spec.BlastRadius * WWO::M));
 		Hit.Target->TakeHit(Dealt, false, Hit.Point); // marks the thrower's reticle (ConfirmHit)
 		HitCount++;
@@ -501,8 +517,32 @@ const FWWOGrenadeKindRules& AWWOGrenade::KindRules(EWWOGrenadeKind Kind)
 			.bBrightFlash = true,
 			.OnBurst = [](AWWOGrenade& G, const FVector& Center) { G.BlindOrSlow(Center, true); },
 		},
+		{ // HealPool: on the ground, a pool that heals teammates (DawnLotus).
+			.Kind = EWWOGrenadeKind::HealPool,
+			.bImpactFuse = false, // its own rule: only walkable ground sets it off
+			.Life = [](const UWWOGrenadeData&) { return WWODawnLotus::T().GroundGrenadeSafetyFuse; },
+			.bLifeExplodes = true,
+			.OnTick = [](AWWOGrenade& G, float) { G.FallCheck(); },
+			.OnTouch = [](AWWOGrenade& G, AActor* Other, IWWOTargetable*) { return G.GroundTouch(Other); },
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center)
+			{
+				AWWOBloomPool::Spawn(G.GetWorld(), Center - FVector(0, 0, Radius * WWO::M), G.Spec.Color, G.Thrower.Get());
+			},
+		},
+		{ // Reveille: on the ground, teammates caught, thrower included, get energy, handling and a full magazine (DawnLotus).
+			.Kind = EWWOGrenadeKind::Reveille,
+			.bImpactFuse = false, // its own rule: only walkable ground sets it off
+			.Life = [](const UWWOGrenadeData&) { return WWODawnLotus::T().GroundGrenadeSafetyFuse; },
+			.bLifeExplodes = true,
+			.OnTick = [](AWWOGrenade& G, float) { G.FallCheck(); },
+			.OnTouch = [](AWWOGrenade& G, AActor* Other, IWWOTargetable*) { return G.GroundTouch(Other); },
+			.OnBurst = [](AWWOGrenade& G, const FVector& Center)
+			{
+				if (AWWOCharacter* By = Cast<AWWOCharacter>(G.Thrower.Get())) WWODawnLotus::ReveilleBurst(*By, Center, G.Spec.BlastRadius);
+			},
+		},
 	};
-	static_assert(UE_ARRAY_COUNT(Rules) == (int32)EWWOGrenadeKind::Blind + 1, "one entry per EWWOGrenadeKind");
+	static_assert(UE_ARRAY_COUNT(Rules) == (int32)EWWOGrenadeKind::Reveille + 1, "one entry per EWWOGrenadeKind");
 	const int32 Index = (int32)Kind;
 	check(Index < UE_ARRAY_COUNT(Rules) && Rules[Index].Kind == Kind);
 	return Rules[FMath::Min(Index, (int32)UE_ARRAY_COUNT(Rules) - 1)];

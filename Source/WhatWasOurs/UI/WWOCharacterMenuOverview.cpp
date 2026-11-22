@@ -21,6 +21,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Framework/Application/SlateApplication.h"
 #include "WWOIds.h"
+#include "Flora/WWODawnLotus.h"
 
 using namespace WWOCharacterMenuUI;
 
@@ -162,7 +163,9 @@ void UWWOCharacterMenu::BuildOverview()
 		case EWWOGrenadeKind::Tripmine: What = FString::Printf(TEXT("Slow · %d%% for %s s"), FMath::RoundToInt(G->SlowAmount * 100.f), *Num(G->SlowTime)); break;
 		case EWWOGrenadeKind::Wall: What = FString::Printf(TEXT("Wall · %s s"), *Num(G->WallTime)); break;
 		case EWWOGrenadeKind::Blind: What = FString::Printf(TEXT("Blind · %s s"), *Num(G->BlindTime)); break;
-		default: What = FString::Printf(TEXT("Blast · %s dmg, %s m"), *Num(G->Damage), *Num(G->BlastRadius)); break;
+		case EWWOGrenadeKind::HealPool: What = FString::Printf(TEXT("Healing pool · %s/s for %s s"), *Num(WWODawnLotus::T().BloomPoolHealPerSecond), *Num(WWODawnLotus::T().BloomPoolTime)); break;
+		case EWWOGrenadeKind::Reveille: What = FString::Printf(TEXT("Team energy, handling, full magazine · %s m"), *Num(WWODawnLotus::T().ReveilleRadius)); break;
+		default: What = FString::Printf(TEXT("Blast · %s dmg, %s m"), *Num(WWODawnLotus::GrenadeDamage(*G)), *Num(WWODawnLotus::GrenadeRadius(*G))); break;
 		}
 		Note(What, G->DisplayName);
 		++Effects;
@@ -179,13 +182,16 @@ void UWWOCharacterMenu::BuildOverview()
 		else if (A->Id == WWOIds::Ability::SporePatches) What = FString::Printf(TEXT("Fog patches · %s s each"), *Num(A->PatchTime));
 		else if (A->Id == WWOIds::Ability::RootBombs) What = FString::Printf(TEXT("Root bombs · %s dmg, %s m"), *Num(A->BombDamage), *Num(A->BombRadius));
 		else if (A->Id == WWOIds::Ability::ShieldShare) What = FString::Printf(TEXT("Shield teammates · +%s"), *Num(A->ShieldAmount));
+		else if (A->Id == WWOIds::Ability::FullBloom) What = FString::Printf(TEXT("Heal teammates · %s split, %s m"), *Num(WWODawnLotus::T().FullBloomPool), *Num(WWODawnLotus::T().FullBloomRadius));
+		else if (A->Id == WWOIds::Ability::Petalfall) What = FString::Printf(TEXT("Heal burst · +%s per %s dmg dealt"), *Num(WWODawnLotus::T().PetalfallHeal), *Num(WWODawnLotus::T().PetalfallDamage));
+		else if (A->Id == WWOIds::Ability::Pollination) What = TEXT("Healing teammates gives grenade and Full Bloom energy");
 		if (!What.IsEmpty()) { Note(What, A->DisplayName); ++Effects; }
 	}
 	if (Flora && !Flora->UltName.IsEmpty()) { Note(TEXT("Ult · ") + Flora->UltName, Flora->DisplayName); ++Effects; }
 	// Traits that change those effects rather than your own stats.
 	static const TMap<FName, FString> EffectNames = {
 		{ "fog_longer", TEXT("fog time") }, { "wall_longer", TEXT("wall time") }, { "slow_longer", TEXT("slow time") },
-		{ "more_bounce", TEXT("grenade bounce") }, { "blast_bigger", TEXT("blast size") }, { "poison_damage", TEXT("poison, pool and fog damage") },
+		{ "more_bounce", TEXT("grenade bounce") }, { "heal_more", TEXT("healing") }, { "nectar_more", TEXT("Nectar gain") }, { "pollination_more", TEXT("Pollination energy") }, { "petalfall_sooner", TEXT("less damage per Petalfall") }, { "blast_bigger", TEXT("blast size") }, { "poison_damage", TEXT("poison, pool and fog damage") },
 	};
 	for (const UWWOTraitData* T : BuildTraits)
 	{

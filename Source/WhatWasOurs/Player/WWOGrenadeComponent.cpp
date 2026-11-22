@@ -7,6 +7,7 @@
 #include "Player/WWOAbilityComponent.h"
 #include "Player/WWOHealthComponent.h"
 #include "Weapons/WWOGrenade.h"
+#include "Flora/WWODawnLotus.h"
 #include "Systems/WWOLoadoutSubsystem.h"
 #include "Data/WWOData.h"
 #include "WWOTypes.h"
@@ -39,7 +40,7 @@ float UWWOGrenadeComponent::EffectiveRechargeTime(const UWWOGrenadeData* Grenade
 {
 	const UWWOGrenadeData* G = Current(Grenade);
 	const AWWOCharacter* P = Cast<AWWOCharacter>(GetOwner());
-	const float Time = P->M("grenade_recharge", RechargeTime * (G ? G->RechargeMult : 1.f)); // traits
+	const float Time = P->M("grenade_recharge", RechargeTime * (G ? WWODawnLotus::GrenadeRecharge(*G) : 1.f)); // traits
 	return Time / P->EntrenchRechargeMultiplier(); // the IronBark ult speeds it up
 }
 
@@ -133,8 +134,8 @@ void UWWOGrenadeComponent::ThrowFrom(const FVector& Hand, const FVector& Dir)
 
 	FWWOGrenadeSpec Spec;
 	Spec.Color = Data->Color;
-	Spec.Damage = Data->Damage;
-	Spec.BlastRadius = Data->BlastRadius * (1.f + Loadout->TraitBonus("blast_bigger")); // Bigger Explosions
+	Spec.Damage = WWODawnLotus::GrenadeDamage(*Data);
+	Spec.BlastRadius = WWODawnLotus::GrenadeRadius(*Data) * (1.f + Loadout->TraitBonus("blast_bigger")); // Bigger Explosions
 	Spec.Fuse = EffectiveFuse();
 	Spec.Data = Data;
 	Spec.Seedburst = P->Abilities->Equipped(WWOIds::Ability::Seedburst);

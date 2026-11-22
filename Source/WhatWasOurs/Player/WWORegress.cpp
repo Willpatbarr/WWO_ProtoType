@@ -80,6 +80,7 @@ struct FWWORegress::FLoadoutSnapshot
 	TArray<TObjectPtr<UWWOTraitData>> Traits;
 	TMap<FName, TObjectPtr<UWWOFramePartData>> Frame;
 	TMap<FName, TMap<FName, TObjectPtr<UWWOModData>>> Mods;
+	TArray<FColor> ShellColors;
 	TMap<FName, FWWOFloraSetup> FloraSetups;
 	TArray<FWWOModConfig> Configs;
 	int32 ActiveConfig = INDEX_NONE;
@@ -422,6 +423,7 @@ void FWWORegress::SnapshotLoadout()
 	S.Traits = L->Equipped.Traits;
 	S.Frame = L->Equipped.Frame;
 	S.Mods = L->Equipped.Mods;
+	S.ShellColors = L->Equipped.ShellColors;
 	S.FloraSetups = L->Equipped.FloraSetups;
 	S.Configs = L->ModConfigs.Configs;
 	S.ActiveConfig = L->ModConfigs.Active;
@@ -442,6 +444,7 @@ void FWWORegress::RestoreLoadout()
 	L->Equipped.Traits = S.Traits;
 	L->Equipped.Frame = S.Frame;
 	L->Equipped.Mods = S.Mods;
+	L->Equipped.ShellColors = S.ShellColors;
 	L->Equipped.FloraSetups = S.FloraSetups;
 	L->ModConfigs.Configs = S.Configs;
 	L->ModConfigs.Active = S.ActiveConfig;
@@ -463,6 +466,7 @@ void FWWORegress::BaselineLoadout()
 	L->Equipped.Abilities.Init(nullptr, UWWOLoadoutSubsystem::AbilitySlots);
 	L->Equipped.Traits.Reset();
 	L->Equipped.Mods.Reset();
+	L->Equipped.ShellColors.Reset();
 	L->Equipped.FloraSetups.Reset();
 	L->Equipped.Frame.Reset();
 	for (const FName& Slot : UWWOLoadoutSubsystem::FrameSlots())

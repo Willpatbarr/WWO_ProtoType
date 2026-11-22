@@ -60,6 +60,7 @@ struct FWWOGrenadeKindRules
 	bool bImpactFuse = true;   // the Impact Grenades trait makes it go off on its first touch
 	bool bBrightFlash = false; // its blast flashes brighter (FWWOGrenadeLook::bBlind)
 	float (*Life)(const UWWOGrenadeData& Data) = nullptr; // no fuse: it waits this long for a target, then fizzles
+	bool bLifeExplodes = false; // ...or goes off properly when that time is up
 	// While it flies or waits (every host tick).
 	void (*OnTick)(AWWOGrenade& G, float DeltaSeconds) = nullptr;
 	// On a touch (Target: something it may hurt, else null). True: handled, nothing else happens on it.
@@ -157,6 +158,9 @@ private:
 	void RaiseWall(const FVector& Center);
 	void BlindOrSlow(const FVector& Center, bool bBlind); // blind (Blind), else slow (Tripmine)
 	void LeavePool(const FVector& Center);
+	bool GroundTouch(const AActor* Other); // Bloom Pool, Reveille: walkable ground sets it off; anything else it glances off
+	void FallCheck();                      // ...and it never falls out of the world live
+	FVector TouchNormal = FVector::UpVector; // the surface of the touch being handled
 
 	// The regression scenarios (-WWORegress, Player/WWORegress.h) call private steps directly; no gameplay code uses this.
 	friend class FWWORegress;

@@ -496,6 +496,63 @@
    "fuse_mult": 1.0,
    "recharge_mult": 1.0,
    "throw_distance_mult": 1.0
+  },
+  {
+   "id": "bloom_pool",
+   "display_name": "Bloom Pool",
+   "color": [
+    0.55,
+    1.0,
+    0.6,
+    1.0
+   ],
+   "order": 30.0,
+   "damage": 0.0,
+   "blast_radius": 4.0,
+   "kind": "heal_pool",
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0,
+   "bounce": 0.05,
+   "flora": "dawnlotus"
+  },
+  {
+   "id": "solar_burst",
+   "display_name": "Solar Burst",
+   "color": [
+    1.0,
+    0.75,
+    0.25,
+    1.0
+   ],
+   "order": 31.0,
+   "damage": 140.0,
+   "blast_radius": 4.5,
+   "kind": "explosive",
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0,
+   "bounce": 0.15,
+   "flora": "dawnlotus"
+  },
+  {
+   "id": "reveille",
+   "display_name": "Reveille",
+   "color": [
+    1.0,
+    0.92,
+    0.7,
+    1.0
+   ],
+   "order": 32.0,
+   "damage": 25.0,
+   "blast_radius": 5.0,
+   "kind": "reveille",
+   "fuse_mult": 1.0,
+   "recharge_mult": 1.0,
+   "throw_distance_mult": 1.0,
+   "bounce": 0.05,
+   "flora": "dawnlotus"
   }
  ],
  "abilities": [
@@ -690,6 +747,49 @@
    "order": 22.0,
    "flora": "ironbark",
    "extra_charges": 1.0
+  },
+  {
+   "id": "pollination",
+   "display_name": "Pollination",
+   "description": "Triggered: healing a teammate gives a little grenade and Full Bloom energy, once per teammate every few seconds.",
+   "color": [
+    1.0,
+    0.85,
+    0.4,
+    1.0
+   ],
+   "kind": "triggered",
+   "order": 30.0,
+   "flora": "dawnlotus"
+  },
+  {
+   "id": "full_bloom",
+   "display_name": "Full Bloom",
+   "description": "Activate: a fixed pool of healing is split among the teammates in a circle around you.",
+   "color": [
+    1.0,
+    0.65,
+    0.7,
+    1.0
+   ],
+   "kind": "active",
+   "order": 31.0,
+   "flora": "dawnlotus",
+   "cooldown": 45.0
+  },
+  {
+   "id": "petalfall",
+   "display_name": "Petalfall",
+   "description": "Triggered: dealing enough damage releases a healing burst around you.",
+   "color": [
+    1.0,
+    0.55,
+    0.6,
+    1.0
+   ],
+   "kind": "triggered",
+   "order": 32.0,
+   "flora": "dawnlotus"
   }
  ],
  "frame_parts": [
@@ -909,6 +1009,26 @@
     0.19,
     1.0
    ]
+  },
+  {
+   "id": "dawnlotus",
+   "display_name": "DawnLotus",
+   "description": "A lotus that opens at first light: heal your team and turn that healing into power. Ult: a single beam whose damage grows with your Nectar.",
+   "color": [
+    1.0,
+    0.72,
+    0.5,
+    1.0
+   ],
+   "order": 3.0,
+   "ult": "beam",
+   "ult_name": "Dawn Beam",
+   "graft_color": [
+    0,
+    0,
+    0,
+    0
+   ]
   }
  ],
  "traits": [
@@ -1106,6 +1226,56 @@
    "order": 4.0,
    "effect": "poison_damage",
    "amount": 0.3
+  },
+  {
+   "id": "generous_bloom",
+   "display_name": "Generous Bloom",
+   "description": "Everything you heal for heals 15% more.",
+   "flora": "dawnlotus",
+   "order": 30.0,
+   "effect": "heal_more",
+   "amount": 0.15
+  },
+  {
+   "id": "sweet_nectar",
+   "display_name": "Sweet Nectar",
+   "description": "Healing fills Nectar 25% faster.",
+   "flora": "dawnlotus",
+   "order": 31.0,
+   "effect": "nectar_more",
+   "amount": 0.25
+  },
+  {
+   "id": "busy_pollen",
+   "display_name": "Busy Pollen",
+   "description": "Pollination gives 50% more energy.",
+   "flora": "dawnlotus",
+   "order": 32.0,
+   "effect": "pollination_more",
+   "amount": 0.5
+  },
+  {
+   "id": "loose_petals",
+   "display_name": "Loose Petals",
+   "description": "Petalfall needs 20% less damage.",
+   "flora": "dawnlotus",
+   "order": 33.0,
+   "effect": "petalfall_sooner",
+   "amount": 0.2
+  },
+  {
+   "id": "early_riser",
+   "display_name": "Early Riser",
+   "description": "Your grenade recharges 15% faster.",
+   "flora": "dawnlotus",
+   "order": 34.0,
+   "mods": [
+    {
+     "stat": "grenade_recharge",
+     "op": 1.0,
+     "value": -0.15
+    }
+   ]
   }
  ],
  "soldier": {

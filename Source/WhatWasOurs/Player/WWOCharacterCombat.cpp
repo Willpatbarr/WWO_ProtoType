@@ -2,6 +2,7 @@
 // health for IWWOTargetable) and the status effects on it (slow, blind, veil, entrench) with their RPCs.
 
 #include "Player/WWOCharacter.h"
+#include "Flora/WWODawnLotus.h"
 #include "WhatWasOurs.h"
 #include "Player/WWOCharacterPrivate.h"
 #include "WWOTypes.h"
@@ -186,6 +187,7 @@ void AWWOCharacter::ClearStatusEffects()
 	SlowLeft = 0.f;
 	VeilLeft = 0.f;
 	EntrenchLeft = 0.f;
+	if (DawnLotus) DawnLotus->ClearBoost();
 	bLunging = false;
 	MoveState.bMantling = false;
 	MoveState.bSliding = false;

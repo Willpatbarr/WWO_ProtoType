@@ -181,7 +181,7 @@ namespace
 	{
 		static const TArray<TArray<FString>> Layout = {
 			{ TEXT("Walk / Sprint"), TEXT("Jump"), TEXT("Crouch / Slide"), TEXT("Camera"), TEXT("HUD"), TEXT("Audio"), TEXT("Player"), TEXT("Aim Assist") },
-			{ TEXT("Melee"), TEXT("Grenades"), TEXT("Ult"), TEXT("Targets") },
+			{ TEXT("Melee"), TEXT("Grenades"), TEXT("Ult"), TEXT("Targets"), TEXT("DawnLotus") },
 			{ TEXT("Soldier"), TEXT("Swarm"), TEXT("Tank"), TEXT("Bots"), TEXT("Allies") },
 			{ TEXT("Maps"), TEXT("Multiplayer"), TEXT("PvP"), TEXT("Waves") },
 		};

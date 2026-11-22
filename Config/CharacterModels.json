@@ -38,6 +38,16 @@
       "anchor_grafts": true,
       "scale": 1.0
     },
+    "dawnlotus": {
+      "mesh": "/Game/WWO/Characters/RobotFrame/SK_RobotFrame.SK_RobotFrame",
+      "retargeter": "robotframe",
+      "shells": true,
+      "hand_fingers": [0, -0.13, -0.99],
+      "hand_palm": [1, 0, 0],
+      "grafts": true,
+      "anchor_grafts": true,
+      "scale": 1.0
+    },
     "soldier": {
       "mesh": "/Game/Robot_scout_R_21/Mesh/SK_Robot_scout_R21.SK_Robot_scout_R21",
       "scale": 1.0
