@@ -845,8 +845,11 @@ namespace
 		// VeilSpore's pieces: static meshes from the flora's 'kit' folder, placed over the worn parts' surface (their
 		// wraps' samples and anchors, FWWOShellSurface), and its mycelium, grown once every cap is placed (it glows
 		// near them).
-		FString Kit;
+		FString Kit, KitSectionName;
 		R->TryGetStringField(TEXT("kit"), Kit);
+		// kit_section: the material the kit's pieces are drawn in: 'fungus' (VeilSpore's atlas, the default) or 'bark' (IronBark's kit atlas).
+		R->TryGetStringField(TEXT("kit_section"), KitSectionName);
+		const FWWOVineMesh::ESection KitSection = KitSectionName == TEXT("bark") ? FWWOVineMesh::KitBark : FWWOVineMesh::Fungus;
 		TArray<FVector4> Glow;           // each cap's gills (where, how far their light reaches the mycelium)
 		TArray<TFunction<void()>> Later; // the mycelium
 		int32 KeptOff = 0;               // pieces left out to keep the face clear
@@ -854,24 +857,37 @@ namespace
 		auto PlaceMesh = [&](const TSharedPtr<FJsonObject>& O, const TFunctionRef<FString(const FString&)> Named, float Sign)
 		{
 			FString MeshName, AnchorName, PathName, UpMode;
-			O->TryGetStringField(TEXT("mesh"), MeshName);
-			const FString ShapePath = FString::Printf(TEXT("%s/%s.%s"), *Kit, *MeshName, *MeshName);
-			const FWWOLeafShape* Shape = Kit.IsEmpty() ? nullptr : FWWOVineGraft::MeshShape(ShapePath);
-			const FWWOLeafShape* Shapes[NumGraftLevels];
-			const FWWOLeafShape* SmallShapes[NumGraftLevels];
-			for (int32 L = 0; L < NumGraftLevels; ++L)
+			// Which mesh: 'mesh' (one), or 'meshes' (a list: each spot takes one, by its seed); a grid's 'crack' list goes
+			// to its middle column (IronBark's scales with a glowing crack down them).
+			struct FVariant { const FWWOLeafShape* Shape; const FWWOLeafShape* Shapes[NumGraftLevels]; const FWWOLeafShape* SmallShapes[NumGraftLevels]; };
+			auto Resolve = [&](const FString& Name, TArray<FVariant>& Out)
 			{
-				Shapes[L] = Shape ? FWWOVineGraft::MeshShape(ShapePath, In.Detail[L].KitLod) : nullptr;
-				SmallShapes[L] = Shape ? FWWOVineGraft::MeshShape(ShapePath, In.Detail[L].KitSmallLod) : nullptr;
-			}
-			if (!Shape)
-			{
-				UE_LOG(LogWWO, Warning, TEXT("Graft recipes: no kit mesh '%s' in '%s'"), *MeshName, *Kit);
+				const FString ShapePath = FString::Printf(TEXT("%s/%s.%s"), *Kit, *Name, *Name);
+				FVariant V;
+				V.Shape = Kit.IsEmpty() ? nullptr : FWWOVineGraft::MeshShape(ShapePath);
+				for (int32 L = 0; L < NumGraftLevels; ++L)
+				{
+					V.Shapes[L] = V.Shape ? FWWOVineGraft::MeshShape(ShapePath, In.Detail[L].KitLod) : nullptr;
+					V.SmallShapes[L] = V.Shape ? FWWOVineGraft::MeshShape(ShapePath, In.Detail[L].KitSmallLod) : nullptr;
+				}
+				if (V.Shape) { Out.Add(V); return; }
+				UE_LOG(LogWWO, Warning, TEXT("Graft recipes: no kit mesh '%s' in '%s'"), *Name, *Kit);
 				++Missing;
-				return;
-			}
+			};
+			auto ResolveList = [&](const TSharedPtr<FJsonObject>& From, const TCHAR* Field, TArray<FVariant>& Out)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Names = nullptr;
+				if (From.IsValid() && From->TryGetArrayField(Field, Names)) for (const TSharedPtr<FJsonValue>& V : *Names) Resolve(V->AsString(), Out);
+			};
+			const TSharedPtr<FJsonObject> Grid = Object(O, TEXT("grid"));
+			TArray<FVariant> Plain, Cracked;
+			if (O->TryGetStringField(TEXT("mesh"), MeshName)) Resolve(MeshName, Plain);
+			ResolveList(O, TEXT("meshes"), Plain);
+			ResolveList(Grid, TEXT("crack"), Cracked);
+			if (Plain.IsEmpty()) return;
 			// Where: an anchor, or along a path (every spacing_cm over 'range', or once at 'at').
 			TArray<FWWOShellPoint> Spots;
+			TArray<bool> SpotCrack; // (a grid's: its middle column)
 			float SlideMax = 0.f, SizeScale = 1.f;
 			const bool bPath = !O->TryGetStringField(TEXT("anchor"), AnchorName);
 			if (!bPath)
@@ -880,6 +896,37 @@ namespace
 				if (!P) { ++Missing; return; }
 				Spots.Add(*P);
 				SlideMax = P->Size;
+				// grid: rows of pieces laid over the surface round the anchor like shingles (the anchor at the middle): 'cols'
+				// (pieces in each row, top row first: a list, or one number with 'rows'), step_up and step_across (cm between
+				// rows and between pieces). Each row is centred, so rows of odd and even counts overlap like bricks.
+				if (Grid.IsValid())
+				{
+					TArray<int32> Cols;
+					const TArray<TSharedPtr<FJsonValue>>* ColList = nullptr;
+					if (Grid->TryGetArrayField(TEXT("cols"), ColList)) for (const TSharedPtr<FJsonValue>& V : *ColList) Cols.Add(FMath::Clamp(int32(V->AsNumber()), 0, 12));
+					else Cols.Init(FMath::Clamp(int32(Num(Grid, TEXT("cols"), 3.0)), 1, 12), FMath::Clamp(int32(Num(Grid, TEXT("rows"), 3.0)), 1, 16));
+					const float StepUp = Num(Grid, TEXT("step_up"), 5.0), StepAcross = Num(Grid, TEXT("step_across"), 4.0);
+					FString GridUpMode;
+					O->TryGetStringField(TEXT("up"), GridUpMode);
+					const FVector GridUp = GridUpMode == TEXT("world") && FMath::Abs(P->RefN.Z) < 0.9f ? FVector::UpVector : P->RefUp;
+					const FWWOShellSurface& Sf = SurfaceNow();
+					Spots.Reset();
+					for (int32 r = 0; r < Cols.Num(); ++r)
+					{
+						for (int32 c = 0; c < Cols[r]; ++c)
+						{
+							FWWOShellPoint Spot = *P;
+							FName Walked = P->Bone;
+							const float UpCm = ((Cols.Num() - 1) * 0.5f - r) * StepUp, AcrossCm = (c - (Cols[r] - 1) * 0.5f) * StepAcross;
+							if (UpCm != 0.f) Sf.Walk(Spot.RefP, Spot.RefN, Tangent(Spot.RefN, GridUp), UpCm, &Walked);
+							if (AcrossCm != 0.f) Sf.Walk(Spot.RefP, Spot.RefN, FVector::CrossProduct(Tangent(Spot.RefN, GridUp), Spot.RefN), AcrossCm * Sign, &Walked);
+							if (FVector::Dist(Spot.RefP, P->RefP) > 0.5f) Spot.Bone = Walked;
+							Spots.Add(Spot);
+							SpotCrack.Add(c == (Cols[r] - 1) / 2);
+						}
+					}
+					SlideMax = StepAcross * 0.3f;
+				}
 				if (Flag(O, TEXT("scale_by_size"), false)) SizeScale = FMath::Clamp(P->Size / float(Num(O, TEXT("size_ref"), 5.0)), 0.6f, 1.6f);
 			}
 			else
@@ -947,13 +994,16 @@ namespace
 				Keep.Add({ Cap, Push, false });
 			}
 			for (const FWWOShellVolume* V : Obstacles) Keep.Add({ *V, 4.f, true });
-			const bool bCap = !MeshName.Contains(TEXT("Mycelium")); // its gills light the mycelium round it
+			const bool bCap = KitSection == FWWOVineMesh::Fungus && !MeshName.Contains(TEXT("Mycelium")); // its gills light the mycelium round it
 			for (int32 i = 0; i < Spots.Num(); ++i)
 			{
 				// The same draws in the same order every time: the same loadout grows the same way on any robot.
 				FRandomStream Rs(Seed * 7919 + i * 131 + (Sign < 0.f ? 104729 : 0));
 				const float JR = Rs.FRandRange(-JRoll, JRoll), JP = Rs.FRandRange(-JPitch, JPitch), JS = Rs.FRandRange(-JScale, JScale);
 				const float SlideA = Rs.FRandRange(0.f, UE_TWO_PI), SlideD = FMath::Min(Rs.FRand() * JSlide, SlideMax);
+				const TArray<FVariant>& Pool = SpotCrack.IsValidIndex(i) && SpotCrack[i] && Cracked.Num() ? Cracked : Plain;
+				const FVariant& Var = Pool[Pool.Num() > 1 ? Rs.RandHelper(Pool.Num()) : 0];
+				const FWWOLeafShape* Shape = Var.Shape;
 				const FWWOShellPoint& S = Spots[i];
 				FVector P = S.RefP, N = S.RefN;
 				FName Bone = S.Bone;
@@ -1027,7 +1077,7 @@ namespace
 					}
 					if (Hit && Hit->bObstacle) ++(bKeep ? ObstaclePushed : ObstacleLeftOut);
 					if (!bKeep) { KeptOff += Hit->bObstacle ? 0 : 1; continue; }
-					VinesNow().KitPiece(Bc, Shapes, SmallShapes, Xf);
+					VinesNow().KitPiece(Bc, Var.Shapes, Var.SmallShapes, Xf, KitSection);
 					if (bCap) Glow.Add(FVector4(Xf.TransformPosition(Shape->Bounds.GetCenter()), FMath::Max(Shape->Bounds.GetExtent().GetMax() * ScC, 4.0)));
 				}
 			}
@@ -1170,7 +1220,7 @@ namespace
 		Out->WorkMs = (FPlatformTime::Seconds() - Started) * 1000.0;
 		// Per level: all its triangles, by material (bark, core, leaf, crystal, stem, fungus, plates, pods, stalks).
 		static const TCHAR* SectionNames[FWWOVineMesh::NumSections] = { TEXT("bark"), TEXT("core"), TEXT("leaf"), TEXT("crystal"), TEXT("stem"),
-			TEXT("fungus"), TEXT("plates"), TEXT("pods"), TEXT("stalks") };
+			TEXT("fungus"), TEXT("scales"), TEXT("plates"), TEXT("pods"), TEXT("stalks") };
 		FString Levels;
 		for (int32 L = 0; L < NumGraftLevels; ++L)
 		{
@@ -1523,7 +1573,17 @@ void UWWOBodyComponent::BuildAnchorGrafts()
 			{
 				FString MeshName;
 				const TSharedPtr<FJsonObject> O = V.IsValid() ? V->AsObject() : nullptr;
-				if (O.IsValid() && O->TryGetStringField(TEXT("mesh"), MeshName)) In.KitPaths.AddUnique(FString::Printf(TEXT("%s/%s.%s"), *Kit, *MeshName, *MeshName));
+				if (!O.IsValid()) continue;
+				auto Want = [&](const FString& Name) { In.KitPaths.AddUnique(FString::Printf(TEXT("%s/%s.%s"), *Kit, *Name, *Name)); };
+				auto WantList = [&](const TSharedPtr<FJsonObject>& From, const TCHAR* Field)
+				{
+					const TArray<TSharedPtr<FJsonValue>>* Names = nullptr;
+					if (From.IsValid() && From->TryGetArrayField(Field, Names)) for (const TSharedPtr<FJsonValue>& N : *Names) Want(N->AsString());
+				};
+				if (O->TryGetStringField(TEXT("mesh"), MeshName)) Want(MeshName);
+				WantList(O, TEXT("meshes"));
+				const TSharedPtr<FJsonObject>* GridObject = nullptr;
+				if (O->TryGetObjectField(TEXT("grid"), GridObject)) WantList(*GridObject, TEXT("crack"));
 			}
 		}
 	}
