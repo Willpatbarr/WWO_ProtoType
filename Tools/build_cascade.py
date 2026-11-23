@@ -298,7 +298,7 @@ def lighting(ns):
         s.set_editor_property(k, v)
     # The grade: a little glow off the trims and the water, corners drawn in, color and contrast up a touch,
     # contact shade under the decks and in the corners.
-    for k, v in (("bloom_intensity", 0.55), ("vignette_intensity", 0.28), ("ambient_occlusion_intensity", 0.6), ("ambient_occlusion_radius", 120.0),
+    for k, v in (("bloom_intensity", 1.6), ("bloom_threshold", 1.2), ("vignette_intensity", 0.28), ("ambient_occlusion_intensity", 0.6), ("ambient_occlusion_radius", 120.0),
                  ("color_saturation", unreal.Vector4(1.08, 1.08, 1.08, 1.0)), ("color_contrast", unreal.Vector4(1.05, 1.05, 1.05, 1.0))):
         try:
             s.set_editor_property("override_" + k, True)
@@ -339,7 +339,7 @@ def build(ns):
             "body_top": None, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
             "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "islet": None, "arch": slab, "bracket": slab,
             "low_cover": None, "block": None, "crate": None, "pillar": None, "monolith": None, "column": None,
-            "rail": bronze, "trim": ns.lamp_instance("CasTrim", (1.0, 0.13, 0.01), 2.6), "ramp": None}
+            "rail": bronze, "trim": unreal.load_asset(KIT_MATS + "/MI_Cas_Glow"), "ramp": None}
     ring_r = layout["data"]["radii"]["ring_outer"] + 0.6
     dresser = cascade_dress.Dresser(ns, layout)
     groups = {}
