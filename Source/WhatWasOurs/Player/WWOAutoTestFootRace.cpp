@@ -791,6 +791,9 @@ namespace
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
 			if (Cast<AWWOCharacter>(*It) || Cast<AWWOGrenade>(*It) || Cast<AWWOEnemy>(*It)) Params.AddIgnoredActor(*It);
+			// A trace that starts inside a cover box meets it where it starts: look through the one it starts in.
+			FVector O, E;
+			if (It->ActorHasTag("Cover") && (It->GetActorBounds(true, O, E), FBox(O - E, O + E).IsInside(Above))) Params.AddIgnoredActor(*It);
 		}
 		if (!World->LineTraceSingleByChannel(Hit, Above, Above - FVector(0, 0, Reach), ECC_Visibility, Params)) return false;
 		Out = Hit.ImpactPoint;
