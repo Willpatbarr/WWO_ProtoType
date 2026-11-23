@@ -222,6 +222,16 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 		const FVector Feet = Body->GetActorLocation() - FVector(0, 0, Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		for (const TWeakObjectPtr<AWWOBreachPortal>& P : Portals)
 		{
+			// The other team's hub doorway carrying that team's core: in, as a hijacker, and the core heals their boss.
+			if (P.IsValid() && P->bHub && P->Team != PS->Team && Cores[P->Team].IsValid() && Cores[P->Team]->Carrier == Body && P->Contains(Feet))
+			{
+				LastThrough.Add(Body, Now);
+				const int32 CoreTeam = P->Team;
+				RemoveCore(CoreTeam);
+				if (!IsHijacking(Body)) Hijack(Body, PS->Team, CoreTeam);
+				DeliverCore(CoreTeam, PS->Team, Body);
+				break;
+			}
 			// The other team's hub doorway, while a hijack is open to this team (bots only when allowed: they don't hijack yet).
 			if (P.IsValid() && P->bHub && P->Team != PS->Team && CanHijack(PS->Team) && !IsHijacking(Body) && P->Contains(Feet))
 			{
@@ -285,14 +295,12 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
 {
 	InHub.Remove(Body);
-	// Carrying a core out through the hub doorway delivers it.
-	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
+	// Carrying your own team's core out through the hub doorway delivers it. The other team's core is only
+	// delivered through their hub doorway: you keep carrying it.
+	if (Cores[Team].IsValid() && Cores[Team]->Carrier == Body)
 	{
-		if (Cores[CoreTeam].IsValid() && Cores[CoreTeam]->Carrier == Body)
-		{
-			RemoveCore(CoreTeam);
-			DeliverCore(CoreTeam, Team);
-		}
+		RemoveCore(Team);
+		DeliverCore(Team, Team, Body);
 	}
 	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
 	if (!To) return;
@@ -927,14 +935,20 @@ void FWWOFootRaceRules::UpdateCores(float DeltaSeconds)
 				Core->GoHome();
 				UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's dropped core went back to the hub"), Team);
 			}
-			// A fresh core is its team's to take; a dropped one is anyone's.
+			// Anyone may take it: its own team, or the other team stealing it (from its spot or dropped).
 			for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 			{
 				const int32 BodyTeam = UWWOWorldSubsystem::TeamOf(Body);
-				if (!Body || Body->Health->bDead || BodyTeam < 0 || (!Core->bDropped && BodyTeam != Team)) continue;
+				if (!Body || Body->Health->bDead || BodyTeam < 0 || BodyTeam > 1) continue;
 				if (!Core->InReach(Body->GetActorLocation())) continue;
 				Core->PickUp(Body);
 				UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) picked up team %d's core"), *Body->GetName(), BodyTeam, Team);
+				if (BodyTeam != Team && GS)
+				{
+					const AWWOPlayerState* ThiefState = Body->GetPlayerState<AWWOPlayerState>();
+					GS->ReportEvent(ThiefState ? ThiefState->GetPlayerName() : Body->GetName(), BodyTeam,
+						FString::Printf(TEXT("stole %s's core"), *AWWOPlayerState::TeamName(Team)));
+				}
 				break;
 			}
 		}
@@ -975,7 +989,7 @@ void FWWOFootRaceRules::RemoveCore(int32 Team)
 	Cores[Team] = nullptr;
 }
 
-void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
+void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam, const AWWOCharacter* By)
 {
 	AWWOBoss* Boss = BossOf(CoreTeam);
 	if (!Boss || Boss->IsDead()) return;
@@ -989,6 +1003,12 @@ void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
 	Boss->Heal(Mode.CoreHeal);
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d delivered team %d's core: its boss heals %.0f (%.0f -> %.0f)"), CarrierTeam, CoreTeam,
 		Boss->GetHealth() - Before, Before, Boss->GetHealth());
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		const AWWOPlayerState* ByState = By ? By->GetPlayerState<AWWOPlayerState>() : nullptr;
+		GS->ReportEvent(ByState ? ByState->GetPlayerName() : AWWOPlayerState::TeamName(CarrierTeam), CarrierTeam,
+			FString::Printf(TEXT("healed %s's boss"), *AWWOPlayerState::TeamName(CoreTeam)));
+	}
 }
 
 // --- Hijacking --------------------------------------------------------------------------------------

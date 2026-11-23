@@ -682,9 +682,55 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(F->BossCycle(Team) == 2 && FMath::IsNearlyEqual(F->BossWindowLeft(Team), Window * 4.f / 3.f, 0.05f),
 			FString::Printf(TEXT("the second window is a third longer (%.2f s)"), F->BossWindowLeft(Team)));
 	}
-	if (Boss && Crossed(C2 + 4.f))
+	// Stealing a core: the other team's boss and its core; the player takes that core from its spot, carries it
+	// out through its own hub doorway (nothing happens: it keeps it), then into their hub doorway: in as a
+	// hijacker, their boss healed, the core spent.
+	const float K = C2 + 4.f;
+	AWWOBoss* TheirBoss = F->BossOf(1 - Team);
+	AWWOBossCore* TheirCore = F->CoreOf(1 - Team);
+	auto LastEvent = [World]() { const AWWOGameState* GS = World->GetGameState<AWWOGameState>(); return GS && GS->KillFeed.Num() ? GS->KillFeed.Last().Victim : FString(); };
+	if (Crossed(K)) for (int32 D = 1; D <= FWWOFootRaceRules::DoorCount; ++D) F->OpenDoor(1 - Team, D);
+	if (Crossed(K + 1.2f))
 	{
-		// A look at it from the boss room's doorway (respawned by now), then the kill.
+		Check(TheirBoss && TheirCore && !TheirCore->Carrier, TEXT("stealing: the other team's boss is up and its core is in the hub"));
+		if (TheirBoss)
+		{
+			F->OpenBossWindow(1 - Team);
+			Hit(TheirBoss, 1000.f);
+		}
+		F->SetEnergy(Team, Rich);
+		StepInto(P, Room1);
+	}
+	if (TheirCore && Crossed(K + 1.6f)) StandOn(TheirCore);
+	if (TheirCore && Crossed(K + 1.8f))
+	{
+		Check(TheirCore->Carrier == P, TEXT("an enemy core can be taken straight from its spot"));
+		Check(LastEvent() == FString::Printf(TEXT("stole %s's core"), *AWWOPlayerState::TeamName(1 - Team)), FString::Printf(TEXT("the kill feed says so (%s)"), *LastEvent()));
+		EnergyMark = TheirBoss ? TheirBoss->GetHealth() : 0.f;
+		StepInto(P, Hub);
+	}
+	if (TheirCore && Crossed(K + 2.3f))
+	{
+		Check(TheirCore->Carrier == P && !F->IsBreaching(P) && TheirBoss && TheirBoss->GetHealth() == EnergyMark,
+			FString::Printf(TEXT("out through your own hub doorway an enemy core heals nothing: you keep carrying it (%.0f)"), TheirBoss ? TheirBoss->GetHealth() : -1.f));
+	}
+	if (TheirCore && Crossed(K + 2.6f)) { F->SetEnergy(Team, Rich); StepInto(P, Room1); } // (after the doorway's cooldown)
+	if (TheirCore && Crossed(K + 3.f))
+	{
+		Check(F->IsBreaching(P) && TheirCore->Carrier == P, TEXT("back in the hub with it"));
+		StepInto(P, OtherHub);
+	}
+	if (Crossed(K + 3.7f) && TheirBoss)
+	{
+		const AWWOBreachPortal* Landing = F->RoomPortal(1 - Team, FWWOFootRaceRules::RoomName(F->OpenedRoom(1 - Team)));
+		Check(F->CoreOf(1 - Team) == nullptr && FMath::IsNearlyEqual(TheirBoss->GetHealth(), FMath::Min(EnergyMark + GM->CoreHeal, TheirBoss->GetMaxHealth()), 1.f),
+			FString::Printf(TEXT("carried into their hub doorway it heals their boss %.0f and is spent (%.0f -> %.0f)"), GM->CoreHeal, EnergyMark, TheirBoss->GetHealth()));
+		Check(F->IsHijacking(P) && At(P, Landing), FString::Printf(TEXT("and the thief goes in as a hijacker, at their furthest opened room (at %s)"), *Where()));
+		Check(LastEvent() == FString::Printf(TEXT("healed %s's boss"), *AWWOPlayerState::TeamName(1 - Team)), FString::Printf(TEXT("the kill feed says so (%s)"), *LastEvent()));
+	}
+	if (Boss && Crossed(K + 4.f))
+	{
+		// A look at it from the boss room's doorway, then the kill.
 		if (BossDoorway)
 		{
 			const FTransform Spot = BossDoorway->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
@@ -694,13 +740,13 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 			P->SetViewRotation(0.f, Facing.Yaw);
 		}
 	}
-	if (Boss && Crossed(C2 + 4.4f))
+	if (Boss && Crossed(K + 4.4f))
 	{
 		F->OpenBossWindow(Team); // the second window has run out by now: a third, for the kill
 		Shot(TEXT("88_footrace_boss"));
 	}
-	if (Boss && Crossed(C2 + 4.6f)) Hit(Boss, GM->BossMaxHealth * 2.f);
-	if (Crossed(C2 + 5.f))
+	if (Boss && Crossed(K + 4.6f)) Hit(Boss, GM->BossMaxHealth * 2.f);
+	if (Crossed(K + 5.f))
 	{
 		Check(F->IsOver() && F->Winner == Team, FString::Printf(TEXT("killing the boss wins the race for its team (winner %d)"), F->Winner));
 		const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
@@ -708,7 +754,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(F->CoreOf(Team) == nullptr, TEXT("the cores go with the match"));
 		Shot(TEXT("88_footrace_win"));
 	}
-	if (Crossed(C2 + 5.4f)) WWOTest::Exit();
+	if (Crossed(K + 5.4f)) WWOTest::Exit();
 }
 
 // -WWOAutoTestFootRaceBots (on L_FootRaceTest with -WWOBots=7: 4 v 4): the bots play FootRace while the

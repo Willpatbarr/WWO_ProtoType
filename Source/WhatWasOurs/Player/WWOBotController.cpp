@@ -1067,19 +1067,20 @@ void AWWOBotController::FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race,
 	const bool bWasPulling = bPulling;
 	bPulling = false;
 
-	// Carrying a core: out through the hub doorway.
-	bool bHasCore = false;
+	// Carrying a core: its own out through its hub doorway; the other team's into theirs (it heals their boss).
+	int32 Carried = -1;
 	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
 	{
 		const AWWOBossCore* Core = Race.CoreOf(CoreTeam);
-		if (Core && Core->Carrier == Me) bHasCore = true;
+		if (Core && Core->Carrier == Me) Carried = CoreTeam;
 	}
+	const bool bHasCore = Carried >= 0;
 	if (bHasCore && !bCarrying) ++CoresCarried;
 	bCarrying = bHasCore;
 	if (bHasCore)
 	{
-		Job = TEXT("carry core");
-		if (const AWWOBreachPortal* Out = Race.HubPortal(Team)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+		Job = Carried == Team ? TEXT("carry core") : TEXT("steal core");
+		if (const AWWOBreachPortal* Out = Race.HubPortal(Carried)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
 		return;
 	}
 

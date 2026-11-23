@@ -65,14 +65,17 @@
 // The first team to kill its boss wins the match.
 //
 // Boss cores (World/WWOBossCore.h; the hub's CoreSpawn marker): CoreDelay s after a team's boss is up and
-// shielded, a core for that team appears in the hub (on the team's side of the marker), and a wave of
-// BossRoomWave enemies in its boss room (BossWaveBurst a tick, not all in one frame) so the team can
-// earn the energy to breach for it; the boss room refills to BossRoomWave (one every BossRoomRefill s)
-// until the core is delivered. Its team picks it
-// up by walking over it; carried out through the team's hub doorway it opens the boss's next window. A
-// carrier who dies drops it where they fell: then either team can take it, and the other team carrying
-// it out through their own hub doorway heals its boss CoreHeal (up to full). A dropped core goes back to
-// its spot after CoreDropTime. The next core comes CoreDelay s after the shield is back.
+// shielded, a core for that team appears in the hub (on the team's side of the marker). The boss room
+// holds BossRoomWave enemies from the moment the boss is up until the match ends (filling BossWaveBurst a
+// tick, then one every BossRoomRefill s), so the team can always earn the energy to breach for a core.
+// Anyone picks a core up by walking over it, its own team or the other (stealing it, from its spot or
+// where a carrier dropped it). Its own team carrying it out through its hub doorway opens the boss's next
+// window. Stealing (Will, 2026-11-23): the other team's player carrying it into the core's own team's hub
+// doorway (the core is the key: no hub kill needed) goes into that team's lane as a hijacker (Hijack:
+// HijackStayTime, no cost) and delivers it there: that team's boss heals CoreHeal (up to full) and the core
+// is spent. Carried out through the thief's own hub doorway it heals nothing: they keep carrying it. A
+// carrier who dies drops it where they fell. A dropped core goes back to its spot after CoreDropTime. The
+// next core comes CoreDelay s after the shield is back (at once counting, after a heal).
 // (The console's wwo.BossWindow still opens a window without a core, for testing.)
 //
 // Two pools (the design doc's 2.1): a door opened while the team's breachers are in the hub freezes
@@ -167,9 +170,10 @@ public:
 	int32 Winner = -1;
 	// The boss cores.
 	AWWOBossCore* CoreOf(int32 Team) const { return Team >= 0 && Team <= 1 ? Cores[Team].Get() : nullptr; }
-	// A core of CoreTeam's carried out through CarrierTeam's hub doorway: CoreTeam's own opens its boss's
-	// next window; the other team's heals CoreTeam's boss CoreHeal.
-	void DeliverCore(int32 CoreTeam, int32 CarrierTeam);
+	// A core of CoreTeam's delivered by CarrierTeam (By: who, for the kill feed): its own team's (out through
+	// its hub doorway) opens its boss's next window; the other team's (into CoreTeam's hub doorway) heals
+	// CoreTeam's boss CoreHeal.
+	void DeliverCore(int32 CoreTeam, int32 CarrierTeam, const AWWOCharacter* By = nullptr);
 	// Hijacking: whether the team may go into the other team's lane now, and who is in an enemy lane.
 	bool CanHijack(int32 Team) const;
 	bool IsHijacking(const AWWOCharacter* Body) const { return Hijackers.Contains(Body); }

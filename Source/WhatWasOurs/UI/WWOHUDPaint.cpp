@@ -1162,7 +1162,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 	{
 		if (It->Carrier != F.Pl) continue;
 		const FString Line = It->Team == Mine ? TEXT("You have your core: take it through your hub doorway to drop your boss's shield")
-			: TEXT("You have their core: take it through your hub doorway to heal their boss");
+			: TEXT("You have their core: take it through THEIR hub doorway to heal their boss");
 		Tag(P, Line, F.Center + FVector2D(0, 160), Type::Title, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f, 0.5f); // sRGB (the painter converts)
 	}
 	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
