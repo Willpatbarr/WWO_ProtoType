@@ -37,6 +37,9 @@
 //   -WWOAutoTestTester          the firing tester (with -WWOTester)
 //   -WWOAutoTestFootRace        FootRace's breach portals (on L_FootRaceTest)
 //   -WWOAutoTestFootRaceBots    a FootRace bot match played to a win (on L_FootRaceTest, with -WWOBots=7)
+//   -WWOAutoTestSurfaces        pools, spore patches and tripmines on the dressed FootRace map's surfaces
+//   -WWOAutoTestLobby           FootRace's lobby: teams, switching, bots per team, the start
+//   -WWOFootRaceLobby           open FootRace's lobby even with other -WWO switches (any -WWO switch skips it otherwise)
 //   -WWOTester                  open the firing tester (also the ?tester map option)
 //   -WWOTesterGun=<id>          (tester test) equip that gun
 //   -WWOTesterNoMods            (tester test) the bare frame

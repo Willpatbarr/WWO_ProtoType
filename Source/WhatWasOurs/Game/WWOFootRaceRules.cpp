@@ -21,6 +21,7 @@
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
+#include "WWOSwitches.h"
 #include "WhatWasOurs.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/TargetPoint.h"
@@ -122,7 +123,88 @@ void FWWOFootRaceRules::Begin()
 	SpawnPortals();
 	SpawnDoorsAndLevers();
 	FindRooms();
+	// The lobby first (nothing starts until the host says), unless a command line asks for a test or a set match.
+	bLobby = WantsLobby();
+	State = bLobby ? EWWOWaveState::Idle : EWWOWaveState::Match;
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		GS->bLobby = bLobby;
+		GS->LobbyBots = { 0, 0 };
+	}
+	if (bLobby) UE_LOG(LogWWO, Display, TEXT("FootRace: the lobby is open"));
+}
+
+bool FWWOFootRaceRules::WantsLobby()
+{
+	return WWOSwitches::Has(TEXT("WWOFootRaceLobby")) || WWOSwitches::Has(TEXT("WWOAutoTestLobby")) || !WWOSwitches::HasAnyWWOSwitch();
+}
+
+void FWWOFootRaceRules::PlaceNewBodies()
+{
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(Mode.GetWorld())->GetPlayers())
+	{
+		if (!Body || !Body->Health || Body->Health->bDead) continue;
+		AController* Controller = Body->GetController();
+		AWWOPlayerState* PS = Controller ? Controller->GetPlayerState<AWWOPlayerState>() : nullptr;
+		if (!PS) continue;
+		if (PS->Team < 0 || PS->Team > 1) FWWOTeamDeathmatch::BalanceTeam(Mode.GameState, Controller);
+		if (Placed.Contains(Body)) continue;
+		Placed.Add(Body);
+		Teleport(Body, SpawnSpot(Body));
+		LastThrough.Add(Body, Now);
+	}
+}
+
+int32 FWWOFootRaceRules::LobbyBotMax(int32 Team) const
+{
+	int32 People = 0;
+	if (Mode.GameState) for (const APlayerState* P : Mode.GameState->PlayerArray)
+	{
+		const AWWOPlayerState* PS = Cast<AWWOPlayerState>(P);
+		if (PS && !PS->IsABot() && PS->Team == Team) ++People;
+	}
+	return FMath::Max(0, AWWOGameMode::FootRaceTeamSize(Mode.GetWorld()->GetMapName()) - People);
+}
+
+void FWWOFootRaceRules::SetLobbyTeam(AController* Player, int32 Team)
+{
+	AWWOPlayerState* PS = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
+	if (!bLobby || !PS || Team < 0 || Team > 1 || PS->Team == Team) return;
+	FWWOTeamDeathmatch::SetTeam(PS, Team);
+	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Player->GetPawn())) Placed.Remove(Body); // to the new team's spawn room
+}
+
+void FWWOFootRaceRules::SetLobbyBots(int32 Team, int32 Count)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (!bLobby || !GS || Team < 0 || Team > 1) return;
+	if (GS->LobbyBots.Num() < 2) GS->LobbyBots.Init(0, 2);
+	bBotsChosen[Team] = true;
+	GS->LobbyBots[Team] = FMath::Clamp(Count, 0, LobbyBotMax(Team));
+}
+
+bool FWWOFootRaceRules::StartRace(const AController* By)
+{
+	// The host's own player only: a joiner's controller isn't local on the host (and has no call that starts it).
+	const APlayerController* Host = Cast<APlayerController>(By);
+	if (!bLobby || !Host || !Host->IsLocalController() || Mode.GetNetMode() == NM_Client)
+	{
+		UE_LOG(LogWWO, Display, TEXT("FootRace: start refused (%s)"), By ? *By->GetName() : TEXT("nobody"));
+		return false;
+	}
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	bLobby = false;
 	State = EWWOWaveState::Match;
+	if (GS)
+	{
+		GS->bLobby = false;
+		Mode.Roster.TeamBots[0] = GS->LobbyBots.IsValidIndex(0) ? GS->LobbyBots[0] : 0;
+		Mode.Roster.TeamBots[1] = GS->LobbyBots.IsValidIndex(1) ? GS->LobbyBots[1] : 0;
+	}
+	Placed.Reset(); // everyone to their team's spawn room
+	UE_LOG(LogWWO, Display, TEXT("FootRace: the race starts: %d bots for blue, %d for orange"), Mode.Roster.TeamBots[0], Mode.Roster.TeamBots[1]);
+	return true;
 }
 
 void FWWOFootRaceRules::SpawnPortals()
@@ -194,6 +276,18 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	UWorld* World = Mode.GetWorld();
 	const double Now = World->GetTimeSeconds();
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
+	if (bLobby)
+	{
+		// The lobby: teams and spawn rooms only. A team's bots, until the host sets them, fill it.
+		PlaceNewBodies();
+		if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+		{
+			if (GS->LobbyBots.Num() < 2) GS->LobbyBots.Init(0, 2);
+			for (int32 Team = 0; Team < 2; ++Team)
+				GS->LobbyBots[Team] = bBotsChosen[Team] ? FMath::Min(GS->LobbyBots[Team], LobbyBotMax(Team)) : LobbyBotMax(Team);
+		}
+		return;
+	}
 	BindDeaths();
 	UpdateHijacks();
 	Drain(DeltaSeconds);

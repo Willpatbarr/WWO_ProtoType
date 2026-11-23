@@ -52,6 +52,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "UI/WWOFootRaceLobby.h"
 #include "Flora/WWOFloraEffects.h"
 #include "Data/WWOData.h"
 #include "Systems/WWOLoadoutSubsystem.h"
@@ -1027,4 +1028,76 @@ void FWWOAutoTest::UpdateAutoSurfacesTest(float DeltaTime)
 		}
 	}
 	if (SurfaceSpots.Num() > 0 && Crossed(3.f + SurfaceSpots.Num() * Step + 0.5f)) WWOTest::Exit();
+}
+
+// -WWOAutoTestLobby (on L_FootRaceTest, alone): FootRace's lobby. It is open (nothing started: no enemies,
+// no bots, no energy) with the player listed on its team; the player switches team; the host's bot steppers
+// (Blue down to 2, Orange held at its most); a start that isn't the host's player's is refused; START RACE
+// closes it, adds the bots per team, puts everyone in their team's spawn room and fills Room1.
+// Screenshot 90_footrace_lobby. Logs `AutoTest lobby: ... ok|FAIL`.
+void FWWOAutoTest::UpdateAutoLobbyTest(float DeltaTime)
+{
+	AWWOCharacter* P = PC->GetWWOCharacter();
+	UWorld* World = PC->GetWorld();
+	AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
+	FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr;
+	const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+	if (!P || !GS) return;
+	const float Before = AutoLobbyClock;
+	AutoLobbyClock += DeltaTime;
+	const float T = AutoLobbyClock;
+	auto Crossed = [&](float At) { return WWOTest::Crossed(Before, T, At); };
+	auto Check = [](bool bOk, const FString& What) { return WWOTest::Check(TEXT("lobby"), bOk, What); };
+	P->Health->GodMode = 1.f;
+	if (Crossed(1.f) && !Check(F != nullptr, TEXT("the map runs FootRace's rules"))) { WWOTest::Exit(); return; }
+	if (!F) return;
+	UWWOFootRaceLobby* Page = PC->Lobby;
+	AWWOPlayerState* PS = PC->GetPlayerState<AWWOPlayerState>();
+	int32 BotsOn[2] = { 0, 0 };
+	for (TActorIterator<AWWOBotController> It(World); It; ++It)
+	{
+		const AWWOPlayerState* B = It->GetPlayerState<AWWOPlayerState>();
+		if (B && B->Team >= 0 && B->Team <= 1) ++BotsOn[B->Team];
+	}
+	const int32 Size = AWWOGameMode::FootRaceTeamSize(World->GetMapName());
+	if (Crossed(2.5f))
+	{
+		Check(GS->bLobby && F->InLobby() && Page && Page->IsOpen() && PC->IsMenuOpen(), TEXT("a FootRace match opens in the lobby, on screen"));
+		Check(UWWOWorldSubsystem::Get(World)->LivingEnemies().Num() == 0 && BotsOn[0] + BotsOn[1] == 0 && F->Energy(0) == 0.f && F->Energy(1) == 0.f,
+			FString::Printf(TEXT("nothing has started: no enemies, no bots, no energy (%d enemies, %d bots)"), UWWOWorldSubsystem::Get(World)->LivingEnemies().Num(), BotsOn[0] + BotsOn[1]));
+		Check(PS && Page && Page->Listed[PS->Team].Contains(PS->GetPlayerName()) && !Page->Listed[1 - PS->Team].Contains(PS->GetPlayerName()),
+			FString::Printf(TEXT("the player is listed on its team (%s)"), PS ? *AWWOPlayerState::TeamName(PS->Team) : TEXT("?")));
+		Check(Page && Page->BotsShown[0] == Size - 1 && Page->BotsShown[1] == Size,
+			FString::Printf(TEXT("each team's bots fill it until the host sets them (%d, %d)"), Page ? Page->BotsShown[0] : -1, Page ? Page->BotsShown[1] : -1));
+		Shot(TEXT("90_footrace_lobby"));
+	}
+	if (Crossed(3.f) && Page) Page->JoinTeam(1);
+	if (Crossed(3.5f))
+	{
+		Check(PS && PS->Team == 1 && Page && Page->Listed[1].Contains(PS->GetPlayerName()) && !Page->Listed[0].Contains(PS->GetPlayerName()),
+			TEXT("switching team moves the player to Orange's column"));
+		Check(GS->LobbyBots.IsValidIndex(1) && GS->LobbyBots[0] == Size && GS->LobbyBots[1] == Size - 1,
+			FString::Printf(TEXT("and the bot counts follow (%d, %d)"), GS->LobbyBots.IsValidIndex(0) ? GS->LobbyBots[0] : -1, GS->LobbyBots.IsValidIndex(1) ? GS->LobbyBots[1] : -1));
+		Page->StepBots(0, -1);
+		Page->StepBots(0, -1);
+		Page->StepBots(1, 1); // already full: stays
+	}
+	if (Crossed(4.f))
+	{
+		Check(GS->LobbyBots[0] == Size - 2 && GS->LobbyBots[1] == Size - 1, FString::Printf(TEXT("the host's steppers: Blue %d, Orange held at its most (%d)"), GS->LobbyBots[0], GS->LobbyBots[1]));
+		Check(!F->StartRace(nullptr) && GS->bLobby, TEXT("a start that isn't the host's own player's is refused"));
+		Check(Page && Page->IsHost(), TEXT("the host's page has the start"));
+	}
+	if (Crossed(4.5f) && Page) Check(Page->StartRace(), TEXT("START RACE starts it"));
+	if (Crossed(7.f))
+	{
+		Check(!GS->bLobby && !F->InLobby() && Page && !Page->IsOpen() && !PC->IsMenuOpen(), TEXT("the lobby closes"));
+		Check(BotsOn[0] == Size - 2 && BotsOn[1] == Size - 1, FString::Printf(TEXT("the bots join per team as chosen (%d, %d)"), BotsOn[0], BotsOn[1]));
+		Check(F->RoomAt(1, P->GetActorLocation()) == 0, FString::Printf(TEXT("the player is in its new team's spawn room (at %s)"), *P->GetActorLocation().ToCompactString()));
+	}
+	if (Crossed(9.f))
+	{
+		Check(F->AliveIn(0, "Room1") > 0 && F->AliveIn(1, "Room1") > 0, FString::Printf(TEXT("the race has begun: both Room1s are filling (%d, %d)"), F->AliveIn(0, "Room1"), F->AliveIn(1, "Room1")));
+		WWOTest::Exit();
+	}
 }

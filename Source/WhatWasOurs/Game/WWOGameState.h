@@ -44,6 +44,10 @@ public:
 	// Each team's hijack window: the server time (GetServerWorldTimeSeconds) the other team's hub doorway
 	// closes to it again (0: closed).
 	UPROPERTY(Replicated) TArray<float> HijackUntil;
+	// FootRace's lobby (FWWOFootRaceRules: before the host starts the race): on while it is open, and the
+	// bots the host has chosen for each team (UWWOFootRaceLobby shows them; the host's choice counts).
+	UPROPERTY(Replicated) bool bLobby = false;
+	UPROPERTY(Replicated) TArray<int32> LobbyBots;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

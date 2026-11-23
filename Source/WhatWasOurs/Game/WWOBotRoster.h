@@ -19,6 +19,7 @@ struct FWWOBotRoster
 	int32 BotsSpawned = 0;
 	int32 BotsExtra = 0;   // +1 for each person who left this match, -1 for each who joined it since
 	int32 OptionBots = -1; // ?bots=N from the launch screen (-1: none given); kept across restarts
+	int32 TeamBots[2] = { -1, -1 }; // FootRace's lobby: how many bots each team gets (-1: not chosen; then the count above, balanced)
 
 	// How many bots the match should have now.
 	int32 Wanted(const AWWOGameMode& GM) const;

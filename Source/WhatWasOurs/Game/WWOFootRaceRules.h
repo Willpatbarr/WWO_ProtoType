@@ -87,6 +87,15 @@
 // The kill feed (AWWOGameState::ReportKill): player kills, and as event lines each breach and each door
 // opened; the lane's AI kills stay out of it.
 //
+// The lobby (Will, 2026-11-23): a FootRace match opens with nothing started (no enemies, no bots, no
+// energy) while UWWOFootRaceLobby shows every machine the two teams; anyone may switch team
+// (SetLobbyTeam; a joiner through AWWOPlayerController::ServerLobbyTeam), the host picks each team's bots
+// (SetLobbyBots, up to filling the team to the map's team size; AWWOGameState::bLobby / LobbyBots replicate
+// it) and starts the race (StartRace, the host's own player only): the bots join per team
+// (FWWOBotRoster::TeamBots), everyone is put in their team's spawn room and the match goes on as without a
+// lobby. Any -WWO command-line switch (tests, -WWOBots=N, -WWOPerfTest...) skips it and starts at once, as
+// before; -WWOFootRaceLobby (or -WWOAutoTestLobby) forces it.
+//
 // The level's markers (Tools/footrace_layout.py) are TargetPoints tagged with what they are and where:
 // TeamSpawn Lane<n>; PortalAnchor Lane<n> Room<k>|Boss; HubPortal Lane<n>. Lane n is team n's.
 
@@ -119,6 +128,13 @@ public:
 	virtual bool IsOver() const override { return State == EWWOWaveState::MatchOver; }
 	virtual FWWOFootRaceRules* AsFootRace() override { return this; }
 
+	// The lobby (see above). StartRace is refused unless By is the host's own player.
+	static bool WantsLobby();
+	bool InLobby() const { return bLobby; }
+	void SetLobbyTeam(AController* Player, int32 Team);
+	void SetLobbyBots(int32 Team, int32 Count);
+	int32 LobbyBotMax(int32 Team) const; // the team's size less its people
+	bool StartRace(const AController* By);
 	// A spot in the player's team's spawn room (respawns, and a body's first placing).
 	FTransform SpawnSpot(const AWWOCharacter* Player) const;
 
@@ -187,6 +203,9 @@ private:
 	// The hub doorway's way out: in front of the doorway of the furthest room the team has opened.
 	void LeaveHub(AWWOCharacter* Body, int32 Team);
 	void BindDeaths();                       // each new player's and enemy's death, once
+	void PlaceNewBodies();                   // teams for anyone without, and each new body to its spawn room
+	bool bLobby = false;
+	bool bBotsChosen[2] = { false, false };  // the host has set this team's bots (else they fill the team)
 	// Hijacking: open the other team's hub doorway to Team; take Body (of Team) into Lane's lane; end a
 	// hijack (bSendHome: back to its own team's furthest opened room); close windows and hijacks whose time is up.
 	void OpenHijack(int32 Team);
