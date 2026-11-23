@@ -43,6 +43,13 @@ CAS_NO_COLLISION = cascade_layout.NO_COLLISION
 CAS_NO_SHADOW = ("trim", "ramp", "body_top")
 CAS_REPLACED = ("pier", "giant_arch", "mesa", "ivy")                       # the art kit draws these (Tools/cascade_dress.py)
 CAS_HIDDEN = ("ramp", "islet", "body_top") + CAS_COVER                     # collision only: a kit piece is what you see
+# The smooth meshes that stand in for the box-built round structure (~/Documents/WWO_Cascade/tools/make_round_kit.py),
+# and the box kinds each one makes collision-only. Without a mesh (not imported), its boxes are drawn as before.
+ROUND = {"Round_Decks": ("floor", "floor_ring", "floor_base", "floor_z3", "floor_z5", "dais", "balcony", "plinth"),
+         "Round_Drum": ("hall_wall", "body"),
+         "Round_Tunnels": ("tunnel_wall", "tunnel_roof"),        # the galleries are straight: they stay boxes
+         "Round_Trim": ()}
+ROUND_SKIP = os.environ.get("WWO_CAS_NO_ROUND", "").split(",")              # e.g. Round_Tunnels: keep that part as boxes
 KIT_TEX = "/Game/WWO/Maps/CascadeKit/Textures/"
 KIT_MATS = "/Game/WWO/Maps/CascadeKit/Materials"
 SUN_PITCH = -46.0
@@ -342,6 +349,19 @@ def build(ns):
             "rail": bronze, "trim": ns.lamp_instance("CasTrim", (1.0, 0.42, 0.1), 4.5), "ramp": None}
     ring_r = layout["data"]["radii"]["ring_outer"] + 0.6
     dresser = cascade_dress.Dresser(ns, layout)
+    round_meshes = [k for k in ROUND if k not in ROUND_SKIP and eal.does_asset_exist(cascade_dress.KIT + k)]
+    hidden = set(CAS_HIDDEN)
+    for k in round_meshes:
+        hidden.update(ROUND[k])
+        dresser.whole(k)
+    nodes = [(sx * 42.4264, sy * 42.4264) for sx in (-1, 1) for sy in (-1, 1)]
+
+    def ring_trim(box):
+        """One of the glowing rings Round_Trim draws smooth (the citadel's tier ring, the balcony's edge, a dais ring)."""
+        r = math.hypot(box.x, box.y)
+        return ((22.2 < r < 23.0 and 13.0 < box.z < 14.1) or (28.5 < r < 29.2 and 4.0 < box.z < 5.0)
+                or any(4.2 < math.hypot(box.x - nx, box.y - ny) < 4.75 for nx, ny in nodes))
+
     groups = {}
     covers = 0
     crates = sum(1 for box in layout["boxes"] if box.kind == "crate")
@@ -353,6 +373,8 @@ def build(ns):
             kind = "body_top"        # the old stepped cone: kept as collision under the kit's tower cluster
         if kind == "trim" and box.z > 14.2 and math.hypot(box.x, box.y) < 24.0:
             continue                 # the cone's glowing tier rings
+        if kind == "trim" and "Round_Trim" in round_meshes and box.shape != "cylinder" and ring_trim(box):
+            continue
         if kind == "trim" and box.shape == "cylinder":
             dresser.put("FloorRing_A", box.x, box.y, box.z - box.height * 0.5, 0.0, box.length * 0.5 / 1.5)
             continue                 # the bases' floor glyph: the kit's inlaid ring instead of a glowing disc
@@ -363,7 +385,7 @@ def build(ns):
                 kind = "floor_base"
         a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[kind], "Cas_" + kind,
                   ("Cover",) if kind in CAS_COVER else (), yaw=90.0 - box.yaw, pitch=box.pitch,
-                  hidden=kind in CAS_HIDDEN, mesh=ns.CYLINDER if box.shape == "cylinder" else None)
+                  hidden=kind in hidden, mesh=ns.CYLINDER if box.shape == "cylinder" else None)
         if kind in CAS_COVER:
             dresser.cover(box, covers)
             covers += 1
@@ -384,8 +406,9 @@ def build(ns):
                 merged += 1
                 if kind in CAS_NO_SHADOW:
                     m.static_mesh_component.set_editor_property("cast_shadow", False)
-                if kind in CAS_HIDDEN:
+                if kind in hidden:
                     m.set_actor_hidden_in_game(True)
+                    m.static_mesh_component.set_editor_property("cast_shadow", False)
                 if kind in CAS_NO_COLLISION:
                     # The merged mesh carries the pieces' simple collision; these kinds are looks only.
                     m.static_mesh_component.set_collision_profile_name("NoCollision")

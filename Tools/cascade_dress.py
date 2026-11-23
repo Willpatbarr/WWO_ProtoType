@@ -29,7 +29,9 @@ import cascade_layout as cl
 KIT = "/Game/WWO/Maps/CascadeKit/Meshes/SM_Cas_"
 KIT_MATS = "/Game/WWO/Maps/CascadeKit/Materials/"
 WATER_Z = cl.WATER_Z
-SLOT_MATS = {"Cas_Water": "MI_Cas_Falls"}   # slot name -> instance, where it is not MI_<slot>
+SLOT_MATS = {"Cas_Water": "MI_Cas_Falls", "Round_Floor": "MI_Cas_StoneFloor", "Round_Paver": "MI_Cas_StonePaver",
+             "Round_SlabFloor": "MI_Cas_StoneSlabFloor", "Round_Slab": "MI_Cas_StoneSlabWall", "Round_Mossy": "MI_Cas_StoneMossy",
+             "Round_Wall": "MI_Cas_StoneWall", "Round_Roof": "MI_Cas_StoneRoof"}   # slot name -> instance, where it is not MI_<slot>
 SUN_FROM_DEG = 235.0      # where the sun stands (mockup degrees): the cliffs stay lower there, so the map isn't in their shade
 
 # Which way a piece's "front" (the manifest's facing) points in its own Unreal space after import, in degrees of
@@ -61,6 +63,7 @@ FIELDS = {
     "FloorRing_A": (False, 0, None), "Pebbles_A": (False, 45, None), "Pebbles_B": (False, 55, None), "Roots_A": (False, 90, None),
     "Decal_Leaves_A": (False, 60, None), "Decal_Leaves_B": (False, 60, None), "Decal_Cracks_A": (False, 50, None), "Decal_Stain_A": (False, 60, None),
     "Crate_A": (True, 0, None), "Brazier_A": (False, 120, None),
+    "Round_Decks": (True, 0, None), "Round_Drum": (True, 0, None), "Round_Tunnels": (True, 0, None), "Round_Trim": (False, 0, None),
     "Waterfall_Lip": (False, 0, None), "Waterfall_Sheet": (False, 0, None), "Mist_Card": (False, 0, None), "Foam_Disc": (False, 260, None),
 }
 
@@ -115,6 +118,10 @@ class Dresser:
         s = (scale, scale, scale) if isinstance(scale, (int, float)) else scale
         self.items.setdefault(name, []).append(unreal.Transform(
             self.ns.mu(x, y, z), unreal.Rotator(roll, pitch, yaw), unreal.Vector(s[0], s[1], s[2])))
+
+    def whole(self, name):
+        """A map-sized mesh authored in place (the smooth round structure): one instance at the origin, unturned."""
+        self.items.setdefault(name, []).append(unreal.Transform(unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1)))
 
     def flush(self):
         """One prop field per mesh."""
