@@ -17,6 +17,8 @@
 #include "UI/WWOCharacterMenu.h"
 #include "UI/WWOLaunchMenu.h"
 #include "UI/WWOScoreboard.h"
+#include "UI/WWOFootRaceLobby.h"
+#include "Game/WWOFootRaceRules.h"
 #include "Game/WWOGameState.h"
 #include "UI/WWOMenuCursor.h"
 #include "EnhancedInputComponent.h"
@@ -47,6 +49,31 @@ void AWWOPlayerController::ServerSwitchTeam_Implementation()
 	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
 	AWWOPlayerState* PS = GetPlayerState<AWWOPlayerState>();
 	if (GM && GM->bPvP && PS) GM->SwitchTeam(this);
+}
+
+void AWWOPlayerController::ServerLobbyTeam_Implementation(int32 Team)
+{
+	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	if (FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr) F->SetLobbyTeam(this, Team);
+}
+
+void AWWOPlayerController::LobbyChooseTeam(int32 Team)
+{
+	if (HasAuthority()) ServerLobbyTeam_Implementation(Team);
+	else ServerLobbyTeam(Team);
+}
+
+void AWWOPlayerController::LobbyBots(int32 Team, int32 Count)
+{
+	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>(); // the host's only (a joiner has none)
+	if (FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr) F->SetLobbyBots(Team, Count);
+}
+
+bool AWWOPlayerController::LobbyStart()
+{
+	AWWOGameMode* GM = GetWorld()->GetAuthGameMode<AWWOGameMode>();
+	FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr;
+	return F && F->StartRace(this);
 }
 
 AWWOPlayerController::AWWOPlayerController()
@@ -510,6 +537,7 @@ void AWWOPlayerController::Tick(float DeltaSeconds)
 		bCreateHeld = bCreate;
 		if (MenuKeys.IsValid() && !MenuKeys->Viewport.IsValid()) MenuKeys->Viewport = GameViewportWidget();
 		UpdateScoreboard();
+		UpdateLobby();
 	}
 	if (AutoTest) AutoTest->Tick(FApp::GetDeltaTime());
 }
@@ -644,7 +672,7 @@ void AWWOPlayerController::Hitstop(float Seconds)
 bool AWWOPlayerController::IsMenuOpen() const
 {
 	// (The scoreboard takes the cursor but doesn't pause: a host's pause would freeze everyone.)
-	return IsOtherMenuOpen() || (FiringTester && FiringTester->WantsCursor()) || (Scoreboard && Scoreboard->IsOpen());
+	return IsOtherMenuOpen() || (FiringTester && FiringTester->WantsCursor()) || (Scoreboard && Scoreboard->IsOpen()) || (Lobby && Lobby->IsOpen());
 }
 
 bool AWWOPlayerController::IsOtherMenuOpen() const
@@ -684,6 +712,7 @@ void AWWOPlayerController::HandleMenuPress(EWWOAction Id)
 		if (Id == EWWOAction::MenuBack || Id == EWWOAction::Menu) LaunchMenu->Back();
 		return;
 	}
+	if (Lobby && Lobby->IsOpen()) return; // the lobby: nothing opens over it (its buttons are all there is)
 	if (Scoreboard && Scoreboard->IsOpen())
 	{
 		// The scoreboard: Circle / Esc steps back from its map list; nothing else opens over it.
@@ -735,6 +764,30 @@ void AWWOPlayerController::UpdateScoreboard()
 		else if (Step == 1 && Open > 3.0) { Scoreboard->ShowMaps(); Step = 2; }
 		else if (Step == 2 && Open > 4.0) { WWOTest::Shot(TEXT("45_scoreboard_maps")); Step = 3; }
 		else if (Step == 3 && Open > 5.0) { Scoreboard->Back(); Scoreboard->NextMatch(); Step = 4; }
+	}
+}
+
+void AWWOPlayerController::UpdateLobby()
+{
+	// FootRace's lobby (AWWOGameState::bLobby, replicated): open on every machine until the host starts the race.
+	const AWWOGameState* GS = GetWorld()->GetGameState<AWWOGameState>();
+	const bool bOn = GS && GS->bLobby;
+	if (bOn && !(Lobby && Lobby->IsOpen()))
+	{
+		if (!Lobby)
+		{
+			Lobby = CreateWidget<UWWOFootRaceLobby>(this, UWWOFootRaceLobby::StaticClass());
+			Lobby->AddToViewport(11); // over the HUD, under the scoreboard
+		}
+		if (SettingsMenu && SettingsMenu->IsOpen()) SettingsMenu->Close();
+		if (CharacterMenu && CharacterMenu->IsOpen()) CharacterMenu->Close();
+		Lobby->Open();
+		SetMenuMode(true);
+	}
+	else if (!bOn && Lobby && Lobby->IsOpen())
+	{
+		Lobby->Close();
+		SetMenuMode(IsMenuOpen());
 	}
 }
 

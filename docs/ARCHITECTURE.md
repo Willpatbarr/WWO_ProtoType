@@ -207,33 +207,63 @@ walks the table in its order (the HUD line's).
     earned by kills (an enemy's `LastHitBy`, a player's `LastAttacker`), needed to enter the hub
     (`BreachThreshold`), drained per breacher per second; out of energy sends the team's breachers back,
     a breacher's death costs a share. The HUD draws both pools under the match line (`PaintBreachEnergy`).
-    Lane rooms (`RoomArea` markers, their scale the size in m): a team's furthest room (the furthest any
-    of its players has stood in; Room1 from the start) fills to `RoomEnemies` and refills after deaths;
-    rooms behind keep their enemies without refilling. Each enemy guards its lane (`AWWOEnemy::Lane`) and
-    only targets that team's players.
+    Hijacking (Will's rules, replacing the design doc's section 4): killing a breacher (`OnPlayerDied`, the
+    victim was in the hub) opens the victim team's hub doorway to the killer's whole team for `HijackOpenTime`
+    s (`OpenHijack`; another such kill restarts it; `AWWOGameState::HijackUntil`, server time). Stepping
+    into it then takes a player into that team's lane at its furthest opened room's doorway (`Hijack`):
+    their breach ends, nothing is paid or drained. After `HijackStayTime` s (`AWWOPlayerState::HijackUntil`)
+    `UpdateHijacks` brings them back to their own furthest opened room; a death just ends it. A kill by or
+    of a hijacker earns `EnergyPerPlayerKill + HijackKillBonus` through `CreditKill`. Bots don't hijack
+    yet (the doorway refuses a bot without `AWWOBotController::bMayHijack`); they fight a hijacker they
+    see as any enemy player. The HUD shows each open window under its team's bar and a hijacker's time left;
+    the kill feed says "<TEAM> can hijack" and "<player> hijacked".
+    A lane is Spawn, Room1..Room5, Boss (`FWWOFootRaceRules::DoorCount` = 5 doors, `BossRoom` its index;
+    `Tools/footrace_layout.py`'s `ROOMS` must match). Lane rooms (`RoomArea` markers, their scale the size
+    in m; 76 x 40 m, the boss room 90 x 60): a team's furthest room (the furthest any of its players has
+    stood in; Room1 from the start) fills to `LaneRoomEnemies` (one every `LaneRoomStagger` s) and refills
+    one every `LaneRoomRefill` s after deaths; rooms behind keep their enemies without refilling. The
+    `EnemySpawn` markers stand on the walls (a lane room's mostly in its far half, the boss room's on all
+    four walls) with a `spawn_gate` box behind each; `SpawnInRoom` takes the marker used longest ago that
+    nobody stands on and spawns at it with a tight scatter (`SpawnScatter`, through `WWOEnemyKinds::
+    SpawnDeferred`'s optional scatter and facing) facing into the room. Each enemy guards its lane
+    (`AWWOEnemy::Lane`) and only targets that team's players. The rooms' cover (`ruin_wall`, `boulder`,
+    `stump`, each its own actor tagged `Cover`) comes from the layout's seeded generator, mirrored
+    between the lanes.
     Doors and levers (`World/WWOBreachDoor.*`, `WWOBreachLever.*` on `DoorSlot` / `LeverSlot`): a lever is
     live when its door is the team's next and the team's current breach went in by the room that door
     leads out of; a breacher holds the Revive key at it (`AWWOCharacter::bHoldingUse`) for `LeverHoldTime`.
     A door opened mid-breach freezes that pool (`BreachFrozen`); earnings go to `BreachNext` (hub kills
     split) until nobody is in the hub, then the next pool takes over. Leaving the hub lands in the furthest
     room opened.
-    The boss (`AWWOBoss`, a bigger Tank, on `BossSpawn`): up and shielded when Door3 opens; `OpenBossWindow`
+    The boss (`AWWOBoss`, a bigger Tank, `BossMaxHealth`, on `BossSpawn` on the boss room's raised platform):
+    up and shielded when the last door (Door5) opens; `OpenBossWindow`
     (for now the console's `wwo.BossWindow`) drops the shield for `BossWindow` s, a third longer each
     window; killing it ends the match (`EndMatch`, `IsOver`) with that team the winner.
+    The boss room holds `BossRoomWave` from the moment its boss is up until the match ends, core or no
+    core (filling `BossWaveBurst`, four, a tick; then one every `BossRoomRefill` s).
     Boss cores (`World/WWOBossCore.*`, on `CoreSpawn`): `CoreDelay` after a boss is shielded a core for its
-    team appears in the hub with a wave of `BossWave` in its boss room; carried out through the team's hub
-    doorway (`LeaveHub`) it opens the next window; a carrier's death drops it (anyone can take it then);
-    the other team delivering it heals the boss `CoreHeal`; a dropped core goes home after `CoreDropTime`.
+    team appears in the hub; anyone takes one by walking over it (its own team, or the other stealing it,
+    from its spot or dropped). Its own team carrying it out through its hub doorway (`LeaveHub`) opens the
+    next window; the other team carrying it into its team's hub doorway (no hub kill needed) goes into that
+    lane as a hijacker and heals that boss `CoreHeal`, the core spent; out through the thief's own doorway it
+    heals nothing (they keep it). A carrier's death drops it; a dropped core goes home after `CoreDropTime`.
+    The lobby (`WantsLobby`, `SetLobbyTeam`, `SetLobbyBots`, `StartRace`; `UI/WWOFootRaceLobby.*`;
+    `AWWOGameState::bLobby`, `LobbyBots`): a match opens with nothing started while every machine shows the
+    teams; anyone switches team (a joiner through `AWWOPlayerController::ServerLobbyTeam`), the host sets
+    each team's bots (`FWWOBotRoster::TeamBots`) and starts it. Any `-WWO` switch skips it;
+    `-WWOFootRaceLobby` forces it.
     Bots (`FWWOBotRoster`, as in team deathmatch; `-WWOBots=N`): with no enemy player to fight, a bot plays
     the race (`AWWOBotController::FootRaceTick`, state `Objective`): it shoots its lane's enemies (`SenseMobs`,
     and its boss in a window), breaches when the team has the energy and a lever or core to go for (two at
-    most), fetches a core, pulls the live lever, leaves, and carries a core out. Its aim and fire are the
+    most), fetches a core (its own fresh one, or a dropped one), pulls the live lever, leaves, and carries
+    its own core out, or the other team's into their hub doorway (it doesn't steal from the spot or hijack
+    by kills). Its aim and fire are the
     player fight's (`AimAt`, `Shoot`).
     The kill feed shows player kills and, as event lines (`AWWOGameState::ReportEvent`, `KillEvent`), each
     breach and door; AI kills stay out. `Begin` loads every enemy's model, clips and the effect materials
     (`UWWOBodyComponent::Preload`, `PreloadAnims`; kept in `Preloaded`) and sets up one of each enemy out of
     sight for half a second, so the first Tank (Room3) or boss doesn't stall the match.
-    The HUD's race track (`PaintRaceTrack`, right edge): each team's three doors as circles (Door1 at the
+    The HUD's race track (`PaintRaceTrack`, right edge): each team's doors as circles (`DoorCount`; Door1 at the
     bottom, filled when open), your team's track on the left, and between them each breaching team's bar,
     its share of the pool the breach began on (`AWWOGameState::BreachStart`), shrinking toward its middle.
   - `FWWOBotRoster` (`Game/WWOBotRoster.*`, the game mode's `Roster`, PvP only): how many bots the match
@@ -274,7 +304,10 @@ Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield,
 **The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
 class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
 `FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). `SpawnDeferred` places one at a spawn
-marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. The waves (`Waves()`) and spawn point tags name
+marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. Things that
+lie on the ground (a spore pool, a Spore Patches patch) settle with `WWOFX::SettleOnGround`: on the
+ground under where they came to rest, never on top of cover (an actor tagged `Cover`, which on the
+dressed maps is often a hidden collision box under a kit piece) or hanging in the air. The waves (`Waves()`) and spawn point tags name
 kinds by id; `FWWOWaveRules::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
 catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
 

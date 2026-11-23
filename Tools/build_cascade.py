@@ -1,40 +1,29 @@
-"""Builds L_Cascade (the 6v6 PvP map, also run by the PvE waves) from Tools/cascade_layout.py's boxes.
+"""Builds L_Cascade (the 6v6 PvP map, also run by the PvE waves) from Tools/cascade_layout.py's boxes, dressed
+with Cascade's art kit (Tools/cascade_dress.py places it; Tools/import_cascade_kit.py imports it and makes its
+materials, and must have run).
 
-UNTESTED: written without running Unreal. The first build is the test (HANDOFF.md, "Cascade").
+Not run on its own: Tools/build_maps.py calls build(ns) when WWO_MAPS has "cascade", passing its own globals
+(Builder, mu, place, new_level, lighting's constants, solid_material, kit_mesh, merge_kind, lamp_instance,
+fit_mesh, actors, levels, eal, tools, mel, log...), so this follows build_arboretum() call for call.
 
-Not run on its own: Tools/build_maps.py calls build(ns) when WWO_MAPS has "cascade", passing its
-own globals (Builder, mu, place, new_level, lighting's constants, solid_material, kit_mesh,
-merge_kind, concrete_instance, lamp_instance, fit_mesh, actors, levels, eal, tools, mel, log...),
-so this follows build_arboretum() call for call. It needs the Arboretum's helpers in build_maps.py
-(concrete_instance, lamp_instance, fit_mesh, merge_kind(kind, group, base, prefix)), and
-Tools/create_kit_concrete.py and Tools/import_flora.py to have run.
-
-- Structure: every box kind merged into one mesh in /Game/WWO/Maps/Cascade (collision merged too),
-  in the weathered concrete tinted darker and cooler, the balcony a little mossy. Cover (low walls,
-  blocks, pillars, monoliths, the hall column) stays separate actors tagged Cover; crates are the
-  kit's crates (fit_mesh). Ramps are the stairs' and bridges' collision, hidden in game; the visual
-  steps, arches, brackets, trim, ivy, giant arches and mesas have no collision.
-- Orange trim: M_WWO_Lamp ("Orange", 6). Lights: the layout's 42 warm point lights, no shadows.
-- Plants: actors like the Arboretum (about 150, so no instancing): red maples (the spring tree's
-  trunk, crown and petals, the crown recolored red) on the rock islets, green ferns (the tropical
-  plants with Recolor 0).
-- Waterfalls: translucent sheets (M_WWO_Waterfall, made here on first use: falling streaks from
-  UV and time in a Custom node, as M_WWO_Ground does) from top_z to the water, with mist puffs
-  (M_WWO_SoftAlpha instances on spheres) where they land and spill.
-- Chasm: a dark teal water plane at z -10 (no collision). Falling kills at z -9: a TargetPoint
-  tagged KillZ, which UWWOHealthComponent reads (the default is -30 m).
-- Looks pass (2026-11-11): the sky light is movable (stationary gave no light without a bake, which
-  left every shaded face black) and tinted warm against the blue it captures; the sun is turned 35
-  degrees off the axes; the concrete is lighter, the far arches and mesas pale and clean; the water is
-  a lit glossy teal plane 6 km across (no visible edge); each waterfall has three soft mist puffs; the
-  room lights are brighter and pulled toward white; the spawn pads are muted; the post process adds
-  bloom, a vignette, contact shade and a little saturation and contrast.
-- Lighting: lighting()'s setup with the sun at -38 degrees, warm white, a bluish height fog, and its
-  own sky (M_WWO_Sky_Cascade, made here: M_WWO_Sky's Godot shader with the concept's bright blue
-  instead of Godot's gray-blue, so the other maps' sky is untouched).
+- Structure: every box kind merged into one mesh in /Game/WWO/Maps/Cascade (collision merged too), in the kit's
+  hewn stone projected in world space (MI_Cas_Stone<Floor|Wall|Roof|Mossy|Dark>). The layout's gameplay is
+  untouched: cover boxes (low walls, blocks, pillars, monoliths, the hall column) stay separate actors tagged
+  Cover but hidden, each under a chipped kit block; crates are the sci-fi kit's crates (fit_mesh); ramps are the
+  stairs' and bridges' collision, hidden in game; the visual steps, arches, brackets and trim have no collision.
+- Replaced by the kit (CAS_REPLACED: not built as boxes): the piers (rock pillars), the giant arches, the mesas
+  (karst spires), the ivy cards. The islets' cylinders stay as hidden collision under the rock stacks, and the old
+  stepped cone above the hall's drum (body_top) as hidden collision under the citadel's tower cluster.
+- Orange trim: M_WWO_Lamp ("CasTrim"). Lights: the layout's 42 warm point lights, no shadows.
+- Chasm: a glossy teal water plane at z -10 with moving ripples and foam (no collision). Falling kills at z -9: a
+  TargetPoint tagged KillZ, which UWWOHealthComponent reads (the default is -30 m).
+- Lighting: lighting()'s setup with the sun at SUN_PITCH / SUN_YAW, warm white, a movable sky light (a stationary
+  one gives nothing without a bake) tinted warm against the blue it captures, a bluish height fog, and its own
+  sky (M_WWO_Sky_Cascade, made here: M_WWO_Sky's shader with the concept's bright blue and drifting clouds, so
+  the other maps' sky is untouched). The post process adds bloom, a vignette and a little saturation and contrast.
 - Gameplay: a PlayerStart per team spawn (6 + 6), the PvE start first (ChoosePlayerStart takes the
   first), EnemySpawn markers tagged PvEOnly (so PvP respawns don't use them) with their kinds, one
-  NavMeshBoundsVolume, invisible boundary walls (r 80 m, to z 40) and a ceiling.
+  NavMeshBoundsVolume, invisible boundary walls (r 100 m, to z 40) and a ceiling.
 """
 import math
 import os
@@ -45,92 +34,43 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cascade_layout  # noqa: E402
+import cascade_dress  # noqa: E402
 
 CAS_MERGED = "/Game/WWO/Maps/Cascade"
-CAS_COVER = ("low_cover", "block", "pillar", "monolith", "column")         # own actors, tagged Cover
+CAS_COVER = ("low_cover", "block", "pillar", "monolith", "column", "crate")         # own actors, tagged Cover
 CAS_SEPARATE = CAS_COVER + ("ramp",)                                       # not merged (ramps stay hidden collision)
 CAS_NO_COLLISION = cascade_layout.NO_COLLISION
-CAS_NO_SHADOW = ("trim", "ivy", "ramp", "giant_arch", "mesa", "tunnel_roof", "gallery_roof")
-FLORA = "/Game/WWO/Flora/Meshes/SM_"
-FERNS = ["Tropical_Plant_3", "Tropical_Plant_2_1", "Tropical_Plant_6", "Tropical_Plant_1_1", "Tropical_Plant_9", "Tropical_Plant_2_2"]
-SUN_PITCH = -38.0
+CAS_NO_SHADOW = ("trim", "ramp", "body_top")
+CAS_REPLACED = ("pier", "giant_arch", "mesa", "ivy")                       # the art kit draws these (Tools/cascade_dress.py)
+CAS_HIDDEN = ("ramp", "islet", "body_top") + CAS_COVER                     # collision only: a kit piece is what you see
+# The smooth meshes that stand in for the box-built round structure (~/Documents/WWO_Cascade/tools/make_round_kit.py),
+# and the box kinds each one makes collision-only. Without a mesh (not imported), its boxes are drawn as before.
+ROUND = {"Round_Decks": ("floor", "floor_ring", "floor_base", "floor_z3", "floor_z5", "dais", "balcony", "plinth"),
+         "Round_Drum": ("hall_wall", "body"),
+         "Round_Tunnels": ("tunnel_wall", "tunnel_roof"),        # the galleries are straight: they stay boxes
+         "Round_Trim": ()}
+ROUND_SKIP = os.environ.get("WWO_CAS_NO_ROUND", "").split(",")              # e.g. Round_Tunnels: keep that part as boxes
+KIT_TEX = "/Game/WWO/Maps/CascadeKit/Textures/"
+KIT_MATS = "/Game/WWO/Maps/CascadeKit/Materials"
+SUN_PITCH = -46.0
 SUN_YAW = 35.0            # off the map's axes, so walls and arches throw slanted shadows
-SKY_LIGHT = 0.8           # the sky's fill: with no bounce light, this is all that reaches the shade
-SUN_COLOR = (1.0, 0.93, 0.82)
+SKY_LIGHT = 1.4           # the sky's fill: with no bounce light, this is all that reaches the shade
+SUN_COLOR = (1.0, 0.89, 0.74)
 FOG_COLOR = (0.62, 0.74, 0.86)
 LIGHT_CANDELAS = 200.0
-MIST_COLOR = (0.86, 0.93, 1.0)
-WATER_COLOR = (0.008, 0.045, 0.06)   # linear: deep teal (the sky's sheen on it brightens it a lot)
+WATER_COLOR = (0.010, 0.060, 0.075)   # linear: deep teal (the sky's sheen on it brightens it a lot)
+WATER_SHALLOW = (0.030, 0.150, 0.150)
 KILL_Z = -9.0
-WATERFALL_COLOR = (0.55, 0.78, 0.86)
+MOSS_TINT = (0.62, 0.72, 0.5)    # over the kit's moss color on the map's own stone: darker and less yellow than the texture
 
-WATERFALL_CODE = """
-// Falling streaks down a translucent sheet: V runs down the sheet, the streaks move with T.
-float s = frac(UV.y * 5.0 - T * Speed + sin(UV.x * 31.0) * 0.12);
-float streak = 0.65 + 0.35 * smoothstep(0.0, 0.35, s) * (1.0 - smoothstep(0.35, 1.0, s));
-float edge = smoothstep(0.0, 0.06, UV.x) * smoothstep(0.0, 0.06, 1.0 - UV.x);
-return float4(C.rgb * Glow * streak, Opacity * edge * (0.75 + 0.25 * streak));
+# M_WWO_Sky's shader (Tools/create_assets.py SKY_CODE) with the concept's clear blue sky (sRGB) and drifting
+# clouds from the kit's noise texture (two samples on a flat sheet overhead, thinning to nothing at the horizon).
+SKY_TOP, SKY_HORIZON = (0.20, 0.44, 0.82), (0.72, 0.84, 0.95)
+CLOUD_UV = """
+float3 d = normalize(-V);
+float2 p = d.xy / max(d.z + 0.10, 0.04);
+return float4(p * 0.11 + T * float2(0.0020, 0.0011), p * 0.31 + T * float2(0.0031, -0.0013) + 0.37);
 """
-
-
-def waterfall_material(ns):
-    """M_WWO_Waterfall (unlit, translucent, two-sided) and its instance, made on first use."""
-    eal, tools, mel = ns.eal, ns.tools, ns.mel
-    path = "/Game/WWO/Materials/M_WWO_Waterfall"
-    parent = eal.load_asset(path) if eal.does_asset_exist(path) else None
-    if not parent:
-        m = tools.create_asset("M_WWO_Waterfall", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
-        m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
-        m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-        m.set_editor_property("two_sided", True)
-        uv = mel.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -900, -200)
-        time = mel.create_material_expression(m, unreal.MaterialExpressionTime, -900, -100)
-        params = []
-        for i, (name, default) in enumerate((("Glow", 1.6), ("Opacity", 0.6), ("Speed", 0.9))):
-            e = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -900, 100 + 100 * i)
-            e.set_editor_property("parameter_name", name)
-            e.set_editor_property("default_value", default)
-            params.append((name, e))
-        color = mel.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -900, 0)
-        color.set_editor_property("parameter_name", "Color")
-        color.set_editor_property("default_value", unreal.LinearColor(0.78, 0.9, 1.0, 1.0))
-        c = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -550, 0)
-        c.set_editor_property("code", WATERFALL_CODE)
-        c.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT4)
-        c.set_editor_property("description", "Waterfall")
-        inputs = [("UV", uv, ""), ("T", time, ""), ("C", color, "RGBA")] + [(n, e, "") for n, e in params]
-        custom_inputs = []
-        for n, _, _ in inputs:
-            ci = unreal.CustomInput()
-            ci.set_editor_property("input_name", n)
-            custom_inputs.append(ci)
-        c.set_editor_property("inputs", custom_inputs)
-        for n, src, out in inputs:
-            mel.connect_material_expressions(src, out, c, n)
-        for (r, g, b, a), prop, y in (((True, True, True, False), unreal.MaterialProperty.MP_EMISSIVE_COLOR, 0),
-                                      ((False, False, False, True), unreal.MaterialProperty.MP_OPACITY, 150)):
-            k = mel.create_material_expression(m, unreal.MaterialExpressionComponentMask, -250, y)
-            for ch, on in zip("rgba", (r, g, b, a)):
-                k.set_editor_property(ch, on)
-            mel.connect_material_expressions(c, "", k, "")
-            mel.connect_material_property(k, "", prop)
-        mel.recompile_material(m)
-        eal.save_loaded_asset(m)
-        parent = m
-    ipath = "/Game/WWO/Materials/Map/MI_Waterfall_Cascade"
-    mi = eal.load_asset(ipath) if eal.does_asset_exist(ipath) else tools.create_asset(
-        "MI_Waterfall_Cascade", "/Game/WWO/Materials/Map", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-    mi.set_editor_property("parent", parent)
-    # Pale blue-green water, dimmer and thinner than the parent's defaults (those read as white panels).
-    mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(*WATERFALL_COLOR, 1.0))
-    mel.set_material_instance_scalar_parameter_value(mi, "Glow", 0.9)
-    mel.set_material_instance_scalar_parameter_value(mi, "Opacity", 0.45)
-    eal.save_loaded_asset(mi)
-    return mi
-
-
-# M_WWO_Sky's shader (Tools/create_assets.py SKY_CODE) with the concept's clear blue sky (sRGB).
-SKY_TOP, SKY_HORIZON = (0.26, 0.52, 0.86), (0.70, 0.83, 0.95)
 SKY_CODE = """
 float3 d = normalize(-V);
 float PI_2 = 1.5707963;
@@ -142,45 +82,75 @@ float c = 1.0 - v / PI_2;
 float3 sky = lerp(horizon, top, saturate(1.0 - pow(saturate(1.0 - c), 1.0 / 0.15)));
 float sun = acos(clamp(dot(normalize(SunDir), d), -1.0, 1.0));
 float sun_max = 0.5235988;
+float glare = 0.0;
 if (sun < sun_max) {
-    sky = lerp(float3(1, 1, 1), sky, saturate(1.0 - pow(saturate(1.0 - sun / sun_max), 1.0 / 0.15)));
+    glare = 1.0 - saturate(1.0 - pow(saturate(1.0 - sun / sun_max), 1.0 / 0.15));
+    sky = lerp(sky, float3(1, 1, 1), glare);
 }
+float cloud = saturate((CA.a * 0.62 + CB.a * 0.30 + CA.r * 0.28 - Cover) * 3.2) * saturate(d.z * 5.0);
+float3 lit = lerp(float3(0.56, 0.62, 0.74), float3(1.0, 0.96, 0.90), saturate(CB.r * 0.9 + 0.25 + glare));
+sky = lerp(sky, lit, cloud * 0.92);
 c = (v - PI_2) / PI_2;
 float3 ground = lerp(horizon, bottom, saturate(1.0 - pow(saturate(1.0 - c), 1.0 / 0.02)));
 return (d.z >= 0.0 ? sky : ground) * Energy;
 """ % (SKY_TOP + SKY_HORIZON)
 
 
+def custom_node(ns, m, desc, code, out, inputs, x, y):
+    c = ns.mel.create_material_expression(m, unreal.MaterialExpressionCustom, x, y)
+    c.set_editor_property("code", code)
+    c.set_editor_property("output_type", out)
+    c.set_editor_property("description", desc)
+    ins = []
+    for n, _, _ in inputs:
+        ci = unreal.CustomInput()
+        ci.set_editor_property("input_name", n)
+        ins.append(ci)
+    c.set_editor_property("inputs", ins)
+    for n, src, src_out in inputs:
+        ns.mel.connect_material_expressions(src, src_out, c, n)
+    return c
+
+
+def noise_sample(ns, m, uv, channels, x, y):
+    """T_Cas_Noise sampled at two of a float4's components (channels "rg" or "ba")."""
+    mel = ns.mel
+    k = mel.create_material_expression(m, unreal.MaterialExpressionComponentMask, x - 200, y)
+    for ch in "rgba":
+        k.set_editor_property(ch, ch in channels)
+    mel.connect_material_expressions(uv, "", k, "")
+    t = mel.create_material_expression(m, unreal.MaterialExpressionTextureSample, x, y)
+    t.set_editor_property("texture", unreal.load_asset(KIT_TEX + "T_Cas_Noise"))
+    t.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+    mel.connect_material_expressions(k, "", t, "UVs")
+    return t
+
+
 def sky_material(ns):
-    """M_WWO_Sky_Cascade: M_WWO_Sky with Cascade's colors (remade every build, so color changes apply)."""
+    """M_WWO_Sky_Cascade: M_WWO_Sky with Cascade's colors and clouds (remade every build, so changes apply)."""
     eal, tools, mel = ns.eal, ns.tools, ns.mel
     path = "/Game/WWO/Materials/M_WWO_Sky_Cascade"
-    if eal.does_asset_exist(path):
-        eal.delete_asset(path)
-    m = tools.create_asset("M_WWO_Sky_Cascade", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
+        "M_WWO_Sky_Cascade", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    mel.delete_all_material_expressions(m)
     m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     m.set_editor_property("two_sided", True)
     m.set_editor_property("is_sky", True)
-    view = mel.create_material_expression(m, unreal.MaterialExpressionCameraVectorWS, -700, -100)
+    view = mel.create_material_expression(m, unreal.MaterialExpressionCameraVectorWS, -1300, -100)
+    time = mel.create_material_expression(m, unreal.MaterialExpressionTime, -1300, 300)
     sun = mel.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -700, 0)
     sun.set_editor_property("parameter_name", "SunDir")
     sun.set_editor_property("default_value", unreal.LinearColor(-0.5, 0.0, 0.866, 0.0))
     energy = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -700, 150)
     energy.set_editor_property("parameter_name", "Energy")
     energy.set_editor_property("default_value", 1.0)
-    c = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -400, 0)
-    c.set_editor_property("code", SKY_CODE)
-    c.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
-    c.set_editor_property("description", "CascadeSky")
-    ins = []
-    for n in ("V", "SunDir", "Energy"):
-        ci = unreal.CustomInput()
-        ci.set_editor_property("input_name", n)
-        ins.append(ci)
-    c.set_editor_property("inputs", ins)
-    mel.connect_material_expressions(view, "", c, "V")
-    mel.connect_material_expressions(sun, "RGB", c, "SunDir")
-    mel.connect_material_expressions(energy, "", c, "Energy")
+    cover = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -700, 250)
+    cover.set_editor_property("parameter_name", "Cover")
+    cover.set_editor_property("default_value", 0.62)
+    uv = custom_node(ns, m, "CloudUV", CLOUD_UV, unreal.CustomMaterialOutputType.CMOT_FLOAT4, [("V", view, ""), ("T", time, "")], -1100, 300)
+    ca, cb = noise_sample(ns, m, uv, "rg", -700, 400), noise_sample(ns, m, uv, "ba", -700, 650)
+    c = custom_node(ns, m, "CascadeSky", SKY_CODE, unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                    [("V", view, ""), ("SunDir", sun, "RGB"), ("Energy", energy, ""), ("CA", ca, "RGBA"), ("CB", cb, "RGBA"), ("Cover", cover, "")], -400, 0)
     mel.connect_material_property(c, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     mel.recompile_material(m)
     eal.save_loaded_asset(m)
@@ -203,37 +173,88 @@ def sky_instance(ns):
     return mi
 
 
-def soft_instance(ns, name, color, alpha):
-    """A soft-edged see-through ball (M_WWO_SoftAlpha, the effects' material) as a fixed instance: mist."""
-    eal, tools, mel = ns.eal, ns.tools, ns.mel
-    path = "/Game/WWO/Materials/Map/" + name
-    mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
-        name, "/Game/WWO/Materials/Map", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-    mi.set_editor_property("parent", unreal.load_asset("/Game/WWO/Materials/M_WWO_SoftAlpha"))
-    mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(color[0], color[1], color[2], 1.0))
-    for k, v in (("Alpha", alpha), ("Edge", 1.0), ("Rim", 0.0), ("Core", 0.0)):
-        mel.set_material_instance_scalar_parameter_value(mi, k, v)
-    eal.save_loaded_asset(mi)
-    return mi
+WATER_UV = """
+// Two sets of ripples sliding across each other, and slow foam drifting on top.
+float2 p = P.xy / Size;
+return float4(p + T * float2(0.011, 0.006), p * 2.3 + T * float2(-0.008, 0.013));
+"""
+WATER_COLOR_CODE = """
+float foam = saturate((NA.a * 0.75 + NB.g * 0.45 - 0.78) * 5.0) * Foam;
+float3 c = lerp(Deep, Shallow, saturate(NA.r * 1.4 - 0.2));
+return lerp(c, float3(0.55, 0.68, 0.70), foam);
+"""
 
 
 def water_material(ns):
-    """M_WWO_CascadeWater: lit, dark teal and glossy, so the sky and the sun's glare sit on it. Remade each build."""
+    """M_WWO_CascadeWater: lit, teal and glossy with moving ripples (the kit's moss normal map, flattened, sliding two
+    ways) and drifting foam from the kit's noise, so the sky and the sun's glare break up on it. Remade each build."""
     eal, tools, mel = ns.eal, ns.tools, ns.mel
     path = "/Game/WWO/Materials/M_WWO_CascadeWater"
     m = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
         "M_WWO_CascadeWater", "/Game/WWO/Materials", unreal.Material, unreal.MaterialFactoryNew())
     mel.delete_all_material_expressions(m)
-    color = mel.create_material_expression(m, unreal.MaterialExpressionConstant3Vector, -400, 0)
-    color.set_editor_property("constant", unreal.LinearColor(WATER_COLOR[0], WATER_COLOR[1], WATER_COLOR[2], 1.0))
-    mel.connect_material_property(color, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    for value, prop, y in ((0.4, unreal.MaterialProperty.MP_ROUGHNESS, 150), (0.4, unreal.MaterialProperty.MP_SPECULAR, 300)):   # a sheen, not a mirror (sharp screen reflections broke into blocks)
+    F4, F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT4, unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    pos = mel.create_material_expression(m, unreal.MaterialExpressionWorldPosition, -1500, 0)
+    time = mel.create_material_expression(m, unreal.MaterialExpressionTime, -1500, 100)
+    size = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -1500, 200)
+    size.set_editor_property("r", 1800.0)
+    uv = custom_node(ns, m, "WaterUV", WATER_UV, F4, [("P", pos, ""), ("T", time, ""), ("Size", size, "")], -1250, 0)
+    na, nb = noise_sample(ns, m, uv, "rg", -800, -300), noise_sample(ns, m, uv, "ba", -800, -50)
+    normals = []
+    for i, ch in enumerate(("rg", "ba")):
+        k = mel.create_material_expression(m, unreal.MaterialExpressionComponentMask, -1000, 300 + 250 * i)
+        for c in "rgba":
+            k.set_editor_property(c, c in ch)
+        mel.connect_material_expressions(uv, "", k, "")
+        t = mel.create_material_expression(m, unreal.MaterialExpressionTextureSample, -800, 300 + 250 * i)
+        t.set_editor_property("texture", unreal.load_asset(KIT_TEX + "T_Cas_Moss_N"))
+        t.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
+        mel.connect_material_expressions(k, "", t, "UVs")
+        normals.append(t)
+    consts = {}
+    for i, (name, rgb) in enumerate((("Deep", WATER_COLOR), ("Shallow", WATER_SHALLOW))):
+        e = mel.create_material_expression(m, unreal.MaterialExpressionConstant3Vector, -800, 800 + 150 * i)
+        e.set_editor_property("constant", unreal.LinearColor(rgb[0], rgb[1], rgb[2], 1.0))
+        consts[name] = e
+    foam = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -800, 1100)
+    foam.set_editor_property("r", 0.8)
+    col = custom_node(ns, m, "WaterColor", WATER_COLOR_CODE, F3, [("NA", na, "RGBA"), ("NB", nb, "RGBA"), ("Deep", consts["Deep"], ""),
+                                                                 ("Shallow", consts["Shallow"], ""), ("Foam", foam, "")], -400, -200)
+    mel.connect_material_property(col, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    nrm = custom_node(ns, m, "WaterNormal", "return normalize(float3((A.xy + B.xy) * 0.22, 1.0));", F3, [("A", normals[0], "RGB"), ("B", normals[1], "RGB")], -400, 350)
+    mel.connect_material_property(nrm, "", unreal.MaterialProperty.MP_NORMAL)
+    for value, prop, y in ((0.16, unreal.MaterialProperty.MP_ROUGHNESS, 600), (0.55, unreal.MaterialProperty.MP_SPECULAR, 700)):
         k = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -400, y)
         k.set_editor_property("r", value)
         mel.connect_material_property(k, "", prop)
     mel.recompile_material(m)
     eal.save_loaded_asset(m)
     return m
+
+
+def stone_instance(ns, name, tint, surface="Stone", **scalars):
+    """An instance of the kit's world-projected stone (M_WWO_CasStone) for the map's own boxes, wearing one of the
+    kit's surfaces: Stone (ashlar), Slab (smooth dark panels), Paver (flagstones), Bronze, Ground."""
+    eal, tools, mel = ns.eal, ns.tools, ns.mel
+    path = KIT_MATS + "/MI_Cas_Stone" + name
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
+        "MI_Cas_Stone" + name, KIT_MATS, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    parent = unreal.load_asset("/Game/WWO/Materials/M_WWO_CasStone")
+    if not parent:
+        raise RuntimeError("missing M_WWO_CasStone: run Tools/import_cascade_kit.py first")
+    mi.set_editor_property("parent", parent)
+    mel.set_material_instance_vector_parameter_value(mi, "Tint", unreal.LinearColor(tint[0], tint[1], tint[2], 1.0))
+    mel.set_material_instance_vector_parameter_value(mi, "MossTint", unreal.LinearColor(*MOSS_TINT, 1.0))
+    for param, suffix in (("StoneColor", "_D"), ("StoneNormal", "_N"), ("StoneORM", "_ORM")):
+        mel.set_material_instance_texture_parameter_value(mi, param, unreal.load_asset(KIT_TEX + "T_Cas_" + surface + suffix))
+    if surface in ("Bronze", "Ground"):
+        scalars.setdefault("Joints", 0.0)        # their ORM blue channel is not a joint height
+    if surface == "Bronze":
+        scalars.setdefault("Metal", 0.85)
+    for k, v in scalars.items():
+        mel.set_material_instance_scalar_parameter_value(mi, k, v)
+    eal.save_loaded_asset(mi)
+    return mi
 
 
 def lighting(ns):
@@ -269,10 +290,10 @@ def lighting(ns):
     # Bluish haze that hides the far arches and mesas, thicker below the decks (the fog's base is at z 0).
     fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0.0))
     fc = fog.component
-    fc.set_editor_property("fog_density", 0.006)
-    fc.set_editor_property("fog_height_falloff", 0.2)
-    fc.set_editor_property("start_distance", 2000.0)
-    fc.set_editor_property("fog_max_opacity", 0.75)
+    fc.set_editor_property("fog_density", 0.011)
+    fc.set_editor_property("fog_height_falloff", 0.04)
+    fc.set_editor_property("start_distance", 4500.0)
+    fc.set_editor_property("fog_max_opacity", 0.8)
     fc.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(*(c * ns.SKY_ENERGY for c in FOG_COLOR), 1.0))
     fog.set_actor_label("HeightFog")
     ppv = actors.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0))
@@ -295,31 +316,6 @@ def lighting(ns):
     ppv.set_actor_label("PostProcess")
 
 
-def flora_instance(ns, name, parent_path, **scalars):
-    """A copy of one of import_flora.py's instances with some scalars changed (Recolor)."""
-    eal, tools, mel = ns.eal, ns.tools, ns.mel
-    folder = "/Game/WWO/Flora/Materials"
-    path = folder + "/" + name
-    mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
-        name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-    mi.set_editor_property("parent", unreal.load_asset(parent_path))
-    for k, v in scalars.items():
-        mel.set_material_instance_scalar_parameter_value(mi, k, v)
-    eal.save_loaded_asset(mi)
-    return mi
-
-
-def static_actor(ns, mesh, at, yaw, scale, label, material=None):
-    a = ns.actors.spawn_actor_from_class(unreal.StaticMeshActor, at, unreal.Rotator(0.0, 0.0, yaw))
-    a.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
-    a.static_mesh_component.set_static_mesh(mesh)
-    if material:
-        a.static_mesh_component.set_material(0, material)
-    a.set_actor_scale3d(unreal.Vector(1, 1, 1) * scale)
-    a.set_actor_label(label)
-    return a
-
-
 def build(ns):
     """ns: build_maps.py's globals (a SimpleNamespace)."""
     eal, actors, levels, mu = ns.eal, ns.actors, ns.levels, ns.mu
@@ -330,42 +326,76 @@ def build(ns):
     b = ns.Builder(1, 1, 13)
     rng = random.Random(13)
     lighting(ns)
-    ci = ns.concrete_instance
-    # Lighter than the first build (it read as near-black in shade): warm pale floors, cooler walls, darker
-    # stone for the piers, and the far arches and mesas pale and clean so they sit back in the haze.
-    floor = ci("Cas_Floor", (0.47, 0.46, 0.44), KitContrast=0.0, DirtStrength=0.75)
-    moss = ci("Cas_Moss", (0.33, 0.42, 0.28), KitContrast=0.0, DirtStrength=1.0)
-    wall = ci("Cas_Wall", (0.40, 0.42, 0.46))
-    roof = ci("Cas_Roof", (0.36, 0.39, 0.38), KitContrast=0.0, Grime=0.6)
-    stone = ci("Cas_Stone", (0.33, 0.34, 0.36), KitContrast=0.0, DirtStrength=0.8)
-    far = ci("Cas_Far", (0.50, 0.53, 0.58), KitContrast=0.0, DirtStrength=0.2)
-    cover = ci("Cas_Cover", (0.52, 0.50, 0.46), KitContrast=0.0, BaseStrength=0.3, BaseHeight=30.0, StreakStrength=0.6)
-    dark = ns.solid_material("CasRail", (0.08, 0.08, 0.09))
-    mats = {"floor": floor, "floor_z3": floor, "floor_z5": floor, "dais": floor, "landing": floor, "bridge": floor, "plinth": floor,
-            "steps": floor, "balcony": moss, "hall_wall": wall, "body": wall, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
-            "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "pier": stone, "islet": stone, "arch": stone, "bracket": stone,
-            "giant_arch": far, "mesa": far, "low_cover": cover, "block": cover, "pillar": cover, "monolith": stone, "column": stone,
-            "rail": dark, "trim": ns.lamp_instance("CasTrim", (1.0, 0.42, 0.1), 4.5), "ivy": ns.solid_material("CasIvy", (0.1, 0.2, 0.07)),
-            "ramp": None}
-    crate_meshes = [ns.kit_mesh("Prop_Crate3"), ns.kit_mesh("Prop_Crate4")]
+    # The kit's hewn stone, projected in world space (Tools/import_cascade_kit.py): warm pale paving, cooler walls,
+    # mossier roofs and balcony, and the cover a little lighter and warmer so it reads against the walls.
+    si = lambda name, tint, surface="Stone", **kw: stone_instance(ns, name, tint, surface, **kw)   # noqa: E731
+    # Different stone for different parts, so the map isn't one wall of ashlar: flagstones on the ring road, the
+    # bridges and the stairs, big ashlar paving elsewhere, smooth dark slab for the citadel and everything that
+    # holds a deck up, ashlar for the rooms' walls, aged bronze for the rails.
+    floor = si("Floor", (1.12, 1.06, 0.98), StoneSize=720.0, MossAmount=0.55, Streaks=0.0)
+    paver = si("Paver", (1.12, 1.08, 1.0), "Paver", StoneSize=440.0, MossAmount=0.7, Streaks=0.0, Bump=0.4)
+    slab_floor = si("SlabFloor", (1.9, 1.85, 1.8), "Slab", StoneSize=640.0, MossAmount=0.5, Streaks=0.0)
+    moss = si("Mossy", (2.1, 2.12, 2.1), "Slab", StoneSize=640.0, MossAmount=1.3, MossSlope=0.35)
+    wall = si("Wall", (1.45, 1.43, 1.42), StoneSize=820.0, MossAmount=0.7)
+    slab = si("SlabWall", (2.3, 2.3, 2.4), "Slab", StoneSize=700.0, MossAmount=0.7)
+    roof = si("Roof", (1.2, 1.25, 1.2), StoneSize=820.0, MossAmount=1.6, MossSlope=0.3)
+    si("Cover", (1.6, 1.5, 1.36), MossAmount=0.8, StoneSize=560.0)       # the kit blocks over the cover boxes (cascade_dress.FIELDS)
+    bronze = si("Rail", (0.8, 0.8, 0.86), "Bronze", StoneSize=300.0, MossAmount=0.0, Streaks=0.2, Variation=0.15)
+    mats = {"floor": floor, "floor_ring": paver, "floor_base": slab_floor, "floor_z3": floor, "floor_z5": floor, "dais": slab_floor,
+            "landing": paver, "bridge": paver, "plinth": slab_floor, "steps": floor, "balcony": moss, "hall_wall": slab, "body": slab,
+            "body_top": None, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
+            "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "islet": None, "arch": slab, "bracket": slab,
+            "low_cover": None, "block": None, "crate": None, "pillar": None, "monolith": None, "column": None,
+            "rail": bronze, "trim": ns.lamp_instance("CasTrim", (1.0, 0.42, 0.1), 4.5), "ramp": None}
+    ring_r = layout["data"]["radii"]["ring_outer"] + 0.6
+    dresser = cascade_dress.Dresser(ns, layout)
+    round_meshes = [k for k in ROUND if k not in ROUND_SKIP and eal.does_asset_exist(cascade_dress.KIT + k)]
+    hidden = set(CAS_HIDDEN)
+    for k in round_meshes:
+        hidden.update(ROUND[k])
+        dresser.whole(k)
+    nodes = [(sx * 42.4264, sy * 42.4264) for sx in (-1, 1) for sy in (-1, 1)]
+
+    def ring_trim(box):
+        """One of the glowing rings Round_Trim draws smooth (the citadel's tier ring, the balcony's edge, a dais ring)."""
+        r = math.hypot(box.x, box.y)
+        return ((22.2 < r < 23.0 and 13.0 < box.z < 14.1) or (28.5 < r < 29.2 and 4.0 < box.z < 5.0)
+                or any(4.2 < math.hypot(box.x - nx, box.y - ny) < 4.75 for nx, ny in nodes))
+
     groups = {}
-    crates = 0
+    covers = 0
+    crates = sum(1 for box in layout["boxes"] if box.kind == "crate")
     for box in layout["boxes"]:
-        if box.kind == "crate":
-            ns.fit_mesh(crate_meshes[crates % 2], box.x, box.y, box.z - box.height * 0.5, (box.length, box.thickness, box.height),
-                        box.yaw, "Cas_crate_%d" % crates, ("Cover",))
-            crates += 1
+        kind = box.kind
+        if kind in CAS_REPLACED:
             continue
-        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "Cas_" + box.kind,
-                  ("Cover",) if box.kind in CAS_COVER else (), yaw=90.0 - box.yaw, pitch=box.pitch,
-                  hidden=box.kind == "ramp", mesh=ns.CYLINDER if box.shape == "cylinder" else None)
-        if box.kind in CAS_NO_SHADOW:
+        if kind == "body" and box.z - box.height * 0.5 > 13.9:
+            kind = "body_top"        # the old stepped cone: kept as collision under the kit's tower cluster
+        if kind == "trim" and box.z > 14.2 and math.hypot(box.x, box.y) < 24.0:
+            continue                 # the cone's glowing tier rings
+        if kind == "trim" and "Round_Trim" in round_meshes and box.shape != "cylinder" and ring_trim(box):
+            continue
+        if kind == "trim" and box.shape == "cylinder":
+            dresser.put("FloorRing_A", box.x, box.y, box.z - box.height * 0.5, 0.0, box.length * 0.5 / 1.5)
+            continue                 # the bases' floor glyph: the kit's inlaid ring instead of a glowing disc
+        if kind == "floor":
+            if math.hypot(box.x, box.y) < ring_r:
+                kind = "floor_ring"
+            elif abs(box.x) > 58.0 and abs(box.y) < 14.0:
+                kind = "floor_base"
+        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[kind], "Cas_" + kind,
+                  ("Cover",) if kind in CAS_COVER else (), yaw=90.0 - box.yaw, pitch=box.pitch,
+                  hidden=kind in hidden, mesh=ns.CYLINDER if box.shape == "cylinder" else None)
+        if kind in CAS_COVER:
+            dresser.cover(box, covers)
+            covers += 1
+        if kind in CAS_NO_SHADOW:
             a.static_mesh_component.set_editor_property("cast_shadow", False)
-        if box.kind in CAS_NO_COLLISION:
+        if kind in CAS_NO_COLLISION:
             a.static_mesh_component.set_collision_profile_name("NoCollision")
             a.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
-        if box.kind not in CAS_SEPARATE:
-            groups.setdefault(box.kind, []).append(a)
+        if kind not in CAS_SEPARATE and kind != "islet":
+            groups.setdefault(kind, []).append(a)
     merged = 0
     for kind, group in groups.items():
         if len(group) < 2:
@@ -376,6 +406,9 @@ def build(ns):
                 merged += 1
                 if kind in CAS_NO_SHADOW:
                     m.static_mesh_component.set_editor_property("cast_shadow", False)
+                if kind in hidden:
+                    m.set_actor_hidden_in_game(True)
+                    m.static_mesh_component.set_editor_property("cast_shadow", False)
                 if kind in CAS_NO_COLLISION:
                     # The merged mesh carries the pieces' simple collision; these kinds are looks only.
                     m.static_mesh_component.set_collision_profile_name("NoCollision")
@@ -385,46 +418,15 @@ def build(ns):
     if merged:
         eal.save_directory(CAS_MERGED, only_if_is_dirty=False, recursive=True)
 
-    # Plants: red maples on the islets, green ferns by the blocks and monoliths.
-    crown = flora_instance(ns, "MI_Flora_Cascade_MapleCrown", "/Game/WWO/Flora/Materials/MI_Flora_SpringTree_Crown", Recolor=1.0)
-    fern = flora_instance(ns, "MI_Flora_Cascade_Fern", "/Game/WWO/Flora/Materials/MI_Flora_Tropical", Recolor=0.0)
-    maples = ferns = 0
-    for i, (kind, x, y, z) in enumerate(layout["plants"]):
-        if kind == "maple":
-            yaw = rng.uniform(0.0, 360.0)
-            scale = rng.uniform(1.0, 1.3)
-            for part in ("Trunk", "Crown", "Petals"):
-                static_actor(ns, unreal.load_asset(FLORA + "SpringTree_" + part), mu(x, y, z - 0.05), yaw, scale, "Cas_maple%d_%s" % (maples, part),
-                             crown if part != "Trunk" else None)
-            maples += 1
-        else:
-            static_actor(ns, unreal.load_asset(FLORA + rng.choice(FERNS)), mu(x, y, z - 0.05), rng.uniform(0.0, 360.0), rng.uniform(0.7, 1.1),
-                         "Cas_fern_%d" % ferns, fern)
-            ferns += 1
-
-    # Waterfalls: a translucent sheet from top_z down to the water, facing out of the map.
-    falls = waterfall_material(ns)
-    mist = soft_instance(ns, "MI_Cascade_Mist", MIST_COLOR, 0.30)
-    mist_thin = soft_instance(ns, "MI_Cascade_MistThin", MIST_COLOR, 0.16)
-    for i, w in enumerate(layout["waterfalls"]):
-        x, y = w["at"]
-        z0, z1 = cascade_layout.WATER_Z, w["top_z"]
-        a = b.box(mu(x, y, (z0 + z1) * 0.5), (0.05, w["width"], z1 - z0), falls, "Cas_waterfall", yaw=90.0 - w["facing_deg"])
-        a.static_mesh_component.set_collision_profile_name("NoCollision")
-        a.static_mesh_component.set_editor_property("cast_shadow", False)
-        a.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
-        # Mist: soft pale puffs where it lands (wider than the sheet) and a thin one where it spills over.
-        for j, (dz, across, tall, alpha_mat) in enumerate(((1.2, 1.9, 4.5, mist), (3.2, 1.3, 5.5, mist_thin), (z1 - z0 - 0.4, 1.15, 1.6, mist_thin))):
-            puff = actors.spawn_actor_from_class(unreal.StaticMeshActor, mu(x, y, z0 + dz), unreal.Rotator(0.0, 0.0, 90.0 - w["facing_deg"]))
-            pc = puff.static_mesh_component
-            pc.set_mobility(unreal.ComponentMobility.STATIC)
-            pc.set_static_mesh(ns.SPHERE)
-            pc.set_material(0, alpha_mat)
-            pc.set_collision_profile_name("NoCollision")
-            pc.set_editor_property("cast_shadow", False)
-            pc.set_editor_property("can_ever_affect_navigation", False)
-            puff.set_actor_scale3d(unreal.Vector(w["width"] * across * 0.6, w["width"] * across, tall))
-            puff.set_actor_label("Cas_mist_%d_%d" % (i, j))
+    # The art kit over all of it: rock, the citadel's towers, wall dressing, plants, waterfalls.
+    dresser.rocks()
+    dresser.citadel()
+    slits, buttresses = dresser.walls()
+    ivy = dresser.edges()
+    maples = dresser.plants()
+    dresser.water()
+    dresser.details()
+    instances = dresser.flush()
 
     # The chasm's water (no collision: falling through it reaches the kill height).
     water = b.box(unreal.Vector(0, 0, cascade_layout.WATER_Z * 100.0 - 5.0), (6000.0, 6000.0, 0.1), water_material(ns), "Cas_water")   # out past the haze: no edge to see
@@ -482,6 +484,6 @@ def build(ns):
     ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
     vol.set_actor_scale3d(unreal.Vector(ey * 100.0 / ext, ex * 100.0 / ext, ez * 100.0 / ext))
     levels.save_current_level()
-    ns.log("L_Cascade: %d boxes, %d kinds merged, %d crates, %d maples, %d ferns, %d waterfalls, %d lights, %d + %d spawns, %d enemy markers"
-           % (len(layout["boxes"]), merged, crates, maples, ferns, len(layout["waterfalls"]), len(layout["lights"]),
+    ns.log("L_Cascade: %d boxes, %d kinds merged, %d crates, %d kit instances (%d maples, %d edge ivy, %d light slits, %d buttresses), %d waterfalls, %d lights, %d + %d spawns, %d enemy markers"
+           % (len(layout["boxes"]), merged, crates, instances, maples, ivy, slits, buttresses, len(layout["waterfalls"]), len(layout["lights"]),
               len(layout["spawns"]["blue"]), len(layout["spawns"]["orange"]), len(layout["pve"]["enemies"])))

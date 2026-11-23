@@ -27,6 +27,9 @@ void AWWOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AWWOGameState, BreachStart);
 	DOREPLIFETIME(AWWOGameState, BossHealth);
 	DOREPLIFETIME(AWWOGameState, BossWindow);
+	DOREPLIFETIME(AWWOGameState, HijackUntil);
+	DOREPLIFETIME(AWWOGameState, bLobby);
+	DOREPLIFETIME(AWWOGameState, LobbyBots);
 	DOREPLIFETIME(AWWOGameState, CoreState);
 }
 

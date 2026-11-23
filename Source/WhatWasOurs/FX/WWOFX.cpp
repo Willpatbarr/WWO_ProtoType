@@ -104,6 +104,27 @@ namespace WWOFX
 		return Comp;
 	}
 
+	FVector SettleOnGround(UWorld* World, const FVector& Rest, float Reach, const AActor* Ignore)
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOSettle), false, Ignore);
+		const FVector From = Rest + FVector(0, 0, 20.f);
+		bool bOnCover = false;
+		for (int32 Try = 0; Try < 6; ++Try)
+		{
+			FHitResult Hit;
+			if (!World->LineTraceSingleByChannel(Hit, From, Rest - FVector(0, 0, Reach), ECC_Visibility, Params)) return Rest;
+			AActor* Under = Hit.GetActor();
+			if (Under && (Under->ActorHasTag("Cover") || Cast<IWWOTargetable>(Under)))
+			{
+				bOnCover |= Under->ActorHasTag("Cover");
+				Params.AddIgnoredActor(Under); // through it, to what it stands on
+				continue;
+			}
+			return bOnCover || Hit.ImpactPoint.Z < Rest.Z - 30.f ? Hit.ImpactPoint : Rest;
+		}
+		return Rest;
+	}
+
 	bool GroundBelow(UWorld* World, const FVector& Point, float Reach, FVector& OutGround, const AActor* Ignore)
 	{
 		FHitResult Hit;

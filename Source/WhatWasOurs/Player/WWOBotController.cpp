@@ -1067,19 +1067,20 @@ void AWWOBotController::FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race,
 	const bool bWasPulling = bPulling;
 	bPulling = false;
 
-	// Carrying a core: out through the hub doorway.
-	bool bHasCore = false;
+	// Carrying a core: its own out through its hub doorway; the other team's into theirs (it heals their boss).
+	int32 Carried = -1;
 	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
 	{
 		const AWWOBossCore* Core = Race.CoreOf(CoreTeam);
-		if (Core && Core->Carrier == Me) bHasCore = true;
+		if (Core && Core->Carrier == Me) Carried = CoreTeam;
 	}
+	const bool bHasCore = Carried >= 0;
 	if (bHasCore && !bCarrying) ++CoresCarried;
 	bCarrying = bHasCore;
 	if (bHasCore)
 	{
-		Job = TEXT("carry core");
-		if (const AWWOBreachPortal* Out = Race.HubPortal(Team)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
+		Job = Carried == Team ? TEXT("carry core") : TEXT("steal core");
+		if (const AWWOBreachPortal* Out = Race.HubPortal(Carried)) GoTo(Me, Out->GetActorLocation(), DeltaSeconds, bMoving, bWantSprint);
 		return;
 	}
 
@@ -1120,7 +1121,7 @@ void AWWOBotController::FootRaceTick(AWWOCharacter* Me, FWWOFootRaceRules& Race,
 	// next door), or its core waiting there. At most two at once; each bot waits its own moment.
 	const int32 Doors = Race.DoorsOpen(Team);
 	const AWWOBossCore* OwnCore = Race.CoreOf(Team);
-	const bool bReason = Doors < 3 || (OwnCore && !OwnCore->Carrier);
+	const bool bReason = Doors < FWWOFootRaceRules::DoorCount || (OwnCore && !OwnCore->Carrier);
 	// Bots wait for a fuller meter than the threshold (BotBreachAt of the meter, which is twice the threshold).
 	const float Enough = Mode ? FMath::Max(Mode->BreachThreshold, Mode->BotBreachAt * 2.f * Mode->BreachThreshold) : 0.f;
 	const bool bCan = Mode && Race.Energy(Team) >= Enough && !Race.IsFrozen(Team) && Race.Breachers(Team) < 2;

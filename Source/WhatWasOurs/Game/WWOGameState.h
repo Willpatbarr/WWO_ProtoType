@@ -29,7 +29,7 @@ public:
 	UPROPERTY(Replicated) float BreachThreshold = 0.f;
 	// While a team's breachers are still in the hub on the pool they opened a door with: that pool is
 	// frozen (BreachFrozen), and what the team earns goes to BreachNext, its next breach. DoorsOpen: each
-	// team's doors opened so far (0-3).
+	// team's doors opened so far (0 to FWWOFootRaceRules::DoorCount).
 	UPROPERTY(Replicated) TArray<float> BreachNext;
 	UPROPERTY(Replicated) TArray<bool> BreachFrozen;
 	UPROPERTY(Replicated) TArray<int32> DoorsOpen;
@@ -41,6 +41,13 @@ public:
 	UPROPERTY(Replicated) TArray<float> BossWindow;
 	// Each team's boss core: 0 none, 1 in the hub, 2 carried, 3 dropped.
 	UPROPERTY(Replicated) TArray<uint8> CoreState;
+	// Each team's hijack window: the server time (GetServerWorldTimeSeconds) the other team's hub doorway
+	// closes to it again (0: closed).
+	UPROPERTY(Replicated) TArray<float> HijackUntil;
+	// FootRace's lobby (FWWOFootRaceRules: before the host starts the race): on while it is open, and the
+	// bots the host has chosen for each team (UWWOFootRaceLobby shows them; the host's choice counts).
+	UPROPERTY(Replicated) bool bLobby = false;
+	UPROPERTY(Replicated) TArray<int32> LobbyBots;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

@@ -19,6 +19,9 @@ public:
 	UPROPERTY(Replicated) int32 Kills = 0;
 	UPROPERTY(Replicated) int32 PrecisionKills = 0; // of those, the ones whose killing hit was a head hit
 	UPROPERTY(Replicated) int32 Deaths = 0;
+	// FootRace: while hijacking, the server time (GetServerWorldTimeSeconds) its time in the enemy lane is
+	// up (0: not hijacking).
+	UPROPERTY(Replicated) float HijackUntil = 0.f;
 
 	static FString TeamName(int32 Team) { return Team == 0 ? TEXT("BLUE") : TEXT("ORANGE"); }
 	static FLinearColor TeamColor(int32 Team) { return Team == 0 ? FLinearColor(0.35f, 0.6f, 1.f) : FLinearColor(1.f, 0.6f, 0.25f); }

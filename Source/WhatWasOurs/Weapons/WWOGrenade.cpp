@@ -289,11 +289,14 @@ void AWWOGrenade::OnBounce(const FHitResult& Hit, const FVector& ImpactVelocity)
 	IWWOTargetable* Target = Cast<IWWOTargetable>(Other);
 	if (Target && !UWWOWorldSubsystem::CanHurt(this, Other)) Target = nullptr; // a teammate: just something to bounce off
 	if (const FWWOGrenadeKindRules* R = Rules(); R && R->OnTouch && R->OnTouch(*this, Other, Target)) return;
-	if (Spec.SporePatches && PatchesLeft > 0 && PatchCooldown <= 0.f && !Target)
+	// A patch sprouts where it touches down: not off a wall or the side of cover (it would hang there), and
+	// not on top of cover (it settles on the floor below, as a pool does).
+	if (Spec.SporePatches && PatchesLeft > 0 && PatchCooldown <= 0.f && !Target && Hit.ImpactNormal.Z >= 0.6f)
 	{
 		PatchesLeft -= 1;
 		PatchCooldown = 0.3f;
-		AWWOSporePatch::Spawn(GetWorld(), GetActorLocation() - FVector(0, 0, Radius * WWO::M), Spec.SporePatches->PatchRadius, Spec.SporePatches->PatchTime, Thrower.Get());
+		AWWOSporePatch::Spawn(GetWorld(), WWOFX::SettleOnGround(GetWorld(), GetActorLocation() - FVector(0, 0, Radius * WWO::M), 8.f * WWO::M, this),
+			Spec.SporePatches->PatchRadius, Spec.SporePatches->PatchTime, Thrower.Get());
 	}
 	if (Spec.bExplodeOnImpact && !Cast<AWWOGrenade>(Other))
 	{
@@ -600,7 +603,8 @@ void AWWOGrenade::BlindOrSlow(const FVector& Center, bool bBlind)
 void AWWOGrenade::LeavePool(const FVector& Center)
 {
 	const UWWOGrenadeData* D = Spec.Data;
-	AWWOSporePool::Spawn(GetWorld(), Center - FVector(0, 0, Radius * WWO::M), Spec.BlastRadius,
+	// On the ground: run off cover it landed on, or down from a burst in the air (WWOFX::SettleOnGround).
+	AWWOSporePool::Spawn(GetWorld(), WWOFX::SettleOnGround(GetWorld(), Center - FVector(0, 0, Radius * WWO::M), 8.f * WWO::M, this), Spec.BlastRadius,
 		D->PoolDps * (1.f + UWWOLoadoutSubsystem::Bonus(this, "poison_damage")), D->PoolTime, Spec.Color, Spec.Flavor, Thrower.Get());
 	UE_LOG(LogWWO, Log, TEXT("Grenade %s: left a %.1f m pool (%.0f/s for %.1f s)"), *D->Id.ToString(), Spec.BlastRadius, D->PoolDps, D->PoolTime);
 }

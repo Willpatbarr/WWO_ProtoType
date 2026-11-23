@@ -7,6 +7,7 @@
 #include "Game/WWOTeamDeathmatch.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOBotController.h"
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyKinds.h"
 #include "Enemies/WWOEnemyTypes.h"
@@ -20,6 +21,7 @@
 #include "FX/WWOFX.h"
 #include "Systems/WWOWorldSubsystem.h"
 #include "WWOTypes.h"
+#include "WWOSwitches.h"
 #include "WhatWasOurs.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/TargetPoint.h"
@@ -30,7 +32,7 @@ namespace
 {
 	FName LaneTag(int32 Team) { return FName(*FString::Printf(TEXT("Lane%d"), Team)); }
 
-	// The room tag on a PortalAnchor (Room1..Room3, Boss).
+	// The room tag on a PortalAnchor (Room1..Room5, Boss).
 	FName RoomOf(const AActor* Marker)
 	{
 		for (const FName& Tag : Marker->Tags)
@@ -76,6 +78,7 @@ void FWWOFootRaceRules::Begin()
 		GS->BossHealth = { -1.f, -1.f };
 		GS->BossWindow = { 0.f, 0.f };
 		GS->CoreState = { 0, 0 };
+		GS->HijackUntil = { 0.f, 0.f };
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	// Every enemy's model, loaded now with the map: the first Tank (Room3) or boss would otherwise stall
@@ -120,7 +123,88 @@ void FWWOFootRaceRules::Begin()
 	SpawnPortals();
 	SpawnDoorsAndLevers();
 	FindRooms();
+	// The lobby first (nothing starts until the host says), unless a command line asks for a test or a set match.
+	bLobby = WantsLobby();
+	State = bLobby ? EWWOWaveState::Idle : EWWOWaveState::Match;
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		GS->bLobby = bLobby;
+		GS->LobbyBots = { 0, 0 };
+	}
+	if (bLobby) UE_LOG(LogWWO, Display, TEXT("FootRace: the lobby is open"));
+}
+
+bool FWWOFootRaceRules::WantsLobby()
+{
+	return WWOSwitches::Has(TEXT("WWOFootRaceLobby")) || WWOSwitches::Has(TEXT("WWOAutoTestLobby")) || !WWOSwitches::HasAnyWWOSwitch();
+}
+
+void FWWOFootRaceRules::PlaceNewBodies()
+{
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(Mode.GetWorld())->GetPlayers())
+	{
+		if (!Body || !Body->Health || Body->Health->bDead) continue;
+		AController* Controller = Body->GetController();
+		AWWOPlayerState* PS = Controller ? Controller->GetPlayerState<AWWOPlayerState>() : nullptr;
+		if (!PS) continue;
+		if (PS->Team < 0 || PS->Team > 1) FWWOTeamDeathmatch::BalanceTeam(Mode.GameState, Controller);
+		if (Placed.Contains(Body)) continue;
+		Placed.Add(Body);
+		Teleport(Body, SpawnSpot(Body));
+		LastThrough.Add(Body, Now);
+	}
+}
+
+int32 FWWOFootRaceRules::LobbyBotMax(int32 Team) const
+{
+	int32 People = 0;
+	if (Mode.GameState) for (const APlayerState* P : Mode.GameState->PlayerArray)
+	{
+		const AWWOPlayerState* PS = Cast<AWWOPlayerState>(P);
+		if (PS && !PS->IsABot() && PS->Team == Team) ++People;
+	}
+	return FMath::Max(0, AWWOGameMode::FootRaceTeamSize(Mode.GetWorld()->GetMapName()) - People);
+}
+
+void FWWOFootRaceRules::SetLobbyTeam(AController* Player, int32 Team)
+{
+	AWWOPlayerState* PS = Player ? Player->GetPlayerState<AWWOPlayerState>() : nullptr;
+	if (!bLobby || !PS || Team < 0 || Team > 1 || PS->Team == Team) return;
+	FWWOTeamDeathmatch::SetTeam(PS, Team);
+	if (AWWOCharacter* Body = Cast<AWWOCharacter>(Player->GetPawn())) Placed.Remove(Body); // to the new team's spawn room
+}
+
+void FWWOFootRaceRules::SetLobbyBots(int32 Team, int32 Count)
+{
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (!bLobby || !GS || Team < 0 || Team > 1) return;
+	if (GS->LobbyBots.Num() < 2) GS->LobbyBots.Init(0, 2);
+	bBotsChosen[Team] = true;
+	GS->LobbyBots[Team] = FMath::Clamp(Count, 0, LobbyBotMax(Team));
+}
+
+bool FWWOFootRaceRules::StartRace(const AController* By)
+{
+	// The host's own player only: a joiner's controller isn't local on the host (and has no call that starts it).
+	const APlayerController* Host = Cast<APlayerController>(By);
+	if (!bLobby || !Host || !Host->IsLocalController() || Mode.GetNetMode() == NM_Client)
+	{
+		UE_LOG(LogWWO, Display, TEXT("FootRace: start refused (%s)"), By ? *By->GetName() : TEXT("nobody"));
+		return false;
+	}
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	bLobby = false;
 	State = EWWOWaveState::Match;
+	if (GS)
+	{
+		GS->bLobby = false;
+		Mode.Roster.TeamBots[0] = GS->LobbyBots.IsValidIndex(0) ? GS->LobbyBots[0] : 0;
+		Mode.Roster.TeamBots[1] = GS->LobbyBots.IsValidIndex(1) ? GS->LobbyBots[1] : 0;
+	}
+	Placed.Reset(); // everyone to their team's spawn room
+	UE_LOG(LogWWO, Display, TEXT("FootRace: the race starts: %d bots for blue, %d for orange"), Mode.Roster.TeamBots[0], Mode.Roster.TeamBots[1]);
+	return true;
 }
 
 void FWWOFootRaceRules::SpawnPortals()
@@ -192,7 +276,20 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	UWorld* World = Mode.GetWorld();
 	const double Now = World->GetTimeSeconds();
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
+	if (bLobby)
+	{
+		// The lobby: teams and spawn rooms only. A team's bots, until the host sets them, fill it.
+		PlaceNewBodies();
+		if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+		{
+			if (GS->LobbyBots.Num() < 2) GS->LobbyBots.Init(0, 2);
+			for (int32 Team = 0; Team < 2; ++Team)
+				GS->LobbyBots[Team] = bBotsChosen[Team] ? FMath::Min(GS->LobbyBots[Team], LobbyBotMax(Team)) : LobbyBotMax(Team);
+		}
+		return;
+	}
 	BindDeaths();
+	UpdateHijacks();
 	Drain(DeltaSeconds);
 	EndBreachesDone();
 	UpdateLevers(DeltaSeconds);
@@ -219,6 +316,25 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 		const FVector Feet = Body->GetActorLocation() - FVector(0, 0, Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		for (const TWeakObjectPtr<AWWOBreachPortal>& P : Portals)
 		{
+			// The other team's hub doorway carrying that team's core: in, as a hijacker, and the core heals their boss.
+			if (P.IsValid() && P->bHub && P->Team != PS->Team && Cores[P->Team].IsValid() && Cores[P->Team]->Carrier == Body && P->Contains(Feet))
+			{
+				LastThrough.Add(Body, Now);
+				const int32 CoreTeam = P->Team;
+				RemoveCore(CoreTeam);
+				if (!IsHijacking(Body)) Hijack(Body, PS->Team, CoreTeam);
+				DeliverCore(CoreTeam, PS->Team, Body);
+				break;
+			}
+			// The other team's hub doorway, while a hijack is open to this team (bots only when allowed: they don't hijack yet).
+			if (P.IsValid() && P->bHub && P->Team != PS->Team && CanHijack(PS->Team) && !IsHijacking(Body) && P->Contains(Feet))
+			{
+				const AWWOBotController* Bot = Cast<AWWOBotController>(Controller);
+				if (Bot && !Bot->bMayHijack) continue;
+				LastThrough.Add(Body, Now);
+				Hijack(Body, PS->Team, P->Team);
+				break;
+			}
 			if (P.IsValid() && P->Team == PS->Team && P->Contains(Feet))
 			{
 				LastThrough.Add(Body, Now); // a refused step waits the cooldown too (one log line, not one a tick)
@@ -259,7 +375,7 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 		}
 	}
 	InHub.Add(Body);
-	for (int32 I = 1; I <= 4; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
+	for (int32 I = 1; I <= BossRoom; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway into the hub (%.0f energy)"), *Body->GetName(), Team,
 		*Portal->Room.ToString(), Energy(Team));
@@ -273,14 +389,12 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 void FWWOFootRaceRules::LeaveHub(AWWOCharacter* Body, int32 Team)
 {
 	InHub.Remove(Body);
-	// Carrying a core out through the hub doorway delivers it.
-	for (int32 CoreTeam = 0; CoreTeam < 2; ++CoreTeam)
+	// Carrying your own team's core out through the hub doorway delivers it. The other team's core is only
+	// delivered through their hub doorway: you keep carrying it.
+	if (Cores[Team].IsValid() && Cores[Team]->Carrier == Body)
 	{
-		if (Cores[CoreTeam].IsValid() && Cores[CoreTeam]->Carrier == Body)
-		{
-			RemoveCore(CoreTeam);
-			DeliverCore(CoreTeam, Team);
-		}
+		RemoveCore(Team);
+		DeliverCore(Team, Team, Body);
 	}
 	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
 	if (!To) return;
@@ -361,19 +475,28 @@ void FWWOFootRaceRules::BindEnemy(AWWOEnemy* Enemy)
 
 FName FWWOFootRaceRules::RoomName(int32 Index)
 {
-	static const FName Names[] = { "Spawn", "Room1", "Room2", "Room3", "Boss" };
+	static const FName Names[] = { "Spawn", "Room1", "Room2", "Room3", "Room4", "Room5", "Boss" };
+	static_assert(UE_ARRAY_COUNT(Names) == BossRoom + 1, "a name for each lane room");
 	return Index >= 0 && Index < UE_ARRAY_COUNT(Names) ? Names[Index] : NAME_None;
 }
 
 FName FWWOFootRaceRules::RoomKind(int32 Index, int32 Spawned)
 {
 	using namespace WWOIds::Enemy;
-	if (Index == 3 && Spawned == 0) return Tank; // Room3 opens with its Tank
+	// Room3 on open with a Tank; Room4 and Room5 also a second one halfway through filling (the boss room's
+	// waves have none: the boss is the big one there).
+	if (Index >= 3 && Index <= DoorCount && Spawned == 0) return Tank;
+	if (Index >= 4 && Index <= DoorCount && Spawned == 10) return Tank;
 	static const FName Room1[] = { Swarm, Swarm, Soldier };
 	static const FName Room2[] = { Soldier, Swarm, Soldier };
 	static const FName Room3[] = { Soldier, Soldier, Swarm };
-	const FName* Pattern = Index == 1 ? Room1 : Index == 2 ? Room2 : Room3;
-	return Pattern[Spawned % 3];
+	static const FName Room4[] = { Soldier, Soldier, Swarm, Soldier };
+	static const FName Room5[] = { Soldier, Soldier, Soldier, Swarm, Soldier, Swarm };
+	if (Index == 1) return Room1[Spawned % UE_ARRAY_COUNT(Room1)];
+	if (Index == 2) return Room2[Spawned % UE_ARRAY_COUNT(Room2)];
+	if (Index == 3) return Room3[Spawned % UE_ARRAY_COUNT(Room3)];
+	if (Index == 4) return Room4[Spawned % UE_ARRAY_COUNT(Room4)];
+	return Room5[Spawned % UE_ARRAY_COUNT(Room5)]; // Room5, and the boss room's waves
 }
 
 void FWWOFootRaceRules::FindRooms()
@@ -384,7 +507,7 @@ void FWWOFootRaceRules::FindRooms()
 		if (!It->ActorHasTag("RoomArea")) continue;
 		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
 		int32 Index = -1;
-		for (int32 I = 0; I < 5; ++I) if (It->ActorHasTag(RoomName(I))) Index = I;
+		for (int32 I = 0; I <= BossRoom; ++I) if (It->ActorHasTag(RoomName(I))) Index = I;
 		if (Team < 0 || Index < 0) continue;
 		FRoom Room;
 		Room.Team = Team;
@@ -398,9 +521,13 @@ void FWWOFootRaceRules::FindRooms()
 	{
 		if (!It->ActorHasTag("EnemySpawn")) continue;
 		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
-		for (int32 I = 1; I <= 4; ++I)
+		for (int32 I = 1; I <= BossRoom; ++I)
 		{
-			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I))) Rooms[*Slot].Spawns.Add(It->GetActorLocation());
+			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I)))
+			{
+				Rooms[*Slot].Spawns.Add(FTransform(FRotator(0.f, It->GetActorRotation().Yaw, 0.f), It->GetActorLocation()));
+				Rooms[*Slot].SpawnUsed.Add(-1.0e9);
+			}
 		}
 	}
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %d lane rooms"), Rooms.Num());
@@ -452,30 +579,65 @@ void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
 	for (FRoom& Room : Rooms)
 	{
 		Room.Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
-		// Only the live room spawns. The boss room only while its team's core is out (a wave comes with the
-		// core, SpawnBossWave, and refills until it is delivered), so the team can always earn the breach to
-		// fetch it, and nothing piles up while the boss fight goes on.
-		const bool bBoss = Room.Index == 4;
-		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty() || (bBoss && !Cores[Room.Team].IsValid())) continue;
-		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossWave : Mode.RoomEnemies);
+		// A lane room spawns while it is its team's live room. The boss room holds BossRoomWave from the moment
+		// its boss is up until the match ends, core or no core (Will: a steady presence there): it fills
+		// BossWaveBurst a tick (a whole wave set up in one frame would hitch), then refills one every
+		// BossRoomRefill s.
+		const bool bBoss = Room.Index == BossRoom;
+		const AWWOBoss* RoomBoss = bBoss ? BossOf(Room.Team) : nullptr;
+		const bool bLive = bBoss ? RoomBoss && !RoomBoss->IsDead() && State == EWWOWaveState::Match : Room.Index == Furthest[Room.Team];
+		if (!bLive || Room.Spawns.IsEmpty()) continue;
+		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossRoomWave : Mode.LaneRoomEnemies);
+		const float Refill = bBoss ? Mode.BossRoomRefill : Mode.LaneRoomRefill;
 		if (Room.Alive.Num() >= Want)
 		{
 			Room.bFilled = true;
-			Room.SpawnLeft = Mode.RoomRefillTime; // a death is refilled RoomRefillTime after it, not at once
+			Room.SpawnLeft = Refill; // a death is refilled Refill s after it, not at once
+			continue;
+		}
+		if (bBoss && !Room.bFilled)
+		{
+			for (int32 I = 0; I < BossWaveBurst && Room.Alive.Num() < Want; ++I) SpawnInRoom(Room);
 			continue;
 		}
 		Room.SpawnLeft -= DeltaSeconds;
 		if (Room.SpawnLeft > 0.f) continue;
 		SpawnInRoom(Room);
-		Room.SpawnLeft = Room.bFilled ? Mode.RoomRefillTime : Mode.RoomSpawnStagger;
+		Room.SpawnLeft = Room.bFilled ? Refill : Mode.LaneRoomStagger;
 	}
 }
 
 void FWWOFootRaceRules::SpawnInRoom(FRoom& Room)
 {
-	const FVector& Marker = Room.Spawns[FMath::Min(Room.Spawns.Num() - 1, (int32)(WWO::FRand() * Room.Spawns.Num()))];
+	// The marker used longest ago with nobody standing on it (any, if all are crowded), so a room fills from
+	// all of its walls; ties go to a random one.
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	const float Crowd = 1.5f * WWO::M;
+	int32 Pick = -1;
+	double Oldest = TNumericLimits<double>::Max();
+	const int32 Start = FMath::Min(Room.Spawns.Num() - 1, (int32)(WWO::FRand() * Room.Spawns.Num()));
+	for (int32 Pass = 0; Pass < 2 && Pick < 0; ++Pass)
+	{
+		for (int32 K = 0; K < Room.Spawns.Num(); ++K)
+		{
+			const int32 I = (Start + K) % Room.Spawns.Num();
+			if (Room.SpawnUsed[I] >= Oldest) continue;
+			if (Pass == 0)
+			{
+				const FVector At = Room.Spawns[I].GetLocation();
+				const bool bCrowded = Room.Alive.ContainsByPredicate([&](const TWeakObjectPtr<AWWOEnemy>& E)
+					{ return E.IsValid() && FVector::Dist2D(E->GetActorLocation(), At) < Crowd; });
+				if (bCrowded) continue;
+			}
+			Pick = I;
+			Oldest = Room.SpawnUsed[I];
+		}
+	}
+	Room.SpawnUsed[Pick] = Now;
+	const FTransform& Marker = Room.Spawns[Pick];
 	FTransform Where;
-	AWWOEnemy* Enemy = WWOEnemyKinds::SpawnDeferred(Mode.GetWorld(), RoomKind(Room.Index, Room.Spawned), Marker, Where);
+	AWWOEnemy* Enemy = WWOEnemyKinds::SpawnDeferred(Mode.GetWorld(), RoomKind(Room.Index, Room.Spawned), Marker.GetLocation(), Where,
+		SpawnScatter, Marker.Rotator().Yaw);
 	if (!Enemy) return;
 	Enemy->bRespawns = false;
 	Enemy->Lane = (int8)Room.Team;
@@ -490,11 +652,14 @@ void FWWOFootRaceRules::SpawnInRoom(FRoom& Room)
 void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 {
 	const int32 VictimTeam = UWWOWorldSubsystem::TeamOf(Victim);
-	if (InHub.Remove(Victim) > 0)
+	const bool bBreacher = InHub.Remove(Victim) > 0;
+	if (bBreacher)
 	{
 		const float Lost = Energy(VictimTeam) * Mode.BreachDeathLoss;
 		AddEnergy(VictimTeam, -Lost, TEXT("a breacher died"));
 	}
+	const bool bVictimHijacking = IsHijacking(Victim);
+	if (bVictimHijacking) EndHijack(Victim, false); // they respawn in their spawn room as any death does
 	// The kill, credited as team deathmatch credits it: whoever hit them last, lately, on the other team.
 	const bool bRecent = Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= KillCreditWindow;
 	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
@@ -503,7 +668,10 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 	if (VictimPS) ++VictimPS->Deaths;
 	if (KillerTeam >= 0 && KillerTeam != VictimTeam)
 	{
-		CreditKill(KillerTeam, Mode.EnergyPerPlayerKill, Killer, TEXT("a player kill"));
+		// A kill by a hijacker (in the enemy lane) or of one: the bonus on top.
+		const bool bHijackKill = IsHijacking(Killer) || bVictimHijacking;
+		CreditKill(KillerTeam, Mode.EnergyPerPlayerKill + (bHijackKill ? Mode.HijackKillBonus : 0.f), Killer,
+			bHijackKill ? (bVictimHijacking ? TEXT("a hijacker killed") : TEXT("a hijacker's kill")) : TEXT("a player kill"));
 		// The kill feed (the lane's AI kills stay out of it): killer > killee, as team deathmatch shows it.
 		AWWOPlayerState* KillerPS = Killer->GetPlayerState<AWWOPlayerState>();
 		const bool bPrecision = Victim->Health->bLastAttackCritical && Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 0.05;
@@ -514,6 +682,8 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 			GS->ReportKill(KillerPS, KillerPS->GetPlayerName(), KillerTeam, VictimPS ? VictimPS->GetPlayerName() : Victim->GetName(), VictimTeam,
 				bPrecision ? AWWOGameState::KillPrecision : FName(), 1);
 		}
+		// A breacher killed: their team's hub doorway opens to the killer's team.
+		if (bBreacher) OpenHijack(KillerTeam);
 	}
 }
 
@@ -554,7 +724,7 @@ void FWWOFootRaceRules::SpawnDoorsAndLevers()
 	UWorld* World = Mode.GetWorld();
 	auto DoorNumber = [](const AActor* Marker)
 	{
-		for (int32 D = 1; D <= 3; ++D) if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("Door%d"), D)))) return D;
+		for (int32 D = 1; D <= DoorCount; ++D) if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("Door%d"), D)))) return D;
 		return 0;
 	};
 	for (TActorIterator<ATargetPoint> It(World); It; ++It)
@@ -617,7 +787,7 @@ AWWOBreachLever* FWWOFootRaceRules::LeverOf(int32 Team, int32 Door) const
 bool FWWOFootRaceRules::IsLeverLive(int32 Team, int32 Door) const
 {
 	if (Team < 0 || Team > 1) return false;
-	return Door == DoorsOpen(Team) + 1 && Door <= 3 && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
+	return Door == DoorsOpen(Team) + 1 && Door <= DoorCount && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
 }
 
 void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By)
@@ -643,7 +813,7 @@ void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d opened Door %d%s"), Team, Door, bFreeze ? TEXT(" (its breach's pool is frozen)") : TEXT(""));
 	const AWWOPlayerState* ByState = By ? By->GetPlayerState<AWWOPlayerState>() : nullptr;
 	GS->ReportEvent(ByState ? ByState->GetPlayerName() : AWWOPlayerState::TeamName(Team), Team, FString::Printf(TEXT("opened Door %d"), Door));
-	if (Door == 3) SpawnBoss(Team);
+	if (Door == DoorCount) SpawnBoss(Team);
 }
 
 void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
@@ -749,7 +919,7 @@ void FWWOFootRaceRules::SpawnBoss(int32 Team)
 	AWWOBoss* Boss = World->SpawnActorDeferred<AWWOBoss>(AWWOBoss::StaticClass(), Where, nullptr, nullptr,
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 	if (!Boss) return;
-	Boss->BossHealth = Mode.BossHealth;
+	Boss->BossHealth = Mode.BossMaxHealth;
 	Boss->bRespawns = false;
 	Boss->Lane = (int8)Team;
 	Boss->FinishSpawning(Where);
@@ -759,7 +929,7 @@ void FWWOFootRaceRules::SpawnBoss(int32 Team)
 	CoreLeft[Team] = Mode.CoreDelay;
 	BindEnemy(Boss);
 	EnemyBindings.Add({ Boss, Boss->OnDied.AddWeakLambda(&Mode, [this, Team](AWWOEnemy*) { EndMatch(Team); }) });
-	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossHealth);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossMaxHealth);
 }
 
 void FWWOFootRaceRules::OpenBossWindow(int32 Team)
@@ -804,7 +974,9 @@ void FWWOFootRaceRules::EndMatch(int32 WinningTeam)
 	{
 		GS->bMatchOver = true;
 		GS->MatchWinner = (int8)WinningTeam;
+		GS->HijackUntil = { 0.f, 0.f };
 	}
+	HijackOpenUntil[0] = HijackOpenUntil[1] = 0.0;
 	if (Mode.bTestRun) Mode.RestartLeft = 6.f;
 	RemoveCore(0);
 	RemoveCore(1);
@@ -836,7 +1008,6 @@ void FWWOFootRaceRules::UpdateCores(float DeltaSeconds)
 				{
 					CoreLeft[Team] = -1.f;
 					SpawnCore(Team);
-					SpawnBossWave(Team);
 				}
 			}
 		}
@@ -858,14 +1029,20 @@ void FWWOFootRaceRules::UpdateCores(float DeltaSeconds)
 				Core->GoHome();
 				UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's dropped core went back to the hub"), Team);
 			}
-			// A fresh core is its team's to take; a dropped one is anyone's.
+			// Anyone may take it: its own team, or the other team stealing it (from its spot or dropped).
 			for (AWWOCharacter* Body : UWWOWorldSubsystem::Get(World)->GetPlayers())
 			{
 				const int32 BodyTeam = UWWOWorldSubsystem::TeamOf(Body);
-				if (!Body || Body->Health->bDead || BodyTeam < 0 || (!Core->bDropped && BodyTeam != Team)) continue;
+				if (!Body || Body->Health->bDead || BodyTeam < 0 || BodyTeam > 1) continue;
 				if (!Core->InReach(Body->GetActorLocation())) continue;
 				Core->PickUp(Body);
 				UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) picked up team %d's core"), *Body->GetName(), BodyTeam, Team);
+				if (BodyTeam != Team && GS)
+				{
+					const AWWOPlayerState* ThiefState = Body->GetPlayerState<AWWOPlayerState>();
+					GS->ReportEvent(ThiefState ? ThiefState->GetPlayerName() : Body->GetName(), BodyTeam,
+						FString::Printf(TEXT("stole %s's core"), *AWWOPlayerState::TeamName(Team)));
+				}
 				break;
 			}
 		}
@@ -900,26 +1077,13 @@ void FWWOFootRaceRules::SpawnCore(int32 Team)
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss core is in the hub"), Team);
 }
 
-void FWWOFootRaceRules::SpawnBossWave(int32 Team)
-{
-	const int32 Count = FMath::RoundToInt(Mode.BossWave);
-	for (FRoom& Room : Rooms)
-	{
-		if (Room.Team != Team || Room.Index != 4 || Room.Spawns.IsEmpty()) continue;
-		for (int32 I = 0; I < Count; ++I) SpawnInRoom(Room);
-		Room.bFilled = true; // from now on it refills at RoomRefillTime while the core is out
-		Room.SpawnLeft = Mode.RoomRefillTime;
-		UE_LOG(LogWWO, Display, TEXT("FootRace: a wave of %d in team %d's boss room"), Count, Team);
-	}
-}
-
 void FWWOFootRaceRules::RemoveCore(int32 Team)
 {
 	if (AWWOBossCore* Core = CoreOf(Team)) Core->Destroy();
 	Cores[Team] = nullptr;
 }
 
-void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
+void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam, const AWWOCharacter* By)
 {
 	AWWOBoss* Boss = BossOf(CoreTeam);
 	if (!Boss || Boss->IsDead()) return;
@@ -933,4 +1097,87 @@ void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
 	Boss->Heal(Mode.CoreHeal);
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d delivered team %d's core: its boss heals %.0f (%.0f -> %.0f)"), CarrierTeam, CoreTeam,
 		Boss->GetHealth() - Before, Before, Boss->GetHealth());
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		const AWWOPlayerState* ByState = By ? By->GetPlayerState<AWWOPlayerState>() : nullptr;
+		GS->ReportEvent(ByState ? ByState->GetPlayerName() : AWWOPlayerState::TeamName(CarrierTeam), CarrierTeam,
+			FString::Printf(TEXT("healed %s's boss"), *AWWOPlayerState::TeamName(CoreTeam)));
+	}
+}
+
+// --- Hijacking --------------------------------------------------------------------------------------
+
+bool FWWOFootRaceRules::CanHijack(int32 Team) const
+{
+	return Team >= 0 && Team <= 1 && State == EWWOWaveState::Match && HijackOpenUntil[Team] > Mode.GetWorld()->GetTimeSeconds();
+}
+
+void FWWOFootRaceRules::OpenHijack(int32 Team)
+{
+	if (Team < 0 || Team > 1 || State != EWWOWaveState::Match) return;
+	const bool bWasOpen = CanHijack(Team);
+	HijackOpenUntil[Team] = Mode.GetWorld()->GetTimeSeconds() + Mode.HijackOpenTime;
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		if (GS->HijackUntil.Num() < 2) GS->HijackUntil.Init(0.f, 2);
+		GS->HijackUntil[Team] = (float)(GS->GetServerWorldTimeSeconds() + Mode.HijackOpenTime);
+		if (!bWasOpen) GS->ReportEvent(AWWOPlayerState::TeamName(Team), Team, TEXT("can hijack"));
+	}
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d killed a breacher: team %d's hub doorway is open to it for %.0f s%s"), Team, 1 - Team,
+		Mode.HijackOpenTime, bWasOpen ? TEXT(" (again)") : TEXT(""));
+}
+
+void FWWOFootRaceRules::Hijack(AWWOCharacter* Body, int32 Team, int32 Lane)
+{
+	const AWWOBreachPortal* To = RoomPortal(Lane, RoomName(OpenedRoom(Lane)));
+	if (!To) return;
+	InHub.Remove(Body); // the breach is over for them: no drain from here
+	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	Hijackers.Add(Body, Mode.GetWorld()->GetTimeSeconds() + Mode.HijackStayTime);
+	AWWOPlayerState* PS = Body->GetPlayerState<AWWOPlayerState>();
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (PS) PS->HijackUntil = GS ? (float)(GS->GetServerWorldTimeSeconds() + Mode.HijackStayTime) : 1.f;
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) hijacked into team %d's %s (%.0f s)"), *Body->GetName(), Team, Lane, *To->Room.ToString(), Mode.HijackStayTime);
+	if (GS) GS->ReportEvent(PS ? PS->GetPlayerName() : Body->GetName(), Team, TEXT("hijacked"));
+}
+
+void FWWOFootRaceRules::EndHijack(AWWOCharacter* Body, bool bSendHome)
+{
+	Hijackers.Remove(Body);
+	if (!Body) return;
+	if (AWWOPlayerState* PS = Body->GetPlayerState<AWWOPlayerState>()) PS->HijackUntil = 0.f;
+	const int32 Team = UWWOWorldSubsystem::TeamOf(Body);
+	if (bSendHome && Team >= 0 && Team <= 1) SendToOpenedRoom(Body, Team);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d)'s hijack is over%s"), *Body->GetName(), Team, bSendHome ? TEXT(": time's up, back to its own lane") : TEXT(""));
+}
+
+void FWWOFootRaceRules::SendToOpenedRoom(AWWOCharacter* Body, int32 Team)
+{
+	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
+	if (!To) return;
+	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	LastThrough.Add(Body, Mode.GetWorld()->GetTimeSeconds());
+}
+
+void FWWOFootRaceRules::UpdateHijacks()
+{
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		if (HijackOpenUntil[Team] <= 0.0 || HijackOpenUntil[Team] > Now) continue;
+		HijackOpenUntil[Team] = 0.0;
+		if (GS && GS->HijackUntil.IsValidIndex(Team)) GS->HijackUntil[Team] = 0.f;
+		UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's hijack window closed"), Team);
+	}
+	TArray<AWWOCharacter*> Dead, Home;
+	for (auto It = Hijackers.CreateIterator(); It; ++It)
+	{
+		AWWOCharacter* Body = It->Key.Get();
+		if (!Body) It.RemoveCurrent();                                 // gone (left the match)
+		else if (Body->Health->bDead) Dead.Add(Body);                  // (OnPlayerDied normally ends it first)
+		else if (It->Value <= Now) Home.Add(Body);
+	}
+	for (AWWOCharacter* Body : Dead) EndHijack(Body, false);
+	for (AWWOCharacter* Body : Home) EndHijack(Body, true);
 }

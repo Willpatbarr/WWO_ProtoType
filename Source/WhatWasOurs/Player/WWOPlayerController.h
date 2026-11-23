@@ -23,6 +23,7 @@ class UWWOSettingsMenu;
 class UWWOCharacterMenu;
 class UWWOLaunchMenu;
 class UWWOScoreboard;
+class UWWOFootRaceLobby;
 class UWWOFiringTester;
 class AWWOCharacter;
 class FWWOMenuCursor;
@@ -57,6 +58,11 @@ public:
 	virtual void BeginPlay() override;
 	// PvP: move to the other team (the host decides; it replicates).
 	UFUNCTION(Server, Reliable) void ServerSwitchTeam();
+	// FootRace's lobby: join a team (a joiner asks the host); the host's own bots per team and its start.
+	void LobbyChooseTeam(int32 Team);
+	UFUNCTION(Server, Reliable) void ServerLobbyTeam(int32 Team);
+	void LobbyBots(int32 Team, int32 Count); // host
+	bool LobbyStart();                       // host: false if refused
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
@@ -137,6 +143,8 @@ private:
 	UPROPERTY() TObjectPtr<UWWOLaunchMenu> LaunchMenu; // only when the map opened on the launch screen
 	UPROPERTY() TObjectPtr<UWWOScoreboard> Scoreboard; // the end of a PvP match (made when the first one ends)
 	void UpdateScoreboard();
+	UPROPERTY() TObjectPtr<UWWOFootRaceLobby> Lobby;   // FootRace's lobby (AWWOGameState::bLobby)
+	void UpdateLobby();
 	UPROPERTY() TObjectPtr<UWWOFiringTester> FiringTester; // only in the firing tester (AWWOGameMode::bTester)
 	bool ScriptHeld[(int32)EWWOAction::Count] = {};
 	bool ScriptQueued[(int32)EWWOAction::Count] = {};

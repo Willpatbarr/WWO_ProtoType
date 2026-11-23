@@ -49,6 +49,12 @@ namespace WWOFX
 
 	// The floor point under a spot, if any (within Reach cm).
 	bool GroundBelow(UWorld* World, const FVector& Point, float Reach, FVector& OutGround, const AActor* Ignore = nullptr);
+	// Where something that lies on the ground (a pool, a spore patch) settles under Rest, the spot it would
+	// take resting where it landed: Rest itself on ordinary ground; the floor below when it landed on top of
+	// cover (an actor tagged Cover: a crate, a broken wall, a rock, often a hidden collision box under a kit
+	// piece on the dressed maps), or when it went off in the air more than 30 cm above the ground. A 12 m pool
+	// on a rock's top hangs in the air and hurts nobody on the floor. Rest if there is no ground within Reach.
+	FVector SettleOnGround(UWorld* World, const FVector& Rest, float Reach, const AActor* Ignore = nullptr);
 }
 
 UENUM()

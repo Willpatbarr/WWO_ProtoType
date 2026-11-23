@@ -18,7 +18,8 @@ int32 FWWOBotRoster::Wanted(const AWWOGameMode& GM) const
 	// The launch screen's count when it gave one (a local match fills the map's teams exactly), else
 	// the Bots setting (or -WWOBots); then one more per person who left, one fewer per person who joined.
 	// (A test run takes only what its command line asks for, not the saved Bots setting.)
-	const int32 Asked = OptionBots >= 0 ? OptionBots : FMath::Max(BotsWanted, GM.bTestRun ? 0 : FMath::RoundToInt(GM.Bots));
+	const int32 Asked = TeamBots[0] >= 0 && TeamBots[1] >= 0 ? TeamBots[0] + TeamBots[1]
+		: OptionBots >= 0 ? OptionBots : FMath::Max(BotsWanted, GM.bTestRun ? 0 : FMath::RoundToInt(GM.Bots));
 	return FMath::Clamp(Asked + BotsExtra, 0, 11);
 }
 
@@ -33,6 +34,18 @@ void FWWOBotRoster::Update(AWWOGameMode& GM, FWWOMatchRules& Match)
 	++BotsSpawned;
 	if (Bot->PlayerState) Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("bot%d"), BotsSpawned));
 	GM.BalanceTeam(Bot);
+	// FootRace's lobby chose each team's bots: this one goes to a team still short of its count.
+	if (TeamBots[0] >= 0 && TeamBots[1] >= 0)
+	{
+		int32 Have[2] = { 0, 0 };
+		for (TActorIterator<AWWOBotController> It(World); It; ++It)
+		{
+			const AWWOPlayerState* PS = It->GetPlayerState<AWWOPlayerState>();
+			if (*It != Bot && PS && PS->Team >= 0 && PS->Team <= 1) ++Have[PS->Team];
+		}
+		if (Have[0] < TeamBots[0]) GM.SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);
+		else if (Have[1] < TeamBots[1]) GM.SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 1);
+	}
 	// -WWOBotsPeace: every bot on one team, so nobody fights and they all just roam the map (a
 	// steady scene of moving characters for performance tests).
 	if (WWOSwitches::Has(TEXT("WWOBotsPeace"))) GM.SetTeam(Bot->GetPlayerState<AWWOPlayerState>(), 0);

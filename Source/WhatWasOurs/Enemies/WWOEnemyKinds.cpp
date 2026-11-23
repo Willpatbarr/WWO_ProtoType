@@ -38,7 +38,8 @@ const FWWOEnemyKind* WWOEnemyKinds::Of(const AWWOEnemy* Enemy)
 	return Enemy ? All().FindByPredicate([Enemy](const FWWOEnemyKind& K) { return Enemy->IsA(K.Class); }) : nullptr;
 }
 
-AWWOEnemy* WWOEnemyKinds::SpawnDeferred(UWorld* World, FName Kind, const FVector& Marker, FTransform& OutWhere)
+AWWOEnemy* WWOEnemyKinds::SpawnDeferred(UWorld* World, FName Kind, const FVector& Marker, FTransform& OutWhere, float ScatterCm,
+	TOptional<float> FacingYaw)
 {
 	// Moved from FWWOWaveRules::SpawnEnemy as it was (the random draws in the same order).
 	const FWWOEnemyKind& Entry = FindOrSwarm(Kind);
@@ -54,7 +55,7 @@ AWWOEnemy* WWOEnemyKinds::SpawnDeferred(UWorld* World, FName Kind, const FVector
 	FVector Feet = Marker;
 	for (int32 Try = 0; Try < 8; ++Try)
 	{
-		const float Scatter = Entry.SpawnScatter;
+		const float Scatter = ScatterCm >= 0.f ? ScatterCm : Entry.SpawnScatter;
 		const FVector Offset = Scatter > 0.f ? FVector(WWO::FRandRange(-Scatter, Scatter), WWO::FRandRange(-Scatter, Scatter), 0.f) : FVector::ZeroVector;
 		const FVector Spot = Marker + Offset;
 		FNavLocation OnMesh;
@@ -75,6 +76,7 @@ AWWOEnemy* WWOEnemyKinds::SpawnDeferred(UWorld* World, FName Kind, const FVector
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	Params.bDeferConstruction = true;
-	OutWhere = FTransform(FRotator(0.f, WWO::FRandRange(0.f, 360.f), 0.f), Feet + FVector(0, 0, HalfHeight));
+	const float Yaw = FacingYaw.IsSet() ? FacingYaw.GetValue() : WWO::FRandRange(0.f, 360.f);
+	OutWhere = FTransform(FRotator(0.f, Yaw, 0.f), Feet + FVector(0, 0, HalfHeight));
 	return World->SpawnActor<AWWOEnemy>(Class, OutWhere, Params);
 }

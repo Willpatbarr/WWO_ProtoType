@@ -79,6 +79,7 @@ public:
 	static int32 Callouts;   // callouts a teammate acted on
 	AWWOCharacter* GetFoe() const { return Foe.Get(); }
 	bool IsFollowing() const { return Leader.IsValid(); }
+	bool bMayHijack = false; // FootRace: bots don't hijack yet; the rules refuse one unless this is set (tests)
 	bool bParked = false; // -WWOBotsLineUp (performance tests): it stands where it was put and does nothing
 
 private:

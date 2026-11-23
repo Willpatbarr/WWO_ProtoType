@@ -79,6 +79,8 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 	M.bAutoTestTester = WWOSwitches::Has(TEXT("WWOAutoTestTester"));
 	M.bAutoTestFootRaceBots = WWOSwitches::Has(TEXT("WWOAutoTestFootRaceBots"));
 	M.bAutoTestFootRace = !M.bAutoTestFootRaceBots && WWOSwitches::Has(TEXT("WWOAutoTestFootRace"));
+	M.bAutoTestSurfaces = WWOSwitches::Has(TEXT("WWOAutoTestSurfaces"));
+	M.bAutoTestLobby = WWOSwitches::Has(TEXT("WWOAutoTestLobby"));
 	M.bAutoTestGunsOnly = WWOSwitches::Has(TEXT("WWOAutoTestGuns"));
 	M.bAutoTestHiddenOnly = WWOSwitches::Has(TEXT("WWOAutoTestHidden"));
 	M.bAutoTestModsOnly = M.bAutoTestGunsOnly || M.bAutoTestHiddenOnly || WWOSwitches::Has(TEXT("WWOAutoTestMods"))
@@ -91,7 +93,7 @@ FWWOAutoTestModes FWWOAutoTestModes::Read(const AWWOPlayerController& Controller
 
 bool FWWOAutoTestModes::Any() const
 {
-	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestHover || bAutoTestTester || bAutoTestFootRace || bAutoTestFootRaceBots || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
+	return bRegress || bPerfTest || bAutoTestTitle || bAutoTestTabs || bAutoTestHover || bAutoTestTester || bAutoTestFootRace || bAutoTestFootRaceBots || bAutoTestSurfaces || bAutoTestLobby || bAutoTestPvP || bJoinerStress || bAutoTestNet || bAutoTest;
 }
 
 TSharedPtr<FWWOAutoTest> FWWOAutoTest::MakeIfAsked(AWWOPlayerController& Controller)
@@ -140,6 +142,8 @@ void FWWOAutoTest::Tick(float DeltaTime)
 	else if (bAutoTestTester) { if (PC->IsLocalController()) UpdateAutoTesterTest(DeltaTime); }
 	else if (bAutoTestFootRace) { if (PC->IsLocalController()) UpdateAutoFootRaceTest(DeltaTime); }
 	else if (bAutoTestFootRaceBots) { if (PC->IsLocalController()) UpdateAutoFootRaceBotsTest(DeltaTime); }
+	else if (bAutoTestSurfaces) { if (PC->IsLocalController()) UpdateAutoSurfacesTest(DeltaTime); }
+	else if (bAutoTestLobby) { if (PC->IsLocalController()) UpdateAutoLobbyTest(DeltaTime); }
 	else if (bAutoTestPvP) UpdateAutoPvPTest(DeltaTime);
 	else if (bJoinerStress) LogJoinerStress(DeltaTime);
 	else if (bAutoTestNet) UpdateAutoNetTest(DeltaTime);

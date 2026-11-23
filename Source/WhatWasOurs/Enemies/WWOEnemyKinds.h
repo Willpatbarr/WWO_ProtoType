@@ -34,6 +34,10 @@ namespace WWOEnemyKinds
 	// Spawns one of this kind at a spawn marker, deferred (set its fields, then FinishSpawning(OutWhere)):
 	// within the kind's SpawnScatter of the marker, its feet on the marker's height, on the navmesh and
 	// clear of anything solid (8 tries, then the nearest navmesh spot). Null if it couldn't be spawned.
-	// The waves' placement (FWWOWaveRules::SpawnEnemy), shared with FootRace's rooms.
-	AWWOEnemy* SpawnDeferred(UWorld* World, FName Kind, const FVector& Marker, FTransform& OutWhere);
+	// The waves' placement (FWWOWaveRules::SpawnEnemy), shared with FootRace's rooms. ScatterCm >= 0
+	// replaces the kind's SpawnScatter (FootRace's wall markers: a tight one, so it comes out at the wall),
+	// and FacingYaw (degrees, Unreal yaw) replaces the random facing; the defaults draw exactly as the
+	// waves always have.
+	AWWOEnemy* SpawnDeferred(UWorld* World, FName Kind, const FVector& Marker, FTransform& OutWhere, float ScatterCm = -1.f,
+		TOptional<float> FacingYaw = {});
 }

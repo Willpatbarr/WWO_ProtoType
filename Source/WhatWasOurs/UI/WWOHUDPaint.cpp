@@ -19,6 +19,7 @@
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOFootRaceRules.h"
 #include "World/WWOBreachLever.h"
 #include "World/WWOBossCore.h"
 #include "EngineUtils.h"
@@ -1121,7 +1122,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const FString Number = FString::Printf(TEXT("%.0f"), Energy);
 		const FLinearColor NumberColor = Energy >= Threshold ? Color : WWO::Darkened(Color, 0.35f);
 		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), Type::Small, NumberColor, Slot == 0 ? 1.f : 0.f, 0.5f, EWeight::SemiBold);
-		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
+		// The team's boss, once its last door is open: its health, and its shield or how long the window has left.
 		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
 		if (BossLeft >= 0.f)
 		{
@@ -1136,12 +1137,32 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), Type::Small, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 0.f, EWeight::SemiBold);
 		}
 	}
+	// Hijacking (Game/WWOFootRaceRules.h): a team's open window, small under its bar, for both teams; and
+	// your own time left in the enemy lane, under the match line.
+	const double ServerNow = GS->GetServerWorldTimeSeconds();
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float Left = GS->HijackUntil.IsValidIndex(Team) && GS->HijackUntil[Team] > 0.f ? float(GS->HijackUntil[Team] - ServerNow) : 0.f;
+		if (Left <= 0.f) continue;
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f);
+		const float X = F.Center.X + (Slot == 0 ? -Gap * 0.5f : Gap * 0.5f);
+		const FString Line = Team == Mine ? FString::Printf(TEXT("YOUR TEAM CAN HIJACK  %.0fs"), FMath::CeilToFloat(Left))
+			: FString::Printf(TEXT("THEY CAN HIJACK  %.0fs"), FMath::CeilToFloat(Left));
+		P.Text(Line, FVector2D(X, Top + BarSize.Y + 9.f), Type::Small, Color, Slot == 0 ? 1.f : 0.f, 0.f, EWeight::SemiBold);
+	}
+	if (const AWWOPlayerState* MyState = F.Pl->GetPlayerState<AWWOPlayerState>(); MyState && MyState->HijackUntil > 0.f)
+	{
+		const float Left = FMath::Max(0.f, float(MyState->HijackUntil - ServerNow));
+		Tag(P, FString::Printf(TEXT("HIJACKING  %.0fs"), FMath::CeilToFloat(Left)), FVector2D(F.Center.X, 64.f), Type::Title,
+			Mine == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f, 0.f);
+	}
 	// Carrying a core: where to take it.
 	for (TActorIterator<AWWOBossCore> It(F.Pl->GetWorld()); It; ++It)
 	{
 		if (It->Carrier != F.Pl) continue;
 		const FString Line = It->Team == Mine ? TEXT("You have your core: take it through your hub doorway to drop your boss's shield")
-			: TEXT("You have their core: take it through your hub doorway to heal their boss");
+			: TEXT("You have their core: take it through THEIR hub doorway to heal their boss");
 		Tag(P, Line, F.Center + FVector2D(0, 160), Type::Title, It->Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f, 0.5f); // sRGB (the painter converts)
 	}
 	// At one of your team's levers: what holding the key does, or why it won't, and how far a pull has got.
@@ -1166,14 +1187,15 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 
 void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
 {
-	// Two tracks on the right edge, your team's on the left: three circles each, Door1 at the bottom (the
-	// race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
+	// Two tracks on the right edge, your team's on the left: a circle per door (FWWOFootRaceRules::DoorCount)
+	// each, Door1 at the bottom (the race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
 	// team breaches and shrinks from both ends toward its middle as the breach's energy drains.
 	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
 	if (!GS || GS->DoorsOpen.Num() < 2) return;
 	const FWWOPainter& P = F.P;
 	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
-	constexpr float TrackTall = 420.f, Radius = 15.f, Apart = 66.f, BarTall = 150.f;
+	constexpr int32 Doors = FWWOFootRaceRules::DoorCount;
+	constexpr float TrackTall = 480.f, Radius = 14.f, Apart = 66.f, BarTall = 150.f;
 	const float Top = F.Center.Y - TrackTall * 0.5f;
 	const float RightX = P.Size.X - 46.f;
 	const double Now = FPlatformTime::Seconds();
@@ -1188,10 +1210,10 @@ void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
 		const int32 Opened = GS->DoorsOpen.IsValidIndex(Team) ? GS->DoorsOpen[Team] : 0;
 		// The track: line segments between the circles (and past the first and last), the circles on it.
 		float PrevY = Top;
-		for (int32 Slot3 = 1; Slot3 <= 3; ++Slot3) // top to bottom: Door3, Door2, Door1
+		for (int32 Step = 1; Step <= Doors; ++Step) // top to bottom: the last door .. Door1
 		{
-			const int32 Door = 4 - Slot3;
-			const float Y = Top + TrackTall * Slot3 / 4.f;
+			const int32 Door = Doors + 1 - Step;
+			const float Y = Top + TrackTall * Step / float(Doors + 1);
 			P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Y - Radius - PrevY), Dim);
 			if (Door <= Opened) P.Disc(FVector2D(X, Y), Radius, Color);
 			P.Ring(FVector2D(X, Y), Radius, Color, 2.f);
