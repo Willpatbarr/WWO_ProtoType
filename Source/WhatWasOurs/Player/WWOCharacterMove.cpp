@@ -71,7 +71,6 @@ namespace
 		{ &AWWOCharacter::MantleTime,     nullptr,                0.05f, 2.f },
 		{ &AWWOCharacter::GroundAccel,    nullptr,                5.f,   600.f },
 		{ &AWWOCharacter::GroundDecel,    nullptr,                5.f,   600.f },
-		{ &AWWOCharacter::SlideLookTurn,  nullptr,                0.f,   1440.f },
 	};
 	constexpr int32 MoveStatCount = UE_ARRAY_COUNT(MoveStatTable);
 }
@@ -447,11 +446,9 @@ void AWWOCharacter::StartSlide(const FVector& WishDir)
 {
 	MoveState.bSliding = true;
 	MoveState.bSlideQueued = false;
-	// A slide goes where you are looking, and keeps turning with your view (SlideLookTurn). With that
-	// at 0 it is the old slide: along your real velocity (after a jump your flight path), locked.
-	const FVector Moving(GetVelocity().X, GetVelocity().Y, 0.f);
-	const FVector Facing = FRotator(0, GetActorRotation().Yaw, 0).Vector();
-	MoveState.SlideDir = SlideLookTurn > 0.f ? Facing : Moving.Size() > 1.f * WWO::M ? Moving.GetSafeNormal() : (!WishDir.IsNearlyZero() ? WishDir : Facing);
+	// A slide goes the way you are looking when it starts, and holds that line to its end: neither the
+	// stick nor turning your view changes it.
+	MoveState.SlideDir = FRotator(0, GetActorRotation().Yaw, 0).Vector();
 	MoveState.SlideSpeedNow = M("slide_speed", SlideSpeed);
 	MoveState.bCrouching = true;
 	MoveState.bSprinting = false;
@@ -564,14 +561,6 @@ void AWWOCharacter::ApplyHorizontal(const FVector& WishDir, bool bOnFloor, float
 		// Constant slow-down chosen so the slide covers exactly SlideDistance.
 		const float End = M("crouch_speed", CrouchSpeed);
 		MoveState.SlideSpeedNow = WWO::MoveToward(MoveState.SlideSpeedNow, End, SlideDecel() * DeltaSeconds);
-		// The slide turns toward where you look, at SlideLookTurn degrees a second (the stick does nothing to it).
-		if (SlideLookTurn > 0.f)
-		{
-			const float Now = FMath::Atan2(MoveState.SlideDir.Y, MoveState.SlideDir.X);
-			const float Step = FMath::DegreesToRadians(SlideLookTurn) * DeltaSeconds;
-			const float Yaw = Now + FMath::Clamp(FMath::FindDeltaAngleRadians(Now, FMath::DegreesToRadians(GetActorRotation().Yaw)), -Step, Step);
-			MoveState.SlideDir = FVector(FMath::Cos(Yaw), FMath::Sin(Yaw), 0.f);
-		}
 		WishVelocity = MoveState.SlideDir * MoveState.SlideSpeedNow * WWO::M;
 		MoveState.GroundVel = FVector2D(WishVelocity.X, WishVelocity.Y) / WWO::M;
 		if (MoveState.SlideSpeedNow <= End) MoveState.bSliding = false;
