@@ -479,27 +479,17 @@ def make_foam():
     return finish(m)
 
 
-GLOW = """
-// A light, not paint: hot at full strength (it clips toward yellow-white and blooms), with slow drifting
-// variation along the strip so it reads as something burning inside the stone.
-float n = Nz.r * 0.6 + Nz.a * 0.4;
-float k = lerp(1.0 - Flicker, 1.0 + Flicker, n);
-return lerp(Color, Hot, saturate(n * 1.6 - 0.35) * Core) * Glow * k;
-"""
-
-
 def glow_parent():
-    """M_WWO_CasGlow: Cascade's light strips (unlit, emissive well above 1 so the bloom makes a halo)."""
-    m = material("M_WWO_CasGlow", shading_model=unreal.MaterialShadingModel.MSM_UNLIT)
-    p = new(m, unreal.MaterialExpressionWorldPosition, -1600, -300)
-    t = new(m, unreal.MaterialExpressionTime, -1600, -200)
-    uv = custom(m, "GlowUV", "return float2(P.x + P.y, P.z) / 330.0 + float2(T * 0.03, -T * 0.05);", 2, [("P", p, ""), ("T", t, "")], -1300, -300)
-    nz = sample(m, "Noise", tex("T_Cas_Noise"), ST.SAMPLERTYPE_MASKS, (uv, ""), -1000, -300)
-    col = custom(m, "Glow", GLOW, 3, [("Nz", nz, "RGBA"), ("Color", color(m, "Color", (1.0, 0.17, 0.015), -900, 0), ""),
-                                      ("Hot", color(m, "Hot", (1.0, 0.45, 0.10), -900, 150), ""), ("Glow", scalar(m, "Glow", 7.0, -900, 300), ""),
-                                      ("Flicker", scalar(m, "Flicker", 0.25, -900, 380), ""), ("Core", scalar(m, "Core", 0.8, -900, 460), "")], -500, -100)
-    mel.connect_material_property(col, "", MP.MP_EMISSIVE_COLOR)
-    return finish(m)
+    """M_WWO_Lamp (Tools/build_maps.py's lamp_instance: unlit, Color x Glow), flagged for the prop fields."""
+    path = "/Game/WWO/Materials/M_WWO_Lamp"
+    m = eal.load_asset(path)
+    if not m:
+        raise RuntimeError("missing M_WWO_Lamp: build a map with Tools/build_maps.py first")
+    if not m.get_editor_property("used_with_instanced_static_meshes"):
+        m.set_editor_property("used_with_instanced_static_meshes", True)
+        mel.recompile_material(m)
+        eal.save_loaded_asset(m)
+    return m
 
 
 # Slot name -> instance. Tints are sRGB-looking linear multipliers over the kit's textures.
@@ -517,7 +507,7 @@ def make_materials():
         "Cas_Stone": instance("MI_Cas_Stone", stone, scalars={"StoneSize": 700.0, "MossAmount": 0.9}, colors={"Tint": (1.45, 1.42, 1.4), "MossTint": (0.62, 0.72, 0.5)}),
         "Cas_Rock": instance("MI_Cas_Rock", rock, colors={"Tint": (1.55, 1.45, 1.35), "MossTint": (0.7, 0.8, 0.5)}),
         "Cas_Moss": instance("MI_Cas_Moss", rock, scalars={"MossAmount": 3.0, "MossSlope": 0.0}),
-        "Cas_Glow": instance("MI_Cas_Glow", glow_parent(), scalars={"Glow": 7.0}),
+        "Cas_Glow": instance("MI_Cas_Glow", glow_parent(), scalars={"Glow": 4.5}, colors={"Color": (1.0, 0.42, 0.1)}),
         "Cas_Bark": instance("MI_Cas_Bark", bark),
         "Cas_LeafRed": instance("MI_Cas_LeafRed", leaf, colors={"Tint": (1.0, 0.72, 0.66)}, scalars={"Backlight": 0.14}),
         "Cas_LeafGreen": instance("MI_Cas_LeafGreen", leaf, colors={"Tint": (0.55, 0.62, 0.4)}),
