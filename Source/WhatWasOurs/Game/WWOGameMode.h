@@ -68,6 +68,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomEnemies = 20.f;    // enemies a team's live room holds
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomStagger = 0.2f;    // s between spawns while a room first fills
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomRefill = 1.5f;     // s between spawns once it has filled
+	UPROPERTY(EditAnywhere, Category = "FootRace") float HijackOpenTime = 30.f;     // s the other team's hub doorway stays open to a team after it kills a breacher
+	UPROPERTY(EditAnywhere, Category = "FootRace") float HijackStayTime = 30.f;     // s each hijacker stays in the enemy lane
+	UPROPERTY(EditAnywhere, Category = "FootRace") float HijackKillBonus = 25.f;    // extra energy for a kill by or of a hijacker
 	// Bot players (PvP; AWWOBotController reads these, the host's values count).
 	UPROPERTY(EditAnywhere, Category = "Bots") float Bots = 0.f;            // how many join (more can be added mid-match; -WWOBots=N too)
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotHealth = 100.f;     // every bot's health and shield, before its own shell parts and traits

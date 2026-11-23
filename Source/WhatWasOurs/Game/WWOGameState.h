@@ -41,6 +41,9 @@ public:
 	UPROPERTY(Replicated) TArray<float> BossWindow;
 	// Each team's boss core: 0 none, 1 in the hub, 2 carried, 3 dropped.
 	UPROPERTY(Replicated) TArray<uint8> CoreState;
+	// Each team's hijack window: the server time (GetServerWorldTimeSeconds) the other team's hub doorway
+	// closes to it again (0: closed).
+	UPROPERTY(Replicated) TArray<float> HijackUntil;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

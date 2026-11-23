@@ -8,4 +8,5 @@ void AWWOPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(AWWOPlayerState, Kills);
 	DOREPLIFETIME(AWWOPlayerState, PrecisionKills);
 	DOREPLIFETIME(AWWOPlayerState, Deaths);
+	DOREPLIFETIME(AWWOPlayerState, HijackUntil);
 }

@@ -207,6 +207,16 @@ walks the table in its order (the HUD line's).
     earned by kills (an enemy's `LastHitBy`, a player's `LastAttacker`), needed to enter the hub
     (`BreachThreshold`), drained per breacher per second; out of energy sends the team's breachers back,
     a breacher's death costs a share. The HUD draws both pools under the match line (`PaintBreachEnergy`).
+    Hijacking (Will's rules, replacing the design doc's section 4): killing a breacher (`OnPlayerDied`, the
+    victim was in the hub) opens the victim team's hub doorway to the killer's whole team for `HijackOpenTime`
+    s (`OpenHijack`; another such kill restarts it; `AWWOGameState::HijackUntil`, server time). Stepping
+    into it then takes a player into that team's lane at its furthest opened room's doorway (`Hijack`):
+    their breach ends, nothing is paid or drained. After `HijackStayTime` s (`AWWOPlayerState::HijackUntil`)
+    `UpdateHijacks` brings them back to their own furthest opened room; a death just ends it. A kill by or
+    of a hijacker earns `EnergyPerPlayerKill + HijackKillBonus` through `CreditKill`. Bots don't hijack
+    yet (the doorway refuses a bot without `AWWOBotController::bMayHijack`); they fight a hijacker they
+    see as any enemy player. The HUD shows each open window under its team's bar and a hijacker's time left;
+    the kill feed says "<TEAM> can hijack" and "<player> hijacked".
     A lane is Spawn, Room1..Room5, Boss (`FWWOFootRaceRules::DoorCount` = 5 doors, `BossRoom` its index;
     `Tools/footrace_layout.py`'s `ROOMS` must match). Lane rooms (`RoomArea` markers, their scale the size
     in m; 76 x 40 m, the boss room 90 x 60): a team's furthest room (the furthest any of its players has

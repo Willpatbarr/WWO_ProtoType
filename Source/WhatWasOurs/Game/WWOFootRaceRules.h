@@ -25,8 +25,9 @@
 // Breach portals (World/WWOBreachPortal.h): one doorway in each lane room on the hub side, one per team
 // in the hub. Stepping into one of your team's room doorways puts you in front of your team's hub
 // doorway; stepping into your hub doorway puts you back in front of the room doorway you came through
-// (Room1's if you never came through one). The other team's doorways do nothing for you (hijacking
-// comes later). Players in the hub are breachers; leaving through the hub doorway (or dying) ends it.
+// (Room1's if you never came through one). The other team's doorways do nothing for you, but for the
+// other team's hub doorway while a hijack is open to your team (below). Players in the hub are breachers;
+// leaving through the hub doorway (or dying, or hijacking) ends it.
 //
 // Breach energy: one pool per team (AWWOGameState::BreachEnergy), the game mode's FootRace tunables.
 // - Earned: EnergyPerEnemy for each AI enemy a player of the team kills (the enemy's LastHitBy), and
@@ -36,7 +37,21 @@
 // - Drained: BreachDrain per second for each of the team's breachers.
 // - Out of energy: every breacher of that team goes back through the hub doorway to their room.
 // - A breacher's death costs the team BreachDeathLoss of its pool.
-// - (Later: the hijack costs and bonuses.)
+// - Hijack kills (below): HijackKillBonus on top of EnergyPerPlayerKill.
+//
+// Hijacking (Will's rules, 2026-11-23; they replace the design doc's section 4: no cost, no drain, the
+// whole team). A player who kills a breacher of the other team (the victim was in the hub) opens the
+// victim team's hub doorway to the killer's whole team for HijackOpenTime s (another such kill while it
+// is open starts the time again; AWWOGameState::HijackUntil, the kill feed's "<TEAM> can hijack").
+// While open, a player of that team who steps into the victim team's hub doorway is taken into the
+// victim team's lane, in front of the room doorway of that team's furthest opened room (where its own
+// breachers land leaving the hub); that ends their breach, costs nothing and drains nothing. A hijacker
+// stays HijackStayTime s (AWWOPlayerState::HijackUntil; the HUD counts it down), then is brought back to
+// their own team's furthest opened room as LeaveHub brings a breacher (no core is delivered that way).
+// A hijacker who dies respawns as any death does, the hijack over. A hijacker's kill of a player of the
+// lane's team earns their team EnergyPerPlayerKill + HijackKillBonus; the defenders killing a hijacker
+// earn the same (both through CreditKill). The lane's AI ignores hijackers (AWWOEnemy::Lane). Bots don't
+// hijack yet: the doorway refuses a bot unless its bMayHijack is set (tests).
 //
 // Doors and levers (World/WWOBreachDoor.h, WWOBreachLever.h; DoorSlot and LeverSlot markers): Door1-5
 // (DoorCount) close the doorways out of Room1-5. A door's lever in the hub is live only when its door is the
@@ -155,6 +170,9 @@ public:
 	// A core of CoreTeam's carried out through CarrierTeam's hub doorway: CoreTeam's own opens its boss's
 	// next window; the other team's heals CoreTeam's boss CoreHeal.
 	void DeliverCore(int32 CoreTeam, int32 CarrierTeam);
+	// Hijacking: whether the team may go into the other team's lane now, and who is in an enemy lane.
+	bool CanHijack(int32 Team) const;
+	bool IsHijacking(const AWWOCharacter* Body) const { return Hijackers.Contains(Body); }
 	// Energy earned by Killer's team: to the pool, or (while frozen) to the next pool, or split in the hub.
 	void CreditKill(int32 Team, float Amount, const AWWOCharacter* Killer, const TCHAR* Why);
 
@@ -165,6 +183,15 @@ private:
 	// The hub doorway's way out: in front of the doorway of the furthest room the team has opened.
 	void LeaveHub(AWWOCharacter* Body, int32 Team);
 	void BindDeaths();                       // each new player's and enemy's death, once
+	// Hijacking: open the other team's hub doorway to Team; take Body (of Team) into Lane's lane; end a
+	// hijack (bSendHome: back to its own team's furthest opened room); close windows and hijacks whose time is up.
+	void OpenHijack(int32 Team);
+	void Hijack(AWWOCharacter* Body, int32 Team, int32 Lane);
+	void EndHijack(AWWOCharacter* Body, bool bSendHome);
+	void UpdateHijacks();
+	void SendToOpenedRoom(AWWOCharacter* Body, int32 Team); // in front of the doorway of the team's furthest opened room
+	TMap<TWeakObjectPtr<AWWOCharacter>, double> Hijackers; // each hijacker and when its time is up (world s)
+	double HijackOpenUntil[2] = { 0.0, 0.0 };              // when each team's hijack window closes (0: closed)
 	void OnPlayerDied(AWWOCharacter* Victim);
 	void OnEnemyDied(AWWOEnemy* Enemy);
 	void Drain(float DeltaSeconds);

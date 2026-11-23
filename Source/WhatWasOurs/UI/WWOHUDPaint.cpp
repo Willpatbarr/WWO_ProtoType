@@ -1137,6 +1137,26 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 			P.Text(BossLine, FVector2D(BossPos.X + (Slot == 0 ? BarSize.X : 0.f), BossPos.Y + 10.f), Type::Small, FLinearColor(1.f, 0.6f, 0.55f), Slot == 0 ? 1.f : 0.f, 0.f, EWeight::SemiBold);
 		}
 	}
+	// Hijacking (Game/WWOFootRaceRules.h): a team's open window, small under its bar, for both teams; and
+	// your own time left in the enemy lane, under the match line.
+	const double ServerNow = GS->GetServerWorldTimeSeconds();
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		const int32 Team = Slot == 0 ? Mine : 1 - Mine;
+		const float Left = GS->HijackUntil.IsValidIndex(Team) && GS->HijackUntil[Team] > 0.f ? float(GS->HijackUntil[Team] - ServerNow) : 0.f;
+		if (Left <= 0.f) continue;
+		const FLinearColor Color = Team == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f);
+		const float X = F.Center.X + (Slot == 0 ? -Gap * 0.5f : Gap * 0.5f);
+		const FString Line = Team == Mine ? FString::Printf(TEXT("YOUR TEAM CAN HIJACK  %.0fs"), FMath::CeilToFloat(Left))
+			: FString::Printf(TEXT("THEY CAN HIJACK  %.0fs"), FMath::CeilToFloat(Left));
+		P.Text(Line, FVector2D(X, Top + BarSize.Y + 9.f), Type::Small, Color, Slot == 0 ? 1.f : 0.f, 0.f, EWeight::SemiBold);
+	}
+	if (const AWWOPlayerState* MyState = F.Pl->GetPlayerState<AWWOPlayerState>(); MyState && MyState->HijackUntil > 0.f)
+	{
+		const float Left = FMath::Max(0.f, float(MyState->HijackUntil - ServerNow));
+		Tag(P, FString::Printf(TEXT("HIJACKING  %.0fs"), FMath::CeilToFloat(Left)), FVector2D(F.Center.X, 64.f), Type::Title,
+			Mine == 1 ? FLinearColor(1.f, 0.68f, 0.2f) : FLinearColor(0.35f, 0.62f, 1.f), 0.5f, 0.f);
+	}
 	// Carrying a core: where to take it.
 	for (TActorIterator<AWWOBossCore> It(F.Pl->GetWorld()); It; ++It)
 	{

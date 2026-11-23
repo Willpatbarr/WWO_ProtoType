@@ -7,6 +7,7 @@
 #include "Game/WWOTeamDeathmatch.h"
 #include "Player/WWOCharacter.h"
 #include "Player/WWOHealthComponent.h"
+#include "Player/WWOBotController.h"
 #include "Enemies/WWOEnemy.h"
 #include "Enemies/WWOEnemyKinds.h"
 #include "Enemies/WWOEnemyTypes.h"
@@ -76,6 +77,7 @@ void FWWOFootRaceRules::Begin()
 		GS->BossHealth = { -1.f, -1.f };
 		GS->BossWindow = { 0.f, 0.f };
 		GS->CoreState = { 0, 0 };
+		GS->HijackUntil = { 0.f, 0.f };
 		GS->BreachThreshold = Mode.BreachThreshold;
 	}
 	// Every enemy's model, loaded now with the map: the first Tank (Room3) or boss would otherwise stall
@@ -193,6 +195,7 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 	const double Now = World->GetTimeSeconds();
 	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>()) GS->BreachThreshold = Mode.BreachThreshold; // a Settings change shows at once
 	BindDeaths();
+	UpdateHijacks();
 	Drain(DeltaSeconds);
 	EndBreachesDone();
 	UpdateLevers(DeltaSeconds);
@@ -219,6 +222,15 @@ void FWWOFootRaceRules::Update(float DeltaSeconds)
 		const FVector Feet = Body->GetActorLocation() - FVector(0, 0, Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		for (const TWeakObjectPtr<AWWOBreachPortal>& P : Portals)
 		{
+			// The other team's hub doorway, while a hijack is open to this team (bots only when allowed: they don't hijack yet).
+			if (P.IsValid() && P->bHub && P->Team != PS->Team && CanHijack(PS->Team) && !IsHijacking(Body) && P->Contains(Feet))
+			{
+				const AWWOBotController* Bot = Cast<AWWOBotController>(Controller);
+				if (Bot && !Bot->bMayHijack) continue;
+				LastThrough.Add(Body, Now);
+				Hijack(Body, PS->Team, P->Team);
+				break;
+			}
 			if (P.IsValid() && P->Team == PS->Team && P->Contains(Feet))
 			{
 				LastThrough.Add(Body, Now); // a refused step waits the cooldown too (one log line, not one a tick)
@@ -536,11 +548,14 @@ void FWWOFootRaceRules::SpawnInRoom(FRoom& Room)
 void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 {
 	const int32 VictimTeam = UWWOWorldSubsystem::TeamOf(Victim);
-	if (InHub.Remove(Victim) > 0)
+	const bool bBreacher = InHub.Remove(Victim) > 0;
+	if (bBreacher)
 	{
 		const float Lost = Energy(VictimTeam) * Mode.BreachDeathLoss;
 		AddEnergy(VictimTeam, -Lost, TEXT("a breacher died"));
 	}
+	const bool bVictimHijacking = IsHijacking(Victim);
+	if (bVictimHijacking) EndHijack(Victim, false); // they respawn in their spawn room as any death does
 	// The kill, credited as team deathmatch credits it: whoever hit them last, lately, on the other team.
 	const bool bRecent = Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= KillCreditWindow;
 	AWWOCharacter* Killer = bRecent ? Cast<AWWOCharacter>(Victim->Health->LastAttacker.Get()) : nullptr;
@@ -549,7 +564,10 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 	if (VictimPS) ++VictimPS->Deaths;
 	if (KillerTeam >= 0 && KillerTeam != VictimTeam)
 	{
-		CreditKill(KillerTeam, Mode.EnergyPerPlayerKill, Killer, TEXT("a player kill"));
+		// A kill by a hijacker (in the enemy lane) or of one: the bonus on top.
+		const bool bHijackKill = IsHijacking(Killer) || bVictimHijacking;
+		CreditKill(KillerTeam, Mode.EnergyPerPlayerKill + (bHijackKill ? Mode.HijackKillBonus : 0.f), Killer,
+			bHijackKill ? (bVictimHijacking ? TEXT("a hijacker killed") : TEXT("a hijacker's kill")) : TEXT("a player kill"));
 		// The kill feed (the lane's AI kills stay out of it): killer > killee, as team deathmatch shows it.
 		AWWOPlayerState* KillerPS = Killer->GetPlayerState<AWWOPlayerState>();
 		const bool bPrecision = Victim->Health->bLastAttackCritical && Mode.GetWorld()->GetTimeSeconds() - Victim->Health->LastAttackTime <= 0.05;
@@ -560,6 +578,8 @@ void FWWOFootRaceRules::OnPlayerDied(AWWOCharacter* Victim)
 			GS->ReportKill(KillerPS, KillerPS->GetPlayerName(), KillerTeam, VictimPS ? VictimPS->GetPlayerName() : Victim->GetName(), VictimTeam,
 				bPrecision ? AWWOGameState::KillPrecision : FName(), 1);
 		}
+		// A breacher killed: their team's hub doorway opens to the killer's team.
+		if (bBreacher) OpenHijack(KillerTeam);
 	}
 }
 
@@ -850,7 +870,9 @@ void FWWOFootRaceRules::EndMatch(int32 WinningTeam)
 	{
 		GS->bMatchOver = true;
 		GS->MatchWinner = (int8)WinningTeam;
+		GS->HijackUntil = { 0.f, 0.f };
 	}
+	HijackOpenUntil[0] = HijackOpenUntil[1] = 0.0;
 	if (Mode.bTestRun) Mode.RestartLeft = 6.f;
 	RemoveCore(0);
 	RemoveCore(1);
@@ -981,4 +1003,81 @@ void FWWOFootRaceRules::DeliverCore(int32 CoreTeam, int32 CarrierTeam)
 	Boss->Heal(Mode.CoreHeal);
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d delivered team %d's core: its boss heals %.0f (%.0f -> %.0f)"), CarrierTeam, CoreTeam,
 		Boss->GetHealth() - Before, Before, Boss->GetHealth());
+}
+
+// --- Hijacking --------------------------------------------------------------------------------------
+
+bool FWWOFootRaceRules::CanHijack(int32 Team) const
+{
+	return Team >= 0 && Team <= 1 && State == EWWOWaveState::Match && HijackOpenUntil[Team] > Mode.GetWorld()->GetTimeSeconds();
+}
+
+void FWWOFootRaceRules::OpenHijack(int32 Team)
+{
+	if (Team < 0 || Team > 1 || State != EWWOWaveState::Match) return;
+	const bool bWasOpen = CanHijack(Team);
+	HijackOpenUntil[Team] = Mode.GetWorld()->GetTimeSeconds() + Mode.HijackOpenTime;
+	if (AWWOGameState* GS = Mode.GetGameState<AWWOGameState>())
+	{
+		if (GS->HijackUntil.Num() < 2) GS->HijackUntil.Init(0.f, 2);
+		GS->HijackUntil[Team] = (float)(GS->GetServerWorldTimeSeconds() + Mode.HijackOpenTime);
+		if (!bWasOpen) GS->ReportEvent(AWWOPlayerState::TeamName(Team), Team, TEXT("can hijack"));
+	}
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d killed a breacher: team %d's hub doorway is open to it for %.0f s%s"), Team, 1 - Team,
+		Mode.HijackOpenTime, bWasOpen ? TEXT(" (again)") : TEXT(""));
+}
+
+void FWWOFootRaceRules::Hijack(AWWOCharacter* Body, int32 Team, int32 Lane)
+{
+	const AWWOBreachPortal* To = RoomPortal(Lane, RoomName(OpenedRoom(Lane)));
+	if (!To) return;
+	InHub.Remove(Body); // the breach is over for them: no drain from here
+	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	Hijackers.Add(Body, Mode.GetWorld()->GetTimeSeconds() + Mode.HijackStayTime);
+	AWWOPlayerState* PS = Body->GetPlayerState<AWWOPlayerState>();
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	if (PS) PS->HijackUntil = GS ? (float)(GS->GetServerWorldTimeSeconds() + Mode.HijackStayTime) : 1.f;
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) hijacked into team %d's %s (%.0f s)"), *Body->GetName(), Team, Lane, *To->Room.ToString(), Mode.HijackStayTime);
+	if (GS) GS->ReportEvent(PS ? PS->GetPlayerName() : Body->GetName(), Team, TEXT("hijacked"));
+}
+
+void FWWOFootRaceRules::EndHijack(AWWOCharacter* Body, bool bSendHome)
+{
+	Hijackers.Remove(Body);
+	if (!Body) return;
+	if (AWWOPlayerState* PS = Body->GetPlayerState<AWWOPlayerState>()) PS->HijackUntil = 0.f;
+	const int32 Team = UWWOWorldSubsystem::TeamOf(Body);
+	if (bSendHome && Team >= 0 && Team <= 1) SendToOpenedRoom(Body, Team);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d)'s hijack is over%s"), *Body->GetName(), Team, bSendHome ? TEXT(": time's up, back to its own lane") : TEXT(""));
+}
+
+void FWWOFootRaceRules::SendToOpenedRoom(AWWOCharacter* Body, int32 Team)
+{
+	AWWOBreachPortal* To = RoomPortal(Team, RoomName(OpenedRoom(Team)));
+	if (!To) return;
+	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	LastThrough.Add(Body, Mode.GetWorld()->GetTimeSeconds());
+}
+
+void FWWOFootRaceRules::UpdateHijacks()
+{
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	AWWOGameState* GS = Mode.GetGameState<AWWOGameState>();
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		if (HijackOpenUntil[Team] <= 0.0 || HijackOpenUntil[Team] > Now) continue;
+		HijackOpenUntil[Team] = 0.0;
+		if (GS && GS->HijackUntil.IsValidIndex(Team)) GS->HijackUntil[Team] = 0.f;
+		UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's hijack window closed"), Team);
+	}
+	TArray<AWWOCharacter*> Dead, Home;
+	for (auto It = Hijackers.CreateIterator(); It; ++It)
+	{
+		AWWOCharacter* Body = It->Key.Get();
+		if (!Body) It.RemoveCurrent();                                 // gone (left the match)
+		else if (Body->Health->bDead) Dead.Add(Body);                  // (OnPlayerDied normally ends it first)
+		else if (It->Value <= Now) Home.Add(Body);
+	}
+	for (AWWOCharacter* Body : Dead) EndHijack(Body, false);
+	for (AWWOCharacter* Body : Home) EndHijack(Body, true);
 }

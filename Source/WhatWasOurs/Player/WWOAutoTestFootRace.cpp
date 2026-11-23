@@ -10,6 +10,10 @@
 // - lane rooms: both Room1s fill at the start, Room3 fills (with its Tank) once stood in, each enemy
 //   comes out at one of the room's wall markers and they spread over most of the markers, a lane's
 //   enemies leave the other team's players alone, a kill is refilled after LaneRoomRefill;
+// - hijacking (two parked bots, a foe and a mate): the other team's hub doorway refuses before a kill;
+//   killing a breacher opens it to the killer's whole team (the feed says so); going in lands in the other
+//   team's furthest opened room, ends the breach, costs and drains nothing; a hijacker's kill and the kill of
+//   a hijacker earn the bonus; a death ends a hijack; time up brings a hijacker home; the doorway closes;
 // - the boss: Door3 and Door4 don't bring it (opened straight), the last door (Door5) brings it up on its
 //   platform (seen from the floor in front), shielded (hits do nothing); CoreDelay later its core appears in the hub
 //   with a wave in the boss room; the core carried out through the hub doorway opens a window, hits land,
@@ -52,6 +56,7 @@ namespace
 	// Room3's enemies as each is first seen (the tick it spawns): how far from the nearest of the room's
 	// EnemySpawn markers, and which marker that is.
 	TMap<TWeakObjectPtr<AWWOEnemy>, TPair<float, int32>> Room3Seen;
+	TWeakObjectPtr<AWWOCharacter> HijackFoe, HijackMate; // the hijack steps' two parked bots
 
 	// Puts the body's feet in the middle of a doorway's opening.
 	void StepInto(AWWOCharacter* P, const AWWOBreachPortal* Portal)
@@ -404,9 +409,139 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		P->SetViewRotation(0.f, Spot.Rotator().Yaw);
 	}
 	if (Crossed(Rooms + 1.5f + GM->LaneRoomRefill)) Shot(TEXT("88_footrace_room_enemies"));
-	// The boss and its cores. Door3 to the last door opened straight (the levers are tested above), with short times.
-	const float B = Rooms + 2.f + GM->LaneRoomRefill;
+	// Hijacking, with two bots (parked: they stand where they are put and do nothing): Foe on team 1,
+	// Mate on team 0. Short times: the doorway open 6 s after the kill, 4 s in the enemy lane.
 	AWWOGameMode* Mutable = Cast<AWWOGameMode>(World->GetAuthGameMode());
+	const float H = Rooms + 2.f + GM->LaneRoomRefill;
+	AWWOCharacter* Foe = HijackFoe.Get();
+	AWWOCharacter* Mate = HijackMate.Get();
+	AWWOPlayerState* MyState = PC->GetPlayerState<AWWOPlayerState>();
+	auto KillBy = [World](AWWOCharacter* Victim, AWWOCharacter* Killer)
+	{
+		Victim->Health->GodMode = 0.f;
+		Victim->Health->LastAttacker = Killer;
+		Victim->Health->LastAttackTime = World->GetTimeSeconds();
+		Victim->Health->Kill();
+	};
+	auto HijackFeed = [World]() { const AWWOGameState* GS = World->GetGameState<AWWOGameState>(); return GS && GS->KillFeed.Num() ? GS->KillFeed.Last() : AWWOGameState::FKillLine(); };
+	if (Crossed(H))
+	{
+		Mutable->HijackOpenTime = 6.f;
+		Mutable->HijackStayTime = 4.f;
+		Mutable->Roster.BotsWanted = 2;
+	}
+	if (Crossed(H + 1.f))
+	{
+		for (TActorIterator<AWWOBotController> It(World); It; ++It)
+		{
+			It->bParked = true;
+			AWWOCharacter* Body = Cast<AWWOCharacter>(It->GetPawn());
+			if (!Body) continue;
+			if (!HijackFoe.IsValid()) { HijackFoe = Body; Mutable->SetTeam(It->GetPlayerState<AWWOPlayerState>(), 1 - Team); }
+			else { HijackMate = Body; It->bMayHijack = true; Mutable->SetTeam(It->GetPlayerState<AWWOPlayerState>(), Team); }
+		}
+		Check(HijackFoe.IsValid() && HijackMate.IsValid(), TEXT("hijacking: two bots to play it with, one on each team"));
+	}
+	if (Foe && Mate)
+	{
+		// The foe breaches; before any kill the other team's hub doorway refuses.
+		if (Crossed(H + 2.f)) { F->SetEnergy(1 - Team, Rich); StepInto(Foe, F->RoomPortal(1 - Team, "Room1")); StepInto(P, OtherHub); AutoFootRaceBefore = P->GetActorLocation(); }
+		if (Crossed(H + 3.f))
+		{
+			Check(F->IsBreaching(Foe), TEXT("hijacking: the other team's player is breaching"));
+			Check(!F->CanHijack(Team) && !F->IsHijacking(P) && FVector::Dist2D(P->GetActorLocation(), AutoFootRaceBefore) < Near,
+				FString::Printf(TEXT("before any kill, the other team's hub doorway refuses (at %s)"), *Where()));
+			// Off the doorway first (it would take the player as soon as it opens), then the kill.
+			const FTransform Spot = Room1->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+			P->TeleportTo(Spot.GetLocation(), Spot.Rotator(), false, true);
+			EnergyMark = F->Energy(Team);
+			KillBy(Foe, P);
+		}
+		if (Crossed(H + 3.3f))
+		{
+			const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+			Check(F->CanHijack(Team) && !F->CanHijack(1 - Team) && GS && GS->HijackUntil.IsValidIndex(Team) && GS->HijackUntil[Team] > GS->GetServerWorldTimeSeconds(),
+				TEXT("killing a breacher opens their hub doorway to the killer's team (and every machine is told)"));
+			Check(FMath::IsNearlyEqual(F->Energy(Team), EnergyMark + GM->EnergyPerPlayerKill, 0.5f),
+				FString::Printf(TEXT("that kill earns the normal %.0f (%.1f -> %.1f)"), GM->EnergyPerPlayerKill, EnergyMark, F->Energy(Team)));
+			const AWWOGameState::FKillLine Line = HijackFeed();
+			Check(Line.How == AWWOGameState::KillEvent && Line.Victim == TEXT("can hijack") && Line.Killer == AWWOPlayerState::TeamName(Team),
+				FString::Printf(TEXT("the kill feed says \"%s can hijack\" (%s %s)"), *AWWOPlayerState::TeamName(Team), *Line.Killer, *Line.Victim));
+			// In through the hub, then into their hub doorway.
+			F->SetEnergy(Team, Rich);
+			StepInto(P, Room1);
+		}
+		if (Crossed(H + 4.f))
+		{
+			Check(F->IsBreaching(P), TEXT("hijacking: breaching first"));
+			StepInto(P, OtherHub);
+		}
+		if (Crossed(H + 4.5f))
+		{
+			const AWWOBreachPortal* Landing = F->RoomPortal(1 - Team, FWWOFootRaceRules::RoomName(F->OpenedRoom(1 - Team)));
+			Check(F->IsHijacking(P) && !F->IsBreaching(P) && At(P, Landing),
+				FString::Printf(TEXT("going in lands in front of the other team's furthest opened room's doorway (%s) and ends the breach (at %s)"),
+					Landing ? *Landing->Room.ToString() : TEXT("none"), *Where()));
+			Check(MyState && MyState->HijackUntil > 0.f, TEXT("and every machine is told who is hijacking, and until when"));
+			const AWWOGameState::FKillLine Line = HijackFeed();
+			Check(Line.How == AWWOGameState::KillEvent && Line.Victim == TEXT("hijacked"), FString::Printf(TEXT("the kill feed says \"<player> hijacked\" (%s)"), *Line.Victim));
+			EnergyMark = F->Energy(Team);
+			StepInto(Mate, OtherHub); // a teammate who wasn't breaching, through the same doorway
+		}
+		if (Crossed(H + 5.5f))
+		{
+			Check(F->Energy(Team) == EnergyMark, FString::Printf(TEXT("hijacking costs nothing and drains nothing (%.1f -> %.1f)"), EnergyMark, F->Energy(Team)));
+			Check(F->IsHijacking(Mate), TEXT("the doorway is open to the killer's whole team: a teammate goes in too"));
+			Shot(TEXT("88_footrace_hijack"));
+		}
+		// The defender (respawned by now) kills one hijacker: the bonus for the defenders, and that hijack is over.
+		if (Crossed(H + 6.5f))
+		{
+			Check(!Foe->Health->bDead, TEXT("hijacking: the foe is back"));
+			NextMark = F->Energy(1 - Team);
+			KillBy(Mate, Foe);
+		}
+		if (Crossed(H + 6.7f))
+		{
+			const AWWOPlayerState* MateState = Mate->GetPlayerState<AWWOPlayerState>();
+			Check(FMath::IsNearlyEqual(F->Energy(1 - Team) - NextMark, GM->EnergyPerPlayerKill + GM->HijackKillBonus, 0.5f),
+				FString::Printf(TEXT("killing a hijacker earns the defenders %.0f + %.0f (%.1f)"), GM->EnergyPerPlayerKill, GM->HijackKillBonus, F->Energy(1 - Team) - NextMark));
+			Check(!F->IsHijacking(Mate) && MateState && MateState->HijackUntil == 0.f, TEXT("a hijacker's death ends its hijack"));
+			// The other hijacker kills the defender: the bonus for the hijackers.
+			EnergyMark = F->Energy(Team);
+			KillBy(Foe, P);
+		}
+		if (Crossed(H + 6.9f))
+		{
+			Check(FMath::IsNearlyEqual(F->Energy(Team) - EnergyMark, GM->EnergyPerPlayerKill + GM->HijackKillBonus, 0.5f),
+				FString::Printf(TEXT("a hijacker's kill earns %.0f + %.0f (%.1f)"), GM->EnergyPerPlayerKill, GM->HijackKillBonus, F->Energy(Team) - EnergyMark));
+		}
+		// Time's up: home to the team's own furthest opened room.
+		if (Crossed(H + 8.5f))
+		{
+			const AWWOBreachPortal* Home = F->RoomPortal(Team, FWWOFootRaceRules::RoomName(F->OpenedRoom(Team)));
+			Check(!F->IsHijacking(P) && MyState && MyState->HijackUntil == 0.f && At(P, Home),
+				FString::Printf(TEXT("after HijackStayTime the hijacker is brought home to its team's furthest opened room (%s; at %s)"),
+					Home ? *Home->Room.ToString() : TEXT("none"), *Where()));
+			Check(F->CanHijack(Team), TEXT("the doorway is still open before HijackOpenTime"));
+		}
+		if (Crossed(H + 9.5f))
+		{
+			const AWWOGameState* GS = World->GetGameState<AWWOGameState>();
+			Check(!F->CanHijack(Team) && GS && GS->HijackUntil.IsValidIndex(Team) && GS->HijackUntil[Team] == 0.f,
+				TEXT("HijackOpenTime after the kill, the doorway closes again"));
+			StepInto(P, OtherHub);
+			AutoFootRaceBefore = P->GetActorLocation();
+		}
+		if (Crossed(H + 10.f))
+		{
+			Check(!F->IsHijacking(P) && FVector::Dist2D(P->GetActorLocation(), AutoFootRaceBefore) < Near, TEXT("and refuses again"));
+			Mutable->HijackOpenTime = 30.f;
+			Mutable->HijackStayTime = 30.f;
+		}
+	}
+	// The boss and its cores. Door3 to the last door opened straight (the levers are tested above), with short times.
+	const float B = H + 11.f;
 	AWWOBoss* Boss = F->BossOf(Team);
 	AWWOBossCore* Core = F->CoreOf(Team);
 	AWWOBreachPortal* BossDoorway = F->RoomPortal(Team, "Boss");

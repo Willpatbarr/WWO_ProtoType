@@ -224,7 +224,10 @@
 		"BossRoomRefill": 0.5,
 		"LaneRoomEnemies": 20,
 		"LaneRoomStagger": 0.20000000298023224,
-		"LaneRoomRefill": 1.5
+		"LaneRoomRefill": 1.5,
+		"HijackOpenTime": 30,
+		"HijackStayTime": 30,
+		"HijackKillBonus": 25
 	},
 	"global/Bots":
 	{

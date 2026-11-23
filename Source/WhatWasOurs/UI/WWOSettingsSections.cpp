@@ -454,6 +454,10 @@ void UWWOSettingsMenu::RegisterMatchSections(AWWOCharacter* P)
 		Row(Mode, "LaneRoomEnemies", TEXT("Enemies in a team's live room"), 0.f, 40.f, 1.f),
 		Row(Mode, "LaneRoomStagger", TEXT("Time between spawns while a room fills (s)"), 0.f, 3.f, 0.05f),
 		Row(Mode, "LaneRoomRefill", TEXT("Time between spawns once it has filled (s)"), 0.f, 20.f, 0.25f),
+		Header(TEXT("Hijacking (killing a breacher opens their hub doorway to your team)")),
+		Row(Mode, "HijackOpenTime", TEXT("Doorway open after the kill (s)"), 1.f, 120.f, 1.f),
+		Row(Mode, "HijackStayTime", TEXT("Time a hijacker stays in the enemy lane (s)"), 1.f, 120.f, 1.f),
+		Row(Mode, "HijackKillBonus", TEXT("Extra energy for a kill by or of a hijacker"), 0.f, 200.f, 5.f),
 	});
 	AddGlobal(TEXT("Bots"), {
 		Header(TEXT("Bot players in PvP (the host's settings count)")),
