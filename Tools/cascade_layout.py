@@ -70,7 +70,7 @@ RAIL_T = 0.15
 HALL_WALL_T = 3.0
 DOOR_HALF_GAP = 3.5                     # m either side of a hall door's axis at the hall's inner face (6 m clear after the pieces' overshoot)
 BALCONY_DOOR_HALF_GAP = 1.9             # the same for the 3 m balcony doors
-TRIM_T = 0.3
+TRIM_T = 0.14
 WATER_Z = -10.0
 STRUCTURE = ("floor", "floor_z3", "floor_z5", "balcony", "dais", "plinth", "hall_wall", "body", "bridge", "ramp", "landing", "rail", "wall",
              "roof", "tunnel_wall", "tunnel_roof", "gallery_wall", "gallery_roof", "pier", "islet")
