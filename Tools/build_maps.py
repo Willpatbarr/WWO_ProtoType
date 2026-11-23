@@ -1032,6 +1032,10 @@ def build_footrace():
     x0, x1, y0, y1 = footrace_layout.bounds()
     cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
     b.box(mu(cx, cy, -0.6), (y1 - y0 + 10.0, x1 - x0 + 10.0, 0.2), None, "SafetyFloor", hidden=True)
+    # Ground under and around everything (looks only): the cliffs stand a few meters behind the lanes' edges and
+    # are open-backed, so without it you look past the floor's edge into nothing.
+    skirt = b.box(mu(cx, cy, -0.15), (y1 - y0 + 90.0, x1 - x0 + 90.0, 0.2), mats["floor"], "FootRace_ground")
+    visual_only(skirt)
     vol = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume, mu(cx, cy, 4.0))
     ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
     vol.set_actor_scale3d(unreal.Vector((y1 - y0) * 50.0 / ext, (x1 - x0) * 50.0 / ext, 600.0 / ext))
