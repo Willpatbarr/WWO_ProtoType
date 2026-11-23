@@ -239,15 +239,25 @@ walks the table in its order (the HUD line's).
     up and shielded when the last door (Door5) opens; `OpenBossWindow`
     (for now the console's `wwo.BossWindow`) drops the shield for `BossWindow` s, a third longer each
     window; killing it ends the match (`EndMatch`, `IsOver`) with that team the winner.
+    The boss room holds `BossRoomWave` from the moment its boss is up until the match ends, core or no
+    core (filling `BossWaveBurst`, four, a tick; then one every `BossRoomRefill` s).
     Boss cores (`World/WWOBossCore.*`, on `CoreSpawn`): `CoreDelay` after a boss is shielded a core for its
-    team appears in the hub with a wave of `BossRoomWave` in its boss room (four a tick), refilled every
-    `BossRoomRefill` s while it is out; carried out through the team's hub
-    doorway (`LeaveHub`) it opens the next window; a carrier's death drops it (anyone can take it then);
-    the other team delivering it heals the boss `CoreHeal`; a dropped core goes home after `CoreDropTime`.
+    team appears in the hub; anyone takes one by walking over it (its own team, or the other stealing it,
+    from its spot or dropped). Its own team carrying it out through its hub doorway (`LeaveHub`) opens the
+    next window; the other team carrying it into its team's hub doorway (no hub kill needed) goes into that
+    lane as a hijacker and heals that boss `CoreHeal`, the core spent; out through the thief's own doorway it
+    heals nothing (they keep it). A carrier's death drops it; a dropped core goes home after `CoreDropTime`.
+    The lobby (`WantsLobby`, `SetLobbyTeam`, `SetLobbyBots`, `StartRace`; `UI/WWOFootRaceLobby.*`;
+    `AWWOGameState::bLobby`, `LobbyBots`): a match opens with nothing started while every machine shows the
+    teams; anyone switches team (a joiner through `AWWOPlayerController::ServerLobbyTeam`), the host sets
+    each team's bots (`FWWOBotRoster::TeamBots`) and starts it. Any `-WWO` switch skips it;
+    `-WWOFootRaceLobby` forces it.
     Bots (`FWWOBotRoster`, as in team deathmatch; `-WWOBots=N`): with no enemy player to fight, a bot plays
     the race (`AWWOBotController::FootRaceTick`, state `Objective`): it shoots its lane's enemies (`SenseMobs`,
     and its boss in a window), breaches when the team has the energy and a lever or core to go for (two at
-    most), fetches a core, pulls the live lever, leaves, and carries a core out. Its aim and fire are the
+    most), fetches a core (its own fresh one, or a dropped one), pulls the live lever, leaves, and carries
+    its own core out, or the other team's into their hub doorway (it doesn't steal from the spot or hijack
+    by kills). Its aim and fire are the
     player fight's (`AimAt`, `Shoot`).
     The kill feed shows player kills and, as event lines (`AWWOGameState::ReportEvent`, `KillEvent`), each
     breach and door; AI kills stay out. `Begin` loads every enemy's model, clips and the effect materials
@@ -294,7 +304,10 @@ Soldier (ranged bursts, cover, strafing), Swarm (bites, leaps) and Tank (shield,
 **The enemy registry** (`Enemies/WWOEnemyKinds.*`): one `FWWOEnemyKind` per kind (id from `WWOIds::Enemy`,
 class, data asset class, `SpawnScatter`, `WaveTestFacing`), looked up by id (`WWOEnemyKinds::Find`,
 `FindOrSwarm`: an unknown id is a Swarm) or by enemy (`Of`). `SpawnDeferred` places one at a spawn
-marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. The waves (`Waves()`) and spawn point tags name
+marker (scatter, navmesh, clear of solids): the waves and FootRace's rooms both spawn through it. Things that
+lie on the ground (a spore pool, a Spore Patches patch) settle with `WWOFX::SettleOnGround`: on the
+ground under where they came to rest, never on top of cover (an actor tagged `Cover`, which on the
+dressed maps is often a hidden collision box under a kit piece) or hanging in the air. The waves (`Waves()`) and spawn point tags name
 kinds by id; `FWWOWaveRules::SpawnEnemy` takes the class and offset rule from the entry; the loadout's
 catalog keeps one data asset per kind (`UWWOLoadoutSubsystem::EnemyDataAs<T>(Id)`).
 
