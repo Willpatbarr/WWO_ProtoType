@@ -255,6 +255,21 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
   (GPU 10.4 ms), 12-player busy bot match 59.8 fps (GPU 11.4 ms, game thread 5.5 ms). With no display attached (or the
   window not in front) macOS holds the game at 40 fps whatever it costs: bring the window to the front before measuring.
 
+## FootRace map as a forest ravine (2026-11-23, branch footrace-ravine)
+- The layout (`Tools/footrace_layout.py`) is five lane rooms (76 x 40 m) and a 90 x 60 m boss room per lane, wall
+  spawns with gates, seeded cover, a boss platform; `build_footrace()` in `Tools/build_maps.py` builds it and calls
+  `Tools/footrace_dress.py` for the looks. Order: `Tools/import_cascade_kit.py`, `Tools/import_ravine_kit.py`
+  (the Ravine kit, made in Blender by `~/Documents/WWO_FootRace/tools`, brief `~/Documents/WWO_FootRace/SPEC.md`,
+  into `/Game/WWO/Maps/RavineKit`; it wears Cascade's parent materials), then `WWO_MAPS=footrace` in the full editor.
+- Looks only, no collision: cliffs (Cascade's) behind the lanes' hidden side walls with undergrowth at the foot,
+  concrete cross walls carried to 20 m with pilasters, caps, door arches and vines, cave mouths / culvert gates at
+  the EnemySpawn markers, kit pieces over the hidden cover boxes, the platform's kerb and obelisks, floor plants
+  (the mutated ones grow in number toward the boss). Densities, shadows and cull distances: `FIELDS` and `floor()`.
+- Lighting is Cascade's `lighting()` with the sun turned down the lanes and greener haze (set in `build_footrace`).
+- Measured (M4 mini, mobile renderer, 1920 x 1080 window, 4v4 busy bots, `-WWOPerfTest`): GPU 7.4 ms, game thread
+  5.8 ms. With the grass at its first density it was GPU 10.2 ms and the frame fell to 40 fps: the grass count in
+  `floor()` is the lever. The frame is game thread plus GPU (r.GTSyncType=1), so the two together must stay under 16.6 ms.
+
 ## Differences from the Godot version
 - Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and
   speeds), not the Godot robot / UAL mesh. The Godot clips loop where their names end in _Loop.

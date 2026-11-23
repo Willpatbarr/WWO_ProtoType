@@ -48,8 +48,8 @@ FIELDS = {
     "Ruin_Wall_A": (True, 0), "Ruin_Wall_B": (True, 0), "Ruin_Wall_C": (True, 0), "Rock_Block_A": (True, 0), "Rock_Block_B": (True, 0),
     "Stump_A": (True, 0), "Log_A": (True, 160), "Hewn_Block_A": (False, 120), "Hewn_Block_B": (False, 120),
     "Platform_Edge_A": (False, 0), "Platform_Obelisk_A": (True, 0),
-    "Tree_A": (True, 0), "Tree_B": (True, 0), "Tree_Lean_A": (True, 0), "Tree_Sapling_A": (False, 180),
-    "Bush_A": (False, 110), "Bush_B": (False, 130), "Fern_Big_A": (False, 70), "Grass_A": (False, 38), "Grass_B": (False, 45),
+    "Tree_A": (False, 0), "Tree_B": (False, 0), "Tree_Lean_A": (True, 0), "Tree_Sapling_A": (False, 180),
+    "Bush_A": (False, 90), "Bush_B": (False, 110), "Fern_Big_A": (False, 60), "Grass_A": (False, 32), "Grass_B": (False, 40),
     "Flowers_A": (False, 40), "Vine_Curtain_Big_A": (False, 0), "Vine_Curtain_Big_B": (False, 0), "Moss_Hang_A": (False, 120),
     "Mutant_Fern_A": (False, 70), "Mutant_Bulb_A": (False, 70), "Mutant_Stalk_A": (False, 100), "Roots_Wall_A": (False, 200),
 }
@@ -271,8 +271,8 @@ class Dresser:
         for lane, name, x0, x1, y0, y1 in self.rooms:
             area = (x1 - x0) * (y1 - y0)
             depth = {"Spawn": 0, "Boss": 6}.get(name, int(name[4:]) if name.startswith("Room") else 0)    # how far down the lane
-            plan = [("Grass_A", area / 16.0), ("Grass_B", area / 26.0), ("Cas:Fern_A", area / 110.0), ("Fern_Big_A", area / 190.0),
-                    ("Flowers_A", area / 120.0), ("Mutant_Fern_A", depth * 2.5), ("Mutant_Bulb_A", depth * 2.0), ("Mutant_Stalk_A", depth * 1.0)]
+            plan = [("Grass_A", area / 30.0), ("Grass_B", area / 42.0), ("Cas:Fern_A", area / 150.0), ("Fern_Big_A", area / 240.0),
+                    ("Flowers_A", area / 170.0), ("Mutant_Fern_A", depth * 2.5), ("Mutant_Bulb_A", depth * 2.0), ("Mutant_Stalk_A", depth * 1.0)]
             for mesh, count in plan:
                 for _ in range(int(count)):
                     x, y = rng.uniform(x0 + 0.8, x1 - 0.8), rng.uniform(y0 + 0.8, y1 - 0.8)
