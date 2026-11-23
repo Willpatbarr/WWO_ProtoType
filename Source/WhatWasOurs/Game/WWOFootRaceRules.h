@@ -8,13 +8,17 @@
 // So far: teams (each player joins the smaller one), each team's spawn room, the lane rooms' enemies,
 // the breach portals and breach energy.
 //
-// Lane rooms (RoomArea markers: Spawn, Room1-3, Boss, in that order along the lane): a team's furthest
-// room, the furthest any of its players has stood in, is its live room; Room1 is live from the start.
-// The live room fills to RoomEnemies at the room's EnemySpawn markers (one every RoomSpawnStagger s) and
-// refills one every RoomRefillTime s after a death; rooms the team has moved past keep what is left but
-// don't refill, the boss room has none (the boss comes later). Each enemy guards its lane (AWWOEnemy::Lane):
-// it only goes after that team's players. The kinds per room are RoomKind's (Room1 mostly Swarm, Room2
-// mostly Soldiers, Room3 Soldiers with a Tank first).
+// Lane rooms (RoomArea markers: Spawn, Room1..Room<DoorCount>, Boss, in that order along the lane): a
+// team's furthest room, the furthest any of its players has stood in, is its live room; Room1 is live
+// from the start. The live room fills to LaneRoomEnemies at the room's EnemySpawn markers (one every
+// LaneRoomStagger s) and refills one every LaneRoomRefill s after a death; rooms the team has moved
+// past keep what is left but don't refill, the boss room has none until its boss's first core. The
+// markers stand on the walls (Tools/footrace_layout.py): an enemy comes out right at its marker (a tight
+// scatter, SpawnScatter) facing into the room, and each spawn takes the marker used longest ago that
+// nobody stands on, so a room fills from all of its walls rather than one spot. Each enemy guards its
+// lane (AWWOEnemy::Lane): it only goes after that team's players. The kinds per room are RoomKind's
+// (Room1 mostly Swarm, Room2 mostly Soldiers, Room3 Soldiers with a Tank first, Room4 and Room5 more
+// Soldiers and a second Tank).
 // The game state says PvP, so the teams can hurt each other and the health component respawns players
 // at PvPSpawnFor (SpawnSpot here: their team's spawn room).
 //
@@ -34,21 +38,22 @@
 // - A breacher's death costs the team BreachDeathLoss of its pool.
 // - (Later: the hijack costs and bonuses.)
 //
-// Doors and levers (World/WWOBreachDoor.h, WWOBreachLever.h; DoorSlot and LeverSlot markers): Door1-3
-// close the doorways out of Room1-3. A door's lever in the hub is live only when its door is the
+// Doors and levers (World/WWOBreachDoor.h, WWOBreachLever.h; DoorSlot and LeverSlot markers): Door1-5
+// (DoorCount) close the doorways out of Room1-5. A door's lever in the hub is live only when its door is the
 // team's next one and the team's current breach went in by the room that door leads out of (one breach
 // opens at most one door). A breacher holds the Revive key at it for LeverHoldTime and it opens.
 // Leaving the hub lands a player in the furthest room their team has opened.
 //
-// The boss (Enemies/WWOEnemyTypes.h, AWWOBoss; a BossSpawn marker per lane): spawned when the team
-// opens Door3, shielded. OpenBossWindow drops the shield for a damage window, BossWindow s long the
+// The boss (Enemies/WWOEnemyTypes.h, AWWOBoss; a BossSpawn marker per lane, on the boss room's platform):
+// spawned with BossMaxHealth when the team opens its last door (Door5), shielded. OpenBossWindow drops the shield for a damage window, BossWindow s long the
 // first time and a third of that longer each time after (t, 1.33t, 1.67t...); then the shield is back.
 // The first team to kill its boss wins the match.
 //
 // Boss cores (World/WWOBossCore.h; the hub's CoreSpawn marker): CoreDelay s after a team's boss is up and
 // shielded, a core for that team appears in the hub (on the team's side of the marker), and a wave of
-// BossWave enemies in its boss room so the team can earn the energy to breach for it; the boss room
-// refills to BossWave (one every RoomRefillTime s) until the core is delivered. Its team picks it
+// BossRoomWave enemies in its boss room (BossWaveBurst a tick, not all in one frame) so the team can
+// earn the energy to breach for it; the boss room refills to BossRoomWave (one every BossRoomRefill s)
+// until the core is delivered. Its team picks it
 // up by walking over it; carried out through the team's hub doorway it opens the boss's next window. A
 // carrier who dies drops it where they fell: then either team can take it, and the other team carrying
 // it out through their own hub doorway heals its boss CoreHeal (up to full). A dropped core goes back to
@@ -113,7 +118,12 @@ public:
 	bool IsBreaching(const AWWOCharacter* Body) const { return InHub.Contains(Body); }
 	int32 Breachers(int32 Team) const; // the team's living players in the hub
 
-	// The lane rooms: index 0 Spawn, 1-3 Room1-3, 4 Boss.
+	// The lane rooms: index 0 Spawn, 1..DoorCount Room1..Room5, BossRoom the boss room. Tools/footrace_layout.py's
+	// ROOMS must match DoorCount.
+	static constexpr int32 DoorCount = 5;
+	static constexpr int32 BossRoom = DoorCount + 1;
+	static constexpr float SpawnScatter = 40.f;  // cm: a room's enemy lands this near its wall marker (each axis)
+	static constexpr int32 BossWaveBurst = 4;    // boss-wave enemies spawned a tick
 	static FName RoomName(int32 Index);
 	int32 FurthestRoom(int32 Team) const { return Team >= 0 && Team <= 1 ? Furthest[Team] : 0; }
 	int32 AliveIn(int32 Team, FName Room) const { return EnemiesIn(Team, Room).Num(); }
@@ -123,9 +133,9 @@ public:
 	// What a room spawns next: its kind by the room and how many it has spawned.
 	static FName RoomKind(int32 Index, int32 Spawned);
 
-	// Doors and levers (Door 1-3).
+	// Doors and levers (Door 1..DoorCount).
 	int32 DoorsOpen(int32 Team) const;
-	int32 OpenedRoom(int32 Team) const { return DoorsOpen(Team) + 1; } // the furthest room it can reach: 1 Room1 .. 4 Boss
+	int32 OpenedRoom(int32 Team) const { return DoorsOpen(Team) + 1; } // the furthest room it can reach: 1 Room1 .. BossRoom
 	AWWOBreachDoor* DoorOf(int32 Team, int32 Door) const;
 	AWWOBreachLever* LeverOf(int32 Team, int32 Door) const;
 	bool IsLeverLive(int32 Team, int32 Door) const;
@@ -176,17 +186,19 @@ private:
 	float WindowLeft[2] = { 0.f, 0.f };
 	TArray<TWeakObjectPtr<AWWOBreachDoor>> Doors;
 	TArray<TWeakObjectPtr<AWWOBreachLever>> Levers;
-	TSet<int32> EnteredFrom[2]; // the rooms (1-4) the team's current breach went in by
+	TSet<int32> EnteredFrom[2]; // the rooms (1..BossRoom) the team's current breach went in by
 	struct FRoom
 	{
 		int32 Team = 0;
 		int32 Index = 0;
 		FBox Area = FBox(ForceInit);
-		TArray<FVector> Spawns;               // its EnemySpawn markers
+		TArray<FTransform> Spawns;            // its EnemySpawn markers (on the walls, facing into the room)
+		TArray<double> SpawnUsed;             // when each marker last had an enemy come out of it
 		TArray<TWeakObjectPtr<AWWOEnemy>> Alive;
 		int32 Spawned = 0;
-		bool bFilled = false;                 // reached RoomEnemies once: from now on it refills slowly
+		bool bFilled = false;                 // reached its count once: from now on it refills slowly
 		float SpawnLeft = 0.f;                // s to the next spawn
+		int32 Burst = 0;                      // boss room: wave enemies still to come, BossWaveBurst a tick
 	};
 	void FindRooms();
 	void UpdateRooms(float DeltaSeconds);

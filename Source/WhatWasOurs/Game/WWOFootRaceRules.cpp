@@ -30,7 +30,7 @@ namespace
 {
 	FName LaneTag(int32 Team) { return FName(*FString::Printf(TEXT("Lane%d"), Team)); }
 
-	// The room tag on a PortalAnchor (Room1..Room3, Boss).
+	// The room tag on a PortalAnchor (Room1..Room5, Boss).
 	FName RoomOf(const AActor* Marker)
 	{
 		for (const FName& Tag : Marker->Tags)
@@ -259,7 +259,7 @@ void FWWOFootRaceRules::GoThrough(AWWOCharacter* Body, int32 Team, AWWOBreachPor
 		}
 	}
 	InHub.Add(Body);
-	for (int32 I = 1; I <= 4; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
+	for (int32 I = 1; I <= BossRoom; ++I) if (RoomName(I) == Portal->Room) EnteredFrom[Team].Add(I);
 	Teleport(Body, To->ArrivalSpot(Body->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %s (team %d) through the %s doorway into the hub (%.0f energy)"), *Body->GetName(), Team,
 		*Portal->Room.ToString(), Energy(Team));
@@ -361,19 +361,28 @@ void FWWOFootRaceRules::BindEnemy(AWWOEnemy* Enemy)
 
 FName FWWOFootRaceRules::RoomName(int32 Index)
 {
-	static const FName Names[] = { "Spawn", "Room1", "Room2", "Room3", "Boss" };
+	static const FName Names[] = { "Spawn", "Room1", "Room2", "Room3", "Room4", "Room5", "Boss" };
+	static_assert(UE_ARRAY_COUNT(Names) == BossRoom + 1, "a name for each lane room");
 	return Index >= 0 && Index < UE_ARRAY_COUNT(Names) ? Names[Index] : NAME_None;
 }
 
 FName FWWOFootRaceRules::RoomKind(int32 Index, int32 Spawned)
 {
 	using namespace WWOIds::Enemy;
-	if (Index == 3 && Spawned == 0) return Tank; // Room3 opens with its Tank
+	// Room3 on open with a Tank; Room4 and Room5 also a second one halfway through filling (the boss room's
+	// waves have none: the boss is the big one there).
+	if (Index >= 3 && Index <= DoorCount && Spawned == 0) return Tank;
+	if (Index >= 4 && Index <= DoorCount && Spawned == 10) return Tank;
 	static const FName Room1[] = { Swarm, Swarm, Soldier };
 	static const FName Room2[] = { Soldier, Swarm, Soldier };
 	static const FName Room3[] = { Soldier, Soldier, Swarm };
-	const FName* Pattern = Index == 1 ? Room1 : Index == 2 ? Room2 : Room3;
-	return Pattern[Spawned % 3];
+	static const FName Room4[] = { Soldier, Soldier, Swarm, Soldier };
+	static const FName Room5[] = { Soldier, Soldier, Soldier, Swarm, Soldier, Swarm };
+	if (Index == 1) return Room1[Spawned % UE_ARRAY_COUNT(Room1)];
+	if (Index == 2) return Room2[Spawned % UE_ARRAY_COUNT(Room2)];
+	if (Index == 3) return Room3[Spawned % UE_ARRAY_COUNT(Room3)];
+	if (Index == 4) return Room4[Spawned % UE_ARRAY_COUNT(Room4)];
+	return Room5[Spawned % UE_ARRAY_COUNT(Room5)]; // Room5, and the boss room's waves
 }
 
 void FWWOFootRaceRules::FindRooms()
@@ -384,7 +393,7 @@ void FWWOFootRaceRules::FindRooms()
 		if (!It->ActorHasTag("RoomArea")) continue;
 		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
 		int32 Index = -1;
-		for (int32 I = 0; I < 5; ++I) if (It->ActorHasTag(RoomName(I))) Index = I;
+		for (int32 I = 0; I <= BossRoom; ++I) if (It->ActorHasTag(RoomName(I))) Index = I;
 		if (Team < 0 || Index < 0) continue;
 		FRoom Room;
 		Room.Team = Team;
@@ -398,9 +407,13 @@ void FWWOFootRaceRules::FindRooms()
 	{
 		if (!It->ActorHasTag("EnemySpawn")) continue;
 		const int32 Team = It->ActorHasTag(LaneTag(1)) ? 1 : It->ActorHasTag(LaneTag(0)) ? 0 : -1;
-		for (int32 I = 1; I <= 4; ++I)
+		for (int32 I = 1; I <= BossRoom; ++I)
 		{
-			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I))) Rooms[*Slot].Spawns.Add(It->GetActorLocation());
+			if (const int32* Slot = Found.Find({ Team, I }); Slot && It->ActorHasTag(RoomName(I)))
+			{
+				Rooms[*Slot].Spawns.Add(FTransform(FRotator(0.f, It->GetActorRotation().Yaw, 0.f), It->GetActorLocation()));
+				Rooms[*Slot].SpawnUsed.Add(-1.0e9);
+			}
 		}
 	}
 	UE_LOG(LogWWO, Display, TEXT("FootRace: %d lane rooms"), Rooms.Num());
@@ -455,27 +468,60 @@ void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
 		// Only the live room spawns. The boss room only while its team's core is out (a wave comes with the
 		// core, SpawnBossWave, and refills until it is delivered), so the team can always earn the breach to
 		// fetch it, and nothing piles up while the boss fight goes on.
-		const bool bBoss = Room.Index == 4;
+		const bool bBoss = Room.Index == BossRoom;
+		// A core's wave comes BossWaveBurst a tick (a whole wave set up in one frame would hitch), wherever the team is.
+		if (Room.Burst > 0 && !Room.Spawns.IsEmpty())
+		{
+			for (int32 I = 0; I < BossWaveBurst && Room.Burst > 0; ++I, --Room.Burst) SpawnInRoom(Room);
+			continue;
+		}
 		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty() || (bBoss && !Cores[Room.Team].IsValid())) continue;
-		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossWave : Mode.RoomEnemies);
+		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossRoomWave : Mode.LaneRoomEnemies);
+		const float Refill = bBoss ? Mode.BossRoomRefill : Mode.LaneRoomRefill;
 		if (Room.Alive.Num() >= Want)
 		{
 			Room.bFilled = true;
-			Room.SpawnLeft = Mode.RoomRefillTime; // a death is refilled RoomRefillTime after it, not at once
+			Room.SpawnLeft = Refill; // a death is refilled Refill s after it, not at once
 			continue;
 		}
 		Room.SpawnLeft -= DeltaSeconds;
 		if (Room.SpawnLeft > 0.f) continue;
 		SpawnInRoom(Room);
-		Room.SpawnLeft = Room.bFilled ? Mode.RoomRefillTime : Mode.RoomSpawnStagger;
+		Room.SpawnLeft = Room.bFilled ? Refill : Mode.LaneRoomStagger;
 	}
 }
 
 void FWWOFootRaceRules::SpawnInRoom(FRoom& Room)
 {
-	const FVector& Marker = Room.Spawns[FMath::Min(Room.Spawns.Num() - 1, (int32)(WWO::FRand() * Room.Spawns.Num()))];
+	// The marker used longest ago with nobody standing on it (any, if all are crowded), so a room fills from
+	// all of its walls; ties go to a random one.
+	const double Now = Mode.GetWorld()->GetTimeSeconds();
+	const float Crowd = 1.5f * WWO::M;
+	int32 Pick = -1;
+	double Oldest = TNumericLimits<double>::Max();
+	const int32 Start = FMath::Min(Room.Spawns.Num() - 1, (int32)(WWO::FRand() * Room.Spawns.Num()));
+	for (int32 Pass = 0; Pass < 2 && Pick < 0; ++Pass)
+	{
+		for (int32 K = 0; K < Room.Spawns.Num(); ++K)
+		{
+			const int32 I = (Start + K) % Room.Spawns.Num();
+			if (Room.SpawnUsed[I] >= Oldest) continue;
+			if (Pass == 0)
+			{
+				const FVector At = Room.Spawns[I].GetLocation();
+				const bool bCrowded = Room.Alive.ContainsByPredicate([&](const TWeakObjectPtr<AWWOEnemy>& E)
+					{ return E.IsValid() && FVector::Dist2D(E->GetActorLocation(), At) < Crowd; });
+				if (bCrowded) continue;
+			}
+			Pick = I;
+			Oldest = Room.SpawnUsed[I];
+		}
+	}
+	Room.SpawnUsed[Pick] = Now;
+	const FTransform& Marker = Room.Spawns[Pick];
 	FTransform Where;
-	AWWOEnemy* Enemy = WWOEnemyKinds::SpawnDeferred(Mode.GetWorld(), RoomKind(Room.Index, Room.Spawned), Marker, Where);
+	AWWOEnemy* Enemy = WWOEnemyKinds::SpawnDeferred(Mode.GetWorld(), RoomKind(Room.Index, Room.Spawned), Marker.GetLocation(), Where,
+		SpawnScatter, Marker.Rotator().Yaw);
 	if (!Enemy) return;
 	Enemy->bRespawns = false;
 	Enemy->Lane = (int8)Room.Team;
@@ -554,7 +600,7 @@ void FWWOFootRaceRules::SpawnDoorsAndLevers()
 	UWorld* World = Mode.GetWorld();
 	auto DoorNumber = [](const AActor* Marker)
 	{
-		for (int32 D = 1; D <= 3; ++D) if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("Door%d"), D)))) return D;
+		for (int32 D = 1; D <= DoorCount; ++D) if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("Door%d"), D)))) return D;
 		return 0;
 	};
 	for (TActorIterator<ATargetPoint> It(World); It; ++It)
@@ -617,7 +663,7 @@ AWWOBreachLever* FWWOFootRaceRules::LeverOf(int32 Team, int32 Door) const
 bool FWWOFootRaceRules::IsLeverLive(int32 Team, int32 Door) const
 {
 	if (Team < 0 || Team > 1) return false;
-	return Door == DoorsOpen(Team) + 1 && Door <= 3 && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
+	return Door == DoorsOpen(Team) + 1 && Door <= DoorCount && !IsFrozen(Team) && Breachers(Team) > 0 && EnteredFrom[Team].Contains(Door);
 }
 
 void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By)
@@ -643,7 +689,7 @@ void FWWOFootRaceRules::OpenDoor(int32 Team, int32 Door, const AWWOCharacter* By
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d opened Door %d%s"), Team, Door, bFreeze ? TEXT(" (its breach's pool is frozen)") : TEXT(""));
 	const AWWOPlayerState* ByState = By ? By->GetPlayerState<AWWOPlayerState>() : nullptr;
 	GS->ReportEvent(ByState ? ByState->GetPlayerName() : AWWOPlayerState::TeamName(Team), Team, FString::Printf(TEXT("opened Door %d"), Door));
-	if (Door == 3) SpawnBoss(Team);
+	if (Door == DoorCount) SpawnBoss(Team);
 }
 
 void FWWOFootRaceRules::UpdateLevers(float DeltaSeconds)
@@ -749,7 +795,7 @@ void FWWOFootRaceRules::SpawnBoss(int32 Team)
 	AWWOBoss* Boss = World->SpawnActorDeferred<AWWOBoss>(AWWOBoss::StaticClass(), Where, nullptr, nullptr,
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 	if (!Boss) return;
-	Boss->BossHealth = Mode.BossHealth;
+	Boss->BossHealth = Mode.BossMaxHealth;
 	Boss->bRespawns = false;
 	Boss->Lane = (int8)Team;
 	Boss->FinishSpawning(Where);
@@ -759,7 +805,7 @@ void FWWOFootRaceRules::SpawnBoss(int32 Team)
 	CoreLeft[Team] = Mode.CoreDelay;
 	BindEnemy(Boss);
 	EnemyBindings.Add({ Boss, Boss->OnDied.AddWeakLambda(&Mode, [this, Team](AWWOEnemy*) { EndMatch(Team); }) });
-	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossHealth);
+	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss is up (%.0f health, shielded)"), Team, Mode.BossMaxHealth);
 }
 
 void FWWOFootRaceRules::OpenBossWindow(int32 Team)
@@ -902,13 +948,15 @@ void FWWOFootRaceRules::SpawnCore(int32 Team)
 
 void FWWOFootRaceRules::SpawnBossWave(int32 Team)
 {
-	const int32 Count = FMath::RoundToInt(Mode.BossWave);
+	const int32 Count = FMath::RoundToInt(Mode.BossRoomWave);
 	for (FRoom& Room : Rooms)
 	{
-		if (Room.Team != Team || Room.Index != 4 || Room.Spawns.IsEmpty()) continue;
-		for (int32 I = 0; I < Count; ++I) SpawnInRoom(Room);
-		Room.bFilled = true; // from now on it refills at RoomRefillTime while the core is out
-		Room.SpawnLeft = Mode.RoomRefillTime;
+		if (Room.Team != Team || Room.Index != BossRoom || Room.Spawns.IsEmpty()) continue;
+		const int32 Now = FMath::Min(Count, BossWaveBurst);
+		for (int32 I = 0; I < Now; ++I) SpawnInRoom(Room);
+		Room.Burst = Count - Now;      // the rest over the next few ticks (UpdateRooms)
+		Room.bFilled = true;           // from now on it refills at BossRoomRefill while the core is out
+		Room.SpawnLeft = Mode.BossRoomRefill;
 		UE_LOG(LogWWO, Display, TEXT("FootRace: a wave of %d in team %d's boss room"), Count, Team);
 	}
 }

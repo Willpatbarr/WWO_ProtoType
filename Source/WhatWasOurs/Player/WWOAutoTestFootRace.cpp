@@ -7,9 +7,11 @@
 // - Door1 blocks the doorway; its lever goes live on a breach from Room1 and opens it; that freezes the
 //   pool, a hub kill splits between the pools, Lever2 waits; leaving lands in Room2 and swaps the pools;
 //   a breach from Room2 opens Door2; leaving lands in Room3;
-// - lane rooms: both Room1s fill at the start, Room3 fills (with its Tank) once stood in, a lane's
-//   enemies leave the other team's players alone, a kill is refilled after RoomRefillTime;
-// - the boss: Door3 brings it up shielded (hits do nothing); CoreDelay later its core appears in the hub
+// - lane rooms: both Room1s fill at the start, Room3 fills (with its Tank) once stood in, each enemy
+//   comes out at one of the room's wall markers and they spread over most of the markers, a lane's
+//   enemies leave the other team's players alone, a kill is refilled after LaneRoomRefill;
+// - the boss: Door3 and Door4 don't bring it (opened straight), the last door (Door5) brings it up on its
+//   platform (seen from the floor in front), shielded (hits do nothing); CoreDelay later its core appears in the hub
 //   with a wave in the boss room; the core carried out through the hub doorway opens a window, hits land,
 //   the window ends on time; the next core is dropped by a carrier who dies; the other team delivering it
 //   heals the boss (never past full); the next window is a third longer; killing the boss wins the race.
@@ -47,6 +49,9 @@ namespace
 	constexpr float Near = 1.5f * WWO::M; // how close to an arrival spot counts as "arrived there"
 	float EnergyMark = 0.f;               // a pool when a step began, for the step that checks it
 	float NextMark = 0.f;
+	// Room3's enemies as each is first seen (the tick it spawns): how far from the nearest of the room's
+	// EnemySpawn markers, and which marker that is.
+	TMap<TWeakObjectPtr<AWWOEnemy>, TPair<float, int32>> Room3Seen;
 
 	// Puts the body's feet in the middle of a doorway's opening.
 	void StepInto(AWWOCharacter* P, const AWWOBreachPortal* Portal)
@@ -121,8 +126,20 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(Team == 0, FString::Printf(TEXT("alone, the player is on team 0 (team %d)"), Team));
 		Check(Room1 && Room2 && Room3 && F->RoomPortal(Team, "Boss") && Hub && OtherHub,
 			TEXT("a doorway in each of the team's rooms, and one per team in the hub"));
-		Check(Door1 && Door2 && F->DoorOf(Team, 3) && F->DoorOf(1 - Team, 1) && Lever1 && Lever2 && F->LeverOf(Team, 3) && F->LeverOf(1 - Team, 1),
-			TEXT("three doors and three levers per team"));
+		int32 DoorsFound = 0, LeversFound = 0;
+		for (int32 T2 = 0; T2 < 2; ++T2)
+		{
+			for (int32 D = 1; D <= FWWOFootRaceRules::DoorCount; ++D)
+			{
+				DoorsFound += F->DoorOf(T2, D) != nullptr;
+				LeversFound += F->LeverOf(T2, D) != nullptr;
+			}
+		}
+		Check(DoorsFound == 2 * FWWOFootRaceRules::DoorCount && LeversFound == 2 * FWWOFootRaceRules::DoorCount,
+			FString::Printf(TEXT("%d doors and %d levers per team (%d doors, %d levers)"), FWWOFootRaceRules::DoorCount, FWWOFootRaceRules::DoorCount, DoorsFound, LeversFound));
+		bool bRooms = true;
+		for (int32 I = 1; I <= FWWOFootRaceRules::BossRoom; ++I) bRooms &= F->RoomPortal(Team, FWWOFootRaceRules::RoomName(I)) != nullptr && !F->RoomCenter(Team, I).IsZero();
+		Check(bRooms, FString::Printf(TEXT("Room1..Room%d and the boss room, each with its doorway"), FWWOFootRaceRules::DoorCount));
 		Check(F->DoorsOpen(0) == 0 && F->DoorsOpen(1) == 0 && Door1 && !Door1->IsOpen(), TEXT("every door starts shut"));
 		bool bInSpawn = false;
 		for (TActorIterator<ATargetPoint> It(World); It; ++It)
@@ -318,8 +335,25 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 	if (Crossed(30.f + Hold + 3.5f))
 		Check(WorstRoom3 < 0.1f, FString::Printf(TEXT("no stall as Room3 fills, its Tank first (worst frame %.1f ms)"), WorstRoom3 * 1000.f));
 	// The lane rooms.
-	const int32 Want = FMath::RoundToInt(GM->RoomEnemies);
-	const float Rooms = 30.f + Hold + 1.5f + Want * GM->RoomSpawnStagger + 1.f; // Room3 has had time to fill
+	const int32 Want = FMath::RoundToInt(GM->LaneRoomEnemies);
+	const float Rooms = 30.f + Hold + 1.5f + Want * GM->LaneRoomStagger + 1.f; // Room3 has had time to fill
+	// Where Room3's enemies come out, each as first seen (the tick it spawned: it hasn't walked yet).
+	if (T >= 30.f + Hold + 0.5f && T < Rooms)
+	{
+		TArray<FVector> Markers;
+		for (TActorIterator<ATargetPoint> It(World); It; ++It)
+		{
+			if (It->ActorHasTag("EnemySpawn") && It->ActorHasTag("Room3") && It->ActorHasTag(Team == 1 ? FName("Lane1") : FName("Lane0"))) Markers.Add(It->GetActorLocation());
+		}
+		for (AWWOEnemy* E : F->EnemiesIn(Team, "Room3"))
+		{
+			if (Room3Seen.Contains(E) || Markers.IsEmpty()) continue;
+			int32 Best = 0;
+			for (int32 I = 1; I < Markers.Num(); ++I)
+				if (FVector::Dist2D(Markers[I], E->GetActorLocation()) < FVector::Dist2D(Markers[Best], E->GetActorLocation())) Best = I;
+			Room3Seen.Add(E, { (float)FVector::Dist2D(Markers[Best], E->GetActorLocation()) / WWO::M, Best });
+		}
+	}
 	if (Crossed(Rooms))
 	{
 		Check(F->AliveIn(1 - Team, "Room1") == Want, FString::Printf(TEXT("the other lane's Room1 filled to %d at the start (%d)"), Want, F->AliveIn(1 - Team, "Room1")));
@@ -332,6 +366,16 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 			if (Kind && Kind->Id == WWOIds::Enemy::Tank) bTank = true;
 		}
 		Check(bTank, TEXT("Room3 has its Tank"));
+		float Farthest = 0.f;
+		TSet<int32> Used;
+		for (const TPair<TWeakObjectPtr<AWWOEnemy>, TPair<float, int32>>& Seen : Room3Seen)
+		{
+			Farthest = FMath::Max(Farthest, Seen.Value.Key);
+			Used.Add(Seen.Value.Value);
+		}
+		Check(Room3Seen.Num() >= Want && Farthest < 1.5f,
+			FString::Printf(TEXT("Room3's enemies come out at its wall markers (%d seen, the farthest %.2f m from one)"), Room3Seen.Num(), Farthest));
+		Check(Used.Num() >= 8, FString::Printf(TEXT("spread over the room's markers, not one spot (%d markers used)"), Used.Num()));
 		int32 Lanes = 0, Unset = 0, AfterMe = 0;
 		for (TActorIterator<AWWOEnemy> It(World); It; ++It)
 		{
@@ -351,17 +395,17 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		}
 	}
 	if (Crossed(Rooms + 0.5f)) Check(F->AliveIn(Team, "Room3") == Want - 1, FString::Printf(TEXT("a kill in Room3 leaves %d (%d)"), Want - 1, F->AliveIn(Team, "Room3")));
-	if (Crossed(Rooms + 1.f + GM->RoomRefillTime))
+	if (Crossed(Rooms + 1.f + GM->LaneRoomRefill))
 	{
-		Check(F->AliveIn(Team, "Room3") == Want, FString::Printf(TEXT("and Room3 refills to %d within %.0f s (%d)"), Want, GM->RoomRefillTime, F->AliveIn(Team, "Room3")));
+		Check(F->AliveIn(Team, "Room3") == Want, FString::Printf(TEXT("and Room3 refills to %d within %.1f s (%d)"), Want, GM->LaneRoomRefill, F->AliveIn(Team, "Room3")));
 		const FTransform Spot = Room3->ArrivalSpot(P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		P->TeleportTo(Spot.GetLocation(), Spot.Rotator());
 		PC->SetControlRotation(Spot.Rotator());
 		P->SetViewRotation(0.f, Spot.Rotator().Yaw);
 	}
-	if (Crossed(Rooms + 1.5f + GM->RoomRefillTime)) Shot(TEXT("88_footrace_room_enemies"));
-	// The boss and its cores. Door3 opened straight (the levers are tested above), with short times.
-	const float B = Rooms + 2.f + GM->RoomRefillTime;
+	if (Crossed(Rooms + 1.5f + GM->LaneRoomRefill)) Shot(TEXT("88_footrace_room_enemies"));
+	// The boss and its cores. Door3 to the last door opened straight (the levers are tested above), with short times.
+	const float B = Rooms + 2.f + GM->LaneRoomRefill;
 	AWWOGameMode* Mutable = Cast<AWWOGameMode>(World->GetAuthGameMode());
 	AWWOBoss* Boss = F->BossOf(Team);
 	AWWOBossCore* Core = F->CoreOf(Team);
@@ -376,21 +420,38 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		P->TeleportTo(C->GetActorLocation() + FVector(0, 0, 10.f), P->GetActorRotation(), false, true);
 	};
 	const float Window = 2.f;
-	const int32 Wave = FMath::RoundToInt(GM->BossWave);
+	const int32 Wave = FMath::RoundToInt(GM->BossRoomWave);
 	if (Crossed(B))
 	{
 		Mutable->BossWindow = Window;
 		Mutable->CoreDelay = 1.f;
-		F->OpenDoor(Team, 3);
+		bool bEarly = false;
+		for (int32 D = 3; D < FWWOFootRaceRules::DoorCount; ++D)
+		{
+			F->OpenDoor(Team, D);
+			bEarly |= F->BossOf(Team) != nullptr;
+		}
+		Check(!bEarly && F->DoorsOpen(Team) == FWWOFootRaceRules::DoorCount - 1, FString::Printf(TEXT("Door3 to Door%d don't bring the boss"), FWWOFootRaceRules::DoorCount - 1));
+		F->OpenDoor(Team, FWWOFootRaceRules::DoorCount);
 	}
 	if (Crossed(B + 0.5f))
 	{
-		Check(F->DoorsOpen(Team) == 3 && Boss != nullptr, TEXT("opening Door3 brings the team's boss up"));
+		Check(F->DoorsOpen(Team) == FWWOFootRaceRules::DoorCount && Boss != nullptr,
+			FString::Printf(TEXT("opening the last door (Door%d) brings the team's boss up"), FWWOFootRaceRules::DoorCount));
 		Check(F->BossOf(1 - Team) == nullptr, TEXT("and not the other team's"));
 		Check(F->AliveIn(Team, "Boss") == 0, TEXT("the boss room has no enemies before its first core"));
 		if (Boss)
 		{
-			Check(Boss->bShielded && FMath::IsNearlyEqual(Boss->GetMaxHealth(), GM->BossHealth), FString::Printf(TEXT("shielded, with %.0f health (%.0f)"), GM->BossHealth, Boss->GetMaxHealth()));
+			Check(Boss->bShielded && FMath::IsNearlyEqual(Boss->GetMaxHealth(), GM->BossMaxHealth), FString::Printf(TEXT("shielded, with %.0f health (%.0f)"), GM->BossMaxHealth, Boss->GetMaxHealth()));
+			// On its platform (the boss room's floor is at its RoomArea's bottom), and in sight from the floor in front of it.
+			const float Floor = F->RoomCenter(Team, FWWOFootRaceRules::BossRoom).Z;
+			const float Feet = Boss->GetActorLocation().Z - Boss->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+			Check(Feet - Floor > 1.2f * WWO::M, FString::Printf(TEXT("the boss stands on its platform (feet %.2f m above the floor)"), (Feet - Floor) / WWO::M));
+			const FVector Ahead = FRotator(0.f, Boss->GetActorRotation().Yaw, 0.f).Vector();
+			const FVector From = FVector(Boss->GetActorLocation().X, Boss->GetActorLocation().Y, Floor + 1.7f * WWO::M) + Ahead * 18.f * WWO::M;
+			FHitResult Sight;
+			const bool bBlocked = World->LineTraceSingleByChannel(Sight, From, Boss->GetActorLocation(), ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(WWOTestBossSight), false, P));
+			Check(!bBlocked || Sight.GetActor() == Boss, FString::Printf(TEXT("and can be shot from the floor 18 m in front (%s)"), bBlocked && Sight.GetActor() ? *Sight.GetActor()->GetName() : TEXT("clear")));
 			Hit(Boss, 500.f);
 		}
 	}
@@ -418,7 +479,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(BossDoorway && At(P, BossDoorway), FString::Printf(TEXT("and the carrier lands in the boss room (at %s)"), *Where()));
 		Hit(Boss, 500.f);
 	}
-	if (Boss && Crossed(B + 3.f)) Check(FMath::IsNearlyEqual(Boss->GetHealth(), GM->BossHealth - 500.f, 1.f), FString::Printf(TEXT("hits land in the window (%.0f)"), Boss->GetHealth()));
+	if (Boss && Crossed(B + 3.f)) Check(FMath::IsNearlyEqual(Boss->GetHealth(), GM->BossMaxHealth - 500.f, 1.f), FString::Printf(TEXT("hits land in the window (%.0f)"), Boss->GetHealth()));
 	if (Boss && Crossed(B + 2.8f + Window + 0.3f)) Check(Boss->bShielded && F->BossWindowLeft(Team) == 0.f, TEXT("the shield is back when the window ends"));
 	// The next core: dropped by a carrier who dies, then lying where they fell.
 	const float C2 = B + 2.8f + Window + 1.6f;
@@ -478,7 +539,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		F->OpenBossWindow(Team); // the second window has run out by now: a third, for the kill
 		Shot(TEXT("88_footrace_boss"));
 	}
-	if (Boss && Crossed(C2 + 4.6f)) Hit(Boss, GM->BossHealth * 2.f);
+	if (Boss && Crossed(C2 + 4.6f)) Hit(Boss, GM->BossMaxHealth * 2.f);
 	if (Crossed(C2 + 5.f))
 	{
 		Check(F->IsOver() && F->Winner == Team, FString::Printf(TEXT("killing the boss wins the race for its team (winner %d)"), F->Winner));

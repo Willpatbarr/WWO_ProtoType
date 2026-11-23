@@ -25,7 +25,7 @@ public:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Look) int8 Team = 0;  // whose doorway (its colour)
 	UPROPERTY(ReplicatedUsing = OnRep_Look) bool bHub = false;
-	FName Room; // host: the lane room it stands in (Room1..Room3, Boss); None in the hub
+	FName Room; // host: the lane room it stands in (Room1..Room5, Boss); None in the hub
 
 	// The opening, m: width and height, and how far in front of and behind its plane a body counts as in it.
 	static constexpr float Width = 3.f;

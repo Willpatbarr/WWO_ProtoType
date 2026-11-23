@@ -215,15 +215,16 @@
 		"BreachDrain": 15,
 		"BreachDeathLoss": 0.25,
 		"LeverHoldTime": 1.7250000238418579,
-		"BossHealth": 9000,
+		"BossMaxHealth": 27000,
 		"BossWindow": 15,
 		"CoreDelay": 5,
 		"CoreHeal": 400,
 		"CoreDropTime": 15,
-		"BossWave": 9,
-		"RoomEnemies": 12,
-		"RoomSpawnStagger": 0.40000000596046448,
-		"RoomRefillTime": 3
+		"BossRoomWave": 22,
+		"BossRoomRefill": 0.5,
+		"LaneRoomEnemies": 20,
+		"LaneRoomStagger": 0.20000000298023224,
+		"LaneRoomRefill": 1.5
 	},
 	"global/Bots":
 	{

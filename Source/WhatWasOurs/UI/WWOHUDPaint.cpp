@@ -19,6 +19,7 @@
 #include "Player/WWOUltComponent.h"
 #include "Allies/WWOAlly.h"
 #include "Game/WWOGameMode.h"
+#include "Game/WWOFootRaceRules.h"
 #include "World/WWOBreachLever.h"
 #include "World/WWOBossCore.h"
 #include "EngineUtils.h"
@@ -1121,7 +1122,7 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 		const FString Number = FString::Printf(TEXT("%.0f"), Energy);
 		const FLinearColor NumberColor = Energy >= Threshold ? Color : WWO::Darkened(Color, 0.35f);
 		P.Text(Number, FVector2D(Slot == 0 ? Pos.X - 8.f : Pos.X + BarSize.X + 8.f, Pos.Y + BarSize.Y * 0.5f), Type::Small, NumberColor, Slot == 0 ? 1.f : 0.f, 0.5f, EWeight::SemiBold);
-		// The team's boss, once Door3 is open: its health, and its shield or how long the window has left.
+		// The team's boss, once its last door is open: its health, and its shield or how long the window has left.
 		const float BossLeft = GS->BossHealth.IsValidIndex(Team) ? GS->BossHealth[Team] : -1.f;
 		if (BossLeft >= 0.f)
 		{
@@ -1166,14 +1167,15 @@ void UWWOHUDWidget::PaintBreachEnergy(const FWWOHUDFrame& F) const
 
 void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
 {
-	// Two tracks on the right edge, your team's on the left: three circles each, Door1 at the bottom (the
-	// race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
+	// Two tracks on the right edge, your team's on the left: a circle per door (FWWOFootRaceRules::DoorCount)
+	// each, Door1 at the bottom (the race climbs), filled once that door is open. Between them each team's breach bar, beside its own track: it fills when the
 	// team breaches and shrinks from both ends toward its middle as the breach's energy drains.
 	const AWWOGameState* GS = F.Pl->GetWorld()->GetGameState<AWWOGameState>();
 	if (!GS || GS->DoorsOpen.Num() < 2) return;
 	const FWWOPainter& P = F.P;
 	const int32 Mine = FMath::Clamp(UWWOWorldSubsystem::TeamOf(F.Pl), 0, 1);
-	constexpr float TrackTall = 420.f, Radius = 15.f, Apart = 66.f, BarTall = 150.f;
+	constexpr int32 Doors = FWWOFootRaceRules::DoorCount;
+	constexpr float TrackTall = 480.f, Radius = 14.f, Apart = 66.f, BarTall = 150.f;
 	const float Top = F.Center.Y - TrackTall * 0.5f;
 	const float RightX = P.Size.X - 46.f;
 	const double Now = FPlatformTime::Seconds();
@@ -1188,10 +1190,10 @@ void UWWOHUDWidget::PaintRaceTrack(const FWWOHUDFrame& F) const
 		const int32 Opened = GS->DoorsOpen.IsValidIndex(Team) ? GS->DoorsOpen[Team] : 0;
 		// The track: line segments between the circles (and past the first and last), the circles on it.
 		float PrevY = Top;
-		for (int32 Slot3 = 1; Slot3 <= 3; ++Slot3) // top to bottom: Door3, Door2, Door1
+		for (int32 Step = 1; Step <= Doors; ++Step) // top to bottom: the last door .. Door1
 		{
-			const int32 Door = 4 - Slot3;
-			const float Y = Top + TrackTall * Slot3 / 4.f;
+			const int32 Door = Doors + 1 - Step;
+			const float Y = Top + TrackTall * Step / float(Doors + 1);
 			P.Box(FVector2D(X - 1.f, PrevY), FVector2D(2.f, Y - Radius - PrevY), Dim);
 			if (Door <= Opened) P.Disc(FVector2D(X, Y), Radius, Color);
 			P.Ring(FVector2D(X, Y), Radius, Color, 2.f);

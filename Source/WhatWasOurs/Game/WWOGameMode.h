@@ -56,15 +56,18 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDrain = 15.f;        // per second, for each of the team's players in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BreachDeathLoss = 0.25f;   // share of the pool lost when one of them dies in the hub
 	UPROPERTY(EditAnywhere, Category = "FootRace") float LeverHoldTime = 1.725f;      // s of holding the Revive key at a lever to pull it
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BossHealth = 9000.f;       // each team's boss
+	// Renamed with new values (2026-11-23) so saved files' old ones drop: BossHealth 9000, BossWave 9, RoomEnemies 12,
+	// RoomSpawnStagger 0.4, RoomRefillTime 3 (Will: more enemies, faster, a much tougher boss).
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossMaxHealth = 27000.f;   // each team's boss
 	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWindow = 15.f;         // s: the first damage window (t); each next is t/3 longer
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDelay = 5.f;          // s after a boss shield goes up before the next core (and its wave)
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreHeal = 400.f;         // a core the other team delivers heals the boss this much
 	UPROPERTY(EditAnywhere, Category = "FootRace") float CoreDropTime = 15.f;      // s a dropped core lies before it goes back to the hub
-	UPROPERTY(EditAnywhere, Category = "FootRace") float BossWave = 9.f;           // enemies in the boss room with each core
-	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomEnemies = 12.f;         // enemies a team's live room holds
-	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomSpawnStagger = 0.4f;   // s between spawns while a room first fills
-	UPROPERTY(EditAnywhere, Category = "FootRace") float RoomRefillTime = 3.f;      // s between spawns once it has filled
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossRoomWave = 22.f;       // enemies in the boss room with each core (and while it is out)
+	UPROPERTY(EditAnywhere, Category = "FootRace") float BossRoomRefill = 0.5f;     // s between the boss room's refills while a core is out
+	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomEnemies = 20.f;    // enemies a team's live room holds
+	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomStagger = 0.2f;    // s between spawns while a room first fills
+	UPROPERTY(EditAnywhere, Category = "FootRace") float LaneRoomRefill = 1.5f;     // s between spawns once it has filled
 	// Bot players (PvP; AWWOBotController reads these, the host's values count).
 	UPROPERTY(EditAnywhere, Category = "Bots") float Bots = 0.f;            // how many join (more can be added mid-match; -WWOBots=N too)
 	UPROPERTY(EditAnywhere, Category = "Bots") float BotHealth = 100.f;     // every bot's health and shield, before its own shell parts and traits

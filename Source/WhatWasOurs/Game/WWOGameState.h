@@ -29,7 +29,7 @@ public:
 	UPROPERTY(Replicated) float BreachThreshold = 0.f;
 	// While a team's breachers are still in the hub on the pool they opened a door with: that pool is
 	// frozen (BreachFrozen), and what the team earns goes to BreachNext, its next breach. DoorsOpen: each
-	// team's doors opened so far (0-3).
+	// team's doors opened so far (0 to FWWOFootRaceRules::DoorCount).
 	UPROPERTY(Replicated) TArray<float> BreachNext;
 	UPROPERTY(Replicated) TArray<bool> BreachFrozen;
 	UPROPERTY(Replicated) TArray<int32> DoorsOpen;

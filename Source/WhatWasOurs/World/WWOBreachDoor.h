@@ -1,7 +1,7 @@
 #pragma once
 
 // A FootRace lane door (Game/WWOFootRaceRules.h): a slab filling one of the lane's doorways (the
-// level's DoorSlot markers: Door1 between Room1 and Room2, Door2 Room2-Room3, Door3 Room3-boss).
+// level's DoorSlot markers: Door1 between Room1 and Room2 ... Door5 Room5-boss).
 // Closed it blocks bodies, shots and the navmesh; the rules open it when the team pulls the door's
 // lever in the hub. Opening is replicated (bOpen) and shown on every machine.
 

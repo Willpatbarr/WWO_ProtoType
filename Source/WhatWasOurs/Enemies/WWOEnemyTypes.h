@@ -152,7 +152,7 @@ private:
 };
 
 // FootRace's boss (Game/WWOFootRaceRules.h): a bigger, tougher Tank, for now. Its health is the game
-// mode's BossHealth (the rules set it before it spawns). It has none of the Tank's own shield; instead the
+// mode's BossMaxHealth (the rules set it before it spawns). It has none of the Tank's own shield; instead the
 // rules hold a boss shield up (bShielded) that takes every hit, and drop it for a damage window.
 UCLASS()
 class WHATWASOURS_API AWWOBoss : public AWWOTank
