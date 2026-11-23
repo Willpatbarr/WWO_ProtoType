@@ -91,6 +91,7 @@ public:
 	AWWOGrenade();
 
 	static AWWOGrenade* Throw(UWorld* World, const FWWOGrenadeSpec& Spec, const FVector& At, const FVector& VelocityCm, AActor* Thrower);
+	bool IsStuck() const { return bStuck; } // a tripmine that has stuck where it landed
 	// A blast that goes off the moment it exists (the ult).
 	static void ExplodeAt(UWorld* World, const FWWOGrenadeSpec& Spec, const FVector& At, AActor* Instigator);
 

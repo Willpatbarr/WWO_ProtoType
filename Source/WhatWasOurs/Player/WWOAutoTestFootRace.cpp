@@ -47,6 +47,14 @@
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Weapons/WWOGrenade.h"
+#include "Player/WWOWeaponComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Flora/WWOFloraEffects.h"
+#include "Data/WWOData.h"
+#include "Systems/WWOLoadoutSubsystem.h"
 
 namespace
 {
@@ -756,4 +764,189 @@ void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
 		Shot(TEXT("89_footracebots_end"));
 		ExitAt = AutoBotsRaceClock + 1.f;
 	}
+}
+
+// -WWOAutoTestSurfaces (on L_FootRaceTest, alone): the kit that needs a surface, on the dressed map, at seven
+// spots in lane 0 (Room2, which has no enemies at the start; the boss room, no boss yet; the hub): the open
+// floor, beside a cover piece (one dropped beside it, one thrown at its face), on top of one, at the foot of a
+// side wall, on the boss platform and its ramp, and in the hub. At each: a pool grenade dropped from 1.5 m, a
+// grenade with Spore Patches dropped from 3 m (it bounces, sprouting patches) and a tripmine. Each pool and
+// patch must lie on the surface under it (within 10 cm of where a downward trace meets it), each mine stuck to
+// a surface; one that lands on top of cover settles on the floor below it (WWOFX::SettleOnGround), and Spore
+// Patches sprout only where the grenade touches down (not off the cover's face). Screenshots 87_surfaces_<spot>. Logs `AutoTest surfaces: ... ok|FAIL` and a `Surfaces:` line per
+// effect (its height over the surface found below it).
+namespace
+{
+	struct FSurfaceSpot { FString Name; FVector At; FVector Throw = FVector::ZeroVector; };
+	TArray<FSurfaceSpot> SurfaceSpots;
+	TWeakObjectPtr<ACameraActor> SurfaceCamera;
+	TArray<TWeakObjectPtr<AWWOGrenade>> SurfaceMines; // this spot's tripmine
+	int32 SurfaceMinesStuck = 0, SurfaceMinesOff = 0;
+
+	// The first surface a downward trace meets from Above (what the game's own ground traces answer).
+	bool SurfaceBelow(UWorld* World, const FVector& Above, float Reach, FVector& Out)
+	{
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WWOTestSurface), false);
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (Cast<AWWOCharacter>(*It) || Cast<AWWOGrenade>(*It) || Cast<AWWOEnemy>(*It)) Params.AddIgnoredActor(*It);
+		}
+		if (!World->LineTraceSingleByChannel(Hit, Above, Above - FVector(0, 0, Reach), ECC_Visibility, Params)) return false;
+		Out = Hit.ImpactPoint;
+		return true;
+	}
+}
+
+void FWWOAutoTest::UpdateAutoSurfacesTest(float DeltaTime)
+{
+	AWWOCharacter* P = PC->GetWWOCharacter();
+	UWorld* World = PC->GetWorld();
+	const AWWOGameMode* GM = World->GetAuthGameMode<AWWOGameMode>();
+	FWWOFootRaceRules* F = GM ? GM->FootRace() : nullptr;
+	if (!P) return;
+	const float Before = AutoSurfacesClock;
+	AutoSurfacesClock += DeltaTime;
+	const float T = AutoSurfacesClock;
+	auto Crossed = [&](float At) { return WWOTest::Crossed(Before, T, At); };
+	auto Check = [](bool bOk, const FString& What) { return WWOTest::Check(TEXT("surfaces"), bOk, What); };
+	P->Health->GodMode = 1.f;
+	if (Crossed(1.f) && !Check(F != nullptr, TEXT("the map runs FootRace's rules"))) { WWOTest::Exit(); return; }
+	if (!F) return;
+	const UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(P);
+	auto GrenadeOf = [L](EWWOGrenadeKind Kind) -> UWWOGrenadeData*
+	{
+		for (UWWOGrenadeData* G : L->Catalog.Grenades) if (G && G->Kind == Kind) return G;
+		return nullptr;
+	};
+	auto SpecOf = [](UWWOGrenadeData* G)
+	{
+		FWWOGrenadeSpec Spec;
+		Spec.Color = G->Color;
+		Spec.Damage = G->Damage;
+		Spec.BlastRadius = G->BlastRadius;
+		Spec.Data = G;
+		return Spec;
+	};
+	UWWOAbilityData* Patches = nullptr;
+	for (UWWOAbilityData* A : L->Catalog.Abilities) if (A && A->Id == WWOIds::Ability::SporePatches) Patches = A;
+	const float Step = 7.f;
+	if (Crossed(2.f))
+	{
+		// The spots, from the level's markers and actors (lane 0; Unreal X is across the lane, Y along it).
+		SurfaceSpots.Reset();
+		const FVector Room2 = F->RoomCenter(0, 2);
+		const FVector Open = Room2 + FVector(0.f, -15.5f * WWO::M, 0.f);
+		SurfaceSpots.Add({ TEXT("floor"), Open });
+		const AActor* Cover = nullptr;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (!It->ActorHasTag("Cover") || F->RoomAt(0, It->GetActorLocation()) != 2) continue;
+			if (!Cover || FVector::Dist2D(It->GetActorLocation(), Open) < FVector::Dist2D(Cover->GetActorLocation(), Open)) Cover = *It;
+		}
+		if (Check(Cover != nullptr, TEXT("a cover piece in Room2")))
+		{
+			FVector O, E;
+			Cover->GetActorBounds(true, O, E);
+			const FVector Side = O + FVector(0.f, E.Y + 1.2f * WWO::M, 0.f);
+			SurfaceSpots.Add({ TEXT("beside_cover"), FVector(Side.X, Side.Y, Room2.Z),
+				FVector(0.f, -9.f * WWO::M, 0.f) }); // also one thrown straight at its face from there
+			SurfaceSpots.Add({ TEXT("on_cover"), FVector(O.X, O.Y, O.Z + E.Z) });
+		}
+		SurfaceSpots.Add({ TEXT("wall_foot"), Open + FVector(-18.9f * WWO::M, 0.f, 0.f) });
+		for (TActorIterator<ATargetPoint> It(World); It; ++It)
+		{
+			if (It->ActorHasTag("BossSpawn") && It->ActorHasTag("Lane0"))
+			{
+				SurfaceSpots.Add({ TEXT("platform"), It->GetActorLocation() + FVector(2.f * WWO::M, 0.f, 0.f) });
+				SurfaceSpots.Add({ TEXT("ramp"), It->GetActorLocation() + FVector(0.f, -11.f * WWO::M, 0.f) });
+			}
+			if (It->ActorHasTag("CoreSpawn")) SurfaceSpots.Add({ TEXT("hub"), It->GetActorLocation() + FVector(8.f * WWO::M, 8.f * WWO::M, 0.f) });
+		}
+		Check(SurfaceSpots.Num() == 7 && Patches && GrenadeOf(EWWOGrenadeKind::Pool) && GrenadeOf(EWWOGrenadeKind::Tripmine),
+			FString::Printf(TEXT("seven spots, and a pool grenade, a tripmine and Spore Patches to try (%d spots)"), SurfaceSpots.Num()));
+	}
+	for (int32 I = 0; I < SurfaceSpots.Num(); ++I)
+	{
+		const FSurfaceSpot& S = SurfaceSpots[I];
+		const float T0 = 3.f + I * Step;
+		FVector Top;
+		const bool bTop = SurfaceBelow(World, S.At + FVector(0, 0, 8.f * WWO::M), 12.f * WWO::M, Top);
+		// The view: a camera 11 m back and 4 m up, looking at the spot (the player stays in its spawn room, so no
+		// room fills because of it).
+		if (Crossed(T0) && bTop)
+		{
+			if (!SurfaceCamera.IsValid())
+			{
+				ACameraActor* Cam = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform::Identity);
+				Cam->GetCameraComponent()->bConstrainAspectRatio = false;
+				Cam->GetCameraComponent()->SetFieldOfView(80.f);
+				SurfaceCamera = Cam;
+			}
+			const FVector Eye = Top + FVector(-8.f * WWO::M, -8.f * WWO::M, 4.f * WWO::M);
+			SurfaceCamera->SetActorLocationAndRotation(Eye, (Top - Eye).Rotation());
+			PC->SetViewTarget(SurfaceCamera.Get());
+		}
+		if (Crossed(T0))
+		{
+			if (!Check(bTop, FString::Printf(TEXT("%s: a surface under the spot"), *S.Name))) continue;
+			if (UWWOGrenadeData* Pool = GrenadeOf(EWWOGrenadeKind::Pool))
+				AWWOGrenade::Throw(World, SpecOf(Pool), Top + FVector(0, 0, 1.5f * WWO::M), FVector::ZeroVector, P);
+			SurfaceMines.Reset();
+			if (UWWOGrenadeData* Mine = GrenadeOf(EWWOGrenadeKind::Tripmine))
+				SurfaceMines.Add(AWWOGrenade::Throw(World, SpecOf(Mine), Top + FVector(1.5f * WWO::M, 1.5f * WWO::M, 1.5f * WWO::M), FVector::ZeroVector, P));
+			if (UWWOGrenadeData* Boom = GrenadeOf(EWWOGrenadeKind::Explosive); Boom && Patches)
+			{
+				FWWOGrenadeSpec Spec = SpecOf(Boom);
+				Spec.SporePatches = Patches;
+				Spec.Fuse = 3.f;
+				AWWOGrenade::Throw(World, Spec, Top + FVector(1.5f * WWO::M, -1.5f * WWO::M, 3.f * WWO::M), FVector::ZeroVector, P);
+				if (!S.Throw.IsZero()) AWWOGrenade::Throw(World, Spec, Top + FVector(0, 0, 1.2f * WWO::M), S.Throw, P); // at the cover's face
+			}
+		}
+		// The mine: stuck to a surface once it lands (checked early: a mine near an enemy goes off).
+		if (Crossed(T0 + 0.75f))
+		{
+			SurfaceMinesStuck = SurfaceMinesOff = 0;
+			for (const TWeakObjectPtr<AWWOGrenade>& G : SurfaceMines)
+			{
+				if (!G.IsValid() || !G->IsStuck()) continue;
+				++SurfaceMinesStuck;
+				const FVector C = G->GetActorLocation();
+				const bool bOn = World->SweepTestByChannel(C, C - FVector(0, 0, 1.f), FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(40.f));
+				UE_LOG(LogWWO, Display, TEXT("Surfaces: %s mine stuck at %s, %s"), *S.Name, *C.ToCompactString(), bOn ? TEXT("touching a surface") : TEXT("touching nothing"));
+				if (!bOn) ++SurfaceMinesOff;
+			}
+		}
+		if (Crossed(T0 + 4.f)) Shot(*FString::Printf(TEXT("87_surfaces_%s"), *S.Name));
+		if (Crossed(T0 + 4.5f) && bTop)
+		{
+			// Every pool and patch near the spot lies on the surface under it; every mine is stuck to something.
+			int32 Pools = 0, PatchesSeen = 0, Mines = 0, Off = 0;
+			float Worst = 0.f;
+			auto Measure = [&](const AActor* A, const TCHAR* What)
+			{
+				FVector Under;
+				const bool bUnder = SurfaceBelow(World, A->GetActorLocation() + FVector(0, 0, 1.f * WWO::M), 20.f * WWO::M, Under);
+				const float Gap = bUnder ? (A->GetActorLocation().Z - Under.Z) / WWO::M : 99.f;
+				UE_LOG(LogWWO, Display, TEXT("Surfaces: %s %s at %s: %.2f m over the surface below it"), *S.Name, What, *A->GetActorLocation().ToCompactString(), Gap);
+				Worst = FMath::Max(Worst, FMath::Abs(Gap));
+				if (FMath::Abs(Gap) > 0.1f) ++Off;
+				// Landed on top of cover: it runs off to the floor (WWOFX::SettleOnGround), not a disc in the air.
+				if (S.Name == TEXT("on_cover") && FMath::Abs(A->GetActorLocation().Z - F->RoomCenter(0, 2).Z) > 0.1f * WWO::M)
+				{
+					UE_LOG(LogWWO, Display, TEXT("Surfaces: %s %s is %.2f m above the room's floor"), *S.Name, What, (A->GetActorLocation().Z - F->RoomCenter(0, 2).Z) / WWO::M);
+					++Off;
+				}
+			};
+			const float Reach = 6.f * WWO::M;
+			for (TActorIterator<AWWOSporePool> It(World); It; ++It) if (FVector::Dist2D(It->GetActorLocation(), Top) < Reach && !It->IsHidden()) { ++Pools; Measure(*It, TEXT("pool")); }
+			for (TActorIterator<AWWOSporePatch> It(World); It; ++It) if (FVector::Dist2D(It->GetActorLocation(), Top) < Reach + FMath::Abs(S.Throw.Y)) { ++PatchesSeen; Measure(*It, TEXT("patch")); }
+			Mines = SurfaceMinesStuck;
+			Off += SurfaceMinesOff;
+			Check(Pools >= 1 && PatchesSeen >= 1 && Mines >= 1 && Off == 0,
+				FString::Printf(TEXT("%s: %d pool(s), %d patch(es), %d mine(s), all on a surface (%d off, the worst %.2f m)"), *S.Name, Pools, PatchesSeen, Mines, Off, Worst));
+		}
+	}
+	if (SurfaceSpots.Num() > 0 && Crossed(3.f + SurfaceSpots.Num() * Step + 0.5f)) WWOTest::Exit();
 }
