@@ -34,7 +34,7 @@ SUN_FROM_DEG = 235.0      # where the sun stands (mockup degrees): the cliffs st
 
 # Which way a piece's "front" (the manifest's facing) points in its own Unreal space after import, in degrees of
 # yaw (0 = +X, 90 = +Y). Read off the bounds in Tools/import_cascade_kit.log.
-FRONT = {"Block_A": 0.0, "Block_B": 0.0, "Block_C": 0.0, "Column_A": 0.0,
+FRONT = {"Block_A": 0.0, "Block_B": 0.0, "Block_C": 0.0, "Column_A": 0.0, "Crate_A": 0.0,
          "Ivy_Curtain_A": 90.0, "Ivy_Curtain_B": 90.0, "Ivy_Curtain_C": 90.0}   # the curtains hang facing Blender -Y
 DEFAULT_FRONT = -90.0   # Blender +Y (the kits' "front") comes in as Unreal -Y
 
@@ -46,16 +46,21 @@ FIELDS = {
     "Boulder_A": (False, 140, None), "Boulder_B": (False, 220, None), "Boulder_C": (False, 0, None),
     "Spire_A": (False, 0, "MI_Cas_RockFar"), "Spire_B": (False, 0, "MI_Cas_RockFar"), "Spire_C": (False, 0, "MI_Cas_RockFar"),
     "ArchGiant": (False, 0, "MI_Cas_StoneFar"),
-    "Citadel_Towers": (True, 0, None), "Tower_A": (False, 0, None), "Tower_B": (False, 0, None), "Tower_C": (False, 0, None),
+    "Citadel_Towers": (True, 0, "MI_Cas_Slab"), "Tower_A": (False, 0, "MI_Cas_Slab"), "Tower_B": (False, 0, "MI_Cas_Slab"), "Tower_C": (False, 0, "MI_Cas_Slab"),
     "Block_A": (True, 0, "MI_Cas_StoneCover"), "Block_B": (True, 0, "MI_Cas_StoneCover"), "Block_C": (True, 0, "MI_Cas_StoneCover"),
-    "Column_A": (True, 0, "MI_Cas_StoneCover"),
-    "Buttress_A": (True, 0, None), "LightSlit_A": (False, 120, None), "Rubble_A": (False, 160, None), "Rubble_B": (False, 200, None),
+    "Column_A": (True, 0, "MI_Cas_Slab"),
+    "Buttress_A": (True, 0, "MI_Cas_Slab"), "LightSlit_A": (False, 120, "MI_Cas_Slab"), "Rubble_A": (False, 160, None), "Rubble_B": (False, 200, None),
     "Banner_A": (False, 160, None),
     "Maple_A": (True, 0, None), "Maple_B": (True, 0, None), "Maple_C": (True, 0, None),
     "Shrub_Red": (False, 130, None), "Shrub_Green": (False, 130, None),
     "Fern_A": (False, 70, None), "Fern_B": (False, 80, None), "Moss_Tuft_A": (False, 45, None),
     "Ivy_Curtain_A": (False, 150, None), "Ivy_Curtain_B": (False, 190, None), "Ivy_Curtain_C": (False, 190, None),
     "Ivy_Wall_A": (False, 150, None), "Vine_Hang_A": (False, 170, None),
+    "Lantern_A": (False, 110, None), "Lantern_Hang_A": (False, 110, None), "Urn_A": (False, 70, None), "Urn_B": (False, 60, None),
+    "Stele_A": (False, 130, None), "RailPost_A": (True, 130, None), "Conduit_A": (False, 80, None), "Grate_A": (False, 60, None),
+    "FloorRing_A": (False, 0, None), "Pebbles_A": (False, 45, None), "Pebbles_B": (False, 55, None), "Roots_A": (False, 90, None),
+    "Decal_Leaves_A": (False, 60, None), "Decal_Leaves_B": (False, 60, None), "Decal_Cracks_A": (False, 50, None), "Decal_Stain_A": (False, 60, None),
+    "Crate_A": (True, 0, None), "Brazier_A": (False, 120, None),
     "Waterfall_Lip": (False, 0, None), "Waterfall_Sheet": (False, 0, None), "Mist_Card": (False, 0, None), "Foam_Disc": (False, 260, None),
 }
 
@@ -253,7 +258,7 @@ class Dresser:
 
     def cover(self, box, index):
         """The kit block (or column) over one cover box: unit pieces, their x along the box's length."""
-        name = "Column_A" if box.kind == "pillar" else ("Block_A", "Block_B", "Block_C")[index % 3]
+        name = "Column_A" if box.kind == "pillar" else "Crate_A" if box.kind == "crate" else ("Block_A", "Block_B", "Block_C")[index % 3]
         self.put(name, box.x, box.y, box.z, box.yaw, (box.length, box.thickness, box.height))
 
     def walls(self):
@@ -278,7 +283,7 @@ class Dresser:
                         if rng.random() < 0.42 * b.length / (steps * 3.2):
                             self.put("LightSlit_A", fx, fy, foot + 2.6, out)
                             slits += 1
-                        if rng.random() < 0.3:
+                        if rng.random() < 0.14:
                             self.put(rng.choice(("Ivy_Curtain_A", "Ivy_Curtain_B")), fx, fy, top - rng.uniform(0.0, 0.5), out, rng.uniform(0.8, 1.15))
                         if rng.random() < 0.55:
                             self.put(rng.choice(("Fern_A", "Fern_B", "Moss_Tuft_A", "Moss_Tuft_A")), fx + nx * side * 0.25, fy + ny * side * 0.25, foot, rng.uniform(0, 360), rng.uniform(0.7, 1.2))
@@ -434,6 +439,108 @@ class Dresser:
                 self.put("Ivy_Curtain_A", b.x - side * math.sin(t) * (b.thickness * 0.5 + 0.03), b.y + side * math.cos(t) * (b.thickness * 0.5 + 0.03), b.z + b.height * 0.5,
                          b.yaw + 90.0 * side, (min(b.length / 2.2, 1.2), 1.0, min(b.height / 3.2, 1.0)))
         return maples
+
+    # --- Small things ---------------------------------------------------------------------------
+
+    def details(self):
+        """The small things: lanterns, urns, steles, conduits, grates, rail posts, pebbles, roots, fallen leaves."""
+        rng = self.rng
+        boxes = self.layout["boxes"]
+        # Hanging lanterns where the layout's ceiling lights are (the light itself stays a point light).
+        ceiling = {"TunnelLamp": 6.0, "GalleryLamp": 6.0, "BaseLamp": 6.95, "TermLamp": None, "HallLamp": 11.0}
+        for x, y, z, _, _, name in self.layout["lights"]:
+            top = ceiling.get(name)
+            if top:
+                self.put("Lantern_Hang_A", x, y, top, rng.uniform(0, 360), (1.0, 1.0, (top - z + 0.5) / 1.55))
+        # Along the walls' inner faces: conduits at the foot, lanterns, urns, steles, pebbles; grates in the floor.
+        for b in boxes:
+            if b.kind not in ("wall", "tunnel_wall", "gallery_wall", "hall_wall") or b.height < 2.0:
+                continue
+            t = math.radians(b.yaw)
+            ux, uy, nx, ny = math.cos(t), math.sin(t), -math.sin(t), math.cos(t)
+            foot = b.z - b.height * 0.5
+            for side in (-1.0, 1.0):
+                off = b.thickness * 0.5 + 0.03
+                deck = self.deck_top(b.x + nx * side * (off + 0.9), b.y + ny * side * (off + 0.9))
+                if deck is None or abs(deck - foot) > 1.0:
+                    continue
+                out = math.degrees(math.atan2(ny * side, nx * side))
+                fx, fy = b.x + nx * side * off, b.y + ny * side * off
+                if b.length >= 3.6 and b.kind != "hall_wall" and rng.random() < 0.5:
+                    self.put("Conduit_A", fx, fy, deck, out, (min(b.length / 4.2, 1.6), 1.0, 1.0))
+                roll = rng.random() * (3.2 / max(b.length, 1.6))
+                u = rng.uniform(-0.35, 0.35) * b.length
+                px, py = fx + ux * u, fy + uy * u
+                if roll < 0.10:
+                    self.put("Lantern_A", px + nx * side * 0.3, py + ny * side * 0.3, deck, rng.uniform(0, 360))
+                elif roll < 0.20:
+                    for k in range(rng.randint(1, 3)):
+                        self.put(rng.choice(("Urn_A", "Urn_A", "Urn_B")), px + nx * side * rng.uniform(0.3, 0.7) + ux * k * 0.6, py + ny * side * rng.uniform(0.3, 0.7) + uy * k * 0.6,
+                                 deck, rng.uniform(0, 360), rng.uniform(0.8, 1.15))
+                elif roll < 0.27 and b.height > 4.0:
+                    self.put("Stele_A", px, py, deck, out, rng.uniform(0.9, 1.15))
+                elif roll < 0.5:
+                    self.put(rng.choice(("Pebbles_A", "Pebbles_B")), px + nx * side * 0.6, py + ny * side * 0.6, deck, rng.uniform(0, 360), rng.uniform(0.7, 1.1))
+                elif roll < 0.56:
+                    self.put("Grate_A", px + nx * side * 1.0, py + ny * side * 1.0, deck, b.yaw, 1.0)
+        # Posts at both ends of every rail, and along the long ones.
+        seen = set()
+        for b in boxes:
+            if b.kind != "rail" or b.length < 1.5:
+                continue
+            t, p = math.radians(b.yaw), math.radians(b.pitch)
+            run = b.length * math.cos(p)
+            n = max(1, int(round(run / 6.5)))
+            for k in range(n + 1):
+                d = -run * 0.5 + run * k / n
+                x, y = b.x + math.cos(t) * d, b.y + math.sin(t) * d
+                key = (round(x * 2.0), round(y * 2.0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                self.put("RailPost_A", x, y, b.z + d * math.tan(p) - b.height * 0.5, b.yaw)
+        # Braziers and steles beside the standing stones.
+        for b in boxes:
+            if b.kind != "monolith":
+                continue
+            t = math.radians(b.yaw)
+            foot = b.z - b.height * 0.5
+            for side in (-1.0, 1.0):
+                x, y = b.x + math.cos(t) * side * (b.length * 0.5 + 0.9), b.y + math.sin(t) * side * (b.length * 0.5 + 0.9)
+                if self.deck_top(x, y) is not None:
+                    self.put("Brazier_A", x, y, foot, rng.uniform(0, 360))
+        # Roots over the rock stacks' rims, fallen leaves under the trees that reach over a deck.
+        for x, y, top, rad in self.stacks:
+            a = rng.uniform(0, 360)
+            self.put("Roots_A", x + rad * 0.85 * math.cos(math.radians(a)), y + rad * 0.85 * math.sin(math.radians(a)), top - 0.05, a, rng.uniform(0.9, 1.3))
+            for _ in range(14):
+                b2, d = rng.uniform(0, 2 * math.pi), rng.uniform(rad, rad + 9.0)
+                px, py = x + d * math.cos(b2), y + d * math.sin(b2)
+                deck = self.deck_top(px, py)
+                if deck is not None and abs(deck - top) < 7.0 and not self.blocked(px, py):
+                    self.put(rng.choice(("Decal_Leaves_A", "Decal_Leaves_B")), px, py, deck + 0.012, rng.uniform(0, 360), rng.uniform(0.8, 1.4))
+        # Cracks, stains, a few stray leaves and pebbles across the open floors.
+        placed = tries = 0
+        while placed < 260 and tries < 6000:
+            tries += 1
+            px, py = rng.uniform(-88.0, 88.0), rng.uniform(-74.0, 74.0)
+            deck = self.deck_top(px, py)
+            if deck is None or self.blocked(px, py):
+                continue
+            name = rng.choice(("Decal_Cracks_A", "Decal_Cracks_A", "Decal_Stain_A", "Decal_Stain_A", "Decal_Leaves_B", "Pebbles_A"))
+            self.put(name, px, py, deck + (0.0 if name == "Pebbles_A" else 0.01 + 0.004 * (placed % 3)), rng.uniform(0, 360), rng.uniform(0.8, 1.5))
+            placed += 1
+
+    def blocked(self, x, y):
+        """Under a wall, a cover piece, a stair or a slope: no flat floor to lay a card on."""
+        for b in self.everything.near(x, y):
+            if b.kind in cl.DECKS and abs(b.pitch) < 1e-6:
+                continue
+            if b.kind in ("roof", "tunnel_roof", "gallery_roof", "balcony", "pier", "islet", "arch", "bracket"):
+                continue
+            if cl.covers2d(b, x, y, grow=1.2):
+                return True
+        return False
 
     # --- Water ----------------------------------------------------------------------------------
 

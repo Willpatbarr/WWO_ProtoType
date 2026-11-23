@@ -235,16 +235,25 @@ Unreal Engine 5.8 as a C++ project. Same systems, same tuning, Unreal-native str
 - Built and played (2026-11-11): solo and a 6v6 bot match run at about 87 fps. Cascade has its own sky,
   `M_WWO_Sky_Cascade` (M_WWO_Sky's shader with a clear blue; `SKY_TOP`/`SKY_HORIZON` in build_cascade.py,
   remade every build), and tints its waterfalls through `MI_Waterfall_Cascade` (`WATERFALL_COLOR`).
-- Looks pass (2026-11-11, all in `build_cascade.py`, constants at its top): the sky light is **movable** and
-  tinted warm (`SKY_LIGHT`; as a stationary light it gave nothing without built lighting, so every shaded
-  face was black); the sun is turned `SUN_YAW` off the axes; lighter concrete, the far arches and mesas pale
-  (`Cas_Far`); a lit glossy teal water plane 6 km across (`M_WWO_CascadeWater`, `WATER_COLOR`); three mist
-  puffs per waterfall (`MI_Cascade_Mist*`, spheres in `M_WWO_SoftAlpha`); room lights at `LIGHT_CANDELAS`
-  200, pulled toward white; muted spawn pads; bloom, vignette, contact shade, a little saturation and
-  contrast in the post process. Frame time with 12 players went from about 10.2 to about 10.7 ms.
-- Still rough: shadows on the floors are strongly blue (sky-lit only: no bounce light in this project);
-  the mist puffs read as soft balls from above; interiors are evenly lit by the sky light (nothing shades
-  it indoors). Plants are actors, not instances (about 150).
+- **Art pass (2026-11-23): the map is dressed with its own art kit.** Three steps, in this order:
+  1. The kit is made in Blender by the scripts in `~/Documents/WWO_Cascade/tools` (`make_rock_kit.py`, `make_arch_kit.py`,
+     `make_foliage_kit.py`, `make_detail_kit.py`; the brief they follow is `~/Documents/WWO_Cascade/SPEC.md`; not in git) into
+     `~/Documents/WWO_Cascade/export`: one FBX per LOD (three LODs a piece) and procedural textures.
+  2. `Tools/import_cascade_kit.py` (headless, `-run=pythonscript`) imports it into `/Game/WWO/Maps/CascadeKit` and makes
+     the materials: `M_WWO_CasStone` (stone projected in world space, one sample per texture, moss, mortar, vertex-colour
+     shade; instances swap its texture set: Stone ashlar, Slab, Paver, Bronze, Ground), `M_WWO_CasRock`, `M_WWO_CasFoliage`,
+     `M_WWO_CasBark`, `M_WWO_CasCloth`, `M_WWO_CasFalls`, `M_WWO_CasMist`, `M_WWO_CasFoam`, `M_WWO_CasDecal`. All are flagged
+     for instanced meshes (a `-game` run cannot add the flag: a missing flag shows as the gray checker). `WWO_CAS_ONLY=materials`
+     redoes only that part.
+  3. `Tools/build_cascade.py` builds the map and calls `Tools/cascade_dress.py`, which places the kit: every mesh through one
+     `AWWOPropField` (`Game/WWOPropField`: a hierarchical instanced component, no collision), with shadow and cull distance per
+     mesh in its `FIELDS` table. Placement is seeded.
+  Gameplay is untouched: cover boxes, islets and the old citadel cone stay as hidden collision under the kit pieces; the
+  piers, mesas, giant arches and ivy cards are no longer built as boxes. Tuning lives at the top of `build_cascade.py`
+  (sun, sky light, fog, water, the per-kind stone instances in `build()`) and in `import_cascade_kit.py`'s `make_materials`.
+- Measured 2026-11-23 on the M4 mini, mobile renderer, 1920 x 1080 window on a 60 Hz display, `-WWOPerfTest`: solo 59.7 fps
+  (GPU 10.4 ms), 12-player busy bot match 59.8 fps (GPU 11.4 ms, game thread 5.5 ms). With no display attached (or the
+  window not in front) macOS holds the game at 40 fps whatever it costs: bring the window to the front before measuring.
 
 ## Differences from the Godot version
 - Bodies are the UE mannequin playing the Godot animations retargeted onto it (same clips, timings and

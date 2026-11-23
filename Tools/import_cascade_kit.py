@@ -37,7 +37,7 @@ ROOT = "/Game/WWO/Maps/CascadeKit"
 TEX, MESHES, MATS = ROOT + "/Textures", ROOT + "/Meshes", ROOT + "/Materials"
 ONLY = [s for s in os.environ.get("WWO_CAS_ONLY", "").split(",") if s]
 LOD_SCREEN = {"default": [1.0, 0.40, 0.12], "foliage": [1.0, 0.30, 0.09]}
-FOLIAGE = ("Maple", "Shrub", "Fern", "Ivy", "Vine", "Moss")
+FOLIAGE = ("Maple", "Shrub", "Fern", "Ivy", "Vine", "Moss", "Roots")
 
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 mel = unreal.MaterialEditingLibrary
@@ -225,7 +225,7 @@ else { T = normalize(float3(-n.y, n.x, 0)); B = float3(0, 0, -1); }
 return normalize(T * TN.x * Bump + B * TN.y * Bump + n * max(TN.z, 0.05));
 """
 STONE_COLOR = """
-float cav = saturate((0.45 - ORM.b) * 3.0);
+float cav = saturate((0.45 - ORM.b) * 3.0) * Joints;   // Joints 0: the texture's blue channel isn't a height (bronze: a metal mask)
 float3 c = lerp(D, Mortar, cav * 0.75) * Tint;      // the joints as worn mortar, not black lines
 c *= lerp(1.0 - Variation, 1.0 + Variation * 0.6, Nz.r);
 float wall = 1.0 - saturate(abs(VN.z) * 3.0);
@@ -306,12 +306,28 @@ def make_stone():
         ("Moss", moss, "RGB"), ("MossTint", color(m, "MossTint", (1.0, 1.0, 1.0), -900, 850), ""), ("WN", wn, ""), ("VN", vn, ""), ("VC", vc, ""),
         ("Variation", scalar(m, "Variation", 0.35, -900, 1000), ""), ("Streaks", scalar(m, "Streaks", 0.6, -900, 1080), ""),
         ("MossSlope", scalar(m, "MossSlope", 0.55, -900, 1160), ""), ("MossAmount", scalar(m, "MossAmount", 1.0, -900, 1240), ""),
-        ("Shade", scalar(m, "Shade", 0.8, -900, 1320), "")], -450, 300)
+        ("Shade", scalar(m, "Shade", 0.8, -900, 1320), ""), ("Joints", scalar(m, "Joints", 1.0, -900, 1400), "")], -450, 300)
     lit_outputs(m, col, (orm, "G"))
     ao = new(m, unreal.MaterialExpressionMultiply, -150, 500)
     link(orm, "R", ao, "A")
     link(vc, "R", ao, "B")
     mel.connect_material_property(ao, "", MP.MP_AMBIENT_OCCLUSION)
+    metal = new(m, unreal.MaterialExpressionMultiply, -150, 650)     # bronze: the ORM's blue channel is its metal mask
+    link(orm, "B", metal, "A")
+    link(scalar(m, "Metal", 0.0, -350, 700), "", metal, "B")
+    mel.connect_material_property(metal, "", MP.MP_METALLIC)
+    return finish(m)
+
+
+def make_decal():
+    """Flat floor cards (fallen leaves, cracks, stains): alpha-cut, lit, a hair above the floor they lie on."""
+    m = material("M_WWO_CasDecal", two_sided=False, blend_mode=unreal.BlendMode.BLEND_MASKED, opacity_mask_clip_value=0.4)
+    d = sample(m, "DecalColor", tex("T_Cas_Decals_D"), ST.SAMPLERTYPE_COLOR, None, -1000, -400)
+    rnd = new(m, unreal.MaterialExpressionPerInstanceRandom, -1600, 100)
+    col = custom(m, "DecalColor", "return D * Tint * lerp(0.75, 1.1, R);", 3, [("D", d, "RGB"), ("Tint", color(m, "Tint", (1.0, 1.0, 1.0), -1300, 200), ""), ("R", rnd, "")], -550, -300)
+    mel.connect_material_property(col, "", MP.MP_BASE_COLOR)
+    mel.connect_material_property(d, "A", MP.MP_OPACITY_MASK)
+    mel.connect_material_property(scalar(m, "Roughness", 0.85, -550, 250), "", MP.MP_ROUGHNESS)
     return finish(m)
 
 
@@ -486,17 +502,29 @@ def glow_parent():
 def make_materials():
     stone, rock, leaf = make_stone(), make_rock(), make_foliage()
     bark, cloth, falls, mist, foam = make_bark(), make_cloth(), make_falls(), make_mist(), make_foam()
+    decal = make_decal()
+
+    def surface(name, tint, **scalars):
+        """The world-projected stone material wearing another texture set (T_Cas_<name>_D/N/ORM)."""
+        return instance("MI_Cas_" + name, stone, scalars=scalars, colors={"Tint": tint, "MossTint": (0.62, 0.72, 0.5)},
+                        textures={"StoneColor": tex("T_Cas_%s_D" % name), "StoneNormal": tex("T_Cas_%s_N" % name), "StoneORM": tex("T_Cas_%s_ORM" % name)})
+
     out = {
         "Cas_Stone": instance("MI_Cas_Stone", stone, scalars={"StoneSize": 700.0, "MossAmount": 0.9}, colors={"Tint": (1.45, 1.42, 1.4), "MossTint": (0.62, 0.72, 0.5)}),
         "Cas_Rock": instance("MI_Cas_Rock", rock, colors={"Tint": (1.55, 1.45, 1.35), "MossTint": (0.7, 0.8, 0.5)}),
         "Cas_Moss": instance("MI_Cas_Moss", rock, scalars={"MossAmount": 3.0, "MossSlope": 0.0}),
-        "Cas_Glow": instance("MI_Cas_Glow", glow_parent(), scalars={"Glow": 4.5}, colors={"Color": (1.0, 0.2, 0.02)}),
+        "Cas_Glow": instance("MI_Cas_Glow", glow_parent(), scalars={"Glow": 2.6}, colors={"Color": (1.0, 0.13, 0.01)}),
         "Cas_Bark": instance("MI_Cas_Bark", bark),
         "Cas_LeafRed": instance("MI_Cas_LeafRed", leaf, colors={"Tint": (1.0, 0.72, 0.66)}, scalars={"Backlight": 0.14}),
         "Cas_LeafGreen": instance("MI_Cas_LeafGreen", leaf, colors={"Tint": (0.55, 0.62, 0.4)}),
-        "Cas_Ivy": instance("MI_Cas_Ivy", leaf, scalars={"WindAmount": 3.0, "Backlight": 0.06}, colors={"Tint": (0.30, 0.40, 0.20)}),
+        "Cas_Ivy": instance("MI_Cas_Ivy", leaf, scalars={"WindAmount": 3.0, "Backlight": 0.04}, colors={"Tint": (0.22, 0.30, 0.17)}),
         "Cas_Fern": instance("MI_Cas_Fern", leaf, scalars={"WindAmount": 2.0, "Backlight": 0.06}, colors={"Tint": (0.36, 0.46, 0.24)}),
         "Cas_Cloth": instance("MI_Cas_Cloth", cloth),
+        "Cas_Slab": surface("Slab", (2.3, 2.3, 2.4), StoneSize=600.0, MossAmount=0.7, Variation=0.2),
+        "Cas_Paver": surface("Paver", (1.1, 1.08, 1.02), StoneSize=420.0, MossAmount=0.8, Streaks=0.0),
+        "Cas_Bronze": surface("Bronze", (0.85, 0.85, 0.9), StoneSize=300.0, MossAmount=0.0, Joints=0.0, Metal=0.85, Streaks=0.2, Variation=0.15),
+        "Cas_Ground": surface("Ground", (1.15, 1.12, 1.05), StoneSize=420.0, MossAmount=0.9, Joints=0.0, Streaks=0.0),
+        "Cas_Decal": instance("MI_Cas_Decal", decal),
         "Cas_Water": instance("MI_Cas_Falls", falls),
         "Cas_Mist": instance("MI_Cas_Mist", mist),
         "Cas_Foam": instance("MI_Cas_Foam", foam),

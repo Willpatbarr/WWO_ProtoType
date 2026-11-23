@@ -225,8 +225,9 @@ def water_material(ns):
     return m
 
 
-def stone_instance(ns, name, tint, **scalars):
-    """An instance of the kit's world-projected stone (M_WWO_CasStone) for the map's own boxes."""
+def stone_instance(ns, name, tint, surface="Stone", **scalars):
+    """An instance of the kit's world-projected stone (M_WWO_CasStone) for the map's own boxes, wearing one of the
+    kit's surfaces: Stone (ashlar), Slab (smooth dark panels), Paver (flagstones), Bronze, Ground."""
     eal, tools, mel = ns.eal, ns.tools, ns.mel
     path = KIT_MATS + "/MI_Cas_Stone" + name
     mi = eal.load_asset(path) if eal.does_asset_exist(path) else tools.create_asset(
@@ -237,6 +238,12 @@ def stone_instance(ns, name, tint, **scalars):
     mi.set_editor_property("parent", parent)
     mel.set_material_instance_vector_parameter_value(mi, "Tint", unreal.LinearColor(tint[0], tint[1], tint[2], 1.0))
     mel.set_material_instance_vector_parameter_value(mi, "MossTint", unreal.LinearColor(*MOSS_TINT, 1.0))
+    for param, suffix in (("StoneColor", "_D"), ("StoneNormal", "_N"), ("StoneORM", "_ORM")):
+        mel.set_material_instance_texture_parameter_value(mi, param, unreal.load_asset(KIT_TEX + "T_Cas_" + surface + suffix))
+    if surface in ("Bronze", "Ground"):
+        scalars.setdefault("Joints", 0.0)        # their ORM blue channel is not a joint height
+    if surface == "Bronze":
+        scalars.setdefault("Metal", 0.85)
     for k, v in scalars.items():
         mel.set_material_instance_scalar_parameter_value(mi, k, v)
     eal.save_loaded_asset(mi)
@@ -314,19 +321,26 @@ def build(ns):
     lighting(ns)
     # The kit's hewn stone, projected in world space (Tools/import_cascade_kit.py): warm pale paving, cooler walls,
     # mossier roofs and balcony, and the cover a little lighter and warmer so it reads against the walls.
-    si = lambda name, tint, **kw: stone_instance(ns, name, tint, **kw)   # noqa: E731
+    si = lambda name, tint, surface="Stone", **kw: stone_instance(ns, name, tint, surface, **kw)   # noqa: E731
+    # Different stone for different parts, so the map isn't one wall of ashlar: flagstones on the ring road, the
+    # bridges and the stairs, big ashlar paving elsewhere, smooth dark slab for the citadel and everything that
+    # holds a deck up, ashlar for the rooms' walls, aged bronze for the rails.
     floor = si("Floor", (1.12, 1.06, 0.98), StoneSize=720.0, MossAmount=0.55, Streaks=0.0)
-    moss = si("Mossy", (1.0, 1.02, 0.95), StoneSize=720.0, MossAmount=1.3, MossSlope=0.35)
+    paver = si("Paver", (1.12, 1.08, 1.0), "Paver", StoneSize=440.0, MossAmount=0.7, Streaks=0.0, Bump=0.4)
+    slab_floor = si("SlabFloor", (1.9, 1.85, 1.8), "Slab", StoneSize=640.0, MossAmount=0.5, Streaks=0.0)
+    moss = si("Mossy", (2.1, 2.12, 2.1), "Slab", StoneSize=640.0, MossAmount=1.3, MossSlope=0.35)
     wall = si("Wall", (1.45, 1.43, 1.42), StoneSize=820.0, MossAmount=0.7)
+    slab = si("SlabWall", (2.3, 2.3, 2.4), "Slab", StoneSize=700.0, MossAmount=0.7)
     roof = si("Roof", (1.2, 1.25, 1.2), StoneSize=820.0, MossAmount=1.6, MossSlope=0.3)
-    stone = si("Dark", (1.15, 1.15, 1.18), StoneSize=820.0, MossAmount=1.0)
     si("Cover", (1.6, 1.5, 1.36), MossAmount=0.8, StoneSize=560.0)       # the kit blocks over the cover boxes (cascade_dress.FIELDS)
-    dark = si("Rail", (1.0, 0.98, 0.95), StoneSize=260.0, MossAmount=1.2)      # the rails: low walls of small worn stone
-    mats = {"floor": floor, "floor_z3": floor, "floor_z5": floor, "dais": floor, "landing": floor, "bridge": floor, "plinth": floor,
-            "steps": floor, "balcony": moss, "hall_wall": wall, "body": wall, "body_top": None, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
-            "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "islet": None, "arch": stone, "bracket": stone,
+    bronze = si("Rail", (0.8, 0.8, 0.86), "Bronze", StoneSize=300.0, MossAmount=0.0, Streaks=0.2, Variation=0.15)
+    mats = {"floor": floor, "floor_ring": paver, "floor_base": slab_floor, "floor_z3": floor, "floor_z5": floor, "dais": slab_floor,
+            "landing": paver, "bridge": paver, "plinth": slab_floor, "steps": floor, "balcony": moss, "hall_wall": slab, "body": slab,
+            "body_top": None, "wall": wall, "tunnel_wall": wall, "gallery_wall": wall,
+            "roof": roof, "tunnel_roof": roof, "gallery_roof": roof, "islet": None, "arch": slab, "bracket": slab,
             "low_cover": None, "block": None, "crate": None, "pillar": None, "monolith": None, "column": None,
-            "rail": dark, "trim": ns.lamp_instance("CasTrim", (1.0, 0.2, 0.02), 4.5), "ramp": None}
+            "rail": bronze, "trim": ns.lamp_instance("CasTrim", (1.0, 0.13, 0.01), 2.6), "ramp": None}
+    ring_r = layout["data"]["radii"]["ring_outer"] + 0.6
     dresser = cascade_dress.Dresser(ns, layout)
     groups = {}
     covers = 0
@@ -339,6 +353,14 @@ def build(ns):
             kind = "body_top"        # the old stepped cone: kept as collision under the kit's tower cluster
         if kind == "trim" and box.z > 14.2 and math.hypot(box.x, box.y) < 24.0:
             continue                 # the cone's glowing tier rings
+        if kind == "trim" and box.shape == "cylinder":
+            dresser.put("FloorRing_A", box.x, box.y, box.z - box.height * 0.5, 0.0, box.length * 0.5 / 1.5)
+            continue                 # the bases' floor glyph: the kit's inlaid ring instead of a glowing disc
+        if kind == "floor":
+            if math.hypot(box.x, box.y) < ring_r:
+                kind = "floor_ring"
+            elif abs(box.x) > 58.0 and abs(box.y) < 14.0:
+                kind = "floor_base"
         a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[kind], "Cas_" + kind,
                   ("Cover",) if kind in CAS_COVER else (), yaw=90.0 - box.yaw, pitch=box.pitch,
                   hidden=kind in CAS_HIDDEN, mesh=ns.CYLINDER if box.shape == "cylinder" else None)
@@ -380,6 +402,7 @@ def build(ns):
     ivy = dresser.edges()
     maples = dresser.plants()
     dresser.water()
+    dresser.details()
     instances = dresser.flush()
 
     # The chasm's water (no collision: falling through it reaches the kill height).
