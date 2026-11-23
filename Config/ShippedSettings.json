@@ -62,7 +62,7 @@
 		"CrouchSpeed": 2.5,
 		"SlideSpeed": 22,
 		"SlideDistance": 9.5,
-		"SlideSteer": 60
+		"SlideLookTurn": 720
 	},
 	"global/Melee":
 	{

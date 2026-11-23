@@ -215,7 +215,7 @@ void UWWOSettingsMenu::RegisterMovementAndViewSections(AWWOCharacter* P)
 		Row(P, "CrouchSpeed", TEXT("Crouch walk speed"), 0.5f, 10.f, 0.5f),
 		Row(P, "SlideSpeed", TEXT("Slide speed"), 1.f, 30.f, 0.5f),
 		Row(P, "SlideDistance", TEXT("Slide distance (m)"), 1.f, 20.f, 0.5f),
-		Row(P, "SlideSteer", TEXT("Slide steering toward the stick (degrees a second; 0 = locked)"), 0.f, 180.f, 5.f),
+		Row(P, "SlideLookTurn", TEXT("Slide follows where you look (degrees a second; 0 = locked along your travel)"), 0.f, 720.f, 20.f),
 	});
 }
 

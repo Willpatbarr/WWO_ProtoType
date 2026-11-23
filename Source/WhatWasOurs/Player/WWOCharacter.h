@@ -203,7 +203,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Crouch") float CrouchSpeed = 2.5f;
 	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideSpeed = 22.f;   // speed at the start of a slide
 	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideDistance = 9.5f; // meters before slowing to crouch speed
-	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideSteer = 60.f;    // degrees a second a slide turns toward the stick (0 = locked)
+	UPROPERTY(EditAnywhere, Category = "Crouch") float SlideLookTurn = 720.f; // degrees a second a slide turns toward where you look (0 = the old slide: along your travel, locked). Was SlideSteer (toward the stick): renamed so saved 60s don't carry over
 	UPROPERTY(EditAnywhere, Category = "Jump") float JumpHeight1 = 2.f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float JumpHeight2 = 2.3f;
 	UPROPERTY(EditAnywhere, Category = "Jump") float AscentGravity = 20.f;

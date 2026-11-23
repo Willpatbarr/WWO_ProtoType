@@ -821,8 +821,8 @@ void FWWORegress::AddMoveScenarios(TArray<FWWORegressScenario>& Out, const UWWOL
 		return false;
 	};
 
-	// At full sprint, one tick: the stick to pure right and crouch. The slide goes where you were going
-	// (forward), then the stick steers it right at SlideSteer.
+	// At full sprint, one tick: the stick to pure right and crouch. The slide goes where you are looking
+	// (forward) and the stick does not turn it (SlideLookTurn).
 	Out.Add(MakePlayerRun(TEXT("move.player.slide_ground"), [FollowSlide](FWWORegress& R, AWWOCharacter& P, FPlayerRun& St, int32 Tick)
 	{
 		if (St.Phase == 0)
