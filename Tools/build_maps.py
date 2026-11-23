@@ -882,11 +882,26 @@ def build_ring_arena():
 # --- FootRace test map (L_FootRaceTest) ------------------------------------------------------
 # Layout only, from Tools/footrace_layout.py (mockup meters, the ring's axes): two lanes of rooms
 # and a closed hub, as flat-colored boxes merged per kind, plus tagged TargetPoints the FootRace rules
-# spawn their actors on (doors, portals, levers, the bosses, cores). No cover, props or textures.
+# spawn their actors on (doors, portals, levers, the bosses, cores). Gray box: no props or textures.
+# Cover (ruin_wall, boulder, stump) stays one actor per piece tagged Cover (how the Soldiers find it);
+# spawn gates are merged but visual only (no collision, out of the navmesh); the boss platform and its
+# ramps are solid and on the navmesh.
 FOOTRACE_COLORS = {
     "floor": (0.3, 0.31, 0.33), "wall": (0.55, 0.57, 0.6), "hub_floor": (0.26, 0.3, 0.27),
     "boss_floor": (0.34, 0.24, 0.24), "spawn0": (0.2, 0.32, 0.6), "spawn1": (0.7, 0.4, 0.16),
+    "ruin_wall": (0.46, 0.44, 0.4), "boulder": (0.36, 0.33, 0.28), "stump": (0.3, 0.22, 0.14),
+    "spawn_gate": (0.02, 0.02, 0.025), "boss_platform": (0.4, 0.28, 0.27), "ramp": (0.4, 0.28, 0.27),
 }
+FOOTRACE_COVER = ("ruin_wall", "boulder", "stump")
+FOOTRACE_VISUAL = ("spawn_gate",)
+
+
+def visual_only(actor):
+    """No collision and no say in the navmesh (a spawn gate: enemies walk out of it)."""
+    comp = actor.static_mesh_component
+    comp.set_collision_profile_name("NoCollision")
+    comp.set_editor_property("can_ever_affect_navigation", False)
+    comp.set_editor_property("cast_shadow", False)
 FOOTRACE_MERGED = "/Game/WWO/Maps/FootRace"
 
 
@@ -902,16 +917,27 @@ def build_footrace():
     lighting()
     mats = {k: solid_material("FootRace_" + k, c) for k, c in FOOTRACE_COLORS.items()}
     groups = {}
+    cover = 0
     for box in layout["boxes"]:
-        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "FootRace_" + box.kind, yaw=90.0)
+        tags = ("Cover",) if box.kind in FOOTRACE_COVER else ()
+        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "FootRace_" + box.kind, tags,
+                  yaw=90.0 - box.yaw, pitch=box.pitch)
+        if box.kind in FOOTRACE_VISUAL:
+            visual_only(a)
+        if box.kind in FOOTRACE_COVER:
+            cover += 1
+            continue
         groups.setdefault(box.kind, []).append(a)
     merged = 0
     for kind, group in groups.items():
         if len(group) < 2:
             continue
         try:
-            if merge_kind(kind, group, base=FOOTRACE_MERGED, prefix="FootRace"):
+            m = merge_kind(kind, group, base=FOOTRACE_MERGED, prefix="FootRace")
+            if m:
                 merged += 1
+                if kind in FOOTRACE_VISUAL:
+                    visual_only(m)
         except Exception as e:  # keep the separate pieces if merging isn't available
             log("footrace: couldn't merge %s (%s); keeping %d pieces" % (kind, e, len(group)))
     if merged:
@@ -936,7 +962,7 @@ def build_footrace():
     ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
     vol.set_actor_scale3d(unreal.Vector((y1 - y0) * 50.0 / ext, (x1 - x0) * 50.0 / ext, 600.0 / ext))
     levels.save_current_level()
-    log("L_FootRaceTest: %d boxes, %d kinds merged, %d markers" % (len(layout["boxes"]), merged, len(layout["markers"])))
+    log("L_FootRaceTest: %d boxes (%d cover), %d kinds merged, %d markers" % (len(layout["boxes"]), cover, merged, len(layout["markers"])))
 
 
 # --- Arboretum (L_Arboretum) -----------------------------------------------------------------
