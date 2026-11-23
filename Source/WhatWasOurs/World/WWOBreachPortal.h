@@ -1,7 +1,7 @@
 #pragma once
 
 // A breach portal (FootRace, Game/WWOFootRaceRules.h): a doorway that teleports. Each lane room
-// (Room1-3, the boss room) has one on its hub side, at the level's PortalAnchor marker, and the hub
+// (Room1-5, the boss room) has one on its hub side, at the level's PortalAnchor marker, and the hub
 // has one per team, at HubPortal. Walking into a room's doorway puts you in front of your team's hub
 // doorway; walking into the hub doorway puts you back in front of the room doorway you came through.
 //

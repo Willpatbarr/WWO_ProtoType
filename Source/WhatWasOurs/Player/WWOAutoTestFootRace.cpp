@@ -554,7 +554,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 // -WWOAutoTestFootRaceBots (on L_FootRaceTest with -WWOBots=7: 4 v 4): the bots play FootRace while the
 // player stands in its spawn room out of the way. Every 10 s a `FootRaceBots:` line logs both teams'
 // energy, doors, bosses and cores and what the bots are doing; the match must end in a win inside the
-// time limit (-WWOFootRaceBotsTime=S, 900 by default), with bots having breached, pulled levers and
+// time limit (-WWOFootRaceBotsTime=S, 1500 by default), with bots having breached, pulled levers and
 // carried cores. Logs `AutoTest footracebots: ... ok|FAIL`.
 void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
 {
@@ -568,7 +568,7 @@ void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
 	if (Limit < 0.f)
 	{
 		FString Value;
-		Limit = WWOSwitches::Value(TEXT("WWOFootRaceBotsTime="), Value) ? FCString::Atof(*Value) : 900.f;
+		Limit = WWOSwitches::Value(TEXT("WWOFootRaceBotsTime="), Value) ? FCString::Atof(*Value) : 1500.f;
 	}
 	P->Health->GodMode = 1.f;
 	// The player stays parked where it was placed: the window takes a person's keys and mouse, and the
