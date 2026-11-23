@@ -477,23 +477,25 @@ void FWWOFootRaceRules::UpdateRooms(float DeltaSeconds)
 	for (FRoom& Room : Rooms)
 	{
 		Room.Alive.RemoveAll([](const TWeakObjectPtr<AWWOEnemy>& E) { return !E.IsValid() || E->IsDead(); });
-		// Only the live room spawns. The boss room only while its team's core is out (a wave comes with the
-		// core, SpawnBossWave, and refills until it is delivered), so the team can always earn the breach to
-		// fetch it, and nothing piles up while the boss fight goes on.
+		// A lane room spawns while it is its team's live room. The boss room holds BossRoomWave from the moment
+		// its boss is up until the match ends, core or no core (Will: a steady presence there): it fills
+		// BossWaveBurst a tick (a whole wave set up in one frame would hitch), then refills one every
+		// BossRoomRefill s.
 		const bool bBoss = Room.Index == BossRoom;
-		// A core's wave comes BossWaveBurst a tick (a whole wave set up in one frame would hitch), wherever the team is.
-		if (Room.Burst > 0 && !Room.Spawns.IsEmpty())
-		{
-			for (int32 I = 0; I < BossWaveBurst && Room.Burst > 0; ++I, --Room.Burst) SpawnInRoom(Room);
-			continue;
-		}
-		if (Room.Index != Furthest[Room.Team] || Room.Spawns.IsEmpty() || (bBoss && !Cores[Room.Team].IsValid())) continue;
+		const AWWOBoss* RoomBoss = bBoss ? BossOf(Room.Team) : nullptr;
+		const bool bLive = bBoss ? RoomBoss && !RoomBoss->IsDead() && State == EWWOWaveState::Match : Room.Index == Furthest[Room.Team];
+		if (!bLive || Room.Spawns.IsEmpty()) continue;
 		const int32 Want = FMath::RoundToInt(bBoss ? Mode.BossRoomWave : Mode.LaneRoomEnemies);
 		const float Refill = bBoss ? Mode.BossRoomRefill : Mode.LaneRoomRefill;
 		if (Room.Alive.Num() >= Want)
 		{
 			Room.bFilled = true;
 			Room.SpawnLeft = Refill; // a death is refilled Refill s after it, not at once
+			continue;
+		}
+		if (bBoss && !Room.bFilled)
+		{
+			for (int32 I = 0; I < BossWaveBurst && Room.Alive.Num() < Want; ++I) SpawnInRoom(Room);
 			continue;
 		}
 		Room.SpawnLeft -= DeltaSeconds;
@@ -904,7 +906,6 @@ void FWWOFootRaceRules::UpdateCores(float DeltaSeconds)
 				{
 					CoreLeft[Team] = -1.f;
 					SpawnCore(Team);
-					SpawnBossWave(Team);
 				}
 			}
 		}
@@ -966,21 +967,6 @@ void FWWOFootRaceRules::SpawnCore(int32 Team)
 	Core->FinishSpawning(FTransform(At));
 	Cores[Team] = Core;
 	UE_LOG(LogWWO, Display, TEXT("FootRace: team %d's boss core is in the hub"), Team);
-}
-
-void FWWOFootRaceRules::SpawnBossWave(int32 Team)
-{
-	const int32 Count = FMath::RoundToInt(Mode.BossRoomWave);
-	for (FRoom& Room : Rooms)
-	{
-		if (Room.Team != Team || Room.Index != BossRoom || Room.Spawns.IsEmpty()) continue;
-		const int32 Now = FMath::Min(Count, BossWaveBurst);
-		for (int32 I = 0; I < Now; ++I) SpawnInRoom(Room);
-		Room.Burst = Count - Now;      // the rest over the next few ticks (UpdateRooms)
-		Room.bFilled = true;           // from now on it refills at BossRoomRefill while the core is out
-		Room.SpawnLeft = Mode.BossRoomRefill;
-		UE_LOG(LogWWO, Display, TEXT("FootRace: a wave of %d in team %d's boss room"), Count, Team);
-	}
 }
 
 void FWWOFootRaceRules::RemoveCore(int32 Team)

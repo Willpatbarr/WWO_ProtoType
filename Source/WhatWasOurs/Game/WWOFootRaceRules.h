@@ -138,7 +138,7 @@ public:
 	static constexpr int32 DoorCount = 5;
 	static constexpr int32 BossRoom = DoorCount + 1;
 	static constexpr float SpawnScatter = 40.f;  // cm: a room's enemy lands this near its wall marker (each axis)
-	static constexpr int32 BossWaveBurst = 4;    // boss-wave enemies spawned a tick
+	static constexpr int32 BossWaveBurst = 4;    // boss-room enemies spawned a tick while it first fills
 	static FName RoomName(int32 Index);
 	int32 FurthestRoom(int32 Team) const { return Team >= 0 && Team <= 1 ? Furthest[Team] : 0; }
 	int32 AliveIn(int32 Team, FName Room) const { return EnemiesIn(Team, Room).Num(); }
@@ -204,7 +204,6 @@ private:
 	void EndMatch(int32 WinningTeam);
 	void UpdateCores(float DeltaSeconds);
 	void SpawnCore(int32 Team);
-	void SpawnBossWave(int32 Team);
 	void RemoveCore(int32 Team);
 	TWeakObjectPtr<AWWOBossCore> Cores[2];
 	float CoreLeft[2] = { -1.f, -1.f }; // s to the team's next core (-1: not counting)
@@ -225,7 +224,6 @@ private:
 		int32 Spawned = 0;
 		bool bFilled = false;                 // reached its count once: from now on it refills slowly
 		float SpawnLeft = 0.f;                // s to the next spawn
-		int32 Burst = 0;                      // boss room: wave enemies still to come, BossWaveBurst a tick
 	};
 	void FindRooms();
 	void UpdateRooms(float DeltaSeconds);

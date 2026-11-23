@@ -582,7 +582,7 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 		Check(F->DoorsOpen(Team) == FWWOFootRaceRules::DoorCount && Boss != nullptr,
 			FString::Printf(TEXT("opening the last door (Door%d) brings the team's boss up"), FWWOFootRaceRules::DoorCount));
 		Check(F->BossOf(1 - Team) == nullptr, TEXT("and not the other team's"));
-		Check(F->AliveIn(Team, "Boss") == 0, TEXT("the boss room has no enemies before its first core"));
+		Check(F->AliveIn(Team, "Boss") == Wave, FString::Printf(TEXT("the boss room fills to %d as soon as the boss is up, before any core (%d)"), Wave, F->AliveIn(Team, "Boss")));
 		if (Boss)
 		{
 			Check(Boss->bShielded && FMath::IsNearlyEqual(Boss->GetMaxHealth(), GM->BossMaxHealth), FString::Printf(TEXT("shielded, with %.0f health (%.0f)"), GM->BossMaxHealth, Boss->GetMaxHealth()));
@@ -598,6 +598,23 @@ void FWWOAutoTest::UpdateAutoFootRaceTest(float DeltaTime)
 			Hit(Boss, 500.f);
 		}
 	}
+	// The boss room keeps its enemies with no core out, refilling at BossRoomRefill; and no stall as it fills.
+	static float WorstBossFill = 0.f;
+	if (T >= B && T < B + 1.f) WorstBossFill = FMath::Max(WorstBossFill, DeltaTime);
+	if (Crossed(B + 1.f))
+	{
+		UE_LOG(LogWWO, Display, TEXT("FootRace frames: worst %.1f ms as the boss and its room's %d enemies came"), WorstBossFill * 1000.f, Wave);
+		Check(WorstBossFill < 0.1f, FString::Printf(TEXT("no stall as the boss room fills (worst frame %.1f ms)"), WorstBossFill * 1000.f));
+	}
+	if (Crossed(B + 2.9f))
+	{
+		Check(F->AliveIn(Team, "Boss") >= Wave, FString::Printf(TEXT("with the core delivered and none out, the boss room still holds %d (%d)"), Wave, F->AliveIn(Team, "Boss")));
+		TArray<AWWOEnemy*> InBoss = F->EnemiesIn(Team, "Boss");
+		FWWODamageBy By(P);
+		for (int32 I = 0; I < 3 && I < InBoss.Num(); ++I) InBoss[I]->ApplyHit(100000.f, false, InBoss[I]->GetActorLocation(), FLinearColor::White);
+	}
+	if (Crossed(B + 3.f + GM->BossRoomRefill * 3.f + 0.4f))
+		Check(F->AliveIn(Team, "Boss") >= Wave, FString::Printf(TEXT("three killed are back within %.1f s (%d)"), GM->BossRoomRefill * 3.f + 0.4f, F->AliveIn(Team, "Boss")));
 	if (Boss && Crossed(B + 0.7f)) Check(Boss->GetHealth() == Boss->GetMaxHealth(), FString::Printf(TEXT("a hit on the shield does nothing (%.0f)"), Boss->GetHealth()));
 	// The first core: CoreDelay after the boss, with its wave.
 	if (Crossed(B + 1.6f))
@@ -731,9 +748,21 @@ void FWWOAutoTest::UpdateAutoFootRaceBotsTest(float DeltaTime)
 		const AWWOCharacter* Body = Cast<AWWOCharacter>(It->GetPawn());
 		Jobs.FindOrAdd(!Body || Body->Health->bDead ? FString(TEXT("dead")) : It->StateIndex() == 4 ? It->JobName() : It->DebugState().Left(8))++;
 	}
+	// Frame times over each 10 s (the log line's "frame avg/worst"; the first seconds load the map).
+	static double FrameSum = 0.0;
+	static int32 Frames = 0;
+	static float FrameWorst = 0.f;
+	FrameSum += DeltaTime;
+	++Frames;
+	FrameWorst = FMath::Max(FrameWorst, DeltaTime);
 	if ((AutoBotsRaceLog -= DeltaTime) <= 0.f)
 	{
 		AutoBotsRaceLog = 10.f;
+		UE_LOG(LogWWO, Display, TEXT("FootRaceBots frames: avg %.1f ms, worst %.1f ms over %d frames; %d enemies alive"),
+			Frames ? FrameSum / Frames * 1000.0 : 0.0, FrameWorst * 1000.f, Frames, UWWOWorldSubsystem::Get(World)->LivingEnemies().Num());
+		FrameSum = 0.0;
+		Frames = 0;
+		FrameWorst = 0.f;
 		FString JobLine;
 		for (const TPair<FString, int32>& J : Jobs) JobLine += FString::Printf(TEXT(" %s %d,"), *J.Key, J.Value);
 		auto BossText = [F](int32 Team)
