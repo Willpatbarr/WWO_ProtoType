@@ -36,8 +36,9 @@ SRC = os.path.expanduser(os.environ.get("WWO_CASCADE_SRC", "~/Documents/WWO_Casc
 ROOT = "/Game/WWO/Maps/CascadeKit"
 TEX, MESHES, MATS = ROOT + "/Textures", ROOT + "/Meshes", ROOT + "/Materials"
 ONLY = [s for s in os.environ.get("WWO_CAS_ONLY", "").split(",") if s]
+PREFIX = "Cas"     # file names: SM_<PREFIX>_*, T_<PREFIX>_* (Tools/import_ravine_kit.py reuses this module with its own)
 LOD_SCREEN = {"default": [1.0, 0.40, 0.12], "foliage": [1.0, 0.30, 0.09]}
-FOLIAGE = ("Maple", "Shrub", "Fern", "Ivy", "Vine", "Moss", "Roots")
+FOLIAGE = ("Maple", "Shrub", "Fern", "Ivy", "Vine", "Moss", "Roots", "Tree", "Bush", "Grass", "Flowers", "Mutant")
 
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 mel = unreal.MaterialEditingLibrary
@@ -79,7 +80,7 @@ def import_textures():
     flip = bool(opengl_normals())
     count = 0
     for f in sorted(os.listdir(folder)):
-        if not (f.startswith("T_Cas_") and f.endswith(".png")):
+        if not (f.startswith("T_%s_" % PREFIX) and f.endswith(".png")):
             continue
         name = os.path.splitext(f)[0]
         task = unreal.AssetImportTask()
@@ -594,7 +595,7 @@ def mesh_tools():
 
 def import_meshes(slots):
     sub = mesh_tools()
-    files = sorted(f for f in os.listdir(SRC) if f.startswith("SM_Cas_") and f.endswith(".fbx"))
+    files = sorted(f for f in os.listdir(SRC) if f.startswith("SM_%s_" % PREFIX) and f.endswith(".fbx"))
     bases = [f for f in files if "_LOD" not in f]
     done = 0
     for f in bases:
@@ -647,7 +648,7 @@ def import_meshes(slots):
             else:
                 missing.append(key)
         out.set_editor_property("static_materials", mats)
-        short = name[len("SM_Cas_"):]
+        short = name[len("SM_%s_" % PREFIX):]
         screens = LOD_SCREEN["foliage" if short.startswith(FOLIAGE) else "default"][:lods]
         try:
             sub.set_lod_screen_sizes(out, screens)
@@ -688,11 +689,16 @@ def main():
         import_meshes(slots)
 
 
-try:
-    main()
-except Exception as e:  # noqa: BLE001
-    import traceback
-    log("FAILED: %s\n%s" % (e, traceback.format_exc()))
-finally:
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_cascade_kit.log"), "w") as f:
-        f.write("\n".join(REPORT) + "\n")
+def run(entry, log_name):
+    try:
+        entry()
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        log("FAILED: %s\n%s" % (e, traceback.format_exc()))
+    finally:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), log_name), "w") as f:
+            f.write("\n".join(REPORT) + "\n")
+
+
+if os.environ.get("WWO_KIT_LIB") != "1":     # imported as a library by another kit's import script
+    run(main, "import_cascade_kit.log")

@@ -906,6 +906,15 @@ FOOTRACE_MERGED = "/Game/WWO/Maps/FootRace"
 
 
 def build_footrace():
+    """L_FootRaceTest from Tools/footrace_layout.py, dressed as a forest ravine (Tools/footrace_dress.py; the Ravine
+    and Cascade kits must be imported: Tools/import_cascade_kit.py, then Tools/import_ravine_kit.py).
+    The layout's boxes keep the gameplay. What you see: the floors in forest floor, the cross walls and the hub's
+    walls in weathered concrete carried up to 20 m (the extra height has no collision: the 12 m boxes already can't
+    be climbed), the lanes' side walls hidden under the cliffs, the cover boxes hidden under kit pieces, the spawn
+    gates' dark boxes replaced by cave mouths and culverts."""
+    import types
+    import build_cascade
+    import footrace_dress
     new_level("/Game/WWO/Maps/L_FootRaceTest")
     if eal.does_directory_exist(FOOTRACE_MERGED):
         eal.delete_directory(FOOTRACE_MERGED)
@@ -914,20 +923,80 @@ def build_footrace():
     if problems:
         raise RuntimeError("footrace layout: " + "; ".join(problems))
     b = Builder(1, 1, 11)
-    lighting()
-    mats = {k: solid_material("FootRace_" + k, c) for k, c in FOOTRACE_COLORS.items()}
+    ns = types.SimpleNamespace(**globals())
+    # Cascade's sky, sun and haze, the sun turned to shine down the lanes (the cross walls throw the long shadows,
+    # the cliffs only a strip along one side), the haze a little green.
+    keep = (build_cascade.SUN_YAW, build_cascade.FOG_COLOR, build_cascade.SKY_LIGHT)
+    build_cascade.SUN_YAW, build_cascade.FOG_COLOR, build_cascade.SKY_LIGHT = 68.0, (0.50, 0.66, 0.52), 1.15
+    try:
+        build_cascade.lighting(ns)
+    finally:
+        build_cascade.SUN_YAW, build_cascade.FOG_COLOR, build_cascade.SKY_LIGHT = keep
+    rav, cas = "/Game/WWO/Maps/RavineKit/Materials/", "/Game/WWO/Maps/CascadeKit/Materials/"
+    load = lambda path: unreal.load_asset(path) or (_ for _ in ()).throw(RuntimeError("missing %s: import the kits first" % path))   # noqa: E731
+    forest, concrete, stone = load(rav + "MI_Rav_Forest"), load(rav + "MI_Rav_Concrete"), load(rav + "MI_Rav_Stone")
+    mats = {"floor": forest, "boss_floor": forest, "spawn0": stone, "spawn1": stone, "hub_floor": load(cas + "MI_Cas_Paver"),
+            "wall": concrete, "cliff_wall": None, "boss_platform": stone, "ramp": stone, "ruin_wall": None, "boulder": None, "stump": None}
+    dresser = footrace_dress.Dresser(ns, layout)
     groups = {}
     cover = 0
+    side_walls, runs = [], {}
     for box in layout["boxes"]:
-        tags = ("Cover",) if box.kind in FOOTRACE_COVER else ()
-        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[box.kind], "FootRace_" + box.kind, tags,
-                  yaw=90.0 - box.yaw, pitch=box.pitch)
-        if box.kind in FOOTRACE_VISUAL:
-            visual_only(a)
-        if box.kind in FOOTRACE_COVER:
+        kind = box.kind
+        if kind == "spawn_gate":
+            continue                                   # the kit's cave mouths and culverts stand there (dresser.spawns)
+        if kind == "wall":
+            along_x = box.length > box.thickness
+            if along_x and abs(box.y) > footrace_layout.HUB[1] * 0.5 + 1.0:
+                kind = "cliff_wall"                    # a lane's side: collision only, the cliff is what you see
+                side_walls.append(box)
+            else:
+                # One run per straight line of wall (a cross wall's pieces round its doorway are one run).
+                key = ("x", round(box.x, 2), box.y > 0) if not along_x else ("y", round(box.y, 2), 0)
+                runs.setdefault(key, []).append(box)
+        hidden = kind == "cliff_wall" or kind in FOOTRACE_COVER
+        tags = ("Cover",) if kind in FOOTRACE_COVER else ()
+        a = b.box(mu(box.x, box.y, box.z), (box.length, box.thickness, box.height), mats[kind], "FootRace_" + kind, tags,
+                  yaw=90.0 - box.yaw, pitch=box.pitch, hidden=hidden)
+        if kind in FOOTRACE_COVER:
+            dresser.cover(box, cover)
             cover += 1
             continue
-        groups.setdefault(box.kind, []).append(a)
+        groups.setdefault(kind, []).append(a)
+    # The man-made walls: each run carried up to the kit's wall top (looks only), then dressed.
+    for key, boxes in runs.items():
+        if key[0] == "x":
+            lo = min(w.y - w.thickness * 0.5 for w in boxes)
+            hi = max(w.y + w.thickness * 0.5 for w in boxes)
+            x0, y0, x1, y1 = boxes[0].x, lo, boxes[0].x, hi
+            size = (footrace_layout.WALL_T, hi - lo, footrace_dress.WALL_TOP - footrace_layout.WALL_H)
+            door = [w for w in boxes if w.z > footrace_layout.WALL_H * 0.5 + 0.1]       # the lintel over a doorway
+            doors = [d.y - lo for d in door]
+        else:
+            lo = min(w.x - w.length * 0.5 for w in boxes)
+            hi = max(w.x + w.length * 0.5 for w in boxes)
+            x0, y0, x1, y1 = lo, boxes[0].y, hi, boxes[0].y
+            size = (hi - lo, footrace_layout.WALL_T, footrace_dress.WALL_TOP - footrace_layout.WALL_H)
+            doors = []
+        up = b.box(mu((x0 + x1) * 0.5, (y0 + y1) * 0.5, (footrace_dress.WALL_TOP + footrace_layout.WALL_H) * 0.5), (size[0], size[1], size[2]), concrete, "FootRace_wall_top", yaw=90.0)
+        visual_only(up)
+        up.static_mesh_component.set_editor_property("cast_shadow", True)
+        groups.setdefault("wall_top", []).append(up)
+        gates = []
+        for m in layout["markers"]:
+            if m.tags[0] != "EnemySpawn":
+                continue
+            if key[0] == "x" and abs(m.x - x0) < footrace_layout.MARKER_IN + 0.5 and lo <= m.y <= hi:
+                gates.append(m.y - lo)
+            elif key[0] == "y" and abs(m.y - y0) < footrace_layout.MARKER_IN + 0.5 and lo <= m.x <= hi:
+                gates.append(m.x - lo)
+        dresser.wall(x0, y0, x1, y1, doors, gates)
+    dresser.cliffs(side_walls)
+    dresser.spawns(sorted(set(round(w.y, 2) for w in side_walls)))
+    for box in layout["boxes"]:
+        if box.kind == "boss_platform":
+            dresser.platform(box)
+    dresser.floor()
     merged = 0
     for kind, group in groups.items():
         if len(group) < 2:
@@ -936,12 +1005,17 @@ def build_footrace():
             m = merge_kind(kind, group, base=FOOTRACE_MERGED, prefix="FootRace")
             if m:
                 merged += 1
-                if kind in FOOTRACE_VISUAL:
-                    visual_only(m)
+                if kind == "cliff_wall":
+                    m.set_actor_hidden_in_game(True)
+                    m.static_mesh_component.set_editor_property("cast_shadow", False)
+                if kind == "wall_top":
+                    m.static_mesh_component.set_collision_profile_name("NoCollision")
+                    m.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
         except Exception as e:  # keep the separate pieces if merging isn't available
             log("footrace: couldn't merge %s (%s); keeping %d pieces" % (kind, e, len(group)))
     if merged:
         eal.save_directory(FOOTRACE_MERGED, only_if_is_dirty=False, recursive=True)
+    instances = dresser.flush()
     for i, m in enumerate(layout["markers"]):
         at = mu(m.x, m.y, m.z)
         rot = unreal.Rotator(0.0, 0.0, 90.0 - m.yaw)
@@ -962,7 +1036,7 @@ def build_footrace():
     ext = max(vol.get_actor_bounds(False)[1].x, 1.0)
     vol.set_actor_scale3d(unreal.Vector((y1 - y0) * 50.0 / ext, (x1 - x0) * 50.0 / ext, 600.0 / ext))
     levels.save_current_level()
-    log("L_FootRaceTest: %d boxes (%d cover), %d kinds merged, %d markers" % (len(layout["boxes"]), cover, merged, len(layout["markers"])))
+    log("L_FootRaceTest: %d boxes (%d cover), %d kinds merged, %d markers, %d kit instances" % (len(layout["boxes"]), cover, merged, len(layout["markers"]), instances))
 
 
 # --- Arboretum (L_Arboretum) -----------------------------------------------------------------
