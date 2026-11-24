@@ -34,9 +34,15 @@ cd WWO && git sparse-checkout set Art/Shells
 | Folder | Holds |
 |---|---|
 | `base/` | `robot_frame_v2_rigged.blend` — the in-game robot and its rig |
+| `base/enemy_<soldier\|swarm\|tank>_rig.blend` | the three enemy skeletons as Blender rigs, bones only. **Not in this repo** (it is public and they are Fab pack data): rebuild them with `tools/make_enemy_rigs.py` from the private `Willpatbarr/WWO_EnemySkeletons` repo cloned beside the WWO folder, or copy them from that repo's `remnant-models` branch. Same units, facing and FBX settings as the robot rig. `tools/enemy_rig_views.py` renders a sheet of them |
 | `tools/` | `shell_kit.py`, `make_shell1.py`, `make_shell2.py`, review scripts |
 | `reference/` | concept sheets and every sketch drawn so far |
 | `shell1_claude.blend`, `shell2_claude.blend` | built output, rebuilt by the tools |
+| `bleakswarm_claude.blend` | the BleakThorn swarm enemy (Remnant melee), rebuilt by `tools/make_bleakswarm.py` on `base/enemy_swarm_rig.blend`; `-- pose` adds a posed skinning sheet, `-- export` writes `export/SK_BleakSwarm.fbx`. One skinned mesh, five material roles (`M_Bleak_Wood`, `Sinew`, `Bone`, `Leaf`, `Vine`). Its colour variation lives in the vertex colours (`Col`, exported sRGB), so the game material must read vertex colour or every strand comes out one flat shade. Like the other two enemy files it holds a Fab skeleton, so it is ignored here; the built `.blend` and FBX are on `WWO_EnemySkeletons`, branch `remnant-models` |
+| `cindersoldier_claude.blend` | the CinderBloom soldier (Remnant ranged), rebuilt by `tools/make_cindersoldier.py` on `base/enemy_soldier_rig.blend`, same switches, writes `export/SK_CinderSoldier.fbx`. Six roles (`M_Cinder_Wood`, `Sinew`, `Bone`, `Leaf`, `Vine`, `Ember`); `Ember` is the one that glows. No weapon on it: the game attaches one |
+| `ironbark_claude.blend` | the IronBark tank (Remnant heavy, also the FootRace boss), rebuilt by `tools/make_ironbark.py` on `base/enemy_tank_rig.blend`, same switches, writes `export/SK_IronBark.fbx`. Built at the skeleton's own size; the game draws it at 0.55. Six roles (`M_Iron_Wood`, `Root`, `Bark`, `Leaf`, `Cap`, `Amber`); `Amber` glows |
+| `tools/remnant_lineup.py` | renders every built Remnant enemy side by side at true scale: `renders/remnant_lineup.png` |
+| `tools/remnant_kit.py` | what the Remnant enemy scripts share: strands, leaves, pierced plates, skinning, vertex colour, renders and export |
 | `renders/`, `export/` | rebuilt by the tools, not in git |
 
 ### <span style="color:#1C8E9C">│</span> Build a shell

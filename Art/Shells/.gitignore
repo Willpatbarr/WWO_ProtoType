@@ -2,3 +2,9 @@ renders/
 export/
 *.blend1
 __pycache__/
+# Built on the Fab pack skeletons: this repo is public, so these stay out of it.
+# They are rebuilt by the tools, and kept in the private WWO_EnemySkeletons repo (branch remnant-models).
+base/enemy_*_rig.blend
+bleakswarm_claude.blend
+cindersoldier_claude.blend
+ironbark_claude.blend
