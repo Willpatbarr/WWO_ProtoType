@@ -103,8 +103,13 @@ def trim_chest(body):
     bm.to_mesh(body.data); bm.free(); body.data.update()
 
 
-def apply(body, thigh_front=None, thigh_side=None):
+def apply(body, thigh_front=None, thigh_side=None, part=None, detail=True):
+    """part: skeleton_split.classify(body), made before this call. The detail pass adds faces, so it needs
+    the split to keep it in step (it rewrites the dict in place); without part there is no detail pass."""
     f = THIGH_FRONT if thigh_front is None else thigh_front
     s = THIGH_SIDE if thigh_side is None else thigh_side
     if f or s: thin_thighs(body, f, s)
     trim_chest(body)
+    if detail and part is not None and os.environ.get("WWO_SKELETON_DETAIL", "1") != "0":
+        import skeleton_detail
+        skeleton_detail.build(body, part)

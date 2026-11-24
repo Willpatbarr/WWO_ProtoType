@@ -100,7 +100,7 @@ def game_parts(which):
     # A file whose build script already trimmed the body before saving (make_shell3.py) is not trimmed again.
     import skeleton_split, skeleton_edits
     split = skeleton_split.classify(body)
-    if which not in BODY_ALREADY_TRIMMED: skeleton_edits.apply(body)
+    if which not in BODY_ALREADY_TRIMMED: skeleton_edits.apply(body, part=split)
     out = {"Skeleton": piece(body, "SK_RobotSkeleton", lambda i: split[i] == "Skeleton")}
     if which == "base":
         for s in SLOTS:

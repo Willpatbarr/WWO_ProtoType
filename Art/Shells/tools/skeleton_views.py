@@ -9,7 +9,7 @@ import skeleton_edits
 
 body = bpy.data.objects["SK_RobotFrame"]
 part = classify(body)
-skeleton_edits.apply(body)
+skeleton_edits.apply(body, part=part)
 skel = body.copy(); skel.data = body.data.copy(); skel.name = "SkeletonOnly"
 bpy.context.scene.collection.objects.link(skel)
 bm = bmesh.new(); bm.from_mesh(skel.data)

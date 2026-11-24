@@ -10,7 +10,7 @@ from skeleton_split import classify
 
 TARGET, SPAN = (39.5, 3.5, 110), 50
 body = bpy.data.objects["SK_RobotFrame"]
-part = classify(body); skeleton_edits.apply(body)
+part = classify(body); skeleton_edits.apply(body, part=part)
 bm = bmesh.new(); bm.from_mesh(body.data)
 bmesh.ops.delete(bm, geom=[f for f in bm.faces if part[f.index] != "Skeleton"], context="FACES")
 skel = bpy.data.objects.new("SkeletonOnly", bpy.data.meshes.new("SkeletonOnly"))
