@@ -71,6 +71,7 @@
       "main": [
         {"piece": "mesh", "anchor": "head_top", "offset": [-3, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodB"},
         {"piece": "mesh", "anchor": "head_top", "offset": [-3, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodA"},
+        {"piece": "mesh", "anchor": "head_top", "offset": [-3, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodC"},
         {"piece": "mesh", "anchor": "head_top", "offset": [-5.25, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodTop"},
         {"piece": "mesh", "mesh": "SM_VS_FlopA", "anchor": "shoulder_top_r", "offset": [-3, 3, 3], "roll": 95, "ignore_obstacles": true},
         {"piece": "mesh", "mesh": "SM_VS_FlopB", "path": "collar_to_shoulder_r", "at": 0.5, "offset": [-3, 4, 5], "roll": 140, "ignore_obstacles": true},
