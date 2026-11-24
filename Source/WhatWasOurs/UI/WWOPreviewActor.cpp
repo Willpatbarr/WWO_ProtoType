@@ -25,9 +25,9 @@ AWWOPreviewActor::AWWOPreviewActor()
 	Capture->SetupAttachment(GetRootComponent());
 	// Godot's preview camera: 4.4 m in front, 1.1 m above the feet, level, 45 degrees tall (Godot
 	// FOVs are vertical; Unreal's are horizontal, so convert for the preview's shape).
-	// (Now nearer, CameraAt, so the character fills the menu's tall middle column.)
-	Capture->SetRelativeLocationAndRotation(CameraAt, FRotator(0.f, 180.f, 0.f));
-	Capture->FOVAngle = FMath::RadiansToDegrees(2.f * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(22.5f)) * Size.X / Size.Y));
+	// (Now CameraAt: higher, further and through a longer lens, for the taller robot.)
+	Capture->SetRelativeLocationAndRotation(CameraAt, FRotator(CameraPitch, 180.f, 0.f));
+	Capture->FOVAngle = FMath::RadiansToDegrees(2.f * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(CameraHalfFov)) * Size.X / Size.Y));
 	Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
 	Capture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR; // tone mapped (filmic), like the game's view
 	Capture->bCaptureEveryFrame = true;

@@ -181,8 +181,8 @@ void UWWOBodyAnimInstance::Snapshot(FWWOBodyAnimProxy& Proxy) const
 	}
 	Proxy.Upper = { Upper.Seq.Get(), Upper.Time, Upper.Seq ? Upper.Weight : 0.f, true };
 	Proxy.Shot = { Shot.Seq.Get(), Shot.Time, Shot.Seq ? Shot.Weight : 0.f, false };
-	Proxy.HunchSpine = HunchSpine;
-	Proxy.HunchHead = HunchHead;
+	Proxy.HunchSpine = HunchSpine + BaseSpine;
+	Proxy.HunchHead = HunchHead + BaseHead;
 }
 
 // --- Proxy (worker thread) -------------------------------------------------------------------

@@ -182,7 +182,7 @@ behaviour. Run the suite again afterwards; it must pass.
 | `-WWOAutoTestMenus` | Both menus by injected controller and keyboard input (about 30 s) | any |
 | `-WWOAutoTestBody` | Body states, your own body in third person, first-person hands (about 1 min) | `L_Arena` |
 | `-WWOAutoTestBody -WWOBodyFlora=<id>` | The same, wearing that flora for the third-person shots (its grafts on the moving body; the loadout guard puts yours back). `-WWOBodyClose`: those shots from about half as far | `L_Arena` |
-| `-WWOAutoTestGrafts` | Eight loadouts in the character preview (about 35 s). `-WWOGraftsCloseYaw=<deg>`: its close-ups (35_*) from that angle instead of -35 (55: the robot's left side, to see how flush pieces sit) | any |
+| `-WWOAutoTestGrafts` | Eight loadouts in the character preview (about 35 s). `-WWOGraftsYaw=<deg>`: its whole-body front shots (34_*_front) from that angle (90: the side, to see how the robot stands). `-WWOGraftsCloseYaw=<deg>`: its close-ups (35_*) from that angle instead of -35 (55: the robot's left side, to see how flush pieces sit) | any |
 | `-WWOAutoTestMaps` | Fixed camera views of the level (about 25 s) | every map |
 | `-WWOAutoTestMods` | Weapon mods and perks against the mod data | `L_TestRange` |
 | `-WWOAutoTestGuns`, `-WWOAutoTestHidden`, `-WWOAutoTestFrames` | Variants inside the mods test: gun screenshots, hidden aim assist, the newer frames and burst counts | `L_TestRange` |

@@ -89,6 +89,10 @@ public:
 	// Degrees spread over the spine bones and over the neck and head (HunchModifier).
 	float HunchSpine = 0.f;
 	float HunchHead = 0.f;
+	// The model's own standing correction, added to the hunch (CharacterModels.json 'upright': the robot's torso tips
+	// forward on the mannequin's clips, so its spine is bent back by this and its head forward again to stay level).
+	float BaseSpine = 0.f;
+	float BaseHead = 0.f;
 	float GetUpperWeight() const { return Upper.Weight; }
 
 	void Advance(float DeltaSeconds); // run by the proxy before each update

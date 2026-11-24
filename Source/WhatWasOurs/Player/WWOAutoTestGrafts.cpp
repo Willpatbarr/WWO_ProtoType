@@ -92,7 +92,10 @@ bool FWWOAutoTest::UpdateAutoGraftTest(AWWOCharacter* P, float DeltaTime)
 	{
 		const float At = 0.5f + k * MenuEvery;
 		if (Crossed(At)) Equip(GraftLoadouts[k]);
-		if (Crossed(At + 0.8f)) { Turn(0.f); Shot(*FString::Printf(TEXT("34_grafts_%d_%s_front"), k, GraftLoadouts[k].Name)); }
+		// -WWOGraftsYaw=<deg>: the whole-body shot from that angle instead of the front (90: the robot's side, to see how it stands).
+		float FrontYaw = 0.f;
+		WWOSwitches::Value(TEXT("WWOGraftsYaw="), FrontYaw);
+		if (Crossed(At + 0.8f)) { Turn(FrontYaw); Shot(*FString::Printf(TEXT("34_grafts_%d_%s_front"), k, GraftLoadouts[k].Name)); }
 		if (Crossed(At + 1.4f)) { Turn(200.f); Shot(*FString::Printf(TEXT("34_grafts_%d_%s_back"), k, GraftLoadouts[k].Name)); }
 	}
 	// Up close: the preview's own camera moved in to the upper body.

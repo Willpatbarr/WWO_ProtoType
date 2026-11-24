@@ -286,6 +286,16 @@ void UWWOBodyComponent::SetModel(FName Key)
 	}
 	double Scale = 1.0;
 	Config->TryGetNumberField(TEXT("scale"), Scale);
+	// upright: degrees the torso is stood up by (the spine bent back, the head tipped forward again by upright_head, the
+	// same unless given), on top of every clip: a model whose build leans forward on the mannequin's poses.
+	double Upright = 0.0, UprightHead = 0.0;
+	Config->TryGetNumberField(TEXT("upright"), Upright);
+	if (!Config->TryGetNumberField(TEXT("upright_head"), UprightHead)) UprightHead = Upright;
+	if (UWWOBodyAnimInstance* Anim = Cast<UWWOBodyAnimInstance>(Driver->GetAnimInstance()))
+	{
+		Anim->BaseSpine = -float(Upright);
+		Anim->BaseHead = -float(UprightHead);
+	}
 	bModelGrafts = false;
 	bModelPinned = false;
 	Config->TryGetBoolField(TEXT("grafts"), bModelGrafts);
