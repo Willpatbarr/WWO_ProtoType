@@ -53,7 +53,7 @@ def piece(src, name, keep):
 if WHICH == "base":
     body = bpy.data.objects["SK_RobotFrame"]
     part = classify(body)
-    skeleton_edits.apply(body)          # in memory only: the .blend is never saved
+    skeleton_edits.apply(body, part=part)          # in memory only: the .blend is never saved
     export(piece(body, "SK_RobotSkeleton", lambda f: part[f.index] == "Skeleton"))
     for s in ("Head", "Core", "Arms", "Legs"):
         export(piece(body, "SK_Shell0_" + s, lambda f, s=s: part[f.index] == s))
