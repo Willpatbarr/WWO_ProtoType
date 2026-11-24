@@ -30,7 +30,7 @@ to `WhatWasOurs.uproject`.
 - Scripted test run: add `-WWOAutoTest` (or a narrower switch, see `docs/TESTING.md`) and `-abslog=<file>`.
   It ends with `AutoTest result: PASS` or `FAIL (n)` and exit code 1 on failure. Screenshots: `Saved/AutoTest/`.
 - PvP bot match: `L_Arboretum -game -windowed -WWOHostPvP -WWOBots=11 -WWOStress -WWOStressTime=90`
-- Windows: `build_windows.bat`, `Tools\package_win.bat`. Mac package: `Tools/package_mac.sh`.
+- Windows: `build_windows.bat`, `Tools\package_win.bat`. A Windows release from someone else's PC: `Tools/windows/setup.ps1` (one-time), then `release_windows_1_build.bat` and `release_windows_2_upload.bat`; they build the `windows-release` branch and publish the tag in `Tools/windows/release.txt`. Mac package: `Tools/package_mac.sh`.
 
 ## Where code lives (`Source/WhatWasOurs/`)
 

@@ -27,7 +27,7 @@ if not defined UE_ROOT (
   echo Unreal Engine 5.8 was not found. In the Epic Games Launcher, open the 5.8 install folder,
   echo copy its path, then in this window type:   set UE_ROOT=that path
   echo ^(no quotes^) and run build_windows.bat again.
-  pause
+  if not defined WWO_NO_PAUSE pause
   exit /b 1
 )
 echo Using Unreal Engine at "%UE_ROOT%"
@@ -39,5 +39,6 @@ call "%HERE%Tools\package_win.bat"
 set "RESULT=%ERRORLEVEL%"
 echo.
 if "%RESULT%"=="0" (echo Done. The game is in "%HERE%Builds\Windows".) else (echo The build failed. Scroll up to the first error.)
-pause
+rem WWO_NO_PAUSE=1: a script is running this (release_windows_1_build.bat), so don't wait for a key.
+if not defined WWO_NO_PAUSE pause
 exit /b %RESULT%

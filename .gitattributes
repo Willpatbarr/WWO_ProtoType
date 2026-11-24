@@ -1,5 +1,6 @@
 # Line endings: the Windows script needs CRLF on any checkout, the shell and Python ones LF.
 *.bat text eol=crlf
+*.ps1 text eol=crlf
 *.sh text eol=lf
 *.py text eol=lf
 *.json text
