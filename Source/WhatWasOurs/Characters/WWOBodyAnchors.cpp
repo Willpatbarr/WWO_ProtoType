@@ -950,6 +950,7 @@ namespace
 			const FVector2D ScaleAlong = Pair(O, TEXT("scale_along"), FVector2D(1.0, 1.0));
 			const float Zig = Num(O, TEXT("zigzag_cm"), 0.0);
 			const float Pitch = Num(O, TEXT("pitch"), 0.0), Roll = Num(O, TEXT("roll"), 0.0);
+			const float Seat = FMath::Clamp(float(Num(O, TEXT("seat"), 0.0)), 0.f, 1.f);
 			const TSharedPtr<FJsonObject> Jit = Object(O, TEXT("jitter"));
 			const float JRoll = Jit ? Num(Jit, TEXT("roll"), 0.0) : 0.f, JPitch = Jit ? Num(Jit, TEXT("pitch"), 0.0) : 0.f;
 			const float JScale = Jit ? Num(Jit, TEXT("scale"), 0.0) : 0.f, JSlide = Jit ? Num(Jit, TEXT("slide_cm"), 0.0) : 0.f;
@@ -1035,9 +1036,25 @@ namespace
 					// Built in its frame (X up, Z out), pitched about its Y (+: Z toward X, a shelf's rim up), rolled about Z.
 					auto Place = [&](const FVector& At, const FVector& Nn)
 					{
-						const FQuat Q = FRotationMatrix::MakeFromXZ(Tangent(Nn, UpWant), Nn).ToQuat()
-							* FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Roll + JR)) * FQuat(FVector::YAxisVector, FMath::DegreesToRadians(Pitch + JP));
-						return FTransform(Q, At + Nn * Off.X, FVector(ScC));
+						const FQuat Rolled = FRotationMatrix::MakeFromXZ(Tangent(Nn, UpWant), Nn).ToQuat() * FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Roll + JR));
+						const FQuat Pitched(FVector::YAxisVector, FMath::DegreesToRadians(Pitch + JP));
+						// seat: laid along the surface. Its length (it runs toward its own -X) goes from its root to where the surface
+						// is, 'seat' of its length along that way, so a long piece lies on whatever part is worn instead of standing
+						// off it where the part curves or tapers (DawnLotus's petals). Pitch then lifts it from there.
+						if (Seat > 0.f)
+						{
+							const float Reach = float(-Shape->Bounds.Min.X) * ScC * Seat;
+							FVector P2 = At, N2 = Nn;
+							FName Unused = Bc;
+							if (Reach > 1.f) SurfaceNow().Walk(P2, N2, -Rolled.GetAxisX(), Reach, &Unused);
+							if (Reach > 1.f && FVector::Dist(At, P2) > 0.25f * Reach)
+							{
+								const FVector Xa = (At - P2).GetSafeNormal();
+								const FVector Na = Tangent(Xa, (Nn + N2).GetSafeNormal(UE_SMALL_NUMBER, Nn));
+								return FTransform(FRotationMatrix::MakeFromXZ(Xa, Na).ToQuat() * Pitched, At + Nn * Off.X, FVector(ScC));
+							}
+						}
+						return FTransform(Rolled * Pitched, At + Nn * Off.X, FVector(ScC));
 					};
 					FTransform Xf = Place(Pc, Nc);
 					auto Clashes = [&](const FTransform& X) -> const FKeep*
