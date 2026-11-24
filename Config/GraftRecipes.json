@@ -142,16 +142,17 @@
       "kit_section": "dawn",
       "main": [
         {"piece": "mesh", "mesh": "SM_DL_BackLotus", "anchor": "back_upper", "offset": [0.5, 0.0, 8.0]},
-        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_l", "offset": [0.4, 0.0, 0.0], "roll": 90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_r", "offset": [0.4, 0.0, 0.0], "roll": -90},
+        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_l", "offset": [0.4, 0.0, 0.0], "roll": -90},
+        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_r", "offset": [0.4, 0.0, 0.0], "roll": 90},
         {"piece": "mesh", "mesh": "SM_DL_StrapShoulder", "anchor": "shoulder_top_l", "offset": [0.4, 0.0, 0.0], "roll": 90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapShoulder", "anchor": "shoulder_top_r", "offset": [0.4, 0.0, 0.0], "roll": -90}
+        {"piece": "mesh", "mesh": "SM_DL_StrapShoulder", "anchor": "shoulder_top_r", "offset": [0.4, 0.0, 0.0], "roll": -90},
+        {"piece": "mesh", "mesh": "SM_DL_StrapChest", "anchor": "chest_front", "offset": [0.3, 0.0, 0.0]}
       ],
       "pollination": [
         {"piece": "mesh", "mesh": "SM_DL_ArmSleeve", "anchor": "upperarm_outer_{s}", "offset": [0.2, 0.0, 0.0]}
       ],
       "full_bloom": [
-        {"piece": "mesh", "mesh": "SM_DL_ThighSleeve", "anchor": "thigh_outer_{s}", "offset": [0.2, 0.0, 0.0]},
+        {"piece": "mesh", "mesh": "SM_DL_ThighSleeve", "anchor": "thigh_outer_{s}", "offset": [-0.4, 0.0, 0.0], "pitch": -7},
         {"piece": "mesh", "mesh": "SM_DL_Greave", "anchor": "shin_front_{s}", "offset": [0.3, 0.0, 0.0]}
       ],
       "petalfall": [
