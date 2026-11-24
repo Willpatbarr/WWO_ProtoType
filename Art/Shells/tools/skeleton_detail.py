@@ -152,12 +152,15 @@ class Detail:
         return f
 
     def place(self, name, c, long, out, length=None, scale=None, face=None, mat=None, width=None, depth=None, top=None,
-              turn=False, fit=None, fill=0.94):
+              turn=False, fit=None, fill=0.94, sym=True, gap=0.0):
         """Copy a kit piece: its length along `long`, its flat side toward `out` (face "d"/"w" picks which; turn flips it).
         length: its full length in cm (uniform scale), or scale. width / depth: squeeze to at most this (full size).
         top: put its outermost point this far along `out` from c (else centred on c).
         fit: a Frame (a bay's floor, with u along `long`): the piece is squeezed sideways, height by height, to fill
-        that outline, so a tapering bay gets a tapering piece and nothing leaves the bay."""
+        that outline, so a tapering bay gets a tapering piece and nothing leaves the bay.
+        sym (with fit; Will, 2026-11-23: no asymmetry anywhere): two copies, mirror images of each other, one in each
+        half of the outline, so whatever the piece's own shape the bay is symmetric about its centre line.
+        gap: how far from the centre line each starts (0..1 of the half width)."""
         k = self.kit(name); h = k["half"]
         s = scale if scale else length / (2 * h.y)
         L = long.normalized(); N = (out - L * out.dot(L)).normalized(); S = L.cross(N)
@@ -172,26 +175,31 @@ class Detail:
         sd = s if not depth or 2 * hn * s <= depth else depth / (2 * hn)
         o = Vector(c)
         if top is not None: o = o + N * (top - hn * sd)
-        bm = self.cur; vs = []
-        for p in k["verts"]:
-            a, l, n = loc(p)
-            if fit:
-                du = (o + L * (l * s) - fit.c).dot(fit.u)
-                v0, v1 = fit.vrange(du); sgn = 1 if S.dot(fit.v) > 0 else -1
-                q = fit.c + fit.u * du + fit.v * ((v0 + v1) / 2 + sgn * (a / hs) * (v1 - v0) / 2 * fill)
-                q += N * ((o - fit.c).dot(N) + n * sd)
-            else:
-                q = o + S * (a * sw) + L * (l * s) + N * (n * sd)
-            vs.append(bm.verts.new(q))
-        flip = face in ("-d", "-w") and False
-        mi = self.M[mat] if mat else None
-        for ix, sm, m in k["faces"]:
-            try: f = bm.faces.new([vs[i] for i in ix])
-            except ValueError: continue
-            f.smooth = sm; f.material_index = m if mi is None else mi
-        for a, b in k["sharp"]:
-            e = bm.edges.get((vs[a], vs[b]))
-            if e: e.smooth = False
+        bm = self.cur; mi = self.M[mat] if mat else None; out = []
+        for m in ((1, -1) if (fit and sym) else (0,)):
+            vs = []
+            for p in k["verts"]:
+                a, l, n = loc(p)
+                if fit:
+                    du = (o + L * (l * s) - fit.c).dot(fit.u)
+                    v0, v1 = fit.vrange(du); sgn = 1 if S.dot(fit.v) > 0 else -1; half = (v1 - v0) / 2
+                    if m: off = m * half * (gap + (a / hs + 1) / 2 * (fill - gap))
+                    else: off = sgn * (a / hs) * half * fill
+                    q = fit.c + fit.u * du + fit.v * ((v0 + v1) / 2 + off)
+                    q += N * ((o - fit.c).dot(N) + n * sd)
+                else:
+                    q = o + S * (a * sw) + L * (l * s) + N * (n * sd)
+                vs.append(bm.verts.new(q))
+            flip = bool(m) and m != sgn                      # the mirror image: its faces wind the other way
+            for ix, sm, fm in k["faces"]:
+                try: f = bm.faces.new([vs[i] for i in (ix[::-1] if flip else ix)])
+                except ValueError: continue
+                f.smooth = sm; f.material_index = fm if mi is None else mi
+            for a, b in k["sharp"]:
+                e = bm.edges.get((vs[a], vs[b]))
+                if e: e.smooth = False
+            out += vs
+        vs = out
         self._placed = getattr(self, "_placed", []) + [vs]
         return vs
 
@@ -381,8 +389,7 @@ def thigh(d):
             mid = mid[:1]
         if mid:
             fr = d.sink(mid, rail=1.0, depth=1.5, floor="04")
-            if s == "out": insert(d, fr, "truss_a", 1.35, 2.6, face="w", turn=True)
-            elif s == "in": insert(d, fr, "truss_b", 1.35, 2.6, face="w", turn=True)
+            if s in ("out", "in"): insert(d, fr, "truss_a", 1.35, 2.6, face="w", turn=True)       # the same inside and out
             elif s == "front": insert(d, fr, "bracket", 1.35, 2.4, fill=0.7)
             else: d.spring(fr.floor.at(-0.84, 0, 0.72), fr.floor.at(0.84, 0, 0.72), r=0.62, turns=6)
         # --- bottom band: a slot down to the knee
@@ -410,8 +417,7 @@ def calf(d):
             if fr.iu > 1.3 and fr.iv > 1.3: bolts4(d, fr, inset=0.55, r=0.25)
         for f in band(s, 33, 48, 30):
             fr = d.sink([f], rail=0.9, depth=1.2 if s in ("out", "in") else 0.9, floor="04")
-            if s == "out": insert(d, fr, "truss_b", 1.05, 2.2, face="w", turn=True)
-            elif s == "in": insert(d, fr, "truss_a", 1.05, 2.2, face="w", turn=True)
+            if s in ("out", "in"): insert(d, fr, "truss_b", 1.05, 2.2, face="w", turn=True)
             elif s == "front": insert(d, fr, "bracket", 0.8, 1.6, fill=0.8)
             else: d.piston(fr.floor.at(0.85, 0, 0.42), fr.floor.at(-0.85, 0, 0.42), r=0.4)
         for f in band(s, 20, 33, 20):
@@ -473,8 +479,8 @@ def foot(d):
         if ribs: slats(d, fr, ribs, b=0.94, h=0.5, t=0.45)
         else:
             deck = fr
-            for b0, b1 in ((-0.95, -0.55), (0.55, 0.95)):            # a lattice link along each edge of the heel deck
-                insert_in(d, fr.floor.rect(-0.95, 0.6, b0, b1), "link", 0.65, 1.2, face="w", fill=1.0)
+            # a lattice link along each edge of the heel deck, mirror images of each other
+            insert_in(d, fr.floor.rect(-0.95, 0.6, -0.95, 0.95), "link", 0.65, 1.2, face="w", fill=1.0, gap=0.58)
 
     # --- the toe hinge: the same roller, turned with grooves and a pin through it
     xs = [v.co.x for f in roller for v in f.verts]; ys = [v.co.y for f in roller for v in f.verts]; zs = [v.co.z for f in roller for v in f.verts]
@@ -516,6 +522,9 @@ def chest(d):
     faces = d.shell(isl)
     wall = [f for f in faces if abs(f.normal.x) > 0.99 and abs(f.calc_center_median().x) < 0.1]    # a wall down the middle, never seen
     bmesh.ops.delete(d.cur, geom=wall, context="FACES_ONLY")
+    # only the robot's left half is worked; the right half is its mirror image, made at the end
+    right = [f for f in faces if f.is_valid and f.calc_center_median().x < 0]
+    bmesh.ops.delete(d.cur, geom=right, context="FACES")
     faces = [f for f in faces if f.is_valid]
     done = set()
 
@@ -523,7 +532,7 @@ def chest(d):
         fs = [f for f in faces if f.is_valid and f not in done and big(f, a) and near(f, n, lim)]
         done.update(fs); return fs
 
-    for sx in (1, -1):
+    for sx in (1,):
         # --- the front wedge: one bay each side of the centre ridge, with ribs across it
         fs = pick((0.6 * sx, -0.8, -0.1), 0.97)
         fr = d.sink(fs, rail=1.0, depth=1.2, floor="04", flat=True)
@@ -533,7 +542,7 @@ def chest(d):
         fr = d.sink(fs, rail=1.2, depth=1.6, floor="04")
         fl = fr.floor
         # where the housing's axis (y 4.0, z 153.6) meets the bay's floor. The floor is uneven (the block's corners
-        # were trimmed for shell 3), so the collar and the truss each sit at the lowest corner near them.
+        # were trimmed for shell 3), so the collar sits at the lowest corner near it.
         hc = Vector((fl.c.x + (-(fl.n.y * (4.0 - fl.c.y) + fl.n.z * (153.6 - fl.c.z)) / fl.n.x), 4.0, 153.6))
         fl = d.floor_near(fr, hc, 11.0)
         hc = hc + fl.n * (fl.c - hc).dot(fl.n)
@@ -541,9 +550,6 @@ def chest(d):
         for k in range(8):
             a = pi / 8 + k * pi / 4
             d.bolt(hc + (fl.u * cos(a) + fl.v * sin(a)) * 5.8 + fl.n * 0.52, fl.n, r=0.3, h=0.2, mat="03")
-        lo = fr.floor.rect(-0.72, -0.12, -0.4, 0.55)
-        lo = d.floor_near(fr, lo.c, 12.0).rect(-0.72, -0.12, -0.4, 0.55)
-        insert_in(d, lo, "loops", 0.8, 2.4, fill=0.95)
         # --- the back: a lattice link down each side of the spine, plates above
         fs = pick((0.13 * sx, 0.97, -0.22), 0.97)
         fr = d.sink(fs, rail=0.9, depth=1.0, floor="04", flat=True)
@@ -553,6 +559,9 @@ def chest(d):
                 fr = d.sink([f], rail=0.8, depth=0.4)
                 bolts4(d, fr, inset=0.8, r=0.32)
     panel_lines(d, faces, done, area=8.0, wide=2.2, rail=0.5, depth=0.25)
+    r = bmesh.ops.duplicate(d.cur, geom=d.cur.verts[:] + d.cur.edges[:] + d.cur.faces[:])
+    for v in [g for g in r["geom"] if isinstance(g, bmesh.types.BMVert)]: v.co.x = -v.co.x
+    bmesh.ops.reverse_faces(d.cur, faces=[g for g in r["geom"] if isinstance(g, bmesh.types.BMFace)])
 
 
 def build(body, part):
