@@ -3,7 +3,7 @@
 	{
 		"WalkSpeed": 4,
 		"SprintSpeed": 9.5,
-		"GroundAccel": 110,
+		"GroundAccel": 140,
 		"GroundDecel": 80
 	},
 	"global/Camera":
@@ -215,19 +215,15 @@
 		"BreachDrain": 15,
 		"BreachDeathLoss": 0.25,
 		"LeverHoldTime": 1.7250000238418579,
-		"BossMaxHealth": 27000,
+		"BossHealth": 9000,
 		"BossWindow": 15,
 		"CoreDelay": 5,
 		"CoreHeal": 400,
 		"CoreDropTime": 15,
-		"BossRoomWave": 22,
-		"BossRoomRefill": 0.5,
-		"LaneRoomEnemies": 20,
-		"LaneRoomStagger": 0.20000000298023224,
-		"LaneRoomRefill": 1.5,
-		"HijackOpenTime": 30,
-		"HijackStayTime": 30,
-		"HijackKillBonus": 25
+		"BossWave": 9,
+		"RoomEnemies": 12,
+		"RoomSpawnStagger": 0.40000000596046448,
+		"RoomRefillTime": 3
 	},
 	"global/Bots":
 	{
@@ -568,13 +564,13 @@
 		"FireRate": 165,
 		"Burst": 3,
 		"BurstRate": 830,
-		"Damage": 15,
-		"CritMultiplier": 2,
+		"Damage": 20,
+		"CritMultiplier": 1.9000000953674316,
 		"FireRange": 105,
 		"Pellets": 1,
 		"PelletSpread": 0,
 		"HipSpread": 0.5,
-		"RecoilUp": 1,
+		"RecoilUp": 0.65000003576278687,
 		"RecoilSide": 0.079999998211860657,
 		"RecoilKickTime": 0.059999998658895493,
 		"RecoilRecovery": 0.80000001192092896,
@@ -582,7 +578,7 @@
 		"RecoilRecoverySync": 0,
 		"RecoilRecoveryCurve": 3.5,
 		"RecoilRecoveryDelay": 0,
-		"VerticalKick": 8.6000003814697266,
+		"VerticalKick": 1.1000000238418579,
 		"HorizontalKick": 0,
 		"KickHold": 0.029999999329447746,
 		"KickReturn": 0.059999998658895493,
@@ -651,13 +647,6 @@
 		"Dexterity": 1,
 		"Durability": 0
 	},
-	"frame/vanguard_head":
-	{
-		"Agility": 2,
-		"Aerial": 0,
-		"Dexterity": 0,
-		"Durability": 1
-	},
 	"frame/standard_arms":
 	{
 		"Agility": 0,
@@ -685,13 +674,6 @@
 		"Aerial": 0,
 		"Dexterity": 1,
 		"Durability": 0
-	},
-	"frame/vanguard_arms":
-	{
-		"Agility": 1,
-		"Aerial": 0,
-		"Dexterity": 0,
-		"Durability": 2
 	},
 	"frame/standard_legs":
 	{
@@ -721,13 +703,6 @@
 		"Dexterity": 0,
 		"Durability": 2
 	},
-	"frame/vanguard_legs":
-	{
-		"Agility": 2,
-		"Aerial": 0,
-		"Dexterity": 0,
-		"Durability": 1
-	},
 	"frame/standard_core":
 	{
 		"Agility": 0,
@@ -755,13 +730,6 @@
 		"Aerial": 2,
 		"Dexterity": 0,
 		"Durability": 1
-	},
-	"frame/vanguard_core":
-	{
-		"Agility": 1,
-		"Aerial": 0,
-		"Dexterity": 0,
-		"Durability": 2
 	},
 	"ability/overgrowth":
 	{
@@ -831,6 +799,15 @@
 	{
 		"ExtraCharges": 1
 	},
+	"ability/pollination":
+	{
+	},
+	"ability/full_bloom":
+	{
+	},
+	"ability/petalfall":
+	{
+	},
 	"trait/extra_speed":
 	{
 		"mod0": 0.10000000149011612,
@@ -894,6 +871,26 @@
 	"trait/stronger_poison":
 	{
 		"Amount": 0.30000001192092896
+	},
+	"trait/generous_bloom":
+	{
+		"Amount": 0.15000000596046448
+	},
+	"trait/sweet_nectar":
+	{
+		"Amount": 0.25
+	},
+	"trait/busy_pollen":
+	{
+		"Amount": 0.5
+	},
+	"trait/loose_petals":
+	{
+		"Amount": 0.20000000298023224
+	},
+	"trait/early_riser":
+	{
+		"mod0": -0.15000000596046448
 	},
 	"grenade/volt_grenade":
 	{
@@ -993,5 +990,52 @@
 		"FuseMult": 1,
 		"Bounce": 0.34999999403953552,
 		"BlindTime": 3
+	},
+	"grenade/bloom_pool":
+	{
+		"Bounce": 0.05000000074505806
+	},
+	"grenade/solar_burst":
+	{
+		"Bounce": 0.15000000596046448
+	},
+	"grenade/reveille":
+	{
+		"Bounce": 0.05000000074505806
+	},
+	"global/DawnLotus":
+	{
+		"PollinationGrenadeEnergy": 0.10000000149011612,
+		"PollinationBloomEnergy": 0.05000000074505806,
+		"PollinationCooldown": 4,
+		"FullBloomPool": 200,
+		"FullBloomRadius": 8,
+		"FullBloomCooldown": 45,
+		"PetalfallDamage": 300,
+		"PetalfallHeal": 30,
+		"PetalfallRadius": 6,
+		"BloomPoolHealPerSecond": 25,
+		"BloomPoolTime": 6,
+		"BloomPoolRadius": 4,
+		"BloomPoolRecharge": 1.25,
+		"SolarBurstDamage": 140,
+		"SolarBurstRadius": 4.5,
+		"SolarBurstRecharge": 1,
+		"ReveilleDamage": 25,
+		"ReveilleRadius": 5,
+		"ReveilleEnergy": 0.10000000149011612,
+		"ReveilleHandling": 1.3500000238418579,
+		"ReveilleHandlingTime": 8,
+		"ReveilleRecharge": 1.5,
+		"NectarMax": 100,
+		"NectarPerHeal": 0.25,
+		"NectarOverhealScale": 0.25,
+		"BeamBaseDamage": 300,
+		"BeamDamageAtFullNectar": 450,
+		"BeamRange": 60,
+		"BeamRadius": 0.60000002384185791,
+		"BeamWindup": 0.64999997615814209,
+		"GroundGrenadeSafetyFuse": 5,
+		"DawnLitTime": 0.60000002384185791
 	}
 }
