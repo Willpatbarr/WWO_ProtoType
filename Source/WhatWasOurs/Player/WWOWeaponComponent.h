@@ -263,6 +263,7 @@ private:
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> HandsMesh;
 	UPROPERTY() TObjectPtr<class USkeletalMeshComponent> HandsArmour; // the arms shell part over the hands mesh, if the robot wears parts
 	uint32 HandsArmourPaint = 0; // the body's ShellPaintSerial its colours were painted from
+	uint32 HandsSkeletonPaint = MAX_uint32; // the same for the hands themselves (the skeleton's colours)
 	UPROPERTY() TObjectPtr<USkeletalMesh> HandsAsset;
 	UPROPERTY() TObjectPtr<UAnimSequence> HandsPose;
 	struct FHandsArm

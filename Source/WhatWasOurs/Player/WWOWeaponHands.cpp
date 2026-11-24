@@ -89,7 +89,9 @@ void UWWOWeaponComponent::BuildHands(USkeletalMesh* Asset)
 		HandsMesh->SetBoundsScale(4.f);
 		HandsMesh->RegisterComponent();
 	}
+	HandsMesh->EmptyOverrideMaterials(); // (the last asset's colours were for its own material slots)
 	HandsMesh->SetSkinnedAssetAndUpdate(Asset);
+	HandsSkeletonPaint = MAX_uint32;
 	HandsRefLocal.Reset();
 	HandsOwner.Reset();
 	if (!Asset || !HandsPose || !HandsPose->GetSkeleton()) return;
@@ -209,6 +211,12 @@ void UWWOWeaponComponent::UpdateHands()
 		HandsArmour->SetBoundsScale(4.f);
 		HandsArmour->SetLeaderPoseComponent(HandsMesh);
 		HandsArmour->RegisterComponent();
+	}
+	// Your skeleton's colours on the hands, as the body paints its own skeleton.
+	if (P && P->Body && HandsSkeletonPaint != P->Body->ShellPaintSerial)
+	{
+		HandsSkeletonPaint = P->Body->ShellPaintSerial;
+		P->Body->PaintSkeleton(HandsMesh);
 	}
 	if (HandsArmour)
 	{

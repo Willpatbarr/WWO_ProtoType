@@ -645,10 +645,10 @@ void UWWOBodyComponent::ShellFromLoadout(const UWWOLoadoutSubsystem* Loadout)
 {
 	static const FName Slots[NumShellSlots] = { "head", "core", "arms", "legs" };
 	int32 Picks[NumShellSlots] = { 0, 0, 0, 0 };
-	FColor Paint[NumShellSlots][NumShellRoles] = {};
-	for (int32 i = 0; i < NumShellSlots; ++i)
+	FColor Paint[NumPaintSlots][NumShellRoles] = {};
+	for (int32 i = 0; i < NumShellSlots; ++i) Picks[i] = ShellLookOf(Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr);
+	for (int32 i = 0; i < NumPaintSlots; ++i) // (the four parts, then the skeleton: FWWOEquipped's order)
 	{
-		Picks[i] = ShellLookOf(Loadout ? Loadout->GetFramePart(Slots[i]) : nullptr);
 		for (int32 Role = 0; Role < NumShellRoles; ++Role) Paint[i][Role] = Loadout ? Loadout->GetShellColor(i, Role) : FColor(0, 0, 0, 0);
 	}
 	SetShellPaint(Paint); // (repaints the parts worn now; a rebuild below paints the new ones)
@@ -671,10 +671,10 @@ int32 UWWOBodyComponent::ShellLookOf(const UWWOFramePartData* Part)
 	return Shell;
 }
 
-void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumShellSlots][NumShellRoles])
+void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumPaintSlots][NumShellRoles])
 {
 	bool bChanged = false;
-	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
+	for (int32 Slot = 0; Slot < NumPaintSlots; ++Slot)
 	{
 		for (int32 Role = 0; Role < NumShellRoles; ++Role)
 		{
@@ -683,7 +683,9 @@ void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumShellSlots][NumSh
 		}
 	}
 	if (!bChanged) return;
-	++ShellPaintSerial; // (the first-person hands' arms part repaints on this)
+	++ShellPaintSerial; // (the first-person hands and their arms part repaint on this)
+	PaintSkeleton(Model);
+	PaintSkeleton(FpBody);
 	for (int32 i = 0; i < ShellParts.Num(); ++i) if (ShellPartSlots.IsValidIndex(i)) PaintShellPart(ShellParts[i], ShellPartSlots[i]);
 	for (int32 i = 0; i < FpShellParts.Num(); ++i) if (FpShellPartSlots.IsValidIndex(i)) PaintShellPart(FpShellParts[i], FpShellPartSlots[i]);
 }
@@ -691,10 +693,11 @@ void UWWOBodyComponent::SetShellPaint(const FColor (&Paint)[NumShellSlots][NumSh
 namespace
 {
 	// Which of a slot's colours a shell part's material takes (FWWOEquipped::EShellRole), from its name: a shell's
-	// MI_Shell<N>_<Role> or the base robot's MI_Robot_<Role> (Tools/import_shell_parts.py). INDEX_NONE: it keeps its own.
-	int32 ShellMaterialRole(const UMaterialInterface* M, bool& bOutLight)
+	// MI_Shell<N>_<Role> or the base robot's MI_Robot_<Role> (Tools/import_shell_parts.py). INDEX_NONE: none of the
+	// slot's; bOutFrame: it is the skeleton's frame showing (Frame, Joint).
+	int32 ShellMaterialRole(const UMaterialInterface* M, bool& bOutLight, bool& bOutFrame)
 	{
-		bOutLight = false;
+		bOutLight = bOutFrame = false;
 		if (!M) return INDEX_NONE;
 		const FString Name = M->GetName();
 		int32 Cut = INDEX_NONE;
@@ -704,7 +707,8 @@ namespace
 		if (Role == TEXT("Primary") || Role == TEXT("Armour")) return 0;
 		if (Role == TEXT("Secondary") || Role == TEXT("Trim")) return 1;
 		if (Role == TEXT("Glow") || Role == TEXT("Visor")) return 2;
-		return INDEX_NONE; // Frame, Joint
+		bOutFrame = Role == TEXT("Frame") || Role == TEXT("Joint");
+		return INDEX_NONE;
 	}
 
 	// How much lighter a shell's PrimaryLight is than its Primary (their Color's mean), so a picked primary keeps that step.
@@ -726,49 +730,81 @@ namespace
 	}
 }
 
-void UWWOBodyComponent::PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const
+void UWWOBodyComponent::PaintShellPart(USkinnedMeshComponent* Part, int32 Slot) const
 {
-	if (Slot >= 0 && Slot < NumShellSlots) PaintShellPartWith(Part, ShellPaint[Slot]);
+	if (Slot >= 0 && Slot < NumShellSlots) PaintShellPartWith(Part, ShellPaint[Slot], ShellPaint[SkeletonPaint][0]);
 }
 
-void UWWOBodyComponent::PaintShellPartWith(USkeletalMeshComponent* Part, const FColor (&Paint)[NumShellRoles])
+namespace
 {
-	const USkeletalMesh* Asset = Part ? Part->GetSkeletalMeshAsset() : nullptr;
-	if (!Asset) return;
-	const TArray<FSkeletalMaterial>& Slots = Asset->GetMaterials();
-	for (int32 i = 0; i < Slots.Num(); ++i)
+	// A dynamic instance of each of the mesh's own materials that Pick gives a colour (alpha 0: its own material back);
+	// bGlow: the colour is a light's, so its emission follows.
+	void PaintMaterials(USkinnedMeshComponent* Part, TFunctionRef<FColor(const UMaterialInterface* Own, bool& bGlow, float& Ratio)> Pick)
 	{
-		UMaterialInterface* Own = Slots[i].MaterialInterface;
-		bool bLight = false;
-		const int32 Role = ShellMaterialRole(Own, bLight);
-		const FColor Pick = Role == INDEX_NONE ? FColor(0, 0, 0, 0) : Paint[Role];
-		if (Pick.A == 0)
+		const USkinnedAsset* Asset = Part ? Part->GetSkinnedAsset() : nullptr;
+		if (!Asset) return;
+		const TArray<FSkeletalMaterial>& Slots = Asset->GetMaterials();
+		for (int32 i = 0; i < Slots.Num(); ++i)
 		{
-			if (Part->GetMaterial(i) != Own) Part->SetMaterial(i, Own); // default: the part's own
-			continue;
-		}
-		UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Part->GetMaterial(i));
-		if (!Mid || Mid->Parent != Own)
-		{
-			Mid = UMaterialInstanceDynamic::Create(Own, Part);
-			Part->SetMaterial(i, Mid);
-		}
-		const FLinearColor Color(Pick); // sRGB -> linear, as the materials' Color is
-		if (Role == 2)
-		{
-			// The glow: its base colour and its emission, at the strength it had (EmissiveColor's brightest channel; Glow,
-			// the multiplier, stays the shell's own).
-			FLinearColor Emissive = FLinearColor::White;
-			Own->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("EmissiveColor")), Emissive);
-			Mid->SetVectorParameterValue(TEXT("Color"), Color);
-			Mid->SetVectorParameterValue(TEXT("EmissiveColor"), Color * Emissive.GetMax());
-		}
-		else
-		{
-			const float Ratio = bLight ? PrimaryLightRatio(Own) : 1.f;
-			Mid->SetVectorParameterValue(TEXT("Color"), FLinearColor(FMath::Min(Color.R * Ratio, 1.f), FMath::Min(Color.G * Ratio, 1.f), FMath::Min(Color.B * Ratio, 1.f), 1.f));
+			UMaterialInterface* Own = Slots[i].MaterialInterface;
+			bool bGlow = false;
+			float Ratio = 1.f;
+			const FColor Picked = Own ? Pick(Own, bGlow, Ratio) : FColor(0, 0, 0, 0);
+			if (Picked.A == 0)
+			{
+				if (Part->GetMaterial(i) != Own) Part->SetMaterial(i, Own); // default: the part's own
+				continue;
+			}
+			UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Part->GetMaterial(i));
+			if (!Mid || Mid->Parent != Own)
+			{
+				Mid = UMaterialInstanceDynamic::Create(Own, Part);
+				Part->SetMaterial(i, Mid);
+			}
+			const FLinearColor Color(Picked); // sRGB -> linear, as the materials' Color is
+			if (bGlow)
+			{
+				// The glow: its base colour and its emission, at the strength it had (EmissiveColor's brightest channel; Glow,
+				// the multiplier, stays the shell's own).
+				FLinearColor Emissive = FLinearColor::White;
+				Own->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("EmissiveColor")), Emissive);
+				Mid->SetVectorParameterValue(TEXT("Color"), Color);
+				Mid->SetVectorParameterValue(TEXT("EmissiveColor"), Color * Emissive.GetMax());
+			}
+			else
+			{
+				Mid->SetVectorParameterValue(TEXT("Color"), FLinearColor(FMath::Min(Color.R * Ratio, 1.f), FMath::Min(Color.G * Ratio, 1.f), FMath::Min(Color.B * Ratio, 1.f), 1.f));
+			}
 		}
 	}
+}
+
+void UWWOBodyComponent::PaintShellPartWith(USkinnedMeshComponent* Part, const FColor (&Paint)[NumShellRoles], FColor Frame)
+{
+	PaintMaterials(Part, [&](const UMaterialInterface* Own, bool& bGlow, float& Ratio)
+	{
+		bool bLight = false, bFrame = false;
+		const int32 Role = ShellMaterialRole(Own, bLight, bFrame);
+		if (Role == INDEX_NONE) return bFrame ? Frame : FColor(0, 0, 0, 0);
+		bGlow = Role == 2;
+		if (bLight && Paint[Role].A > 0) Ratio = PrimaryLightRatio(Own);
+		return Paint[Role];
+	});
+}
+
+void UWWOBodyComponent::PaintSkeleton(USkinnedMeshComponent* Mesh) const
+{
+	if (!Mesh || !HasShells()) return;
+	const FColor (&Paint)[NumShellRoles] = ShellPaint[SkeletonPaint];
+	PaintMaterials(Mesh, [&](const UMaterialInterface* Own, bool& bGlow, float& Ratio)
+	{
+		// On the bare skeleton the plates are the base robot's Armour and Trim (its skull, chest block, shoulder
+		// housings): the skeleton's secondary. Everything else that is not a light is its frame.
+		bool bLight = false, bFrame = false;
+		const int32 Role = ShellMaterialRole(Own, bLight, bFrame);
+		if (Role == 2) { bGlow = true; return Paint[2]; }
+		return Role == INDEX_NONE ? Paint[0] : Paint[1];
+	});
 }
 
 USkeletalMesh* UWWOBodyComponent::ShellMesh(int32 Slot) const
@@ -828,6 +864,8 @@ void UWWOBodyComponent::RebuildShell()
 	}
 	const double Started = FPlatformTime::Seconds();
 	ON_SCOPE_EXIT { UE_LOG(LogWWO, Verbose, TEXT("Body %s: shell rebuilt in %.2f ms"), *GetOwner()->GetName(), (FPlatformTime::Seconds() - Started) * 1000.0); };
+	PaintSkeleton(Model); // (a new model, or a first-person body made since the colours were set)
+	PaintSkeleton(FpBody);
 	for (int32 Slot = 0; Slot < NumShellSlots; ++Slot)
 	{
 		USkeletalMesh* Asset = ShellMesh(Slot);

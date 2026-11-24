@@ -543,7 +543,7 @@ UMaterialInterface* UWWOCharacterMenu::PartPicture(const UWWOFramePartData* Part
 	if (!PartPictures || !L || Slot == INDEX_NONE) return nullptr;
 	FColor Paint[3];
 	for (int32 Role = 0; Role < 3; ++Role) Paint[Role] = L->GetShellColor(Slot, Role);
-	return PartPictures->Picture(Part, Slot, Paint, bSmall);
+	return PartPictures->Picture(Part, Slot, Paint, L->GetShellColor(FWWOEquipped::ShellSkeleton, FWWOEquipped::ShellPrimary), bSmall);
 }
 
 UWidget* UWWOCharacterMenu::PictureWidget(UMaterialInterface* Mat, FVector2D Size)

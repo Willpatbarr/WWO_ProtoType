@@ -17,7 +17,7 @@ namespace
 	// wwo.ShellColor <slot|all> <primary|secondary|glow> <hex|default>: your own loadout's shell colour, as the
 	// character menu's picker sets it (saved with the loadout).
 	FAutoConsoleCommandWithWorldAndArgs ShellColorCommand(TEXT("wwo.ShellColor"),
-		TEXT("wwo.ShellColor <head|core|arms|legs|all> <primary|secondary|glow> <hex|default>: your loadout's shell part colour (saved, as the character menu sets it)."),
+		TEXT("wwo.ShellColor <head|core|arms|legs|skeleton|all> <primary|secondary|glow> <hex|default>: your loadout's shell part colour (saved, as the character menu sets it). skeleton: primary is its frame, secondary its plates; all: the four parts."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			UWWOLoadoutSubsystem* L = UWWOLoadoutSubsystem::Get(World);
@@ -25,7 +25,7 @@ namespace
 			FColor Color;
 			if (!L || Args.Num() < 3 || !UWWOLoadoutSubsystem::ParseShellColor(Args[0], Args[1], Args[2], Slot, Role, Color))
 			{
-				UE_LOG(LogWWO, Warning, TEXT("wwo.ShellColor <head|core|arms|legs|all> <primary|secondary|glow> <hex|default>"));
+				UE_LOG(LogWWO, Warning, TEXT("wwo.ShellColor <head|core|arms|legs|skeleton|all> <primary|secondary|glow> <hex|default>"));
 				return;
 			}
 			L->SetShellColor(Slot, Role, Color);
@@ -34,7 +34,7 @@ namespace
 
 bool UWWOLoadoutSubsystem::ParseShellColor(const FString& SlotText, const FString& RoleText, const FString& ColorText, int32& OutSlot, int32& OutRole, FColor& OutColor)
 {
-	static const TCHAR* const Slots[] = { TEXT("head"), TEXT("core"), TEXT("arms"), TEXT("legs") }; // UWWOBodyComponent::EShellSlot
+	static const TCHAR* const Slots[] = { TEXT("head"), TEXT("core"), TEXT("arms"), TEXT("legs"), TEXT("skeleton") }; // UWWOBodyComponent::EShellSlot, then FWWOEquipped::ShellSkeleton
 	static const TCHAR* const Roles[] = { TEXT("primary"), TEXT("secondary"), TEXT("glow") };       // FWWOEquipped::EShellRole
 	OutSlot = SlotText.Equals(TEXT("all"), ESearchCase::IgnoreCase) ? INDEX_NONE : -2;
 	for (int32 i = 0; i < UE_ARRAY_COUNT(Slots); ++i) if (SlotText.Equals(Slots[i], ESearchCase::IgnoreCase)) OutSlot = i;
@@ -108,7 +108,7 @@ void UWWOLoadoutSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			int32 Slot = INDEX_NONE, Role = 0;
 			FColor Color;
 			if (Parts.Num() == 3 && ParseShellColor(Parts[0], Parts[1], Parts[2], Slot, Role, Color)) Equipped.SetShellColor(Slot, Role, Color);
-			else UE_LOG(LogWWO, Warning, TEXT("-WWOShellColor: '%s' is not <head|core|arms|legs|all>:<primary|secondary|glow>:<hex|default>"), *Entry);
+			else UE_LOG(LogWWO, Warning, TEXT("-WWOShellColor: '%s' is not <head|core|arms|legs|skeleton|all>:<primary|secondary|glow>:<hex|default>"), *Entry);
 		}
 		bNeverSave = true;
 		UE_LOG(LogWWO, Display, TEXT("Loadout: shell colours from -WWOShellColor=%s, in memory only; the saved file is not written this run"), *ColorSwitch);

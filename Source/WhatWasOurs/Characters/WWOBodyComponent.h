@@ -139,16 +139,22 @@ public:
 	// Each slot's colours (FWWOEquipped::ShellColors: primary, secondary, glow; alpha 0 keeps the part's own), from the loadout
 	// (ShellFromLoadout). They're painted on every part this body draws (PaintShellPart), and by the first-person hands on
 	// the arms part over them, which repaint when ShellPaintSerial changes.
-	static constexpr int32 NumShellRoles = 3;
-	FColor ShellPaint[NumShellSlots][NumShellRoles] = {};
+	// The last row is the skeleton's own (SkeletonPaint: its frame, its plates; FWWOEquipped::ShellSkeleton).
+	static constexpr int32 NumShellRoles = 3, SkeletonPaint = NumShellSlots, NumPaintSlots = NumShellSlots + 1;
+	FColor ShellPaint[NumPaintSlots][NumShellRoles] = {};
 	uint32 ShellPaintSerial = 0;
-	void SetShellPaint(const FColor (&Paint)[NumShellSlots][NumShellRoles]);
+	void SetShellPaint(const FColor (&Paint)[NumPaintSlots][NumShellRoles]);
 	// Puts a slot's colours on a part (any skinned mesh showing a SK_Shell<n>_<Slot>): dynamic instances of its own materials
 	// with the colours swapped in (primary on Primary / PrimaryLight / Armour, secondary on Secondary / Trim, glow on Glow /
-	// Visor; Frame and Joint keep theirs); a default colour puts the part's own material back.
-	void PaintShellPart(USkeletalMeshComponent* Part, int32 Slot) const;
-	// The same with the colours given (a slot's primary, secondary, glow): for a part on no body (the menu's part pictures).
-	static void PaintShellPartWith(USkeletalMeshComponent* Part, const FColor (&Paint)[NumShellRoles]);
+	// Visor; Frame and Joint, the skeleton showing through the part, take the skeleton's frame colour); a default colour
+	// puts the part's own material back.
+	void PaintShellPart(USkinnedMeshComponent* Part, int32 Slot) const;
+	// The same with the colours given (a slot's primary, secondary, glow, and the skeleton's frame colour if any): for a
+	// part on no body (the menu's part pictures).
+	static void PaintShellPartWith(USkinnedMeshComponent* Part, const FColor (&Paint)[NumShellRoles], FColor Frame = FColor(0, 0, 0, 0));
+	// Puts the skeleton's colours on a mesh showing the bare skeleton (the model, the first-person body, the first-person
+	// hands): its frame colour on Joint and Frame, its plates' on Armour and Trim.
+	void PaintSkeleton(USkinnedMeshComponent* Mesh) const;
 	// A frame slot's index here (head, core, arms, legs: EShellSlot, FWWOEquipped's shell colour order); INDEX_NONE if it is none.
 	static int32 ShellSlotOf(FName FrameSlot);
 	// The shell number a frame part looks like (shell_looks; 0, the base robot, if it isn't listed).

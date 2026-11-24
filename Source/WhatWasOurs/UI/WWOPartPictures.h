@@ -39,6 +39,7 @@ struct FWWOPartPicture
 	UPROPERTY() TObjectPtr<USkeletalMesh> Mesh;
 	int32 Slot = 0;              // UWWOBodyComponent::EShellSlot
 	FColor Paint[3] = {};        // primary, secondary, glow (alpha 0: the part's own)
+	FColor Frame = FColor(0, 0, 0, 0); // the skeleton's frame colour, on the part's own frame and joint pieces
 	bool bSmall = false;         // the Shell tab's size
 	bool bTaken = false;
 	uint64 Used = 0;             // when it was last asked for (the least recent go first when there are too many)
@@ -64,7 +65,7 @@ public:
 
 	// The picture of Part (none: the base robot's) in Slot (EShellSlot) in these colours: a UI material ready to
 	// show now, which fills in when its capture is taken (over the next few Steps; it is clear until then).
-	UMaterialInterface* Picture(const UWWOFramePartData* Part, int32 Slot, const FColor (&Paint)[3], bool bSmall = false);
+	UMaterialInterface* Picture(const UWWOFramePartData* Part, int32 Slot, const FColor (&Paint)[3], FColor Frame = FColor(0, 0, 0, 0), bool bSmall = false);
 	// Takes the waiting pictures, a few each frame. The menu calls it from its tick while it is open.
 	void Step();
 	int32 Waiting() const { return Queue.Num(); }

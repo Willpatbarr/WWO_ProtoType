@@ -128,11 +128,11 @@ void AWWOPartPictures::BeginPlay()
 	}
 }
 
-UMaterialInterface* AWWOPartPictures::Picture(const UWWOFramePartData* Part, int32 Slot, const FColor (&Paint)[3], bool bSmall)
+UMaterialInterface* AWWOPartPictures::Picture(const UWWOFramePartData* Part, int32 Slot, const FColor (&Paint)[3], FColor Frame, bool bSmall)
 {
 	USkeletalMesh* Mesh = UWWOBodyComponent::ShellMeshFor(Part, Slot);
 	if (!Mesh) return nullptr;
-	const FString Key = FString::Printf(TEXT("%s|%d|%s|%s|%s|%s"), *Mesh->GetPathName(), Slot, *Paint[0].ToHex(), *Paint[1].ToHex(), *Paint[2].ToHex(), bSmall ? TEXT("small") : TEXT("large"));
+	const FString Key = FString::Printf(TEXT("%s|%d|%s|%s|%s|%s|%s"), *Mesh->GetPathName(), Slot, *Paint[0].ToHex(), *Paint[1].ToHex(), *Paint[2].ToHex(), *Frame.ToHex(), bSmall ? TEXT("small") : TEXT("large"));
 	if (FWWOPartPicture* Found = Cache.Find(Key))
 	{
 		Found->Used = ++Clock;
@@ -145,6 +145,7 @@ UMaterialInterface* AWWOPartPictures::Picture(const UWWOFramePartData* Part, int
 	Pic.Slot = Slot;
 	Pic.bSmall = bSmall;
 	for (int32 Role = 0; Role < 3; ++Role) Pic.Paint[Role] = Paint[Role];
+	Pic.Frame = Frame;
 	Pic.Used = ++Clock;
 	const FIntPoint Size = bSmall ? SmallPixels : Pixels;
 	Pic.Color = MakeTarget(this, RTF_RGBA8, Size); // display values, as the preview's (M_WWO_PartPicture decodes them)
@@ -183,7 +184,7 @@ void AWWOPartPictures::SetUp(int32 Station, const FWWOPartPicture& Pic)
 	USkeletalMeshComponent* Part = Parts[Station];
 	Part->SetSkeletalMeshAsset(Pic.Mesh);
 	Part->SetForcedLOD(1);
-	UWWOBodyComponent::PaintShellPartWith(Part, Pic.Paint);
+	UWWOBodyComponent::PaintShellPartWith(Part, Pic.Paint, Pic.Frame);
 	// Facing the camera (the preview robot's -90), turned three-quarters on.
 	const FRotator Facing(0.f, -90.f + Turn[FMath::Clamp(Pic.Slot, 0, UWWOBodyComponent::NumShellSlots - 1)], 0.f);
 	Part->SetRelativeLocationAndRotation(StationAt(Station), Facing);

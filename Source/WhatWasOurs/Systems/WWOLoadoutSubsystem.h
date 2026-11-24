@@ -73,7 +73,7 @@ public:
 	TArray<UWWOAbilityData*> AbilitiesForFlora() const { return Catalog.AbilitiesFor(Equipped.Flora); }
 	TArray<UWWOTraitData*> TraitsForFlora() const { return Catalog.TraitsFor(Equipped.Flora); }
 	TArray<UWWOFramePartData*> FramePartsFor(FName Slot) const { return Catalog.FramePartsFor(Slot); }
-	// The shell parts' colours (FWWOEquipped::ShellColors): Slot in UWWOBodyComponent::EShellSlot's order, Role
+	// The shell parts' colours (FWWOEquipped::ShellColors): Slot in UWWOBodyComponent::EShellSlot's order (then FWWOEquipped::ShellSkeleton), Role
 	// FWWOEquipped::EShellRole; alpha 0 is "default" (the part's own colour).
 	FColor GetShellColor(int32 Slot, int32 Role) const { return Equipped.GetShellColor(Slot, Role); }
 
@@ -85,8 +85,8 @@ public:
 	void EquipFramePart(UWWOFramePartData* Part);
 	void EquipAbility(int32 Slot, UWWOAbilityData* Choice);
 	bool ToggleTrait(UWWOTraitData* Choice);
-	void SetShellColor(int32 Slot, int32 Role, FColor Color); // Slot INDEX_NONE: every slot; alpha 0: back to the part's own
-	// "head", "core", "arms", "legs" or "all" (INDEX_NONE); "primary", "secondary", "glow"; a hex colour ("C8452B", "#c8452b")
+	void SetShellColor(int32 Slot, int32 Role, FColor Color); // Slot INDEX_NONE: every part (not the skeleton); alpha 0: back to the part's own
+	// "head", "core", "arms", "legs", "skeleton" or "all" (INDEX_NONE: the four parts); "primary", "secondary", "glow"; a hex colour ("C8452B", "#c8452b")
 	// or "default" (alpha 0). False if any doesn't parse.
 	static bool ParseShellColor(const FString& SlotText, const FString& RoleText, const FString& ColorText, int32& OutSlot, int32& OutRole, FColor& OutColor);
 

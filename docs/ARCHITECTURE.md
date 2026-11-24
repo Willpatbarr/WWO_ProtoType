@@ -159,7 +159,7 @@ walks the table in its order (the HUD line's).
     assets and `Config/WeaponMods.json`), the picker lists, `FindById`, the enemies' data by kind
     (`EnemyData`) and the allies'.
   - `FWWOEquipped Equipped` (`WWOLoadoutEquipped.*`): flora, weapon, grenade, abilities, traits, frame
-    parts and each frame's mods, the shell colours (`ShellColors`: per slot a primary, secondary and glow colour,
+    parts and each frame's mods, the shell colours (`ShellColors`: per slot, the four parts and then the skeleton under them, a primary, secondary and glow colour; the skeleton's are its frame and its plates, painted by `PaintSkeleton` on the model, the first-person body and hands,
     alpha 0 for the part's own; empty, and not written, while all are default); the equip rules; to and from
     the save and the wire. The body paints them on every shell part it draws (`UWWOBodyComponent::PaintShellPart`:
     dynamic instances of the part's own `M_WWO_Robot` instances), and the first-person hands on their arms part.

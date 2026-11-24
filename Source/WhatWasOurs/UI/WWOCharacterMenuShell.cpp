@@ -79,13 +79,14 @@ namespace
 		{ TEXT("Amber"), TEXT("FFC21E") }, { TEXT("Yellow"), TEXT("F5F04A") }, { TEXT("Lime"), TEXT("A8FF3C") },
 		{ TEXT("Green"), TEXT("3CFF7A") }, { TEXT("Teal"), TEXT("2EF0C0") }, { TEXT("Dim"), TEXT("5A5F66") },
 	};
-	const TCHAR* const PaintTargets[] = { TEXT("All"), TEXT("Head"), TEXT("Core"), TEXT("Arms"), TEXT("Legs") }; // INDEX_NONE, then EShellSlot's order
+	const TCHAR* const PaintTargets[] = { TEXT("All"), TEXT("Head"), TEXT("Core"), TEXT("Arms"), TEXT("Legs"), TEXT("Skeleton") }; // INDEX_NONE (the four parts), EShellSlot's order, FWWOEquipped::ShellSkeleton
 	const TCHAR* const PaintRoles[] = { TEXT("Primary"), TEXT("Secondary"), TEXT("Glow") };                     // FWWOEquipped::EShellRole
+	const TCHAR* const SkeletonRoles[] = { TEXT("Frame"), TEXT("Plates") };                                     // the skeleton's primary and secondary (it has no glow)
 }
 
 void UWWOCharacterMenu::BuildColourRows(UWWOLoadoutSubsystem* L, TFunctionRef<void(const FString&)> Label)
 {
-	// Which part (All, Head, Core, Arms, Legs) and which of its colours, on one row; then the swatches and Default. The
+	// Which part (All, Head, Core, Arms, Legs, or the Skeleton under them) and which of its colours, on one row; then the swatches and Default. The
 	// preview robot follows the loadout, so a click shows at once.
 	TWeakObjectPtr<UWWOCharacterMenu> WeakThis = this;
 	TWeakObjectPtr<UWWOLoadoutSubsystem> WL = L;
@@ -99,21 +100,23 @@ void UWWOCharacterMenu::BuildColourRows(UWWOLoadoutSubsystem* L, TFunctionRef<vo
 			bOn ? &OnEdge : &DimEdge, bOn ? WWOUI::BoxEdgeOn : WWOUI::BoxEdge));
 		Cell->SetPadding(FMargin(Gap * K, 0, 0, 0));
 	};
+	const bool bSkeleton = PaintTarget == FWWOEquipped::ShellSkeleton;
+	if (bSkeleton && PaintRole >= UE_ARRAY_COUNT(SkeletonRoles)) PaintRole = 0;
 	for (int32 i = 0; i < UE_ARRAY_COUNT(PaintTargets); ++i)
 	{
 		const int32 Target = i - 1;
-		AddPick(PaintTargets[i], PaintTarget == Target, 74.f, [WeakThis, Target] { if (WeakThis.IsValid()) { WeakThis->PaintTarget = Target; WeakThis->Refresh(); } }, i == 0 ? 0.f : 6.f);
+		AddPick(PaintTargets[i], PaintTarget == Target, Target == FWWOEquipped::ShellSkeleton ? 86.f : 64.f, [WeakThis, Target] { if (WeakThis.IsValid()) { WeakThis->PaintTarget = Target; WeakThis->Refresh(); } }, i == 0 ? 0.f : 6.f);
 	}
-	for (int32 i = 0; i < UE_ARRAY_COUNT(PaintRoles); ++i)
+	for (int32 i = 0; i < (bSkeleton ? UE_ARRAY_COUNT(SkeletonRoles) : UE_ARRAY_COUNT(PaintRoles)); ++i)
 	{
-		AddPick(PaintRoles[i], PaintRole == i, 98.f, [WeakThis, i] { if (WeakThis.IsValid()) { WeakThis->PaintRole = i; WeakThis->Refresh(); } }, i == 0 ? 28.f : 6.f);
+		AddPick(bSkeleton ? SkeletonRoles[i] : PaintRoles[i], PaintRole == i, 98.f, [WeakThis, i] { if (WeakThis.IsValid()) { WeakThis->PaintRole = i; WeakThis->Refresh(); } }, i == 0 ? 28.f : 6.f);
 	}
 	AddContent(Picks);
 
 	// The colour the target has now: the slot's, or with All the one every slot shares (none marked if they differ).
 	bool bSame = true;
 	const FColor Now = L->GetShellColor(PaintTarget == INDEX_NONE ? 0 : PaintTarget, PaintRole);
-	if (PaintTarget == INDEX_NONE) for (int32 S = 1; S < FWWOEquipped::ShellSlots; ++S) bSame &= L->GetShellColor(S, PaintRole) == Now;
+	if (PaintTarget == INDEX_NONE) for (int32 S = 1; S < FWWOEquipped::ShellPartSlots; ++S) bSame &= L->GetShellColor(S, PaintRole) == Now;
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	auto AddSwatch = [&](const FString& Text, const FLinearColor& Fill, FColor Value, const FString& Tip, float Width)
 	{

@@ -11,7 +11,7 @@
 //   -WWOBodyFlora=<id>          with -WWOAutoTestBody: wear that flora (its grafts) for the third-person shots
 //   -WWOShell=<n> or <h,c,a,l>  every robot wears shell n (0 base, 1 sleek, 2 scout, 3 tan), or a shell per part: head, core, arms, legs (also the wwo.Shell console command)
 //   -WWOShellColor=<slot>:<role>:<hex|default>[,...]  your loadout's shell colours for this run, in memory only (the loadout is not saved
-//                               that run); slot head|core|arms|legs|all, role primary|secondary|glow (also the wwo.ShellColor console command, which saves)
+//                               that run); slot head|core|arms|legs|skeleton|all, role primary|secondary|glow (also the wwo.ShellColor console command, which saves)
 //   -WWOAnchorGrafts            robots place flora grafts from their shell parts' anchors (Config/GraftRecipes.json), as wwo.AnchorGrafts 1
 //                               (wwo.ShellAnchors 0|1|2 draws those anchors and paths; not a switch: -ExecCmds="wwo.ShellAnchors 2")
 //   -WWOAutoTestGrafts          eight loadouts in the character preview

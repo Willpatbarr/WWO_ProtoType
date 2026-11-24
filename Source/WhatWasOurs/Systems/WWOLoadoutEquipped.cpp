@@ -318,7 +318,7 @@ bool FWWOEquipped::SetShellColor(int32 Slot, int32 Role, FColor Color)
 	bool bChanged = false;
 	for (int32 S = 0; S < ShellSlots; ++S)
 	{
-		if (Slot != INDEX_NONE && S != Slot) continue;
+		if (Slot == INDEX_NONE ? S >= ShellPartSlots : S != Slot) continue; // ("all": the four parts; the skeleton is picked by name)
 		if (GetShellColor(S, Role) == Color) continue;
 		ShellColors.SetNumZeroed(ShellSlots * ShellRoles);
 		ShellColors[S * ShellRoles + Role] = Color;
