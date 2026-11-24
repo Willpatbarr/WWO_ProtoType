@@ -1,13 +1,13 @@
-# Shell 4: angular bone-white plate armour on the kitbashed skeleton. The whole body: head, chest, waist, shoulders, upper arms, forearms, legs and feet.
-# Reference (Will, 2026-11-23): reference/shell4_concept_front.jpg and shell4_concept_side.jpg (the look), and
-# reference/shell4_upper_front.jpg and shell4_chest_side.jpg, painted over the front and side views of
+# Shell 5: angular bone-white plate armour on the kitbashed skeleton. The whole body: head, chest, waist, shoulders, upper arms, forearms, legs and feet.
+# Reference (Will, 2026-11-23): reference/shell5_concept_front.jpg and shell5_concept_side.jpg (the look), and
+# reference/shell5_upper_front.jpg and shell5_chest_side.jpg, painted over the front and side views of
 # renders/skeleton_sheet.png (target (0, 0, 100), span 215: 0.1536 cm per px; the paintings are those tiles at
 # 0.79 px per px, so 0.194 cm per px: front x = 0 at px 262.4, z = 100 at px 498.4; side y = 0 at px 195.6,
 # z = 100 at px 481.3).
 #
-#   /Applications/Blender.app/Contents/MacOS/Blender -b ../base/robot_frame_v2_rigged.blend -P make_shell4.py
-# Writes shell4_claude.blend, renders/shell4_chest_*.png and shell4_shoulder_*.png (six views each) and
-# renders/shell4_full_*.png (the whole robot, the views the paintings were made on).
+#   /Applications/Blender.app/Contents/MacOS/Blender -b ../base/robot_frame_v2_rigged.blend -P make_shell5.py
+# Writes shell5_claude.blend, renders/shell5_chest_*.png and shell5_shoulder_*.png (six views each) and
+# renders/shell5_full_*.png (the whole robot, the views the paintings were made on).
 #
 # The chest, all rigid to spine_02 (Core). Flat plates, hard edges, each a slab (the ribs alone are curved).
 # No rivets: the dots in the paintings were left in by accident (Will, 2026-11-23).
@@ -25,7 +25,7 @@ import shell_kit as K, skeleton_edits
 from skeleton_split import classify
 
 OUT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Shell 4's colours, read off the paintings: bone white plates, warm grey-tan ribs, near-black frame.
+# Shell 5's colours, read off the paintings: bone white plates, warm grey-tan ribs, near-black frame.
 K.ROLES["Primary"] = dict(color=(0.66, 0.61, 0.53), rough=0.55, metal=0.05)
 K.ROLES["Secondary"] = dict(color=(0.33, 0.27, 0.21), rough=0.5, metal=0.15)
 K.ROLES["Frame"] = dict(color=(0.035, 0.035, 0.04), rough=0.5, metal=0.4)
@@ -191,7 +191,7 @@ def chest():
     plates("chest_rim", rim, "Frame", 1.0)
 
 
-# ---- the shoulders (reference/shell4_upper_front.jpg, the two flat pink shapes over each shoulder; front view
+# ---- the shoulders (reference/shell5_upper_front.jpg, the two flat pink shapes over each shoulder; front view
 # only, so every depth is mine). Two stacked shards over the joint, pointing out and down, riding the upper arm
 # as shell 2's and 3's shoulder pieces do (Arms). Left shoulder; the right mirrors it.
 #   shoulder_upper  a ridged roof: the painting's quad (15.3, 166.8) (26, 160) (30.3, 151.5) (16, 159.3), with the
@@ -215,7 +215,7 @@ def shoulder():
     solid("shoulder_lower", [[p / 100 for p in f] for f in lower], "Primary", "upperarm_l", "arms", inset=0.006, centre=centre, mirror=True)
 
 
-# ---- the upper arms (reference/shell4_upper_front.jpg: the dark tan plates from under the shoulder to above the
+# ---- the upper arms (reference/shell5_upper_front.jpg: the dark tan plates from under the shoulder to above the
 # elbow; Will, 2026-11-23: "the same kind of wrapping plate as the sides of the torso"). Two layered curved plates
 # round the arm, open on the side facing the body. The arm is a tube along ARM_A-ARM_B, ARM_RP wide across the
 # arm in the front view and ARM_RY deep. A plate is a band on it between a top and a bottom line, given as
@@ -243,7 +243,7 @@ def upper_arm():
     curved("arm_plates", bands, "Secondary", bone="upperarm_l", slot="arms", inside=nearest, both=False)
 
 
-# ---- the forearms (reference/shell4_upper_front.jpg: the flat pink leaf shape on each forearm; front view only).
+# ---- the forearms (reference/shell5_upper_front.jpg: the flat pink leaf shape on each forearm; front view only).
 # Will, 2026-11-23, on a first pass that was one blade behind the arm: "overall good shape, but the forearm armor
 # should completely cover the sides of the forearms and cover the front and backs to an extent".
 # Two angular bone-white shells, one on the outside of the forearm and one on the inside (the side facing the
@@ -280,7 +280,7 @@ def forearm():
     shell("forearm_inner", FA_IN, -1)
 
 
-# ---- the head (reference/shell4_head_views.jpg, Will 2026-11-23: front, side and front 3/4, painted over the
+# ---- the head (reference/shell5_head_views.jpg, Will 2026-11-23: front, side and front 3/4, painted over the
 # same three views of renders/skeleton_sheet.png at 0.848 px per px, so 0.1814 cm per px: front x = 0 at px 245.5,
 # z = 100 at px 529.8; side y = 0 at px 652.5, z = 100 at px 530.5). All rigid to the head bone (Head):
 #   helm_cap     bone white: a grooved strip down the middle from the brow over the top to a tip behind the head,
@@ -340,7 +340,7 @@ def head():
                         [A(9.6, 5.2, 180.8), A(6.0, 12.6, 180.4), A(6.5, 11.2, 179.2), A(9.7, 5.6, 179.4)]], "Frame", 0.5, [[m(r_t), r_t, r_b, m(r_b)]])
 
 
-# ---- the waist (reference/shell4_waist_views.jpg, Will 2026-11-23: front and side, painted over the same views
+# ---- the waist (reference/shell5_waist_views.jpg, Will 2026-11-23: front and side, painted over the same views
 # of renders/skeleton_sheet.png at 1.686 px per px, so 0.0911 cm per px: front x = 0 at px 193.7, side y = 0 at
 # px 1710.7, z = 100 at px 283.2). Bone white, flat plates, all rigid to the pelvis (Core):
 #   waist_belt   each side: a hip panel sloping down to the front, a spike out from its top corner, and a panel
@@ -386,7 +386,7 @@ def waist():
 
 
 # ---- the legs and feet. No sketch (Will, 2026-11-23: "try to do the legs and feet now"): designed from
-# reference/shell4_concept_front.jpg and _side.jpg in the same language as the rest of the shell. Left leg (Legs).
+# reference/shell5_concept_front.jpg and _side.jpg in the same language as the rest of the shell. Left leg (Legs).
 #   thigh_blade               bone white: a long blade on the outer front of the thigh, up to a point at the hip
 #   knee_cap, shin_upper, shin_lower   bone white: a knee cap, a flared two-pronged greave, a plate down to the ankle
 #   thigh_plates, calf_plates dark tan wrapping plates, two tiers each, round the back, tucked under the shells
@@ -514,7 +514,7 @@ forearm()
 head()
 waist()
 legs()
-parts = K.finish("Shell4", base_hands=False)
+parts = K.finish("Shell5", base_hands=False)
 
 
 def touch_check(o, what):
@@ -533,31 +533,31 @@ touch_check(parts["arms"], "arm armour")
 touch_check(parts["head"], "helmet")
 touch_check(parts["legs"], "leg armour")
 if os.environ.get("WWO_CHECK_ONLY"): sys.exit(0)      # corners and the skeleton check only: nothing saved or rendered
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "shell4_claude.blend"))
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "shell5_claude.blend"))
 
 cam, lights = K.studio((1000, 1000))
-R = OUT + "/renders/shell4_chest_"
+R = OUT + "/renders/shell5_chest_"
 v = {"front": (0, -1, 0), "side": (1, 0, 0), "three_q": (0.7, -1, 0.5), "low_q": (0.7, -1, -0.35), "back": (0, 1, 0), "back_q": (0.7, 1, 0.25)}
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(0, 0, 145), span=70)
 K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
-R = OUT + "/renders/shell4_shoulder_"
+R = OUT + "/renders/shell5_shoulder_"
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(26.0, 3.5, 147.0), span=60)
 K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
-R = OUT + "/renders/shell4_head_"
+R = OUT + "/renders/shell5_head_"
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(0, -1, 177), span=40)
 K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
-R = OUT + "/renders/shell4_waist_"
+R = OUT + "/renders/shell5_waist_"
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(0, 0, 106), span=50)
 K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
 for part_, tg, sp in (("thigh", (13.0, 1.0, 84.0), 56), ("calf", (14.5, 3.5, 42.0), 60), ("foot", (15.8, -4.0, 10.0), 44)):
-    R = OUT + "/renders/shell4_%s_" % part_
+    R = OUT + "/renders/shell5_%s_" % part_
     for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=tg, span=sp)
     K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
-R = OUT + "/renders/shell4_forearm_"
+R = OUT + "/renders/shell5_forearm_"
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(39.5, 3.5, 113.0), span=50)
 K.sheet([R + n + ".png" for n in v], 3, R + "sheet.png")
 cam, lights = K.studio()
-R = OUT + "/renders/shell4_full_"
+R = OUT + "/renders/shell5_full_"
 v = {"front": (0, -1, 0), "side": (1, 0, 0), "three_q": (-0.62, -1, 0.12), "back": (0, 1, 0)}
 for n, d in v.items(): K.shoot(R + n + ".png", cam, lights, d, target=(0, 0, 100), span=215)
 K.sheet([R + n + ".png" for n in v], 4, R + "sheet.png")
