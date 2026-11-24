@@ -96,6 +96,8 @@ def mesh_options(skeleton):
     p.set_editor_property("use_source_name_for_asset", True)
     common = p.get_editor_property("common_meshes_properties")
     common.set_editor_property("force_all_mesh_as_type", unreal.InterchangeForceMeshType.IFMT_SKELETAL_MESH)
+    # Keep Blender's normals. Recomputing them welds the corners of flat facets and shades hard plates round.
+    common.set_editor_property("recompute_normals", False)
     skel = p.get_editor_property("common_skeletal_meshes_and_animations_properties")
     skel.set_editor_property("skeleton", skeleton)
     meshes = p.get_editor_property("mesh_pipeline")
@@ -146,6 +148,18 @@ def material_for(slot, parent, made):
     return mi
 
 
+def keep_normals(sub, mesh, name):
+    """Every LOD builds with the imported normals (a skeletal mesh's own default is to recompute them)."""
+    for i in range(sub.get_lod_count(mesh)):
+        bs = sub.get_lod_build_settings(mesh, i)
+        if bs.get_editor_property("recompute_normals"):
+            bs.set_editor_property("recompute_normals", False)
+            sub.set_lod_build_settings(mesh, i, bs)
+    left = [i for i in range(sub.get_lod_count(mesh)) if sub.get_lod_build_settings(mesh, i).get_editor_property("recompute_normals")]
+    if left:
+        log("%s: LODs %s still recompute normals" % (name, left))
+
+
 def import_part(file, skeleton, parent, made):
     name = os.path.splitext(file)[0]
     scratch = MESHES + "/Import_" + name
@@ -168,6 +182,7 @@ def import_part(file, skeleton, parent, made):
     out = eal.load_asset(dest)
     sk = out.get_editor_property("skeleton")
     sub = unreal.get_editor_subsystem(unreal.SkeletalMeshEditorSubsystem)
+    keep_normals(sub, out, name)
     try:
         sub.regenerate_lod(out, 3, True, False)
     except Exception as e:  # noqa: BLE001
@@ -182,10 +197,11 @@ def import_part(file, skeleton, parent, made):
             missing.append(key)
         slots.append(slot)
     out.set_editor_property("materials", slots)
+    keep_normals(sub, out, name)
     eal.save_loaded_asset(out)
-    log("%s: skeleton %s, slots %s, missing %s, LODs %d, bounds %s" % (
+    log("%s: skeleton %s, slots %s, missing %s, LODs %d, verts %s, bounds %s" % (
         name, sk.get_name() if sk else None, [str(s.get_editor_property("material_slot_name")) for s in slots], missing,
-        sub.get_lod_count(out), out.get_bounds().box_extent))
+        sub.get_lod_count(out), [sub.get_num_verts(out, i) for i in range(sub.get_lod_count(out))], out.get_bounds().box_extent))
     return out
 
 
