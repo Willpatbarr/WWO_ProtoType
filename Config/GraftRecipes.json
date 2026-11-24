@@ -137,22 +137,23 @@
       ]
     },
 "dawnlotus": {
-      "_comment": "DawnLotus v2 from kit pieces (~/Documents/WWO_Flora/tools/make_dawnlotus_kit_v2.py): large layered lotus petals, symmetrical. main (always worn): a wide open lotus on the back, a ring behind the shoulders and head. Pollination: a petal pauldron on each shoulder and a petal collar on the chest. Full Bloom: a petal tasset on each outer hip. Petalfall: petal vambraces and greaves. Each grenade: a bud on the front of the right thigh with one, two or three amber drops.",
+      "_comment": "DawnLotus v2 from kit pieces (~/Documents/WWO_Flora/tools/make_dawnlotus_kit_v2.py): large layered lotus petals, symmetrical. main (always worn): a wide open lotus on the back, a ring behind the shoulders and head, and a petal collar over the chest top and shoulder tops. Pollination: the shoulders and upper arms. Full Bloom: the thighs and shins. Petalfall: the forearms. Each grenade: a bud on the front of the right thigh with one, two or three amber drops.",
       "kit": "/Game/WWO/Flora/DawnLotus/Kit",
       "kit_section": "dawn",
       "main": [
-        {"piece": "mesh", "mesh": "SM_DL_BackLotus", "anchor": "back_upper", "offset": [0.5, 0.0, 8.0]}
+        {"piece": "mesh", "mesh": "SM_DL_BackLotus", "anchor": "back_upper", "offset": [0.5, 0.0, 8.0]},
+        {"piece": "mesh", "mesh": "SM_DL_Mantle", "anchor": "chest_front", "offset": [0.3, 0.0, 0.0]}
       ],
       "pollination": [
         {"piece": "mesh", "mesh": "SM_DL_Pauldron", "anchor": "shoulder_outer_{s}", "offset": [-2.0, 0.0, 0.0], "pitch": -16},
-        {"piece": "mesh", "mesh": "SM_DL_Gorget", "anchor": "chest_front", "offset": [0.3, 0.0, 4.0]}
+        {"piece": "mesh", "mesh": "SM_DL_ArmSleeve", "anchor": "upperarm_outer_{s}", "offset": [0.2, 0.0, 0.0]}
       ],
       "full_bloom": [
-        {"piece": "mesh", "mesh": "SM_DL_Tasset", "anchor": "thigh_outer_{s}", "offset": [-1.0, 0.0, 0.0], "pitch": -14}
+        {"piece": "mesh", "mesh": "SM_DL_ThighSleeve", "anchor": "thigh_outer_{s}", "offset": [0.2, 0.0, 0.0]},
+        {"piece": "mesh", "mesh": "SM_DL_Greave", "anchor": "shin_front_{s}", "offset": [0.3, 0.0, 0.0]}
       ],
       "petalfall": [
-        {"piece": "mesh", "mesh": "SM_DL_Vambrace", "anchor": "forearm_outer_{s}", "offset": [-0.6, 0.0, 0.0], "pitch": -6},
-        {"piece": "mesh", "mesh": "SM_DL_Greave", "anchor": "shin_front_{s}", "offset": [0.3, 0.0, 0.0]}
+        {"piece": "mesh", "mesh": "SM_DL_Vambrace", "anchor": "forearm_outer_{s}", "offset": [0.2, 0.0, 0.0]}
       ],
       "grenade.bloom_pool": [
         {"piece": "mesh", "mesh": "SM_DL_PendantPool", "anchor": "thigh_front_r", "offset": [0.3, 0.0, 9.0]}
