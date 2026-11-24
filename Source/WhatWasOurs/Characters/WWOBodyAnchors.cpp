@@ -994,7 +994,8 @@ namespace
 				Cap.Radii = FVector(Num(K, TEXT("radius"), 6.0));
 				Keep.Add({ Cap, Push, false });
 			}
-			for (const FWWOShellVolume* V : Obstacles) Keep.Add({ *V, 4.f, true });
+			// ignore_obstacles: a piece that is meant to swallow what stands on the part (VeilSpore's hood over an antenna).
+			if (!Flag(O, TEXT("ignore_obstacles"), false)) for (const FWWOShellVolume* V : Obstacles) Keep.Add({ *V, 4.f, true });
 			const bool bCap = KitSection == FWWOVineMesh::Fungus && !MeshName.Contains(TEXT("Mycelium")); // its gills light the mycelium round it
 			for (int32 i = 0; i < Spots.Num(); ++i)
 			{

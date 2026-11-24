@@ -66,74 +66,80 @@
       ]
     },
     "veilspore": {
-      "_comment": "(filled in below)",
+      "_comment": "VeilSpore from kit pieces (~/Documents/WWO_Flora/tools/make_veilspore_kit.py). main (always worn): the hood, three wide thin caps stacked over the head (top over the brow, a second tier round the back and sides, a third at the neck on the right), stepping down in caps over the right collar and shoulder, and a thick lattice of mycelium pouring from under them over that shoulder and half the chest. Spore Fog Damage: the caps and lattice on down the right arm. Spore Dash: down the left leg. Spore Patches: patches on the body.",
       "kit": "/Game/WWO/Flora/VeilSpore/Kit",
+      "main": [
+        {"piece": "mesh", "anchor": "head_top", "offset": [-1, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodLow"},
+        {"piece": "mesh", "anchor": "head_top", "offset": [-1, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodCheek"},
+        {"piece": "mesh", "anchor": "head_top", "offset": [-1, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodMid"},
+        {"piece": "mesh", "anchor": "head_top", "offset": [-1, 0, 0], "ignore_obstacles": true, "mesh": "SM_VS_HoodTop"},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "head_to_collar_r", "range": [0.15, 1], "spacing_cm": 5, "up": "world", "scale_along": [0.95, 0.8], "zigzag_cm": 2, "pitch": 12, "jitter": {"roll": 7, "pitch": 4, "scale": 0.1}, "keep_off": "face", "seed": 5},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "collar_r", "up": "world", "pitch": 15, "jitter": {"roll": 7, "scale": 0.1}, "seed": 6},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "collar_to_shoulder_r", "range": [0.3, 1], "spacing_cm": 6, "up": "world", "zigzag_cm": 3, "pitch": 15, "jitter": {"roll": 7, "pitch": 4, "scale": 0.1}, "seed": 7},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "shoulder_top_r", "up": "world", "pitch": 15, "scale": 1.05, "jitter": {"roll": 7}, "seed": 8},
+        {"piece": "mycelium", "paths": [{"path": "head_to_collar_r", "range": [0.3, 1]}, {"path": "neck_to_collar_r"}, {"path": "collar_to_shoulder_r"}], "width": [11, 11], "cell": 3.0, "strand": [1.0, 0.2], "taper": [0.06, 0.12], "holes": 0.16, "roots": 16, "seed": 10, "glow": 1.3},
+        {"piece": "mycelium", "paths": [{"path": "sash_r", "range": [0, 0.6]}], "width": [11, 11], "cell": 3.0, "strand": [1.0, 0.2], "taper": [0.08, 0.3], "holes": 0.16, "roots": 16, "seed": 12, "glow": 1.3},
+        {"piece": "mycelium", "paths": [{"path": "chest_ring", "range": [0.68, 1]}], "width": [11, 11], "cell": 3.0, "strand": [1.0, 0.2], "taper": [0.25, 0.15], "holes": 0.16, "roots": 16, "seed": 13, "glow": 1.3},
+        {"piece": "mycelium", "paths": [{"path": "chest_side_line_r", "range": [0.25, 0.8]}], "width": [11, 11], "cell": 3.0, "strand": [1.0, 0.2], "taper": [0.15, 0.3], "holes": 0.16, "roots": 16, "seed": 11, "glow": 1.3},
+        {"piece": "mycelium", "paths": [{"path": "sash_back_r", "range": [0, 0.45]}], "width": [11, 11], "cell": 3.0, "strand": [1.0, 0.2], "taper": [0.08, 0.3], "holes": 0.16, "roots": 16, "seed": 14, "glow": 1.3},
+        {"piece": "mycelium", "cell": 3.0, "strand": [1.0, 0.2], "holes": 0.16, "roots": 16, "glow": 1.3, "taper": [0.1, 0.3], "paths": [{"path": "sash_r", "range": [0, 0.75]}], "width": [14, 12], "seed": 31},
+        {"piece": "mycelium", "cell": 3.0, "strand": [1.0, 0.2], "holes": 0.16, "roots": 16, "glow": 1.3, "taper": [0.1, 0.3], "paths": [{"path": "collar_to_shoulder_r"}], "width": [12, 12], "seed": 32},
+        {"piece": "mycelium", "cell": 3.0, "strand": [1.0, 0.2], "holes": 0.16, "roots": 16, "glow": 1.3, "taper": [0.1, 0.3], "anchor": "shoulder_blade_r", "size": 13, "seed": 33},
+        {"piece": "mycelium", "cell": 3.0, "strand": [1.0, 0.2], "holes": 0.16, "roots": 16, "glow": 1.3, "taper": [0.1, 0.3], "anchor": "chest_side_r", "size": 11, "seed": 34}
+      ],
       "grenade": [
-        { "piece": "mycelium", "anchor": "hip_side_r", "size": 10.5, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 34, "holes": 0.08 }
+        {"piece": "mycelium", "anchor": "hip_side_r", "size": 10.5, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 34, "holes": 0.08}
       ],
       "grenade.spore_blast": [
-        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "scale": 1.49, "pitch": 10, "seed": 31, "offset": [0, -2.0, 0.0] },
-        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, 2.55, -3.25], "scale": 1.04, "pitch": 5, "jitter": {"roll": 20}, "seed": 32 },
-        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -6.55, -2.6], "scale": 0.98, "jitter": {"roll": 20}, "seed": 33 },
-        { "piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -2.0, -5.85], "scale": 0.72, "jitter": {"roll": 25}, "seed": 35 }
+        {"piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "scale": 1.49, "pitch": 10, "seed": 31, "offset": [0, -2.0, 0.0]},
+        {"piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, 2.55, -3.25], "scale": 1.04, "pitch": 5, "jitter": {"roll": 20}, "seed": 32},
+        {"piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -6.55, -2.6], "scale": 0.98, "jitter": {"roll": 20}, "seed": 33},
+        {"piece": "mesh", "mesh": "SM_VS_RoundCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -2.0, -5.85], "scale": 0.72, "jitter": {"roll": 25}, "seed": 35}
       ],
       "grenade.spore_pool": [
-        { "piece": "mesh", "mesh": "SM_VS_Stack3", "anchor": "hip_side_r", "up": "world", "offset": [0, -2.0, -3.9], "scale": 0.98, "pitch": 8, "seed": 41 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "hip_side_r", "up": "world", "offset": [0, -6, 2], "scale": 1.0, "pitch": 12, "jitter": {"roll": 15}, "seed": 42 }
+        {"piece": "mesh", "mesh": "SM_VS_Stack3", "anchor": "hip_side_r", "up": "world", "offset": [0, -2.0, -3.9], "scale": 0.98, "pitch": 8, "seed": 41},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "hip_side_r", "up": "world", "offset": [0, -6, 2], "scale": 1.0, "pitch": 12, "jitter": {"roll": 15}, "seed": 42}
       ],
       "grenade.poison_spike": [
-        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -6.29, 0.0], "jitter": {"roll": 15, "scale": 0.15}, "seed": 51, "scale": 1.3 },
-        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -3.43, 1.3], "jitter": {"roll": 15, "scale": 0.15}, "seed": 52, "scale": 1.3 },
-        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -0.57, -1.3], "jitter": {"roll": 15, "scale": 0.15}, "seed": 53, "scale": 1.3 },
-        { "piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, 2.29, 0.0], "jitter": {"roll": 15, "scale": 0.15}, "seed": 54, "scale": 1.3 }
+        {"piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -6.29, 0.0], "jitter": {"roll": 15, "scale": 0.15}, "seed": 51, "scale": 1.3},
+        {"piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -3.43, 1.3], "jitter": {"roll": 15, "scale": 0.15}, "seed": 52, "scale": 1.3},
+        {"piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, -0.57, -1.3], "jitter": {"roll": 15, "scale": 0.15}, "seed": 53, "scale": 1.3},
+        {"piece": "mesh", "mesh": "SM_VS_SpikeCap", "anchor": "hip_side_r", "up": "world", "offset": [0, 2.29, 0.0], "jitter": {"roll": 15, "scale": 0.15}, "seed": 54, "scale": 1.3}
       ],
       "spore_fog_damage": [
-        { "piece": "mesh", "mesh": "SM_VS_HoodCrown", "anchor": "head_top", "offset": [-1, 0, 0], "keep_off": {"volume": "face", "push": 6}, "seed": 1 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "head_ring", "range": [0.55, 0.92], "spacing_cm": 7, "up": "world", "offset": [-0.5, 0, -2], "scale": 0.9, "pitch": 8, "jitter": {"roll": 12, "pitch": 8, "scale": 0.12}, "keep_off": "face", "seed": 2 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "head_ring", "range": [0.12, 0.45], "spacing_cm": 8, "up": "world", "offset": [-0.5, 0, -2], "scale": 0.8, "pitch": 8, "jitter": {"roll": 12, "pitch": 8, "scale": 0.12}, "keep_off": "face", "seed": 3 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "head_back", "up": "world", "offset": [0, 0, -3], "pitch": 10, "jitter": {"roll": 10}, "seed": 4 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "head_to_collar_r", "range": [0.15, 1], "spacing_cm": 5, "up": "world", "scale_along": [0.95, 0.8], "zigzag_cm": 2, "pitch": 12, "jitter": {"roll": 12, "pitch": 6, "scale": 0.1}, "keep_off": "face", "seed": 5 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "head_to_collar_l", "at": 0.4, "up": "world", "scale": 0.8, "pitch": 12, "keep_off": "face", "seed": 17 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "collar_r", "up": "world", "pitch": 15, "jitter": {"roll": 15, "scale": 0.1}, "seed": 6 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "collar_to_shoulder_r", "range": [0.3, 1], "spacing_cm": 6, "up": "world", "zigzag_cm": 3, "pitch": 15, "jitter": {"roll": 15, "pitch": 8, "scale": 0.1}, "seed": 7 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "anchor": "shoulder_top_r", "up": "world", "pitch": 15, "scale": 1.05, "jitter": {"roll": 10}, "seed": 8 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "arm_line_r", "range": [0.06, 0.36], "spacing_cm": 4.5, "up": "world", "scale_along": [1.05, 0.75], "zigzag_cm": 5, "pitch": 18, "jitter": {"roll": 22, "pitch": 10, "scale": 0.18, "slide_cm": 2}, "seed": 9 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "arm_line_r", "range": [0.12, 0.62], "spacing_cm": 5, "up": "world", "scale_along": [1.3, 0.85], "zigzag_cm": -5, "pitch": 22, "jitter": {"roll": 25, "pitch": 12, "scale": 0.25, "slide_cm": 2.5}, "seed": 19, "offset": [0, 1.5, 0] },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "path": "arm_line_r", "range": [0.3, 0.55], "spacing_cm": 9, "up": "world", "scale": 1.1, "zigzag_cm": 2, "pitch": 15, "jitter": {"roll": 25, "scale": 0.15}, "seed": 59 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "path": "arm_line_r", "range": [0.45, 0.9], "spacing_cm": 3.2, "up": "world", "scale_along": [1.35, 0.85], "zigzag_cm": 4.5, "pitch": 24, "jitter": {"roll": 25, "pitch": 12, "scale": 0.25, "slide_cm": 1.5}, "seed": 29 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "arm_line_r", "range": [0.5, 0.78], "spacing_cm": 6, "up": "world", "scale": 0.8, "zigzag_cm": -2, "pitch": 20, "jitter": {"roll": 20, "scale": 0.2}, "seed": 69 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfXS", "path": "arm_line_r", "range": [0.82, 1], "spacing_cm": 2.4, "up": "world", "zigzag_cm": 3, "pitch": 25, "jitter": {"roll": 25, "scale": 0.25, "slide_cm": 1}, "seed": 39 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "upperarm_coil_r", "range": [0.12, 0.55], "spacing_cm": 7, "up": "world", "scale": 0.75, "pitch": 20, "jitter": {"roll": 25, "pitch": 10, "scale": 0.25}, "seed": 49 },
-        { "piece": "mycelium", "paths": [{"path": "head_to_collar_r", "range": [0.3, 1]}, {"path": "neck_to_collar_r"}, {"path": "collar_to_shoulder_r"}, {"path": "arm_line_r", "range": [0, 0.95]}], "width": [7, 7], "cell": 3.2, "strand": [1.0, 0.32], "taper": [0.06, 0.12], "holes": 0.12, "roots": 12, "seed": 10 },
-        { "piece": "mycelium", "paths": [{"path": "sash_r", "range": [0, 0.6]}], "width": [7, 6], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.08, 0.3], "holes": 0.12, "roots": 8, "seed": 12 },
-        { "piece": "mycelium", "paths": [{"path": "chest_ring", "range": [0.68, 1]}], "width": [7, 7], "cell": 3.2, "strand": [0.9, 0.3], "taper": [0.25, 0.15], "holes": 0.15, "roots": 8, "seed": 13 },
-        { "piece": "mycelium", "paths": [{"path": "chest_side_line_r", "range": [0.25, 0.8]}], "width": [6, 6], "cell": 3.4, "strand": [0.85, 0.28], "taper": [0.15, 0.3], "holes": 0.15, "roots": 5, "seed": 11 },
-        { "piece": "mycelium", "paths": [{"path": "sash_back_r", "range": [0, 0.45]}], "width": [7, 7], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.08, 0.3], "holes": 0.12, "roots": 8, "seed": 14 },
-        { "piece": "mycelium", "paths": [{"path": "arm_back_line_r", "range": [0.04, 0.95]}], "width": [5, 5], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.1, 0.12], "holes": 0.12, "roots": 8, "seed": 15 }
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "arm_line_r", "range": [0.06, 0.36], "spacing_cm": 4.5, "up": "world", "scale_along": [1.05, 0.75], "zigzag_cm": 5, "pitch": 18, "jitter": {"roll": 7, "pitch": 4, "scale": 0.18, "slide_cm": 2}, "seed": 9},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "arm_line_r", "range": [0.12, 0.62], "spacing_cm": 5, "up": "world", "scale_along": [1.3, 0.85], "zigzag_cm": -5, "pitch": 22, "jitter": {"roll": 7, "pitch": 4, "scale": 0.25, "slide_cm": 2.5}, "seed": 19, "offset": [0, 1.5, 0]},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "path": "arm_line_r", "range": [0.3, 0.55], "spacing_cm": 9, "up": "world", "scale": 1.1, "zigzag_cm": 2, "pitch": 15, "jitter": {"roll": 7, "scale": 0.15}, "seed": 59},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "path": "arm_line_r", "range": [0.45, 0.9], "spacing_cm": 3.2, "up": "world", "scale_along": [1.35, 0.85], "zigzag_cm": 4.5, "pitch": 24, "jitter": {"roll": 7, "pitch": 4, "scale": 0.25, "slide_cm": 1.5}, "seed": 29},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "arm_line_r", "range": [0.5, 0.78], "spacing_cm": 6, "up": "world", "scale": 0.8, "zigzag_cm": -2, "pitch": 20, "jitter": {"roll": 7, "scale": 0.2}, "seed": 69},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfXS", "path": "arm_line_r", "range": [0.82, 1], "spacing_cm": 2.4, "up": "world", "zigzag_cm": 3, "pitch": 25, "jitter": {"roll": 7, "scale": 0.25, "slide_cm": 1}, "seed": 39},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "upperarm_coil_r", "range": [0.12, 0.55], "spacing_cm": 7, "up": "world", "scale": 0.75, "pitch": 20, "jitter": {"roll": 7, "pitch": 4, "scale": 0.25}, "seed": 49},
+        {"piece": "mycelium", "paths": [{"path": "arm_line_r", "range": [0, 0.95]}], "width": [7, 7], "cell": 3.2, "strand": [1.0, 0.32], "taper": [0.06, 0.12], "holes": 0.12, "roots": 12, "seed": 110},
+        {"piece": "mycelium", "paths": [{"path": "arm_back_line_r", "range": [0.04, 0.95]}], "width": [5, 5], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.1, 0.12], "holes": 0.12, "roots": 8, "seed": 15}
       ],
       "spore_dash": [
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "waist_to_hip_l", "range": [0.35, 1], "spacing_cm": 5, "up": "world", "scale": 1.1, "zigzag_cm": 3, "pitch": 25, "jitter": {"roll": 15, "scale": 0.15}, "seed": 21 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "leg_line_l", "range": [0.03, 0.3], "spacing_cm": 5, "up": "world", "scale_along": [0.85, 0.65], "zigzag_cm": 3, "pitch": 26, "jitter": {"roll": 22, "pitch": 10, "scale": 0.18, "slide_cm": 2}, "seed": 22, "offset": [0, -2.5, 0] },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "leg_line_l", "range": [0.08, 0.55], "spacing_cm": 4.5, "up": "world", "scale_along": [1.2, 0.75], "zigzag_cm": 4, "pitch": 28, "jitter": {"roll": 25, "pitch": 10, "scale": 0.22, "slide_cm": 2.5}, "seed": 24, "offset": [0, -3.5, 0] },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "path": "leg_line_l", "range": [0.2, 0.45], "spacing_cm": 10, "up": "world", "scale": 1.0, "zigzag_cm": 1.5, "pitch": 18, "jitter": {"roll": 20, "scale": 0.15}, "seed": 27, "offset": [0, -1.5, 0] },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "path": "leg_line_l", "range": [0.5, 0.9], "spacing_cm": 3.4, "up": "world", "scale_along": [1.3, 0.8], "zigzag_cm": 3.5, "pitch": 30, "jitter": {"roll": 22, "pitch": 10, "scale": 0.22, "slide_cm": 1.5}, "seed": 23, "offset": [0, -2, 0] },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfXS", "path": "leg_line_l", "range": [0.86, 1], "spacing_cm": 2.6, "up": "world", "zigzag_cm": 3, "pitch": 30, "jitter": {"roll": 25, "scale": 0.25}, "seed": 25 },
-        { "piece": "mycelium", "paths": [{"path": "waist_to_hip_l", "range": [0.2, 1]}, {"path": "leg_line_l", "range": [0, 0.97]}], "width": [16, 7], "cell": 3.2, "strand": [1.0, 0.32], "taper": [0.08, 0.1], "roots": 16, "seed": 26, "holes": 0.12 },
-        { "piece": "mycelium", "paths": [{"path": "leg_back_line_l", "range": [0.04, 0.95]}], "width": [6, 6], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.08, 0.1], "holes": 0.12, "roots": 10, "seed": 28 }
+        {"piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "waist_to_hip_l", "range": [0.35, 1], "spacing_cm": 5, "up": "world", "scale": 1.1, "zigzag_cm": 3, "pitch": 25, "jitter": {"roll": 15, "scale": 0.15}, "seed": 21},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfL", "path": "leg_line_l", "range": [0.03, 0.3], "spacing_cm": 5, "up": "world", "scale_along": [0.85, 0.65], "zigzag_cm": 3, "pitch": 26, "jitter": {"roll": 22, "pitch": 10, "scale": 0.18, "slide_cm": 2}, "seed": 22, "offset": [0, -2.5, 0]},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfM", "path": "leg_line_l", "range": [0.08, 0.55], "spacing_cm": 4.5, "up": "world", "scale_along": [1.2, 0.75], "zigzag_cm": 4, "pitch": 28, "jitter": {"roll": 25, "pitch": 10, "scale": 0.22, "slide_cm": 2.5}, "seed": 24, "offset": [0, -3.5, 0]},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "path": "leg_line_l", "range": [0.2, 0.45], "spacing_cm": 10, "up": "world", "scale": 1.0, "zigzag_cm": 1.5, "pitch": 18, "jitter": {"roll": 20, "scale": 0.15}, "seed": 27, "offset": [0, -1.5, 0]},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "path": "leg_line_l", "range": [0.5, 0.9], "spacing_cm": 3.4, "up": "world", "scale_along": [1.3, 0.8], "zigzag_cm": 3.5, "pitch": 30, "jitter": {"roll": 22, "pitch": 10, "scale": 0.22, "slide_cm": 1.5}, "seed": 23, "offset": [0, -2, 0]},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfXS", "path": "leg_line_l", "range": [0.86, 1], "spacing_cm": 2.6, "up": "world", "zigzag_cm": 3, "pitch": 30, "jitter": {"roll": 25, "scale": 0.25}, "seed": 25},
+        {"piece": "mycelium", "paths": [{"path": "waist_to_hip_l", "range": [0.2, 1]}, {"path": "leg_line_l", "range": [0, 0.97]}], "width": [16, 7], "cell": 3.2, "strand": [1.0, 0.32], "taper": [0.08, 0.1], "roots": 16, "seed": 26, "holes": 0.12},
+        {"piece": "mycelium", "paths": [{"path": "leg_back_line_l", "range": [0.04, 0.95]}], "width": [6, 6], "cell": 3.2, "strand": [0.95, 0.3], "taper": [0.08, 0.1], "holes": 0.12, "roots": 10, "seed": 28}
       ],
       "spore_patches": [
-        { "piece": "mycelium", "anchor": "hip_back", "size": 16, "cell": 2.8, "strand": [0.85, 0.28], "roots": 5, "seed": 61, "holes": 0.08 },
-        { "piece": "mesh", "mesh": "SM_VS_Stack3", "anchor": "hip_back", "up": "world", "offset": [0, 0, -1], "scale": 0.75, "pitch": 10, "jitter": {"roll": 10}, "seed": 62 },
-        { "piece": "mycelium", "anchor": "shoulder_blade_l", "size": 10.5, "cell": 2.8, "strand": [0.85, 0.28], "roots": 5, "seed": 63, "holes": 0.08 },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "shoulder_blade_l", "up": "world", "offset": [0, 0, -2], "scale": 0.85, "pitch": 10, "jitter": {"roll": 10}, "seed": 64 },
-        { "piece": "mycelium", "anchor": "thigh_back_r", "size": 10, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 65, "holes": 0.08 },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "thigh_back_r", "up": "world", "offset": [0, 0, -1], "scale": 0.75, "pitch": 15, "seed": 66 },
-        { "piece": "mycelium", "anchor": "upperarm_outer_l", "size": 8.5, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 67, "holes": 0.08 },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "upperarm_outer_l", "up": "world", "offset": [0, 0, -1], "scale": 0.7, "pitch": 15, "seed": 68 },
-        { "piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "hip_back", "up": "world", "offset": [0, 7, 1], "scale": 0.7, "pitch": 12, "jitter": {"roll": 15}, "seed": 69 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "hip_back", "up": "world", "offset": [0, -7, 2], "scale": 1.0, "pitch": 15, "jitter": {"roll": 15}, "seed": 70 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "shoulder_blade_l", "up": "world", "offset": [0, -4, 3], "scale": 0.9, "pitch": 15, "jitter": {"roll": 15}, "seed": 71 },
-        { "piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "thigh_back_r", "up": "world", "offset": [0, 3.5, -5], "scale": 0.85, "pitch": 18, "jitter": {"roll": 15}, "seed": 72 }
+        {"piece": "mycelium", "anchor": "hip_back", "size": 16, "cell": 2.8, "strand": [0.85, 0.28], "roots": 5, "seed": 61, "holes": 0.08},
+        {"piece": "mesh", "mesh": "SM_VS_Stack3", "anchor": "hip_back", "up": "world", "offset": [0, 0, -1], "scale": 0.75, "pitch": 10, "jitter": {"roll": 10}, "seed": 62},
+        {"piece": "mycelium", "anchor": "shoulder_blade_l", "size": 10.5, "cell": 2.8, "strand": [0.85, 0.28], "roots": 5, "seed": 63, "holes": 0.08},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "shoulder_blade_l", "up": "world", "offset": [0, 0, -2], "scale": 0.85, "pitch": 10, "jitter": {"roll": 10}, "seed": 64},
+        {"piece": "mycelium", "anchor": "thigh_back_r", "size": 10, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 65, "holes": 0.08},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "thigh_back_r", "up": "world", "offset": [0, 0, -1], "scale": 0.75, "pitch": 15, "seed": 66},
+        {"piece": "mycelium", "anchor": "upperarm_outer_l", "size": 8.5, "cell": 2.8, "strand": [0.8, 0.26], "roots": 4, "seed": 67, "holes": 0.08},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "upperarm_outer_l", "up": "world", "offset": [0, 0, -1], "scale": 0.7, "pitch": 15, "seed": 68},
+        {"piece": "mesh", "mesh": "SM_VS_Stack2", "anchor": "hip_back", "up": "world", "offset": [0, 7, 1], "scale": 0.7, "pitch": 12, "jitter": {"roll": 15}, "seed": 69},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "hip_back", "up": "world", "offset": [0, -7, 2], "scale": 1.0, "pitch": 15, "jitter": {"roll": 15}, "seed": 70},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "shoulder_blade_l", "up": "world", "offset": [0, -4, 3], "scale": 0.9, "pitch": 15, "jitter": {"roll": 15}, "seed": 71},
+        {"piece": "mesh", "mesh": "SM_VS_ShelfS", "anchor": "thigh_back_r", "up": "world", "offset": [0, 3.5, -5], "scale": 0.85, "pitch": 18, "jitter": {"roll": 15}, "seed": 72}
       ]
     },
 "dawnlotus": {
