@@ -354,8 +354,10 @@ def resample(P, step, closed=False):
     return np.stack([np.interp(q, s, P[:, k]) for k in range(3)], axis=1), L
 
 
-def make_path(w, pts, closed, step):
-    """A shortest line over the wrap through the waypoints pts (closed: back to the first)."""
+def make_path(w, pts, closed, step, centre=False):
+    """A shortest line over the wrap through the waypoints pts (closed: back to the first). centre: every point is
+    held on the robot's mid-plane (x = 0) while it relaxes, for a centre-line path whose shortest line would
+    otherwise step round a pocket on one side (shell 4's spine, under its back blades' lower edge)."""
     wp = list(pts) + ([pts[0]] if closed else [])
     vs = [w.vert(p) for p in wp]
     legs = []
@@ -375,6 +377,7 @@ def make_path(w, pts, closed, step):
             q = line.copy()
             q[1:-1] = 0.5 * line[1:-1] + 0.25 * (line[:-2] + line[2:])
             q[pinned] = line[pinned]
+            if centre: q[:, 0] = 0.0
             line = np.array([w.nearest(p) for p in q])
         legs = [line[pins[k]:pins[k + 1] + 1] for k in range(len(pins) - 1)]
     # resample each leg on its own so every waypoint is a point of the line (a shared resampling would cut
@@ -385,7 +388,11 @@ def make_path(w, pts, closed, step):
         seg = np.linalg.norm(np.diff(np.array(acc), axis=0), axis=1).sum()
         if seg < 1.0 and k < len(legs) - 1: continue
         r, _ = resample(np.array(acc), step); out.extend(r[1:]); acc = [r[-1]]
+    if centre: out = np.array(out); out[:, 0] = 0.0
     out = np.array([w.nearest(p) for p in out])
+    if centre:      # the mid-plane can cross a pocket the wrap has no surface in: bridge it, evenly spaced
+        out = out[np.concatenate([[True], np.linalg.norm(np.diff(out, axis=0), axis=1) > 1e-3])]
+        out, _ = resample(out, step); out[:, 0] = 0.0
     if closed: out[-1] = out[0]
     L = float(np.linalg.norm(np.diff(out, axis=0), axis=1).sum())
     return dict(points=[dict(p=p, n=w.normal(p), bone=w.bone(p)) for p in out], length=L, closed=closed)
@@ -536,7 +543,7 @@ def run():
                         if isinstance(x, dict): wp.append(place(w, x, name + " waypoint"))
                         elif x.startswith("@"): wp.append(w.nearest(seam[x[1:]]["p"]))
                         else: wp.append(A[x]["p"])
-                path = make_path(w, wp, e["closed"], SPEC.STEP)
+                path = make_path(w, wp, e["closed"], SPEC.STEP, centre=e.get("centre", False))
                 path.update(from_seam=e["from_seam"], to_seam=e["to_seam"], kind=e["kind"])
                 Pa[name] = path
                 log(slot, name, "length %.1f points %d" % (path["length"], len(path["points"])))

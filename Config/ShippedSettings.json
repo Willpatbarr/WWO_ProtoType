@@ -651,6 +651,13 @@
 		"Dexterity": 1,
 		"Durability": 0
 	},
+	"frame/vanguard_head":
+	{
+		"Agility": 2,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 1
+	},
 	"frame/standard_arms":
 	{
 		"Agility": 0,
@@ -678,6 +685,13 @@
 		"Aerial": 0,
 		"Dexterity": 1,
 		"Durability": 0
+	},
+	"frame/vanguard_arms":
+	{
+		"Agility": 1,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 2
 	},
 	"frame/standard_legs":
 	{
@@ -707,6 +721,13 @@
 		"Dexterity": 0,
 		"Durability": 2
 	},
+	"frame/vanguard_legs":
+	{
+		"Agility": 2,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 1
+	},
 	"frame/standard_core":
 	{
 		"Agility": 0,
@@ -734,6 +755,13 @@
 		"Aerial": 2,
 		"Dexterity": 0,
 		"Durability": 1
+	},
+	"frame/vanguard_core":
+	{
+		"Agility": 1,
+		"Aerial": 0,
+		"Dexterity": 0,
+		"Durability": 2
 	},
 	"ability/overgrowth":
 	{

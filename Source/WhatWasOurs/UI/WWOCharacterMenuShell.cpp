@@ -46,7 +46,7 @@ void UWWOCharacterMenu::BuildFrameRows()
 			C.PictureSize = FVector2D(60.f, 40.f);
 			Cards.Add(ItemCard(C, [WeakThis, WL, Part] { if (WL.IsValid()) WL->EquipFramePart(Part); if (WeakThis.IsValid()) WeakThis->Refresh(); }));
 		}
-		AddCardGrid(Cards, 4);
+		AddCardGrid(Cards, 5); // five shells: one row per slot
 	}
 	BuildColourRows(L, Label);
 	Label(TEXT("Net effect"));

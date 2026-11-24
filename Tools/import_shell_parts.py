@@ -8,6 +8,7 @@ Source: ~/Documents/WWO_Shells/export/*.fbx (WWO_SHELL_SRC to use another folder
   SK_Shell1_<Slot>          shell 1 ("sleek")
   SK_Shell2_<Slot>          shell 2 ("scout")
   SK_Shell3_<Slot>          shell 3 (the tan one, from Will's sketches)
+  SK_Shell4_<Slot>          shell 4 (bone-white plates over tan, from Will's paintings; Will calls it shell 5)
 Slots: Head, Core, Arms, Legs.
 
 Run headless from the project folder (after Tools/create_robot_materials.py has made M_WWO_Robot):
@@ -55,7 +56,8 @@ SHELL_ROLES = {
 SHELL_GLOW = {
     "1": dict(Color=(0.8, 0.82, 0.85), Roughness=0.3, Metallic=0.0, EmissiveColor=(0.9, 0.95, 1.0), Glow=14.0, **PLAIN),
     "2": dict(Color=(0.5, 1.0, 0.05), Roughness=0.3, Metallic=0.0, EmissiveColor=(0.22, 1.0, 0.0), Glow=8.0, **PLAIN),
-    "3": dict(Color=(0.0, 0.0, 0.0), Roughness=0.3, Metallic=0.0, EmissiveColor=(1.0, 0.33, 0.0), Glow=12.0, **PLAIN)   # (its Blender strength, 1.3, read as barely lit in the game),
+    "3": dict(Color=(0.0, 0.0, 0.0), Roughness=0.3, Metallic=0.0, EmissiveColor=(1.0, 0.33, 0.0), Glow=12.0, **PLAIN),   # (its Blender strength, 1.3, read as barely lit in the game)
+    "4": dict(Color=(0.0, 0.0, 0.0), Roughness=0.3, Metallic=0.0, EmissiveColor=(0.25, 1.0, 0.85), Glow=12.0, **PLAIN),   # teal visor bars; same Blender strength as 3
 }
 # A shell's own colours for a role, over SHELL_ROLES (as its make_shell<N>.py overrides shell_kit.ROLES).
 SHELL_OWN = {
@@ -63,6 +65,11 @@ SHELL_OWN = {
         "Primary": dict(Color=(0.74, 0.57, 0.36), Roughness=0.5, Metallic=0.1),
         "Secondary": dict(Color=(0.30, 0.19, 0.09), Roughness=0.45, Metallic=0.1),
         "Frame": dict(Color=(0.040, 0.036, 0.024), Roughness=0.55, Metallic=0.2),
+    },
+    "4": {
+        "Primary": dict(Color=(0.66, 0.61, 0.53), Roughness=0.55, Metallic=0.05),
+        "Secondary": dict(Color=(0.33, 0.27, 0.21), Roughness=0.5, Metallic=0.15),
+        "Frame": dict(Color=(0.035, 0.035, 0.04), Roughness=0.5, Metallic=0.4),
     },
 }
 

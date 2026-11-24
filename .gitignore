@@ -44,3 +44,6 @@ Tools/*.log
 
 # A model imported for local testing only (Tools/import_test_gun.py)
 Content/WWO/Test/
+
+# Remnant enemy models (Tools/import_remnant_enemies.py): built on Fab pack skeletons, kept in the private WWO_EnemySkeletons repo
+Content/Remnants/

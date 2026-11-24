@@ -89,7 +89,7 @@ def piece(src, name, keep):
     return o
 
 
-BODY_ALREADY_TRIMMED = ("3",)
+BODY_ALREADY_TRIMMED = ("3", "4")
 
 
 def game_parts(which):
@@ -97,7 +97,7 @@ def game_parts(which):
     the source objects are hidden). which = 'base' or a shell number as a string."""
     body = bpy.data.objects["SK_RobotFrame"]
     # The skeleton as the game has it: skeleton_split's rule and skeleton_edits' trims (export_shells.py base).
-    # A file whose build script already trimmed the body before saving (make_shell3.py) is not trimmed again.
+    # A file whose build script already trimmed the body before saving (make_shell3.py, make_shell4.py) is not trimmed again.
     import skeleton_split, skeleton_edits
     split = skeleton_split.classify(body)
     if which not in BODY_ALREADY_TRIMMED: skeleton_edits.apply(body, part=split)

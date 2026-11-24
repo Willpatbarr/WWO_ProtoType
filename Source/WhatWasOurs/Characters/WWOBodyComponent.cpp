@@ -605,7 +605,7 @@ namespace
 	}
 
 	FAutoConsoleCommandWithWorldAndArgs ShellCommand(TEXT("wwo.Shell"),
-		TEXT("wwo.Shell <n>: every robot wears shell n (0 base, 1 sleek, 2 scout, 3 tan). wwo.Shell <head> <core> <arms> <legs>: a shell per part. wwo.Shell off: back to each body's own."),
+		TEXT("wwo.Shell <n>: every robot wears shell n (0 base, 1 sleek, 2 scout, 3 tan, 4 bone-white). wwo.Shell <head> <core> <arms> <legs>: a shell per part. wwo.Shell off: back to each body's own."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			int32 Picks[UWWOBodyComponent::NumShellSlots];

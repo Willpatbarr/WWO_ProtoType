@@ -833,6 +833,16 @@
    "durability": 0.0
   },
   {
+   "id": "vanguard_head",
+   "display_name": "Vanguard Head",
+   "slot": "head",
+   "order": 3.5,
+   "agility": 2.0,
+   "durability": 1.0,
+   "aerial": 0.0,
+   "dexterity": 0.0
+  },
+  {
    "id": "standard_arms",
    "display_name": "Standard Arms",
    "slot": "arms",
@@ -873,6 +883,16 @@
    "durability": 0.0
   },
   {
+   "id": "vanguard_arms",
+   "display_name": "Vanguard Arms",
+   "slot": "arms",
+   "order": 7.5,
+   "agility": 1.0,
+   "durability": 2.0,
+   "aerial": 0.0,
+   "dexterity": 0.0
+  },
+  {
    "id": "standard_legs",
    "display_name": "Standard Legs",
    "order": 8.0,
@@ -905,6 +925,16 @@
    "order": 11.0,
    "agility": 1.0,
    "durability": 2.0,
+   "aerial": 0.0,
+   "dexterity": 0.0
+  },
+  {
+   "id": "vanguard_legs",
+   "display_name": "Vanguard Legs",
+   "slot": "legs",
+   "order": 11.5,
+   "agility": 2.0,
+   "durability": 1.0,
    "aerial": 0.0,
    "dexterity": 0.0
   },
@@ -946,6 +976,16 @@
    "aerial": 2.0,
    "durability": 1.0,
    "agility": 0.0,
+   "dexterity": 0.0
+  },
+  {
+   "id": "vanguard_core",
+   "display_name": "Vanguard Core",
+   "slot": "core",
+   "order": 15.5,
+   "agility": 1.0,
+   "durability": 2.0,
+   "aerial": 0.0,
    "dexterity": 0.0
   }
  ],

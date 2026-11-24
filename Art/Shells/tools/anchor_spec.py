@@ -21,6 +21,7 @@
 #   closed True for rings (the line ends where it starts)
 #   kind  'line' | 'ring' | 'spiral' (only used to colour the review renders)
 #   sided True: written for the left side; the _r mirror swaps every _l/_r and mirrors the inline dirs
+#   centre True: the line is held on the robot's mid-plane (x = 0) as it relaxes (centre-line paths)
 
 
 def A(bone, t, dir, **kw):
@@ -135,7 +136,8 @@ PATHS = {
         "sash_l":     P(["collar_l", "chest_front", W("spine_02", 0.12, {"front": 1, "inner": 0.9}), "waist_side_r"],
                       sided=True),                       # a bandolier, left shoulder to right hip (the waypoint fixes its route)
         "spine_line": P(["back_upper", W("spine_02", 0.55, "back"), W("spine_02", 0.35, "back"), "back_lower",
-                        "hip_back"]),          # down the spine (mid waypoints keep it on the centre line over back gear)
+                        "hip_back"], centre=True),   # down the spine (mid waypoints keep it on the centre line over back gear;
+                                                     # centre holds it there under shell 4's back blades' lower edge)
         "collar_to_shoulder_l": P(["collar_l", "@seam_shoulder_l"], sided=True, to_seam="seam_shoulder_l"),
         "waist_to_hip_l":       P(["waist_side_l", "@seam_hip_l"], sided=True, to_seam="seam_hip_l"),   # meets leg_line
         "neck_to_collar_l":     P(["@seam_neck_l", "collar_l"], sided=True, from_seam="seam_neck_l"),   # head_to_collar's end, on

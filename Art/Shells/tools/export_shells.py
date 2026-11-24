@@ -2,7 +2,7 @@
 #   Blender -b robot_frame_v2_rigged.blend -P export_shells.py -- base     the in-game robot, split into
 #       SK_RobotSkeleton (joints, struts, hands: always shown) and SK_Shell0_<Head|Core|Arms|Legs> (its armour)
 #   Blender -b shell1_claude.blend -P export_shells.py -- 1                SK_Shell1_<Head|Core|Arms|Legs>
-#   Blender -b shell2_claude.blend -P export_shells.py -- 2
+#   Blender -b shell2_claude.blend -P export_shells.py -- 2      (and shell3_claude.blend -- 3, shell4_claude.blend -- 4)
 # Out: export/*.fbx. Import with the game's Tools/import_shell_parts.py.
 import bpy, bmesh, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
