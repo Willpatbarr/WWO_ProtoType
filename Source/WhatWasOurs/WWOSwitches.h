@@ -14,7 +14,7 @@
 //                               that run); slot head|core|arms|legs|all, role primary|secondary|glow (also the wwo.ShellColor console command, which saves)
 //   -WWOAnchorGrafts            robots place flora grafts from their shell parts' anchors (Config/GraftRecipes.json), as wwo.AnchorGrafts 1
 //                               (wwo.ShellAnchors 0|1|2 draws those anchors and paths; not a switch: -ExecCmds="wwo.ShellAnchors 2")
-//   -WWOAutoTestGrafts          six loadouts in the character preview
+//   -WWOAutoTestGrafts          eight loadouts in the character preview
 //   -WWOGraftsCloseYaw=<deg>    its close-up shots (35_*) turned this far instead of -35 (90: the robot's side)
 //   -WWOAutoTestMaps            fixed camera views of the level
 //   -WWOAutoTestMods            weapon mods and perks against the mod data

@@ -1150,6 +1150,7 @@ namespace
 				}
 			}
 		};
+		Section(TEXT("main")); // the flora's main graft: worn whatever the abilities and grenade (DawnLotus's back lotus)
 		if (!In.Grenade.IsNone())
 		{
 			Section(TEXT("grenade"));

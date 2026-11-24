@@ -1,4 +1,4 @@
-// -WWOAutoTest: the flora graft steps (also alone with -WWOAutoTestGrafts). Six loadouts, two per
+// -WWOAutoTest: the flora graft steps (also alone with -WWOAutoTestGrafts). Eight loadouts, two per
 // flora, each with frame parts that color the body's regions, equipped in turn with the character
 // menu open: the preview from the front and from behind (34_grafts_*), then again with the
 // preview's camera moved in close (35_grafts_*). The loadout is put back
@@ -35,6 +35,8 @@ namespace
 		{ TEXT("spore_patches_fog"), "veilspore", "spore_pool", "spore_patches", "spore_fog_damage", { "focus_head", "light_core" } },
 		{ TEXT("bark_shield_roots"), "ironbark", "iron_grenade", "shield_share", "root_bombs", { "armored_core", "sturdy_legs", "standard_head", "standard_arms" } },
 		{ TEXT("bark_extra_seeds"), "ironbark", "wall_grenade", "extra_grenade", "seedburst", { "quick_arms", "guard_head" } },
+		{ TEXT("lotus_pollen_bloom"), "dawnlotus", "bloom_pool", "pollination", "full_bloom", { "standard_head", "standard_arms", "standard_core", "standard_legs" } },
+		{ TEXT("lotus_petalfall"), "dawnlotus", "reveille", "petalfall", "pollination", { "focus_head", "light_core" } },
 	};
 	constexpr int32 NumGraftLoadouts = UE_ARRAY_COUNT(GraftLoadouts);
 	constexpr float MenuEvery = 2.f, CloseEvery = 1.6f;
