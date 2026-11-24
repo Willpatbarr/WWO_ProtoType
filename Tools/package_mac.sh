@@ -10,6 +10,17 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENGINE="/Volumes/UnrealSSD/Epic Games/UE_5.8/Engine"
 OUT="/Volumes/UnrealSSD/Builds/WhatWasOurs"
 "$PROJECT_DIR/Tools/close_game.sh"
+# Notarization needs a login stored once by hand in the login keychain (it is not in git and nothing here
+# makes it):  xcrun notarytool store-credentials wwo-notary --apple-id spiderenst@gmail.com --team-id 7TGV8R73HC
+# Without it a Developer ID build can't be notarized, so stop now rather than after the long build.
+# WWO_ALLOW_UNNOTARIZED=1 builds anyway (signed only: players must use Open Anyway the first time).
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application" && [ -z "$WWO_ALLOW_UNNOTARIZED" ] \
+   && ! xcrun notarytool history --keychain-profile "${WWO_NOTARY_PROFILE:-wwo-notary}" >/dev/null 2>&1; then
+  echo "No '${WWO_NOTARY_PROFILE:-wwo-notary}' notarization login in the keychain: store it (command at the top of $0)"
+  echo "and check it with: xcrun notarytool history --keychain-profile ${WWO_NOTARY_PROFILE:-wwo-notary}"
+  echo "or rerun with WWO_ALLOW_UNNOTARIZED=1 to build a signed, un-notarized app."
+  exit 1
+fi
 # Config/ShippedSettings.json is in git (the tuning every build starts from). This Mac's saved
 # Settings values replace it when there are any; on a fresh clone the one in git ships as it is.
 if [ -f "$PROJECT_DIR/Saved/WWO/SavedSettings.json" ]; then
