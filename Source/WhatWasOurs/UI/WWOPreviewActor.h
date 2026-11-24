@@ -42,7 +42,8 @@ public:
 	// waist height and close, the robot was seen from below and looked as if it leaned. It still fills about 90% of the
 	// preview image's height, with room above for a VeilSpore hood and below for the floor shadow.
 	static inline const FVector CameraAt = FVector(400.f, 0.f, 125.f);
-	static constexpr float CameraPitch = -3.9f, CameraHalfFov = 14.75f;
+	static constexpr float CameraPitch = -3.9f;
+	static constexpr float CameraHalfFov = 14.75f;
 	// The backdrop's color, so it comes out as the panel's (0.1, 0.11, 0.13) after the capture's
 	// tonemapping, at BackdropBias; at another exposure it's scaled to match (BackdropFor).
 	// ExposureBias is the gun preview's (AWWOGunPreviewActor); the character uses CharacterExposure.

@@ -99,7 +99,9 @@ private:
 	// Frames a station waits after setting a part up before it captures (its render state is sent at the end of
 	// the frame), how long it waits for the probe before keeping the bounds' framing, and how many captures of the
 	// picture it takes (the last one stands).
-	static constexpr int32 SettleFrames = 1, ProbeWait = 12, Shots = 2;
+	static constexpr int32 SettleFrames = 1;
+	static constexpr int32 ProbeWait = 12;
+	static constexpr int32 Shots = 2;
 	static constexpr int32 MostKept = 40;
 	void SetUp(int32 Station, const FWWOPartPicture& Pic);
 	void Aim(int32 Station, const FVector& Middle, float Distance, float FieldOfView);

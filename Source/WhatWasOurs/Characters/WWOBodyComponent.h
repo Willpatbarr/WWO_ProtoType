@@ -140,7 +140,9 @@ public:
 	// (ShellFromLoadout). They're painted on every part this body draws (PaintShellPart), and by the first-person hands on
 	// the arms part over them, which repaint when ShellPaintSerial changes.
 	// The last row is the skeleton's own (SkeletonPaint: its frame, its plates; FWWOEquipped::ShellSkeleton).
-	static constexpr int32 NumShellRoles = 3, SkeletonPaint = NumShellSlots, NumPaintSlots = NumShellSlots + 1;
+	static constexpr int32 NumShellRoles = 3;
+	static constexpr int32 SkeletonPaint = NumShellSlots;
+	static constexpr int32 NumPaintSlots = NumShellSlots + 1;
 	FColor ShellPaint[NumPaintSlots][NumShellRoles] = {};
 	uint32 ShellPaintSerial = 0;
 	void SetShellPaint(const FColor (&Paint)[NumPaintSlots][NumShellRoles]);

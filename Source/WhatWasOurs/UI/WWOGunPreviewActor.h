@@ -60,7 +60,8 @@ private:
 	FName Shown;
 	float Clock = 0.f;
 	// The three-quarter view: the gun turned this far toward the camera, and the camera's pitch down.
-	static constexpr float SwayRate = 0.45f, CameraPitch = -12.f;
+	static constexpr float SwayRate = 0.45f;
+	static constexpr float CameraPitch = -12.f;
 	float BaseYaw = -28.f, SwayYaw = 10.f, Pitch = CameraPitch;
 	FVector2D Shape = Size;     // the picture's shape (Frame fits the gun to it)
 	bool bPicture = false;
