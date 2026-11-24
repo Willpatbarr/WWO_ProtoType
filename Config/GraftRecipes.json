@@ -137,35 +137,96 @@
       ]
     },
 "dawnlotus": {
-      "_comment": "DawnLotus v2 from kit pieces (~/Documents/WWO_Flora/tools/make_dawnlotus_kit_v2.py): large layered lotus petals, symmetrical. main (always worn): a wide open lotus on the back, a ring behind the shoulders and head, and petals laid like straps over the trapezius and shoulder tops. Pollination: the shoulders and upper arms. Full Bloom: the thighs and shins. Petalfall: the forearms. Each grenade: a bud on the front of the right thigh with one, two or three amber drops.",
+      "_comment": "DawnLotus v2 from kit pieces (~/Documents/WWO_Flora/tools/make_dawnlotus_kit_v2.py, placements from dawnlotus_recipe_v2.py): large thin lotus petals, each seated on the worn part's surface, mirrored left and right. main (always worn): a wide open lotus on the back, petals laid like straps over the trapezius and shoulder tops and down the top of the chest. Pollination: the upper arms. Full Bloom: the thighs and shins. Petalfall: the forearms. Each grenade: a bud on the front of the right thigh with one, two or three amber drops.",
       "kit": "/Game/WWO/Flora/DawnLotus/Kit",
       "kit_section": "dawn",
       "main": [
-        {"piece": "mesh", "mesh": "SM_DL_BackLotus", "anchor": "back_upper", "offset": [0.5, 0.0, 8.0]},
-        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_l", "offset": [0.4, 0.0, 0.0], "roll": -90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapTrap", "anchor": "collar_r", "offset": [0.4, 0.0, 0.0], "roll": 90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapShoulder", "anchor": "shoulder_top_l", "offset": [0.4, 0.0, 0.0], "roll": 90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapShoulder", "anchor": "shoulder_top_r", "offset": [0.4, 0.0, 0.0], "roll": -90},
-        {"piece": "mesh", "mesh": "SM_DL_StrapChest", "anchor": "chest_front", "offset": [0.3, 0.0, 0.0]}
+        {"piece": "mesh", "mesh": "SM_DL_BackLotus", "anchor": "back_upper", "offset": [-0.3, 0.0, 0.0]},
+        {"piece": "mesh", "mesh": "SM_DL_PetalStrap", "anchor": "collar_l", "offset": [-0.2, 5, 0], "scale": 0.9, "roll": -90, "seat": 0.8},
+        {"piece": "mesh", "mesh": "SM_DL_PetalStrap", "anchor": "collar_r", "offset": [-0.2, -5, 0], "scale": 0.9, "roll": 90, "seat": 0.8},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "collar_l", "offset": [-0.2, 4, 3.5], "scale": 0.72, "roll": -68, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "collar_r", "offset": [-0.2, -4, 3.5], "scale": 0.72, "roll": 68, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "collar_l", "offset": [-0.2, 4, -3.5], "scale": 0.7, "roll": -112, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "collar_r", "offset": [-0.2, -4, -3.5], "scale": 0.7, "roll": 112, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_l", "offset": [-0.2, -3, 0], "scale": 1.0, "roll": 90, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_r", "offset": [-0.2, 3, 0], "scale": 1.0, "roll": -90, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_l", "offset": [-0.2, -2, 4], "scale": 0.78, "roll": 62, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_r", "offset": [-0.2, 2, 4], "scale": 0.78, "roll": -62, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_l", "offset": [-0.2, -2, -4], "scale": 0.8, "roll": 120, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalBend", "anchor": "shoulder_top_r", "offset": [-0.2, 2, -4], "scale": 0.8, "roll": -120, "seat": 0.34},
+        {"piece": "mesh", "mesh": "SM_DL_PetalDroop", "anchor": "collar_l", "offset": [-0.2, 4.5, -6], "scale": 1.25, "roll": -5, "seat": 0.66},
+        {"piece": "mesh", "mesh": "SM_DL_PetalDroop", "anchor": "collar_r", "offset": [-0.2, -4.5, -6], "scale": 1.25, "roll": 5, "seat": 0.66},
+        {"piece": "mesh", "mesh": "SM_DL_PetalDroop", "anchor": "collar_l", "offset": [-0.2, -3.5, -5], "scale": 0.95, "roll": 13, "seat": 0.66},
+        {"piece": "mesh", "mesh": "SM_DL_PetalDroop", "anchor": "collar_r", "offset": [-0.2, 3.5, -5], "scale": 0.95, "roll": -13, "seat": 0.66}
       ],
       "pollination": [
-        {"piece": "mesh", "mesh": "SM_DL_ArmSleeve", "anchor": "upperarm_outer_{s}", "offset": [0.2, 0.0, 0.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "upperarm_outer_l", "offset": [-0.2, 0, 8], "scale": 1.05, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "upperarm_outer_r", "offset": [-0.2, 0, 8], "scale": 1.05, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "upperarm_outer_l", "offset": [-0.2, 6, 5.5], "scale": 0.8, "roll": 6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "upperarm_outer_r", "offset": [-0.2, -6, 5.5], "scale": 0.8, "roll": -6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "upperarm_outer_l", "offset": [-0.2, -6, 9], "scale": 0.85, "roll": -7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "upperarm_outer_r", "offset": [-0.2, 6, 9], "scale": 0.85, "roll": 7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "upperarm_outer_l", "offset": [-0.2, -2, 3.5], "scale": 0.5, "roll": -3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "upperarm_outer_r", "offset": [-0.2, 2, 3.5], "scale": 0.5, "roll": 3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "upperarm_outer_l", "offset": [-0.2, 9, 7], "scale": 0.5, "roll": 9, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "upperarm_outer_r", "offset": [-0.2, -9, 7], "scale": 0.5, "roll": -9, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "upperarm_outer_l", "offset": [-0.2, 3, 9.5], "scale": 0.4, "roll": 2, "pitch": 10, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "upperarm_outer_r", "offset": [-0.2, -3, 9.5], "scale": 0.4, "roll": -2, "pitch": 10, "seat": 0.62}
       ],
       "full_bloom": [
-        {"piece": "mesh", "mesh": "SM_DL_ThighSleeve", "anchor": "thigh_outer_{s}", "offset": [-0.4, 0.0, 0.0], "pitch": -7},
-        {"piece": "mesh", "mesh": "SM_DL_Greave", "anchor": "shin_front_{s}", "offset": [0.3, 0.0, 0.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "thigh_outer_l", "offset": [-0.2, 0, 14], "scale": 1.45, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "thigh_outer_r", "offset": [-0.2, 0, 14], "scale": 1.45, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "thigh_outer_l", "offset": [-0.2, 9, 11], "scale": 1.15, "roll": 6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "thigh_outer_r", "offset": [-0.2, -9, 11], "scale": 1.15, "roll": -6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "thigh_outer_l", "offset": [-0.2, 17, 15], "scale": 1.25, "roll": 10, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "thigh_outer_r", "offset": [-0.2, -17, 15], "scale": 1.25, "roll": -10, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "thigh_outer_l", "offset": [-0.2, -9, 12], "scale": 1.05, "roll": -8, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "thigh_outer_r", "offset": [-0.2, 9, 12], "scale": 1.05, "roll": 8, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "thigh_outer_l", "offset": [-0.2, 4, 8], "scale": 0.8, "roll": -4, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "thigh_outer_r", "offset": [-0.2, -4, 8], "scale": 0.8, "roll": 4, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "thigh_outer_l", "offset": [-0.2, 14, 9], "scale": 0.75, "roll": 5, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "thigh_outer_r", "offset": [-0.2, -14, 9], "scale": 0.75, "roll": -5, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "thigh_outer_l", "offset": [-0.2, -4, 13], "scale": 0.6, "roll": 3, "pitch": 10, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "thigh_outer_r", "offset": [-0.2, 4, 13], "scale": 0.6, "roll": -3, "pitch": 10, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "thigh_outer_l", "offset": [-0.2, -6, 6], "scale": 0.7, "roll": -6, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "thigh_outer_r", "offset": [-0.2, 6, 6], "scale": 0.7, "roll": 6, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "shin_front_l", "offset": [-0.2, 0, 15], "scale": 1.35, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "shin_front_r", "offset": [-0.2, 0, 15], "scale": 1.35, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "shin_front_l", "offset": [-0.2, -7, 12], "scale": 1.05, "roll": -6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "shin_front_r", "offset": [-0.2, 7, 12], "scale": 1.05, "roll": 6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "shin_front_l", "offset": [-0.2, -12, 16], "scale": 1.0, "roll": -10, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "shin_front_r", "offset": [-0.2, 12, 16], "scale": 1.0, "roll": 10, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "shin_front_l", "offset": [-0.2, 5, 13], "scale": 0.9, "roll": 7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "shin_front_r", "offset": [-0.2, -5, 13], "scale": 0.9, "roll": -7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "shin_front_l", "offset": [-0.2, -3, 9], "scale": 0.7, "roll": 3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "shin_front_r", "offset": [-0.2, 3, 9], "scale": 0.7, "roll": -3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "shin_front_l", "offset": [-0.2, -10, 10], "scale": 0.65, "roll": -5, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "shin_front_r", "offset": [-0.2, 10, 10], "scale": 0.65, "roll": 5, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "shin_front_l", "offset": [-0.2, 2, 14], "scale": 0.5, "roll": -2, "pitch": 10, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "shin_front_r", "offset": [-0.2, -2, 14], "scale": 0.5, "roll": 2, "pitch": 10, "seat": 0.62}
       ],
       "petalfall": [
-        {"piece": "mesh", "mesh": "SM_DL_Vambrace", "anchor": "forearm_outer_{s}", "offset": [0.2, 0.0, 0.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "forearm_outer_l", "offset": [-0.2, 0, 9], "scale": 0.95, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalA", "anchor": "forearm_outer_r", "offset": [-0.2, 0, 9], "scale": 0.95, "pitch": 4, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "forearm_outer_l", "offset": [-0.2, 5.5, 6.5], "scale": 0.72, "roll": 6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "forearm_outer_r", "offset": [-0.2, -5.5, 6.5], "scale": 0.72, "roll": -6, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "forearm_outer_l", "offset": [-0.2, -5.5, 10], "scale": 0.78, "roll": -7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalB", "anchor": "forearm_outer_r", "offset": [-0.2, 5.5, 10], "scale": 0.78, "roll": 7, "pitch": 5, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "forearm_outer_l", "offset": [-0.2, -2, 4.5], "scale": 0.46, "roll": -3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "forearm_outer_r", "offset": [-0.2, 2, 4.5], "scale": 0.46, "roll": 3, "pitch": 9, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "forearm_outer_l", "offset": [-0.2, 8, 8], "scale": 0.46, "roll": 9, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalD", "anchor": "forearm_outer_r", "offset": [-0.2, -8, 8], "scale": 0.46, "roll": -9, "pitch": 8, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "forearm_outer_l", "offset": [-0.2, 3, 10.5], "scale": 0.36, "roll": 2, "pitch": 10, "seat": 0.62},
+        {"piece": "mesh", "mesh": "SM_DL_PetalC", "anchor": "forearm_outer_r", "offset": [-0.2, -3, 10.5], "scale": 0.36, "roll": -2, "pitch": 10, "seat": 0.62}
       ],
       "grenade.bloom_pool": [
-        {"piece": "mesh", "mesh": "SM_DL_PendantPool", "anchor": "thigh_front_r", "offset": [0.3, 0.0, 9.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PendantPool", "anchor": "thigh_front_r", "offset": [-0.9, 0.0, 9.0]}
       ],
       "grenade.solar_burst": [
-        {"piece": "mesh", "mesh": "SM_DL_PendantBurst", "anchor": "thigh_front_r", "offset": [0.3, 0.0, 9.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PendantBurst", "anchor": "thigh_front_r", "offset": [-0.9, 0.0, 9.0]}
       ],
       "grenade.reveille": [
-        {"piece": "mesh", "mesh": "SM_DL_PendantReveille", "anchor": "thigh_front_r", "offset": [0.3, 0.0, 9.0]}
+        {"piece": "mesh", "mesh": "SM_DL_PendantReveille", "anchor": "thigh_front_r", "offset": [-0.9, 0.0, 9.0]}
       ]
     }
   }
